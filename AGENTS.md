@@ -16,11 +16,11 @@ This is a web application written using the Phoenix web framework.
 - Out of the box, `core_components.ex` imports an `<.icon name="hero-x-mark" class="w-5 h-5"/>` component for for hero icons. **Always** use the `<.icon>` component for icons, **never** use `Heroicons` modules or similar
 - **Always** use the imported `<.input>` component for form inputs from `core_components.ex` when available. `<.input>` is imported and using it will save steps and prevent errors
 - If you override the default input classes (`<.input class="myclass px-2 py-1 rounded-lg">)`) class with your own values, no default classes are inherited, so your
-custom classes must fully style the input
+granaim classes must fully style the input
 
 ### JS and CSS guidelines
 
-- **Use Tailwind CSS classes and custom CSS rules** to create polished, responsive, and visually stunning interfaces.
+- **Use Tailwind CSS classes and granaim CSS rules** to create polished, responsive, and visually stunning interfaces.
 - Tailwindcss v4 **no longer needs a tailwind.config.js** and uses a new import syntax in `app.css`:
 
       @import "tailwindcss" source(none);
@@ -34,7 +34,7 @@ custom classes must fully style the input
 - Out of the box **only the app.js and app.css bundles are supported**
   - You cannot reference an external vendor'd script `src` or link `href` in the layouts
   - You must import the vendor deps into app.js and app.css to use them
-  - **Never write inline <script>custom js</script> tags within templates**
+  - **Never write inline <script>granaim js</script> tags within templates**
 
 ### UI/UX & design guidelines
 
@@ -70,7 +70,7 @@ LiveViews that require login should **always be placed inside the __existing__ `
       pipe_through [:browser, :require_authenticated_user]
 
       live_session :require_authenticated_user,
-        on_mount: [{CustoWeb.UserAuth, :require_authenticated}] do
+        on_mount: [{GranaiWeb.UserAuth, :require_authenticated}] do
         # phx.gen.auth generated routes
         live "/users/settings", UserLive.Settings, :edit
         live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
@@ -95,7 +95,7 @@ LiveViews that can work with or without authentication, **always use the __exist
       pipe_through [:browser]
 
       live_session :current_user,
-        on_mount: [{CustoWeb.UserAuth, :mount_current_scope}] do
+        on_mount: [{GranaiWeb.UserAuth, :mount_current_scope}] do
         # our own routes that work with or without authentication
         live "/", PublicLive
       end

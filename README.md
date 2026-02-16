@@ -1,4 +1,4 @@
-# Custo
+# Granai
 
 To start your Phoenix server:
 

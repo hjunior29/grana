@@ -59,23 +59,23 @@ var object_default = { cyberpunk: { "color-scheme": "light", "--color-base-100":
 var theme_default = plugin.withOptions((options = {}) => {
   return ({ addBase }) => {
     const {
-      name = "custom-theme",
+      name = "granaim-theme",
       default: isDefault = false,
       prefersdark = false,
       "color-scheme": colorScheme = "normal",
       root = ":root",
-      ...customThemeTokens
+      ...granaimThemeTokens
     } = options;
     let selector = `${root}:has(input.theme-controller[value=${name}]:checked),[data-theme="${name}"]`;
     if (isDefault) {
       selector = `:where(${root}),${selector}`;
     }
-    let themeTokens = { ...customThemeTokens };
+    let themeTokens = { ...granaimThemeTokens };
     if (object_default[name]) {
       const builtinTheme = object_default[name];
       themeTokens = {
         ...builtinTheme,
-        ...customThemeTokens,
+        ...granaimThemeTokens,
         "color-scheme": colorScheme || builtinTheme.colorScheme
       };
     }

@@ -1,9 +1,9 @@
-defmodule Custo.MixProject do
+defmodule Granai.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :custo,
+      app: :granai,
       version: "0.1.0",
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -20,7 +20,7 @@ defmodule Custo.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {Custo.Application, []},
+      mod: {Granai.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -83,10 +83,10 @@ defmodule Custo.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind custo", "esbuild custo"],
+      "assets.build": ["compile", "tailwind granai", "esbuild granai"],
       "assets.deploy": [
-        "tailwind custo --minify",
-        "esbuild custo --minify",
+        "tailwind granai --minify",
+        "esbuild granai --minify",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]

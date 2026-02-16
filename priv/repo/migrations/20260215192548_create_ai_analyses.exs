@@ -1,4 +1,4 @@
-defmodule Custo.Repo.Migrations.CreateAiAnalyses do
+defmodule Granai.Repo.Migrations.CreateAiAnalyses do
   use Ecto.Migration
 
   def change do
