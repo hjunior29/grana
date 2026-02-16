@@ -55,12 +55,13 @@ defmodule CustoWeb.CoreComponents do
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-hook={!@rest[:hidden] && "AutoDismiss"}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="pointer-events-auto transition-all duration-500"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
+        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap shadow-lg",
         @kind == :info && "alert-info",
         @kind == :error && "alert-error"
       ]}>
