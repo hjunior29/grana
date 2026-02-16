@@ -1,7 +1,7 @@
 import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
-import {hooks as colocatedHooks} from "phoenix-colocated/custo"
+import {hooks as colocatedHooks} from "phoenix-colocated/granai"
 import topbar from "../vendor/topbar"
 
 const CategoryChart = {
