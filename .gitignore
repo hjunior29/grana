@@ -35,3 +35,8 @@ custo-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Ignore example files that are not meant to be published.
+priv/examples/*
+
+# Environment variables
+.env

@@ -1,5 +1,25 @@
 import Config
 
+if File.exists?(".env") do
+  ".env"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.each(fn line ->
+    case String.split(line, "=", parts: 2) do
+      [key, value] ->
+        key = String.trim(key)
+        value = String.trim(value)
+
+        unless System.get_env(key) do
+          System.put_env(key, value)
+        end
+
+      _ ->
+        :ok
+    end
+  end)
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -21,6 +41,8 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :custo, CustoWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+
+config :custo, :gemini_api_key, System.get_env("GEMINI_API_KEY")
 
 if config_env() == :prod do
   database_url =
