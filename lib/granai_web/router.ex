@@ -54,6 +54,7 @@ defmodule GranaiWeb.Router do
     end
 
     post "/users/update-password", UserSessionController, :update_password
+    get "/transactions/export", TransactionsExportController, :export
   end
 
   scope "/", GranaiWeb do

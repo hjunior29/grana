@@ -340,6 +340,14 @@ defmodule GranaiWeb.TransactionsLive do
             <.icon name="hero-arrows-right-left" class="size-3 inline" />
             {@internal_count} interna(s) excluída(s)
           </span>
+          <a
+            :if={@total > 0}
+            href={"/transactions/export?#{build_query_string(@filters)}"}
+            class="btn btn-sm btn-outline gap-1 ml-auto"
+          >
+            <.icon name="hero-arrow-down-tray" class="size-4" />
+            Exportar CSV
+          </a>
         </div>
 
         <div :if={@transactions == []} class="text-center py-16">

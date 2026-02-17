@@ -67,7 +67,7 @@ defmodule GranaiWeb.UserLive.Registration do
          socket
          |> put_flash(
            :info,
-           "An email was sent to #{user.email}, please access it to confirm your account."
+           "Um e-mail foi enviado para #{user.email}, por favor acesse-o para confirmar sua conta."
          )
          |> push_navigate(to: ~p"/users/log-in")}
 

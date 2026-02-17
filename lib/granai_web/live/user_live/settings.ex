@@ -84,6 +84,44 @@ defmodule GranaiWeb.UserLive.Settings do
             </.button>
           </.form>
         </div>
+
+        <div class="divider" />
+
+        <div class="mb-8">
+          <h3 class="text-lg font-semibold mb-4 text-error">Excluir Conta</h3>
+          <p class="text-sm opacity-60 mb-4">
+            Ao excluir sua conta, todos os seus dados serão removidos permanentemente,
+            incluindo extratos, transações, categorias e análises. Esta ação não pode ser desfeita.
+          </p>
+          <button
+            phx-click="show_delete_modal"
+            class="btn btn-error btn-outline"
+          >
+            <.icon name="hero-trash" class="size-4" />
+            Excluir Minha Conta
+          </button>
+        </div>
+
+        <dialog
+          :if={@show_delete_modal}
+          class="modal modal-open"
+          phx-window-keydown="cancel_delete"
+          phx-key="Escape"
+        >
+          <div class="modal-box">
+            <h3 class="text-lg font-bold text-error">Excluir Conta Permanentemente</h3>
+            <p class="py-4 opacity-70">
+              Esta ação é irreversível. Todos os seus dados serão apagados.
+            </p>
+            <div class="modal-action">
+              <button type="button" phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
+              <button phx-click="confirm_delete" class="btn btn-error">Excluir Permanentemente</button>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button phx-click="cancel_delete">close</button>
+          </form>
+        </dialog>
       </div>
     </Layouts.app>
     """
@@ -114,6 +152,7 @@ defmodule GranaiWeb.UserLive.Settings do
       |> assign(:email_form, to_form(email_changeset))
       |> assign(:password_form, to_form(password_changeset))
       |> assign(:trigger_submit, false)
+      |> assign(:show_delete_modal, false)
 
     {:ok, socket}
   end
@@ -175,6 +214,29 @@ defmodule GranaiWeb.UserLive.Settings do
 
       changeset ->
         {:noreply, assign(socket, password_form: to_form(changeset, action: :insert))}
+    end
+  end
+
+  def handle_event("show_delete_modal", _params, socket) do
+    {:noreply, assign(socket, :show_delete_modal, true)}
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    {:noreply, assign(socket, :show_delete_modal, false)}
+  end
+
+  def handle_event("confirm_delete", _params, socket) do
+    user = socket.assigns.current_scope.user
+
+    case Accounts.delete_user(user) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> redirect(to: ~p"/users/log-in")
+         |> put_flash(:info, "Sua conta foi excluída permanentemente.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Erro ao excluir conta.")}
     end
   end
 end
