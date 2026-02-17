@@ -6,6 +6,7 @@ defmodule Granai.Banking.Category do
     field :name, :string
     field :icon, :string
     field :color, :string
+    field :kind, :string, default: "expense"
     field :is_system, :boolean, default: false
 
     belongs_to :user, Granai.Accounts.User
@@ -15,8 +16,9 @@ defmodule Granai.Banking.Category do
 
   def changeset(category, attrs) do
     category
-    |> cast(attrs, [:name, :icon, :color, :is_system, :user_id])
+    |> cast(attrs, [:name, :icon, :color, :kind, :is_system, :user_id])
     |> validate_required([:name])
+    |> validate_inclusion(:kind, ["expense", "investment", "income"])
     |> unique_constraint([:name, :user_id])
   end
 end

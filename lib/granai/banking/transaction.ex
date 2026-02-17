@@ -9,6 +9,10 @@ defmodule Granai.Banking.Transaction do
     field :amount, :decimal
     field :type, :string
     field :identifier, :string
+    field :installment_current, :integer
+    field :installment_total, :integer
+    field :installment_group_id, :string
+    field :is_internal_transfer, :boolean, default: false
 
     belongs_to :bank_statement, Granai.Banking.BankStatement
     belongs_to :user, Granai.Accounts.User
@@ -26,6 +30,10 @@ defmodule Granai.Banking.Transaction do
       :amount,
       :type,
       :identifier,
+      :installment_current,
+      :installment_total,
+      :installment_group_id,
+      :is_internal_transfer,
       :bank_statement_id,
       :user_id,
       :category_id

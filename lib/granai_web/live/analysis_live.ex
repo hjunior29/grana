@@ -228,16 +228,16 @@ defmodule GranaiWeb.AnalysisLive do
           </form>
         </div>
 
+        <div class="mb-4">
+          <h3 class="font-semibold text-lg">Histórico de Análises</h3>
+          <p class="text-sm opacity-50">Suas análises anteriores ficam salvas aqui</p>
+        </div>
+
         <div :if={@loading} class="card bg-base-200 p-6 mb-8">
           <div class="flex items-center gap-3">
             <span class="loading loading-spinner loading-sm text-primary" />
             <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
           </div>
-        </div>
-
-        <div class="mb-4">
-          <h3 class="font-semibold text-lg">Histórico de Análises</h3>
-          <p class="text-sm opacity-50">Suas análises anteriores ficam salvas aqui</p>
         </div>
 
         <div :if={@analyses == []} class="text-center py-16">
