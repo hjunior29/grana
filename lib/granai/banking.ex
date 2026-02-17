@@ -698,7 +698,7 @@ defmodule Granai.Banking do
     |> available_months()
     |> Enum.map(fn {y, _m} -> y end)
     |> Enum.uniq()
-    |> Enum.sort(:desc)
+    |> Enum.sort(:asc)
   end
 
   def daily_spending(user_id, year, month, opts \\ []) do

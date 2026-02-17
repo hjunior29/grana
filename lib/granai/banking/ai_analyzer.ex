@@ -3,26 +3,10 @@ defmodule Granai.Banking.AIAnalyzer do
   alias Granai.Banking
   alias Granai.AI.Provider
 
-  def analyze_month(user_id, year, month) do
-    case Accounts.get_user_ai_config(user_id) do
-      {:error, :no_api_key} -> {:error, :no_api_key}
-      {:ok, config} -> do_analyze(user_id, year, month, config)
-    end
-  end
-
   def analyze_with_filters(user_id, filters, granaim_prompt \\ nil) do
     case Accounts.get_user_ai_config(user_id) do
       {:error, :no_api_key} -> {:error, :no_api_key}
       {:ok, config} -> do_analyze_filtered(user_id, filters, granaim_prompt, config)
-    end
-  end
-
-  defp do_analyze(user_id, year, month, config) do
-    summary = Banking.monthly_summary(user_id, year, month)
-
-    case summary.transaction_count do
-      0 -> {:error, "Nenhuma transação encontrada neste período"}
-      _ -> call_ai(build_prompt(summary, year, month), config)
     end
   end
 
@@ -31,11 +15,13 @@ defmodule Granai.Banking.AIAnalyzer do
     year = filters[:year] || filters["year"]
     bank = filters[:bank] || filters["bank"]
     type = filters[:type] || filters["type"]
+    statement_type = filters[:statement_type] || filters["statement_type"]
 
     opts =
       []
       |> maybe_add(:bank, bank)
       |> maybe_add(:type, type)
+      |> maybe_add(:statement_type, statement_type)
 
     summary =
       case month do
@@ -54,8 +40,8 @@ defmodule Granai.Banking.AIAnalyzer do
             m -> "#{Banking.month_name(m)}/#{year}"
           end
 
-        filter_desc = build_filter_desc(bank, type)
-        prompt = build_filtered_prompt(summary, period, filter_desc, granaim_prompt)
+        filter_desc = build_filter_desc(bank, type, statement_type)
+        prompt = build_prompt(summary, period, filter_desc, granaim_prompt)
         call_ai(prompt, config)
     end
   end
@@ -65,13 +51,20 @@ defmodule Granai.Banking.AIAnalyzer do
   defp maybe_add(opts, _key, ""), do: opts
   defp maybe_add(opts, key, val), do: Keyword.put(opts, key, val)
 
-  defp build_filter_desc(bank, type) do
+  defp build_filter_desc(bank, type, statement_type) do
     parts =
       []
       |> add_desc(bank, fn
         nil -> nil
         "all" -> nil
         b -> "Banco: #{String.capitalize(b)}"
+      end)
+      |> add_desc(statement_type, fn
+        nil -> nil
+        "all" -> nil
+        "extrato" -> "Fonte: Extrato bancário"
+        "fatura" -> "Fonte: Fatura de cartão"
+        _ -> nil
       end)
       |> add_desc(type, fn
         nil -> nil
@@ -94,34 +87,24 @@ defmodule Granai.Banking.AIAnalyzer do
     end
   end
 
-  defp build_filtered_prompt(summary, period, filter_desc, granaim_prompt) do
+  defp build_prompt(summary, period, filter_desc, granaim_prompt) do
     base = base_prompt_data(summary)
 
     granaim =
       case granaim_prompt do
         nil -> ""
         "" -> ""
-        p -> "\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n#{p}\n"
+        p -> "\nPERGUNTA/INSTRUÇÃO DO USUÁRIO (responda no campo \"resposta\" do JSON):\n#{p}\n"
       end
+
+    has_prompt = granaim != ""
 
     """
     Analise os dados financeiros de #{period} de um usuário brasileiro e forneça insights úteis.
 
     #{filter_desc}#{base}
     #{granaim}
-    #{json_format_instruction()}
-    """
-  end
-
-  defp build_prompt(summary, year, month) do
-    base = base_prompt_data(summary)
-
-    """
-    Analise os dados financeiros de #{Banking.month_name(month)}/#{year} de um usuário brasileiro e forneça insights úteis.
-
-    #{base}
-
-    #{json_format_instruction()}
+    #{json_format_instruction(has_prompt)}
     """
   end
 
@@ -161,27 +144,41 @@ defmodule Granai.Banking.AIAnalyzer do
     """
   end
 
-  defp json_format_instruction do
+  defp json_format_instruction(has_user_prompt) do
+    resposta_instruction =
+      if has_user_prompt do
+        "\"resposta\": \"Resposta direta e específica à pergunta/instrução do usuário acima\""
+      else
+        "\"resposta\": null"
+      end
+
     """
     Responda em português brasileiro com exatamente este formato JSON:
     {
-      "resumo": "Uma frase resumindo a saúde financeira do mês",
-      "insights": [
-        "Insight 1 sobre os gastos",
-        "Insight 2 sobre padrões identificados",
-        "Insight 3 sobre oportunidades de economia"
+      "nota": <número decimal de 0.0 a 10.0 representando a saúde financeira geral>,
+      "titulo": "Título curto e descritivo da análise (máximo 8 palavras)",
+      "resumo": "Resumo conciso de 2-3 frases sobre a situação financeira do período",
+      "pontos": [
+        {"tipo": "positivo", "texto": "Ponto positivo específico com dados reais"},
+        {"tipo": "negativo", "texto": "Ponto negativo ou preocupante"},
+        {"tipo": "neutro", "texto": "Observação relevante"},
+        {"tipo": "dica", "texto": "Sugestão prática de economia"}
       ],
-      "alerta": "Um alerta importante se houver algo preocupante, ou null se tudo estiver ok",
-      "dica": "Uma dica prática de economia baseada nos dados"
+      "alerta": "Alerta importante se houver algo preocupante, ou null se tudo estiver ok",
+      #{resposta_instruction}
     }
 
-    Retorne APENAS o JSON, sem explicações adicionais. Seja direto e específico com números reais dos dados.
-    IMPORTANTE: Formate todos os valores monetários no padrão brasileiro (ex: R$ 5.550,09 e não R$ 5550.09).
+    REGRAS:
+    - Retorne APENAS o JSON, sem texto adicional
+    - "pontos": inclua entre 3 e 6 pontos, usando os tipos: positivo, negativo, neutro, dica
+    - "nota": baseie-se em: saldo positivo (+), controle de gastos (+), diversificação (-), gastos excessivos (-)
+    - Seja direto e específico com números reais dos dados
+    - Formate valores monetários no padrão brasileiro (R$ 5.550,09)
     """
   end
 
   defp call_ai(prompt, config) do
-    ai_config = Map.merge(config, %{temperature: 0.3, max_output_tokens: 1024})
+    ai_config = Map.merge(config, %{temperature: 0.3, max_output_tokens: 2048})
 
     case Provider.generate_content(prompt, ai_config) do
       {:ok, response_body} -> parse_response(response_body)
@@ -199,7 +196,7 @@ defmodule Granai.Banking.AIAnalyzer do
       end
 
     case Jason.decode(json_text) do
-      {:ok, %{"resumo" => _, "insights" => _, "dica" => _} = result} ->
+      {:ok, %{"nota" => _, "titulo" => _, "resumo" => _, "pontos" => _} = result} ->
         {:ok, result}
 
       {:ok, _} ->

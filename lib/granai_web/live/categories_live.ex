@@ -77,7 +77,7 @@ defmodule GranaiWeb.CategoriesLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="max-w-4xl mx-auto">
+      <div class="max-w-6xl mx-auto">
         <div class="mb-8 flex items-center justify-between">
           <div>
             <h1 class="text-3xl font-bold tracking-tight">Categorias</h1>

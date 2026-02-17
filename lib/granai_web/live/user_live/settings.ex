@@ -9,7 +9,7 @@ defmodule GranaiWeb.UserLive.Settings do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-2xl">
+      <div class="max-w-xl mx-auto">
         <div class="mb-8">
           <h1 class="text-3xl font-bold tracking-tight">Configurações</h1>
           <p class="text-sm opacity-60 mt-1">Gerencie sua conta, preferências e integrações</p>
