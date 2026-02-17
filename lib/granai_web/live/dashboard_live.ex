@@ -546,7 +546,7 @@ defmodule GranaiWeb.DashboardLive do
 
             <%!-- Monthly Spending Chart (year view) --%>
             <div :if={@view_mode == "year"} class="card bg-base-200 p-6">
-              <h3 class="font-semibold mb-4">Gastos Mensais — {@selected_year}</h3>
+              <h3 class="font-semibold mb-4">Gastos Mensais</h3>
               <div
                 id="monthly-spending-chart"
                 phx-hook="DailyChart"

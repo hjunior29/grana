@@ -365,7 +365,7 @@ defmodule GranaiWeb.TransactionsLive do
             </div>
           </form>
           <div class="flex justify-end mt-3">
-            <button type="button" phx-click="clear_filters" class="btn btn-ghost btn-xs">
+            <button type="button" phx-click="clear_filters" class="btn btn-error btn-xs">
               Limpar filtros
             </button>
           </div>
@@ -391,7 +391,7 @@ defmodule GranaiWeb.TransactionsLive do
           <a
             :if={@total > 0}
             href={"/transactions/export?#{build_query_string(@filters)}"}
-            class="btn btn-sm btn-outline gap-1 ml-auto"
+            class="btn btn-sm gap-1 ml-auto"
           >
             <.icon name="hero-arrow-down-tray" class="size-4" />
             Exportar CSV

@@ -54,10 +54,37 @@ defmodule Granai.AI.Providers.Gemini do
         {:ok, resp}
 
       {:ok, %{status: status, body: resp_body}} ->
-        {:error, "API error: #{status} - #{inspect(resp_body)}"}
+        {:error, friendly_error(status, resp_body)}
 
-      {:error, reason} ->
-        {:error, "Request failed: #{inspect(reason)}"}
+      {:error, %Req.TransportError{reason: :timeout}} ->
+        {:error, "A requisição demorou demais. Tente novamente."}
+
+      {:error, %Req.TransportError{reason: :econnrefused}} ->
+        {:error, "Não foi possível conectar ao servidor da API. Verifique sua conexão."}
+
+      {:error, _reason} ->
+        {:error, "Falha na conexão com a API. Verifique sua internet e tente novamente."}
     end
   end
+
+  defp friendly_error(400, %{"error" => %{"status" => "INVALID_ARGUMENT"}}),
+    do: "API Key inválida. Verifique sua chave nas Configurações."
+
+  defp friendly_error(403, _),
+    do: "API Key sem permissão. Verifique se a chave está ativa no Google AI Studio."
+
+  defp friendly_error(429, _),
+    do: "Limite de requisições atingido. Aguarde alguns minutos e tente novamente."
+
+  defp friendly_error(500, _),
+    do: "Erro interno do servidor da Google. Tente novamente em instantes."
+
+  defp friendly_error(503, _),
+    do: "Serviço temporariamente indisponível. Tente novamente em instantes."
+
+  defp friendly_error(status, %{"error" => %{"message" => msg}}),
+    do: "Erro da API (#{status}): #{msg}"
+
+  defp friendly_error(status, _),
+    do: "Erro inesperado da API (código #{status}). Tente novamente."
 end
