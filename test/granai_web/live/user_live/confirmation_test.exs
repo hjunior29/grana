@@ -73,7 +73,7 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
         live(conn, ~p"/users/log-in/#{token}")
         |> follow_redirect(conn, ~p"/users/log-in")
 
-      assert html =~ "Magic link is invalid or it has expired"
+      assert html =~ "Link mágico é inválido ou expirou."
     end
 
     test "logs confirmed user in without changing confirmed_at", %{
@@ -104,7 +104,7 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
         live(conn, ~p"/users/log-in/#{token}")
         |> follow_redirect(conn, ~p"/users/log-in")
 
-      assert html =~ "Magic link is invalid or it has expired"
+      assert html =~ "Link mágico é inválido ou expirou."
     end
 
     test "raises error for invalid token", %{conn: conn} do
@@ -112,7 +112,7 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
         live(conn, ~p"/users/log-in/invalid-token")
         |> follow_redirect(conn, ~p"/users/log-in")
 
-      assert html =~ "Magic link is invalid or it has expired"
+      assert html =~ "Link mágico é inválido ou expirou."
     end
   end
 end

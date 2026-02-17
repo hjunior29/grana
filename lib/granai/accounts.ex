@@ -274,6 +274,13 @@ defmodule Granai.Accounts do
   end
 
   @doc """
+  Deletes a user and all associated data.
+  """
+  def delete_user(user) do
+    Repo.delete(user)
+  end
+
+  @doc """
   Deletes the signed token with the given context.
   """
   def delete_user_session_token(token) do

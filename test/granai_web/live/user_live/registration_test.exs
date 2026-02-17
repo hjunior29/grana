@@ -47,7 +47,7 @@ defmodule GranaiWeb.UserLive.RegistrationTest do
         |> follow_redirect(conn, ~p"/users/log-in")
 
       assert html =~
-               ~r/An email was sent to .*, please access it to confirm your account/
+               ~r/Um e-mail foi enviado para .*, por favor acesse-o para confirmar sua conta/
     end
 
     test "renders errors for duplicated email", %{conn: conn} do
