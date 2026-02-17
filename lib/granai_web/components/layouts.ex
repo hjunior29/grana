@@ -25,7 +25,7 @@ defmodule GranaiWeb.Layouts do
           </.link>
         </div>
         <div :if={@current_scope} class="flex-none">
-          <ul class="menu menu-horizontal gap-1 items-center">
+          <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
             <li>
               <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
             </li>

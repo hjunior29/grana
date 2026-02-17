@@ -22,12 +22,12 @@ defmodule GranaiWeb.TransactionsLiveTest do
     assert html =~ "Sem Categoria"
     assert html =~ "Limpar filtros"
     assert html =~ "Todos os bancos"
-    assert html =~ "Todos os tipos"
+    assert html =~ "Todas transações"
   end
 
   test "shows transaction count", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/transactions")
-    assert html =~ "transação(ões) encontrada(s)"
+    assert html =~ "Nenhuma transação"
   end
 
   test "redirects unauthenticated users", %{conn: _conn} do
