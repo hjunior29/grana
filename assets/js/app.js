@@ -42,6 +42,11 @@ function pct(val, total) {
   return total > 0 ? ((val / total) * 100).toFixed(1) : "0"
 }
 
+// Expose tooltip utilities for inline scripts (landing page)
+window.showTooltip = showTooltip
+window.hideTooltip = hideTooltip
+window.fmtBRL = fmtBRL
+
 // --- Chart Hooks ---
 
 const CategoryChart = {
@@ -351,6 +356,59 @@ const ProjectionChart = {
   }
 }
 
+const ProgressBar = {
+  mounted() {
+    this.realProgress = parseFloat(this.el.dataset.progress) || 0
+    this.displayed = 0
+    this.bar = this.el.querySelector("progress")
+    this.pctEl = this.el.querySelector("[data-pct]")
+    this.tick()
+  },
+  updated() {
+    const newTarget = parseFloat(this.el.dataset.progress) || 0
+    if (newTarget !== this.realProgress) {
+      this.realProgress = newTarget
+      this.tick()
+    }
+  },
+  tick() {
+    if (this.raf) cancelAnimationFrame(this.raf)
+    const isAI = this.el.dataset.ai === "true"
+    const step = () => {
+      const target = this.realProgress
+      if (this.displayed < target) {
+        // Snap quickly to real progress
+        const diff = target - this.displayed
+        this.displayed += Math.max(0.5, diff * 0.15)
+        if (this.displayed > target) this.displayed = target
+        this.update()
+        this.raf = requestAnimationFrame(step)
+      } else if (isAI && target < 100) {
+        // AI only: fake creep while waiting for Gemini
+        const total = parseInt(this.el.dataset.total) || 1
+        const slotSize = 100 / total
+        const ceiling = target + slotSize * 0.85
+        if (this.displayed < ceiling) {
+          this.displayed += 0.06
+          this.update()
+        }
+        this.raf = requestAnimationFrame(step)
+      } else if (this.displayed < 100) {
+        // Local: stay at real progress, keep loop alive for next update
+        this.raf = requestAnimationFrame(step)
+      }
+    }
+    this.raf = requestAnimationFrame(step)
+  },
+  update() {
+    this.bar.value = this.displayed
+    if (this.pctEl) this.pctEl.textContent = Math.round(this.displayed) + "%"
+  },
+  destroyed() {
+    if (this.raf) cancelAnimationFrame(this.raf)
+  }
+}
+
 const DropZone = {
   mounted() {
     let counter = 0
@@ -376,6 +434,25 @@ const DropZone = {
   }
 }
 
+const ActiveNav = {
+  mounted() {
+    this.highlight()
+    this._onNav = () => requestAnimationFrame(() => this.highlight())
+    window.addEventListener("phx:navigate", this._onNav)
+  },
+  destroyed() {
+    window.removeEventListener("phx:navigate", this._onNav)
+  },
+  highlight() {
+    const path = window.location.pathname
+    this.el.querySelectorAll("a[href]").forEach(a => {
+      const href = a.getAttribute("href")
+      const active = path === href || (href !== "/" && path.startsWith(href))
+      a.classList.toggle("menu-active", active)
+    })
+  }
+}
+
 const Hooks = {
   ...colocatedHooks,
   CategoryChart,
@@ -385,6 +462,8 @@ const Hooks = {
   AutoDismiss,
   NotificationStack,
   DropZone,
+  ProgressBar,
+  ActiveNav,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

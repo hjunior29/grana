@@ -14,13 +14,14 @@ defmodule GranaiWeb.UploadLiveTest do
 
   test "shows page description", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/upload")
-    assert html =~ "Importe extratos e faturas em formato CSV ou PDF"
+    assert html =~ "Importe e gerencie seus extratos e faturas"
   end
 
-  test "selecting bank shows upload area", %{conn: conn} do
+  test "selecting bank shows type selection", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/upload")
     html = view |> element("button[phx-value-bank=nubank]") |> render_click()
-    assert html =~ "Arraste arquivos CSV ou PDF"
+    assert html =~ "Extrato"
+    assert html =~ "Fatura"
   end
 
   test "redirects unauthenticated users", %{conn: _conn} do

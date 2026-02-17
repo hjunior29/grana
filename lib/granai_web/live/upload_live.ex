@@ -16,12 +16,16 @@ defmodule GranaiWeb.UploadLive do
       |> assign(:statement_type, nil)
       |> assign(:processing, false)
       |> assign(:results, [])
+      |> assign(:progress_current, 0)
+      |> assign(:progress_total, 0)
+      |> assign(:progress_filename, "")
+      |> assign(:progress_ai, false)
       |> assign(:delete_target, nil)
       |> assign(:selected_ids, MapSet.new())
       |> allow_upload(:statements,
         accept: ~w(.csv .pdf),
-        max_entries: 20,
-        max_file_size: 10_000_000
+        max_entries: 12,
+        max_file_size: 5_000_000
       )
 
     {:ok, socket}
@@ -170,16 +174,44 @@ defmodule GranaiWeb.UploadLive do
         {:ok, {entry.client_name, File.read!(path)}}
       end)
 
+    total = length(file_data)
+    parent = self()
+
     Task.async(fn ->
-      Enum.map(file_data, fn {filename, content} ->
-        case StatementProcessor.process(content, bank, statement_type, user_id, filename) do
-          {:ok, result} -> {:ok, filename, result.transaction_count}
-          {:error, reason} -> {:error, filename, reason}
-        end
+      file_data
+      |> Enum.with_index(1)
+      |> Enum.map(fn {{filename, content}, index} ->
+        send(parent, {:processing_file, index, total, filename})
+
+        result =
+          case StatementProcessor.process(content, bank, statement_type, user_id, filename) do
+            {:ok, r} -> {:ok, filename, r.transaction_count}
+            {:error, reason} -> {:error, filename, reason}
+          end
+
+        send(parent, {:file_done, index, total})
+        result
       end)
     end)
 
-    {:noreply, assign(socket, :upload_bank, bank)}
+    {:noreply,
+     assign(socket,
+       upload_bank: bank,
+       progress_current: 0,
+       progress_total: total,
+       progress_filename: ""
+     )}
+  end
+
+  def handle_info({:processing_file, _index, total, filename}, socket) do
+    is_ai = String.ends_with?(String.downcase(filename), ".pdf")
+
+    {:noreply,
+     assign(socket, progress_total: total, progress_filename: filename, progress_ai: is_ai)}
+  end
+
+  def handle_info({:file_done, index, total}, socket) do
+    {:noreply, assign(socket, progress_current: index, progress_total: total)}
   end
 
   def handle_info({ref, results}, socket) when is_reference(ref) do
@@ -200,6 +232,10 @@ defmodule GranaiWeb.UploadLive do
       |> assign(:processing, false)
       |> assign(:results, successes)
       |> assign(:total, total)
+      |> assign(:progress_current, 0)
+      |> assign(:progress_total, 0)
+      |> assign(:progress_filename, "")
+      |> assign(:progress_ai, false)
 
     socket =
       case {successes, errors} do
@@ -337,6 +373,9 @@ defmodule GranaiWeb.UploadLive do
                 <div class="text-left">
                   <h3 class="font-semibold">Extrato</h3>
                   <p class="text-sm opacity-70">Conta corrente — entradas e saídas</p>
+                  <p class="text-xs opacity-50 mt-1">
+                    {extrato_tip(@bank)}
+                  </p>
                 </div>
               </div>
             </button>
@@ -354,6 +393,9 @@ defmodule GranaiWeb.UploadLive do
                 <div class="text-left">
                   <h3 class="font-semibold">Fatura</h3>
                   <p class="text-sm opacity-70">Cartão de crédito — gastos e parcelas</p>
+                  <p class="text-xs opacity-50 mt-1">
+                    {fatura_tip(@bank)}
+                  </p>
                 </div>
               </div>
             </button>
@@ -364,20 +406,27 @@ defmodule GranaiWeb.UploadLive do
               <div class="flex flex-col items-center gap-4">
                 <div
                   id="drop-zone"
-                  class="w-full border-2 border-dashed border-base-content/20 rounded-xl hover:border-primary/50 transition-all duration-200"
-                  phx-drop-target={@uploads.statements.ref}
+                  class={[
+                    "w-full border-2 border-dashed rounded-xl transition-all duration-200",
+                    (!@processing && "border-base-content/20 hover:border-primary/50") ||
+                      "border-base-content/10 opacity-50 pointer-events-none"
+                  ]}
+                  phx-drop-target={!@processing && @uploads.statements.ref}
                   phx-hook="DropZone"
                 >
-                  <.live_file_input upload={@uploads.statements} class="hidden" />
+                  <.live_file_input upload={@uploads.statements} class="hidden" disabled={@processing} />
                   <label
-                    for={@uploads.statements.ref}
-                    class="cursor-pointer block p-8 text-center"
+                    for={!@processing && @uploads.statements.ref}
+                    class={[
+                      "block p-8 text-center",
+                      (!@processing && "cursor-pointer") || "cursor-not-allowed"
+                    ]}
                   >
                     <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
                     <p class="font-medium">
                       Arraste arquivos CSV ou PDF, ou clique para selecionar
                     </p>
-                    <p class="text-sm opacity-60 mt-1">Até 20 arquivos, máximo 10MB cada</p>
+                    <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
                   </label>
                 </div>
 
@@ -407,13 +456,40 @@ defmodule GranaiWeb.UploadLive do
                 </div>
 
                 <button
+                  :if={!@processing}
                   type="submit"
                   class="btn btn-primary btn-wide"
-                  disabled={@processing || @uploads.statements.entries == []}
+                  disabled={@uploads.statements.entries == []}
                 >
-                  <span :if={@processing} class="loading loading-spinner loading-sm" />
-                  {if @processing, do: "Processando...", else: "Processar"}
+                  Processar
                 </button>
+
+                <div
+                  :if={@processing}
+                  id="upload-progress"
+                  phx-hook="ProgressBar"
+                  data-progress={progress_percent(@progress_current, @progress_total)}
+                  data-total={@progress_total}
+                  data-ai={to_string(@progress_ai)}
+                  class="w-full"
+                >
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                      <span class="loading loading-spinner loading-xs"></span>
+                      <span class="text-sm">
+                        <span :if={@progress_filename != ""} class="font-medium">
+                          {@progress_filename}
+                        </span>
+                        <span :if={@progress_total > 1} class="opacity-60">
+                          — {@progress_current}/{@progress_total}
+                        </span>
+                      </span>
+                    </div>
+                    <span data-pct class="text-sm font-mono opacity-60">0%</span>
+                  </div>
+                  <progress class="progress progress-primary w-full" value="0" max="100">
+                  </progress>
+                </div>
               </div>
             </form>
           </div>
@@ -509,7 +585,7 @@ defmodule GranaiWeb.UploadLive do
                     </td>
                     <td>
                       <span class={[
-                        "badge badge-sm",
+                        "badge badge-sm whitespace-nowrap",
                         (stmt.status == "completed" && "badge-success") || "badge-warning"
                       ]}>
                         {stmt.total_transactions} transações
@@ -595,12 +671,15 @@ defmodule GranaiWeb.UploadLive do
     """
   end
 
+  defp progress_percent(_current, 0), do: 0
+  defp progress_percent(current, total), do: round(current / total * 100)
+
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_bytes(bytes), do: "#{Float.round(bytes / 1024, 1)} KB"
 
-  defp upload_error_to_string(:too_large), do: "Arquivo muito grande (máximo 10MB)"
+  defp upload_error_to_string(:too_large), do: "Arquivo muito grande (máximo 5MB)"
   defp upload_error_to_string(:not_accepted), do: "Tipo de arquivo não aceito (use CSV ou PDF)"
-  defp upload_error_to_string(:too_many_files), do: "Muitos arquivos (máximo 20)"
+  defp upload_error_to_string(:too_many_files), do: "Muitos arquivos (máximo 12)"
   defp upload_error_to_string(err), do: "Erro: #{inspect(err)}"
 
   defp format_datetime_br(dt) do
@@ -631,6 +710,14 @@ defmodule GranaiWeb.UploadLive do
       true -> [1, :dots, current - 1, current, current + 1, :dots, total]
     end
   end
+
+  defp extrato_tip("nubank"), do: "Recomendado: CSV"
+  defp extrato_tip("bradesco"), do: "Recomendado: PDF"
+  defp extrato_tip(_), do: ""
+
+  defp fatura_tip("nubank"), do: "Recomendado: CSV"
+  defp fatura_tip("bradesco"), do: "Recomendado: CSV"
+  defp fatura_tip(_), do: ""
 
   defp type_badge_class("fatura"), do: "badge-warning"
   defp type_badge_class(_), do: "badge-info"

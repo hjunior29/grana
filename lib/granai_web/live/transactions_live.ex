@@ -399,7 +399,7 @@ defmodule GranaiWeb.TransactionsLive do
                     phx-click-away="cancel-edit"
                   >
                     <input type="hidden" name="txn_id" value={txn.id} />
-                    <select name="category_id" class="select select-bordered select-xs">
+                    <select name="category_id" class="select select-bordered select-xs w-auto min-w-0 max-w-36 text-xs py-0 h-6 min-h-0">
                       <option
                         :for={cat <- @categories}
                         value={cat.id}
