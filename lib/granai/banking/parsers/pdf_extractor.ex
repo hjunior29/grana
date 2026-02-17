@@ -1,4 +1,6 @@
 defmodule Granai.Banking.Parsers.PdfExtractor do
+  alias Granai.Banking.Parsers.InstallmentParser
+
   def extract(pdf_bytes, bank) do
     api_key = Application.get_env(:granai, :gemini_api_key) || System.get_env("GEMINI_API_KEY")
 
@@ -56,6 +58,7 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
     - A descrição deve incluir o tipo (ex: "Compra no débito") E o nome do estabelecimento/destinatário
     - Para transferências Pix, inclua o nome do destinatário/remetente na descrição
     - Valores devem ser POSITIVOS (sem sinal negativo)
+    - PRESERVE informações de parcelas na descrição (ex: "Netflix - Parcela 1/3", "Compra Loja - Parcela 2/6")
 
     Retorne APENAS um JSON array, sem explicações:
     [{"date": "01/01/2026", "description": "Pagamento de fatura", "amount": 15.00, "type": "debit"}, ...]
@@ -78,6 +81,7 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
     - Quando houver "DES: nome" ou "REM: nome", inclua o nome na descrição separado por " - "
     - Valores devem ser POSITIVOS (sem sinal negativo)
     - Se uma transação tem valor tanto em Crédito quanto em Débito, trate como duas transações separadas
+    - PRESERVE informações de parcelas na descrição (ex: "LOJA 1/3", "Compra 2/6")
 
     Retorne APENAS um JSON array, sem explicações:
     [{"date": "06/02/2026", "description": "PIX QR CODE DINAMICO - 99 FOOD", "amount": 17.18, "type": "debit"}, ...]
@@ -98,6 +102,7 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
     - IGNORE linhas de subtotais, saldos e cabeçalhos
     - Valores devem ser POSITIVOS
     - Inclua todas as transações individuais
+    - PRESERVE informações de parcelas na descrição (ex: "Parcela 1/3", "2/6")
 
     Retorne APENAS um JSON array, sem explicações:
     [{"date": "01/01/2026", "description": "Descrição", "amount": 100.00, "type": "debit"}, ...]
@@ -138,14 +143,20 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
     case parse_date(date_str) do
       {:ok, date} ->
         decimal_amount = to_decimal(amount)
+        trimmed_desc = String.trim(desc)
+        {cleaned_desc, inst_current, inst_total} = InstallmentParser.extract(trimmed_desc)
+        group_id = InstallmentParser.generate_group_id(cleaned_desc, inst_total)
 
         %{
           date: date,
           amount: if(type == "debit", do: Decimal.negate(decimal_amount), else: decimal_amount),
           type: type,
           identifier: nil,
-          description: String.trim(desc),
-          original_description: String.trim(desc)
+          description: cleaned_desc,
+          original_description: trimmed_desc,
+          installment_current: inst_current,
+          installment_total: inst_total,
+          installment_group_id: group_id
         }
 
       _ ->

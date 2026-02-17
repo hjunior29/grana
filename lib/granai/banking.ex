@@ -20,21 +20,49 @@ defmodule Granai.Banking do
     |> Repo.insert()
   end
 
+  def update_category(%Category{} = category, attrs) do
+    category
+    |> Category.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_category(%Category{is_system: true}), do: {:error, :system_category}
+
+  def delete_category(%Category{} = category) do
+    Repo.delete(category)
+  end
+
+  def category_stats(user_id) do
+    Category
+    |> where([c], is_nil(c.user_id) or c.user_id == ^user_id)
+    |> join(:left, [c], t in Transaction, on: t.category_id == c.id)
+    |> join(:left, [c, _t], r in CategoryRule, on: r.category_id == c.id)
+    |> group_by([c, _t, _r], c.id)
+    |> select([c, t, r], %{
+      category_id: c.id,
+      transaction_count: count(t.id, :distinct),
+      rule_count: count(r.id, :distinct)
+    })
+    |> Repo.all()
+    |> Map.new(fn s -> {s.category_id, s} end)
+  end
+
   def ensure_default_categories(user_id) do
     defaults = [
-      %{name: "Alimentação", icon: "hero-cake", color: "#F59E0B"},
-      %{name: "Transporte", icon: "hero-truck", color: "#3B82F6"},
-      %{name: "Moradia", icon: "hero-home", color: "#8B5CF6"},
-      %{name: "Saúde", icon: "hero-heart", color: "#EF4444"},
-      %{name: "Lazer", icon: "hero-musical-note", color: "#EC4899"},
-      %{name: "Educação", icon: "hero-academic-cap", color: "#06B6D4"},
-      %{name: "Compras", icon: "hero-shopping-bag", color: "#F97316"},
-      %{name: "Transferências", icon: "hero-arrows-right-left", color: "#6366F1"},
-      %{name: "Investimentos", icon: "hero-chart-bar", color: "#10B981"},
-      %{name: "Pagamentos", icon: "hero-credit-card", color: "#64748B"},
-      %{name: "Salário", icon: "hero-banknotes", color: "#22C55E"},
-      %{name: "Assinaturas", icon: "hero-arrow-path", color: "#A855F7"},
-      %{name: "Sem Categoria", icon: "hero-question-mark-circle", color: "#9CA3AF"}
+      %{name: "Alimentação", icon: "hero-cake", color: "#F59E0B", kind: "expense"},
+      %{name: "Transporte", icon: "hero-truck", color: "#3B82F6", kind: "expense"},
+      %{name: "Moradia", icon: "hero-home", color: "#8B5CF6", kind: "expense"},
+      %{name: "Saúde", icon: "hero-heart", color: "#EF4444", kind: "expense"},
+      %{name: "Lazer", icon: "hero-musical-note", color: "#EC4899", kind: "expense"},
+      %{name: "Educação", icon: "hero-academic-cap", color: "#06B6D4", kind: "expense"},
+      %{name: "Compras", icon: "hero-shopping-bag", color: "#F97316", kind: "expense"},
+      %{name: "Transferências", icon: "hero-arrows-right-left", color: "#6366F1", kind: "expense"},
+      %{name: "Investimentos", icon: "hero-chart-bar", color: "#10B981", kind: "investment"},
+      %{name: "Rendimentos", icon: "hero-sparkles", color: "#14B8A6", kind: "income"},
+      %{name: "Pagamentos", icon: "hero-credit-card", color: "#64748B", kind: "expense"},
+      %{name: "Salário", icon: "hero-banknotes", color: "#22C55E", kind: "income"},
+      %{name: "Assinaturas", icon: "hero-arrow-path", color: "#A855F7", kind: "expense"},
+      %{name: "Sem Categoria", icon: "hero-question-mark-circle", color: "#9CA3AF", kind: "expense"}
     ]
 
     Enum.each(defaults, fn cat_attrs ->
@@ -150,9 +178,11 @@ defmodule Granai.Banking do
     query = filter_by_date_to(query, Keyword.get(opts, :date_to))
     query = filter_by_search(query, Keyword.get(opts, :search))
     query = filter_by_bank(query, Keyword.get(opts, :bank), user_id)
+    query = filter_by_statement_type(query, Keyword.get(opts, :statement_type), user_id)
     query = filter_by_type(query, Keyword.get(opts, :type))
     query = filter_by_amount_min(query, Keyword.get(opts, :amount_min))
-    filter_by_amount_max(query, Keyword.get(opts, :amount_max))
+    query = filter_by_amount_max(query, Keyword.get(opts, :amount_max))
+    filter_by_internal(query, Keyword.get(opts, :internal))
   end
 
   defp filter_by_category(query, nil), do: query
@@ -194,7 +224,25 @@ defmodule Granai.Banking do
 
   defp filter_by_type(query, nil), do: query
   defp filter_by_type(query, "all"), do: query
+
+  defp filter_by_type(query, "investment") do
+    query
+    |> join(:inner, [t], c in Category, on: t.category_id == c.id and c.kind == "investment")
+  end
+
   defp filter_by_type(query, type), do: where(query, [t], t.type == ^type)
+
+  defp filter_by_statement_type(query, nil, _user_id), do: query
+  defp filter_by_statement_type(query, "all", _user_id), do: query
+
+  defp filter_by_statement_type(query, st_type, user_id) do
+    stmt_ids =
+      BankStatement
+      |> where([bs], bs.user_id == ^user_id and bs.statement_type == ^st_type)
+      |> select([bs], bs.id)
+
+    where(query, [t], t.bank_statement_id in subquery(stmt_ids))
+  end
 
   defp filter_by_amount_min(query, nil), do: query
 
@@ -207,6 +255,11 @@ defmodule Granai.Banking do
   defp filter_by_amount_max(query, max) do
     where(query, [t], fragment("ABS(?)", t.amount) <= ^max)
   end
+
+  defp filter_by_internal(query, nil), do: query
+  defp filter_by_internal(query, "all"), do: query
+  defp filter_by_internal(query, "hide"), do: where(query, [t], t.is_internal_transfer == false)
+  defp filter_by_internal(query, "only"), do: where(query, [t], t.is_internal_transfer == true)
 
   def get_transaction!(id) do
     Transaction
@@ -231,6 +284,128 @@ defmodule Granai.Banking do
       end)
 
     Repo.insert_all(Transaction, entries)
+  end
+
+  # Internal Transfer Detection
+
+  # Known credit card company names used with "pagto eletron" detection
+  @cc_issuers [
+    "nu pagamentos",
+    "nubank"
+  ]
+
+  # Standalone patterns that always indicate CC bill payment
+  @cc_payment_patterns [
+    "pagamento de fatura",
+    "pag fatura",
+    "pgto fatura"
+  ]
+
+  @transfer_patterns [
+    "pix",
+    "transferência",
+    "transferencia",
+    "ted",
+    "doc",
+    "transf "
+  ]
+
+  def detect_internal_transfers(user_id) do
+    # 1) Reset all
+    Transaction
+    |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
+    |> Repo.update_all(set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)])
+
+    # 2) Mark credit card bill payments in extratos
+    mark_cc_bill_payments(user_id)
+
+    # 3) Mark matching inter-account transfers
+    mark_inter_account_transfers(user_id)
+
+    :ok
+  end
+
+  defp mark_cc_bill_payments(user_id) do
+    extrato_stmt_ids =
+      BankStatement
+      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "extrato")
+      |> select([bs], bs.id)
+
+    transactions =
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.type == "debit")
+      |> where([t], t.bank_statement_id in subquery(extrato_stmt_ids))
+      |> Repo.all()
+
+    cc_payment_ids =
+      transactions
+      |> Enum.filter(fn t ->
+        desc = String.downcase(t.description)
+
+        Enum.any?(@cc_payment_patterns, &String.contains?(desc, &1)) or
+          (String.contains?(desc, "pagto eletron") and
+             Enum.any?(@cc_issuers, &String.contains?(desc, &1)))
+      end)
+      |> Enum.map(& &1.id)
+
+    if cc_payment_ids != [] do
+      Transaction
+      |> where([t], t.id in ^cc_payment_ids)
+      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
+    end
+  end
+
+  defp mark_inter_account_transfers(user_id) do
+    # Load all transactions with their bank info
+    transactions =
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == false)
+      |> preload(:bank_statement)
+      |> Repo.all()
+
+    # Filter to only transfer-like descriptions
+    transfer_txns =
+      Enum.filter(transactions, fn t ->
+        desc = String.downcase(t.description)
+        Enum.any?(@transfer_patterns, &String.contains?(desc, &1))
+      end)
+
+    {debits, credits} = Enum.split_with(transfer_txns, &(&1.type == "debit"))
+
+    # Match debits with credits from different banks, same amount, close dates
+    matched_ids = find_transfer_matches(debits, credits)
+
+    if matched_ids != [] do
+      Transaction
+      |> where([t], t.id in ^matched_ids)
+      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
+    end
+  end
+
+  defp find_transfer_matches(debits, credits) do
+    # Track which credits have already been matched to avoid double-matching
+    {matched_ids, _used_credits} =
+      Enum.reduce(debits, {[], MapSet.new()}, fn debit, {ids, used} ->
+        debit_amount = Decimal.abs(debit.amount)
+        debit_bank = debit.bank_statement && debit.bank_statement.bank
+
+        match =
+          Enum.find(credits, fn credit ->
+            credit_bank = credit.bank_statement && credit.bank_statement.bank
+
+            not MapSet.member?(used, credit.id) and
+              credit_bank != debit_bank and
+              Decimal.equal?(Decimal.abs(credit.amount), debit_amount) and
+              abs(Date.diff(debit.date, credit.date)) <= 3
+          end)
+
+        case match do
+          nil -> {ids, used}
+          credit -> {[debit.id, credit.id | ids], MapSet.put(used, credit.id)}
+        end
+      end)
+
+    matched_ids
   end
 
   # Category Rules
@@ -344,11 +519,14 @@ defmodule Granai.Banking do
       ]) ->
         Map.get(cat_map, "Transferências")
 
-      String.contains?(desc_lower, ["pagamento de fatura"]) ->
+      String.contains?(desc_lower, ["pagamento de fatura", "pagamento recebido"]) ->
         Map.get(cat_map, "Pagamentos")
 
       String.contains?(desc_lower, ["pagamento de boleto", "pagto eletron"]) ->
         Map.get(cat_map, "Pagamentos")
+
+      String.contains?(desc_lower, ["rendimento", "rentab"]) ->
+        Map.get(cat_map, "Rendimentos")
 
       String.contains?(desc_lower, [
         "investimento",
@@ -357,8 +535,6 @@ defmodule Granai.Banking do
         "nuvest",
         "nuinvest",
         "criptomoeda",
-        "rendimento",
-        "rentab",
         "capitalizacao"
       ]) ->
         Map.get(cat_map, "Investimentos")
@@ -407,19 +583,49 @@ defmodule Granai.Banking do
   end
 
   defp build_summary(transactions) do
-    total_income =
-      transactions
-      |> Enum.filter(&(&1.type == "credit"))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+    # 0) Exclude internal transfers (CC bill payments from extrato, inter-account PIX, etc.)
+    {internal, non_internal} = Enum.split_with(transactions, & &1.is_internal_transfer)
 
-    total_expenses =
-      transactions
-      |> Enum.filter(&(&1.type == "debit"))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
+    # 1) Exclude bill payments entirely (e.g. "Pagamento recebido" in Nubank fatura)
+    {_payments, relevant} = Enum.split_with(non_internal, &bill_payment?/1)
+
+    # 2) Separate refunds (estornos) — these discount from expenses
+    {refunds, rest} = Enum.split_with(relevant, &refund?/1)
+
+    # 3) Income = remaining credits (real income from extratos)
+    income_txns = Enum.filter(rest, &(&1.type == "credit"))
+
+    total_income =
+      Enum.reduce(income_txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+
+    # 4) All debits
+    debits = Enum.filter(rest, &(&1.type == "debit"))
+
+    # 5) Separate investments from real expenses
+    {investment_debits, expense_debits} =
+      Enum.split_with(debits, fn t ->
+        t.category && t.category.kind == "investment"
+      end)
+
+    total_investments =
+      Enum.reduce(investment_debits, Decimal.new(0), fn t, acc ->
+        Decimal.add(acc, Decimal.abs(t.amount))
+      end)
+
+    # 6) Gross expenses = debits in expense categories only
+    gross_expenses =
+      Enum.reduce(expense_debits, Decimal.new(0), fn t, acc ->
+        Decimal.add(acc, Decimal.abs(t.amount))
+      end)
+
+    # 7) Refund total to subtract from expenses
+    refund_total =
+      Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+
+    total_expenses = Decimal.sub(gross_expenses, refund_total)
 
     by_category =
-      transactions
-      |> Enum.filter(&(&1.type == "debit"))
+      expense_debits
       |> Enum.group_by(fn t -> t.category end)
       |> Enum.map(fn {category, txns} ->
         total =
@@ -434,11 +640,30 @@ defmodule Granai.Banking do
     %{
       total_income: total_income,
       total_expenses: total_expenses,
-      balance: Decimal.sub(total_income, total_expenses),
+      total_investments: total_investments,
+      balance: Decimal.sub(total_income, Decimal.add(total_expenses, total_investments)),
       by_category: by_category,
       transactions: transactions,
-      transaction_count: length(transactions)
+      transaction_count: length(relevant),
+      income_count: length(income_txns),
+      expense_count: length(expense_debits),
+      investment_count: length(investment_debits),
+      refund_count: length(refunds),
+      internal_count: length(internal)
     }
+  end
+
+  defp bill_payment?(t) do
+    t.type == "credit" and
+      String.contains?(String.downcase(t.description), "pagamento recebido") and
+      t.date.day <= 10
+  end
+
+  defp refund?(t) do
+    t.type == "credit" and
+      (String.contains?(String.downcase(t.description), "estorno") or
+         (String.contains?(String.downcase(t.description), "pagamento recebido") and
+            t.date.day > 10))
   end
 
   def available_months(user_id) do
@@ -471,15 +696,22 @@ defmodule Granai.Banking do
     date_from = Date.new!(year, month, 1)
     date_to = Date.end_of_month(date_from)
 
+    investment_cat_ids =
+      Category
+      |> where([c], (is_nil(c.user_id) or c.user_id == ^user_id) and c.kind == "investment")
+      |> select([c], c.id)
+
     query =
       Transaction
       |> where(
         [t],
         t.user_id == ^user_id and t.type == "debit" and t.date >= ^date_from and
-          t.date <= ^date_to
+          t.date <= ^date_to and t.is_internal_transfer == false
       )
+      |> where([t], t.category_id not in subquery(investment_cat_ids) or is_nil(t.category_id))
 
     query = filter_by_bank(query, Keyword.get(opts, :bank), user_id)
+    query = filter_by_statement_type(query, Keyword.get(opts, :statement_type), user_id)
 
     query
     |> group_by([t], t.date)
@@ -488,36 +720,92 @@ defmodule Granai.Banking do
     |> Repo.all()
   end
 
-  def monthly_income_expenses(user_id, year) do
-    date_from = Date.new!(year, 1, 1)
-    date_to = Date.new!(year, 12, 31)
+  def monthly_income_expenses(user_id, year, opts \\ []) do
+    list_opts =
+      [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)]
+      |> Keyword.merge(Keyword.take(opts, [:bank, :statement_type, :type]))
 
-    Transaction
-    |> where([t], t.user_id == ^user_id and t.date >= ^date_from and t.date <= ^date_to)
-    |> group_by([t], [fragment("EXTRACT(MONTH FROM ?)::integer", t.date), t.type])
-    |> select([t], %{
-      month: fragment("EXTRACT(MONTH FROM ?)::integer", t.date),
-      type: t.type,
-      total: sum(fragment("ABS(?)", t.amount))
-    })
-    |> Repo.all()
-    |> Enum.group_by(& &1.month)
-    |> Enum.map(fn {month, items} ->
+    transactions = list_transactions(user_id, list_opts)
+
+    transactions
+    |> Enum.reject(& &1.is_internal_transfer)
+    |> Enum.group_by(fn t -> t.date.month end)
+    |> Enum.map(fn {month, txns} ->
+      relevant = Enum.reject(txns, &bill_payment?/1)
+      {refunds, rest} = Enum.split_with(relevant, &refund?/1)
+
       income =
-        Enum.find_value(items, Decimal.new(0), fn
-          %{type: "credit", total: t} -> t
-          _ -> nil
+        rest
+        |> Enum.filter(&(&1.type == "credit"))
+        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+
+      debits = Enum.filter(rest, &(&1.type == "debit"))
+
+      {inv_debits, exp_debits} =
+        Enum.split_with(debits, fn t -> t.category && t.category.kind == "investment" end)
+
+      gross_expenses =
+        Enum.reduce(exp_debits, Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.amount))
         end)
 
-      expenses =
-        Enum.find_value(items, Decimal.new(0), fn
-          %{type: "debit", total: t} -> t
-          _ -> nil
+      investments =
+        Enum.reduce(inv_debits, Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.amount))
         end)
 
-      %{month: month, income: income, expenses: expenses}
+      refund_total =
+        Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+
+      %{
+        month: month,
+        income: income,
+        expenses: Decimal.sub(gross_expenses, refund_total),
+        investments: investments
+      }
     end)
     |> Enum.sort_by(& &1.month)
+  end
+
+  def transactions_summary(user_id, opts) do
+    build_transactions_query(user_id, opts)
+    |> exclude(:preload)
+    |> exclude(:order_by)
+    |> where([t], t.is_internal_transfer == false)
+    |> join(:left, [t], c in Category, on: t.category_id == c.id)
+    |> select([t, c], %{
+      total_income:
+        coalesce(
+          sum(fragment("CASE WHEN ? = 'credit' THEN ? ELSE 0 END", t.type, t.amount)),
+          0
+        ),
+      total_expenses:
+        coalesce(
+          sum(
+            fragment(
+              "CASE WHEN ? = 'debit' AND (? IS NULL OR ? != 'investment') THEN ABS(?) ELSE 0 END",
+              t.type,
+              c.kind,
+              c.kind,
+              t.amount
+            )
+          ),
+          0
+        ),
+      total_investments:
+        coalesce(
+          sum(
+            fragment(
+              "CASE WHEN ? = 'debit' AND ? = 'investment' THEN ABS(?) ELSE 0 END",
+              t.type,
+              c.kind,
+              t.amount
+            )
+          ),
+          0
+        )
+    })
+    |> Repo.one()
   end
 
   def uncategorized_count(user_id) do
@@ -534,6 +822,82 @@ defmodule Granai.Banking do
       end
 
     Repo.aggregate(query, :count)
+  end
+
+  # Installments
+
+  def list_active_installments(user_id, opts \\ []) do
+    base =
+      Transaction
+      |> where([t], t.user_id == ^user_id and not is_nil(t.installment_total))
+
+    base = filter_by_bank(base, Keyword.get(opts, :bank), user_id)
+    base = filter_by_statement_type(base, Keyword.get(opts, :statement_type), user_id)
+
+    subquery =
+      base
+      |> group_by([t], t.installment_group_id)
+      |> select([t], %{
+        group_id: t.installment_group_id,
+        max_current: max(t.installment_current)
+      })
+
+    Transaction
+    |> join(:inner, [t], s in subquery(subquery),
+      on: t.installment_group_id == s.group_id and t.installment_current == s.max_current
+    )
+    |> where([t, _s], t.installment_current < t.installment_total)
+    |> preload(:category)
+    |> order_by([t], desc: fragment("ABS(?)", t.amount))
+    |> Repo.all()
+  end
+
+  def installment_projection_summary(user_id, opts \\ []) do
+    installments = list_active_installments(user_id, opts)
+
+    active_count = length(installments)
+
+    total_remaining =
+      Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
+        remaining = txn.installment_total - txn.installment_current
+        Decimal.add(acc, Decimal.mult(Decimal.abs(txn.amount), remaining))
+      end)
+
+    this_month_total =
+      Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
+        Decimal.add(acc, Decimal.abs(txn.amount))
+      end)
+
+    %{
+      active_count: active_count,
+      total_remaining: total_remaining,
+      this_month_total: this_month_total,
+      installments: installments
+    }
+  end
+
+  def monthly_installment_projections(user_id, months_ahead \\ 12, opts \\ []) do
+    installments = list_active_installments(user_id, opts)
+    today = Date.utc_today()
+
+    0..(months_ahead - 1)
+    |> Enum.map(fn offset ->
+      projected_date = Date.new!(today.year, today.month, 1) |> Date.shift(month: offset)
+      month_label = "#{month_name_short(projected_date.month)}/#{projected_date.year}"
+
+      total =
+        Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
+          remaining = txn.installment_total - txn.installment_current
+          if offset < remaining do
+            Decimal.add(acc, Decimal.abs(txn.amount))
+          else
+            acc
+          end
+        end)
+
+      %{label: month_label, total: total}
+    end)
+    |> Enum.reject(fn %{total: t} -> Decimal.compare(t, 0) == :eq end)
   end
 
   # AI Analyses

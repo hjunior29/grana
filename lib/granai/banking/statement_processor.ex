@@ -3,10 +3,10 @@ defmodule Granai.Banking.StatementProcessor do
   alias Granai.Banking.Parsers.{Nubank, NubankFatura, Bradesco, BradescoFatura, PdfExtractor}
   alias Granai.Banking.AICategorizer
 
-  def process(file_content, bank, user_id, filename) do
+  def process(file_content, bank, statement_type, user_id, filename) do
     categories = Banking.ensure_default_categories(user_id)
 
-    parsed = parse_file(file_content, bank, filename)
+    parsed = parse_file(file_content, bank, statement_type, filename)
 
     case parsed do
       {:error, reason} ->
@@ -22,6 +22,7 @@ defmodule Granai.Banking.StatementProcessor do
           Banking.create_statement(%{
             bank: bank,
             filename: filename,
+            statement_type: statement_type,
             user_id: user_id,
             period_start: period_start,
             period_end: period_end,
@@ -39,11 +40,16 @@ defmodule Granai.Banking.StatementProcessor do
               amount: txn.amount,
               type: txn.type,
               identifier: txn.identifier,
+              installment_current: txn[:installment_current],
+              installment_total: txn[:installment_total],
+              installment_group_id: txn[:installment_group_id],
               bank_statement_id: statement.id,
               user_id: user_id,
               category_id: txn.category_id
             }
           end)
+
+        entries = deduplicate(entries, user_id)
 
         {count, _} = Banking.bulk_insert_transactions(entries)
 
@@ -52,11 +58,13 @@ defmodule Granai.Banking.StatementProcessor do
           total_transactions: count
         })
 
+        Banking.detect_internal_transfers(user_id)
+
         {:ok, %{statement_id: statement.id, transaction_count: count}}
     end
   end
 
-  defp parse_file(file_content, bank, filename) do
+  defp parse_file(file_content, bank, statement_type, filename) do
     case file_type(filename) do
       :pdf ->
         case PdfExtractor.extract(file_content, bank) do
@@ -65,41 +73,14 @@ defmodule Granai.Banking.StatementProcessor do
         end
 
       :csv ->
-        parse_csv(file_content, bank)
+        parse_csv(file_content, bank, statement_type)
     end
   end
 
-  defp parse_csv(content, "bradesco") do
-    case detect_bradesco_type(content) do
-      :fatura -> BradescoFatura.parse(content)
-      :extrato -> Bradesco.parse(content)
-    end
-  end
-
-  defp parse_csv(content, "nubank") do
-    case detect_nubank_type(content) do
-      :fatura -> NubankFatura.parse(content)
-      :extrato -> Nubank.parse(content)
-    end
-  end
-
-  defp detect_nubank_type(content) do
-    first_line = content |> String.split(~r/\r\n|\r|\n/, parts: 2) |> List.first("")
-
-    cond do
-      String.starts_with?(first_line, "date,title,amount") -> :fatura
-      true -> :extrato
-    end
-  end
-
-  defp detect_bradesco_type(content) do
-    cond do
-      String.contains?(content, "Fatura") -> :fatura
-      String.contains?(content, "Valor(US$)") -> :fatura
-      String.contains?(content, "Total da fatura") -> :fatura
-      true -> :extrato
-    end
-  end
+  defp parse_csv(content, "nubank", "fatura"), do: NubankFatura.parse(content)
+  defp parse_csv(content, "nubank", "extrato"), do: Nubank.parse(content)
+  defp parse_csv(content, "bradesco", "fatura"), do: BradescoFatura.parse(content)
+  defp parse_csv(content, "bradesco", "extrato"), do: Bradesco.parse(content)
 
   defp file_type(filename) do
     case Path.extname(String.downcase(filename)) do
@@ -154,6 +135,39 @@ defmodule Granai.Banking.StatementProcessor do
             rule_categorized
         end
     end
+  end
+
+  defp deduplicate(entries, user_id) do
+    dates = Enum.map(entries, & &1.date)
+    date_from = Enum.min(dates, Date)
+    date_to = Enum.max(dates, Date)
+
+    existing =
+      Banking.list_transactions(user_id, date_from: date_from, date_to: date_to)
+
+    existing_freq =
+      existing
+      |> Enum.map(&fingerprint/1)
+      |> Enum.frequencies()
+
+    {kept, _freq} =
+      Enum.reduce(entries, {[], existing_freq}, fn entry, {acc, freq} ->
+        key = fingerprint(entry)
+        count = Map.get(freq, key, 0)
+
+        if count > 0 do
+          {acc, Map.put(freq, key, count - 1)}
+        else
+          {[entry | acc], freq}
+        end
+      end)
+
+    Enum.reverse(kept)
+  end
+
+  defp fingerprint(%{date: date, description: desc, amount: amount}) do
+    normalized_amount = amount |> Decimal.round(2) |> Decimal.to_string(:normal)
+    {date, String.downcase(String.trim(desc)), normalized_amount}
   end
 
   defp get_period(transactions) do

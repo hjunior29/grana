@@ -1,4 +1,6 @@
 defmodule Granai.Banking.Parsers.Nubank do
+  alias Granai.Banking.Parsers.InstallmentParser
+
   def parse(csv_content) do
     csv_content
     |> String.split("\n")
@@ -16,13 +18,21 @@ defmodule Granai.Banking.Parsers.Nubank do
             amount = parse_amount(String.trim(value_str))
             type = if Decimal.compare(amount, 0) == :lt, do: "debit", else: "credit"
 
+            trimmed_desc = String.trim(description)
+            cleaned_desc = clean_description(trimmed_desc)
+            {final_desc, inst_current, inst_total} = InstallmentParser.extract(cleaned_desc)
+            group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
+
             %{
               date: date,
               amount: amount,
               type: type,
               identifier: String.trim(identifier),
-              description: clean_description(String.trim(description)),
-              original_description: String.trim(description)
+              description: final_desc,
+              original_description: trimmed_desc,
+              installment_current: inst_current,
+              installment_total: inst_total,
+              installment_group_id: group_id
             }
 
           _ ->

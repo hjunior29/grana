@@ -1,4 +1,6 @@
 defmodule Granai.Banking.Parsers.NubankFatura do
+  alias Granai.Banking.Parsers.InstallmentParser
+
   def parse(csv_content) do
     csv_content
     |> String.split("\n")
@@ -17,13 +19,20 @@ defmodule Granai.Banking.Parsers.NubankFatura do
             amount = Decimal.negate(csv_amount)
             type = if Decimal.compare(amount, 0) == :lt, do: "debit", else: "credit"
 
+            trimmed_title = String.trim(title)
+            {cleaned_desc, inst_current, inst_total} = InstallmentParser.extract(trimmed_title)
+            group_id = InstallmentParser.generate_group_id(cleaned_desc, inst_total)
+
             %{
               date: date,
               amount: amount,
               type: type,
               identifier: nil,
-              description: clean_description(String.trim(title)),
-              original_description: String.trim(title)
+              description: cleaned_desc,
+              original_description: trimmed_title,
+              installment_current: inst_current,
+              installment_total: inst_total,
+              installment_group_id: group_id
             }
 
           _ ->
@@ -68,9 +77,4 @@ defmodule Granai.Banking.Parsers.NubankFatura do
     end
   end
 
-  defp clean_description(desc) do
-    desc
-    |> String.replace(~r/ - Parcela \d+\/\d+$/, "")
-    |> String.trim()
-  end
 end

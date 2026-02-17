@@ -4,8 +4,63 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/granai"
 import topbar from "../vendor/topbar"
 
+// --- Tooltip Utility ---
+const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:oklch(var(--b3) / 0.85);backdrop-filter:blur(8px);color:oklch(var(--bc));box-shadow:0 4px 12px rgba(0,0,0,0.2);font-size:13px;pointer-events:none;white-space:nowrap;display:none"
+
+function showTooltip(container, event, html) {
+  let tip = container.querySelector(".chart-tooltip")
+  if (!tip) {
+    tip = document.createElement("div")
+    tip.className = "chart-tooltip"
+    tip.setAttribute("style", tooltipStyle)
+    container.style.position = "relative"
+    container.appendChild(tip)
+  }
+  tip.innerHTML = html
+  tip.style.display = "block"
+  const rect = container.getBoundingClientRect()
+  let left = event.clientX - rect.left + 12
+  let top = event.clientY - rect.top - 10
+  // Prevent overflow right
+  if (left + tip.offsetWidth > rect.width - 8) {
+    left = event.clientX - rect.left - tip.offsetWidth - 12
+  }
+  tip.style.left = left + "px"
+  tip.style.top = top + "px"
+}
+
+function hideTooltip(container) {
+  const tip = container.querySelector(".chart-tooltip")
+  if (tip) tip.style.display = "none"
+}
+
+function fmtBRL(val) {
+  return "R$ " + val.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})
+}
+
+function pct(val, total) {
+  return total > 0 ? ((val / total) * 100).toFixed(1) : "0"
+}
+
+// --- Chart Hooks ---
+
 const CategoryChart = {
-  mounted() { this.renderChart() },
+  mounted() {
+    this.renderChart()
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-cat-name]")
+      if (!target) return hideTooltip(this.el)
+      const name = target.dataset.catName
+      const value = parseFloat(target.dataset.catValue)
+      const total = parseFloat(target.dataset.catTotal)
+      showTooltip(this.el, e, `<strong>${name}</strong><br>${fmtBRL(value)} · ${pct(value, total)}%`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-cat-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.catUrl})
+    })
+  },
   updated() { this.renderChart() },
   renderChart() {
     const data = JSON.parse(this.el.dataset.categories || "[]")
@@ -37,11 +92,12 @@ const CategoryChart = {
       const ix2 = cx + innerRadius * Math.cos(startAngle)
       const iy2 = cy + innerRadius * Math.sin(startAngle)
 
-      svg += `<path d="M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${item.color}" opacity="0.85" class="transition-opacity hover:opacity-100"><title>${item.name}: R$ ${item.value.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})}</title></path>`
+      const urlAttr = item.url ? ` data-cat-url="${item.url}"` : ""
+      svg += `<path d="M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${item.color}" opacity="0.85" class="transition-all hover:opacity-100 cursor-pointer" style="transform-origin:${cx}px ${cy}px" data-cat-name="${item.name}" data-cat-value="${item.value}" data-cat-total="${total}"${urlAttr}></path>`
       startAngle = endAngle
     })
 
-    const formattedTotal = `R$ ${total.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+    const formattedTotal = fmtBRL(total)
     svg += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" class="fill-base-content text-xs opacity-50">Total</text>`
     svg += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" class="fill-base-content text-sm font-semibold">${formattedTotal}</text>`
     svg += `</svg>`
@@ -59,7 +115,19 @@ const CategoryChart = {
 }
 
 const DailyChart = {
-  mounted() { this.renderChart() },
+  mounted() {
+    this.renderChart()
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-day-date]")
+      if (!target) return hideTooltip(this.el)
+      showTooltip(this.el, e, `<strong>${target.dataset.dayDate}</strong><br>${fmtBRL(parseFloat(target.dataset.dayValue))}`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-day-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.dayUrl})
+    })
+  },
   updated() { this.renderChart() },
   renderChart() {
     const data = JSON.parse(this.el.dataset.daily || "[]")
@@ -82,7 +150,8 @@ const DailyChart = {
       const x = padding.left + (i * (chartWidth / data.length)) + 1
       const y = padding.top + chartHeight - barHeight
 
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-primary opacity-70 hover:opacity-100 transition-opacity"><title>${item.date}: R$ ${item.value.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})}</title></rect>`
+      const urlAttr = item.url ? ` data-day-url="${item.url}"` : ""
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-primary opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${item.date}" data-day-value="${item.value}"${urlAttr}></rect>`
 
       if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
         svg += `<text x="${x + barWidth / 2}" y="${height - 5}" text-anchor="middle" class="fill-base-content text-[8px] opacity-40">${item.date}</text>`
@@ -169,7 +238,23 @@ const NotificationStack = {
 }
 
 const IncomeExpensesChart = {
-  mounted() { this.renderChart() },
+  mounted() {
+    this.renderChart()
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-ie-label]")
+      if (!target) return hideTooltip(this.el)
+      const label = target.dataset.ieLabel
+      const type = target.dataset.ieType
+      const value = parseFloat(target.dataset.ieValue)
+      const typeLabel = type === "income" ? "Receitas" : "Despesas"
+      showTooltip(this.el, e, `<strong>${label}</strong><br>${typeLabel}: ${fmtBRL(value)}`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-ie-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.ieUrl})
+    })
+  },
   updated() { this.renderChart() },
   renderChart() {
     const data = JSON.parse(this.el.dataset.monthly || "[]")
@@ -193,13 +278,66 @@ const IncomeExpensesChart = {
       const incomeH = (item.income / maxVal) * chartHeight
       const expenseH = (item.expenses / maxVal) * chartHeight
 
-      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="fill-success opacity-70 hover:opacity-100 transition-opacity"><title>${item.label} Receitas: R$ ${item.income.toLocaleString("pt-BR", {minimumFractionDigits: 2})}</title></rect>`
-      svg += `<rect x="${x + barWidth + 2}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="fill-error opacity-70 hover:opacity-100 transition-opacity"><title>${item.label} Despesas: R$ ${item.expenses.toLocaleString("pt-BR", {minimumFractionDigits: 2})}</title></rect>`
+      const incUrl = item.income_url ? ` data-ie-url="${item.income_url}"` : ""
+      const expUrl = item.expenses_url ? ` data-ie-url="${item.expenses_url}"` : ""
+
+      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="fill-success opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
+      svg += `<rect x="${x + barWidth + 2}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="fill-error opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
       svg += `<text x="${x + barWidth}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${item.label}</text>`
     })
 
     svg += `</svg>`
     svg += `<div class="flex justify-center gap-6 text-xs opacity-60 mt-1"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-success/70"></span> Receitas</span><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-error/70"></span> Despesas</span></div>`
+
+    const existing = this.el.querySelector(".chart-svg")
+    if (existing) {
+      existing.innerHTML = svg
+    } else {
+      const div = document.createElement("div")
+      div.className = "chart-svg"
+      div.innerHTML = svg
+      this.el.insertBefore(div, this.el.firstChild)
+    }
+  }
+}
+
+const ProjectionChart = {
+  mounted() {
+    this.renderChart()
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-proj-label]")
+      if (!target) return hideTooltip(this.el)
+      showTooltip(this.el, e, `<strong>${target.dataset.projLabel}</strong><br>${fmtBRL(parseFloat(target.dataset.projValue))}`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+  },
+  updated() { this.renderChart() },
+  renderChart() {
+    const data = JSON.parse(this.el.dataset.projections || "[]")
+    if (!data.length) return
+
+    const maxVal = Math.max(...data.map(d => d.value))
+    if (maxVal === 0) return
+
+    const width = 700
+    const height = 220
+    const padding = {top: 20, right: 10, bottom: 35, left: 10}
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+    const barWidth = Math.max(8, (chartWidth / data.length) - 4)
+
+    let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-56">`
+
+    data.forEach((item, i) => {
+      const barHeight = (item.value / maxVal) * chartHeight
+      const x = padding.left + (i * (chartWidth / data.length)) + 2
+      const y = padding.top + chartHeight - barHeight
+
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity" data-proj-label="${item.label}" data-proj-value="${item.value}"></rect>`
+      svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${item.label}</text>`
+    })
+
+    svg += `</svg>`
 
     const existing = this.el.querySelector(".chart-svg")
     if (existing) {
@@ -243,6 +381,7 @@ const Hooks = {
   CategoryChart,
   DailyChart,
   IncomeExpensesChart,
+  ProjectionChart,
   AutoDismiss,
   NotificationStack,
   DropZone,

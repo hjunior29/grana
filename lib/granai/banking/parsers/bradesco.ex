@@ -1,4 +1,6 @@
 defmodule Granai.Banking.Parsers.Bradesco do
+  alias Granai.Banking.Parsers.InstallmentParser
+
   def parse(csv_content) do
     csv_content
     |> String.split("\n")
@@ -34,13 +36,21 @@ defmodule Granai.Banking.Parsers.Bradesco do
                 nil
 
               _ ->
+                trimmed_desc = String.trim(historico)
+                cleaned_desc = clean_description(trimmed_desc)
+                {final_desc, inst_current, inst_total} = InstallmentParser.extract(cleaned_desc)
+                group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
+
                 %{
                   date: date,
                   amount: amount,
                   type: type,
                   identifier: nil,
-                  description: clean_description(String.trim(historico)),
-                  original_description: String.trim(historico)
+                  description: final_desc,
+                  original_description: trimmed_desc,
+                  installment_current: inst_current,
+                  installment_total: inst_total,
+                  installment_group_id: group_id
                 }
             end
 

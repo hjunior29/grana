@@ -17,6 +17,7 @@ defmodule GranaiWeb.TransactionsLive do
       |> assign(:categories, categories)
       |> assign(:banks, banks)
       |> assign(:editing_id, nil)
+      |> assign(:expanded_ids, MapSet.new())
       |> assign(:statement_info, nil)
 
     {:ok, socket}
@@ -29,12 +30,14 @@ defmodule GranaiWeb.TransactionsLive do
     filters = %{
       search: params["search"] || "",
       bank: params["bank"] || "all",
+      statement_type: params["statement_type"] || "all",
       type: params["type"] || "all",
       category_id: params["category_id"] || "all",
       date_from: params["date_from"] || "",
       date_to: params["date_to"] || "",
       amount_min: params["amount_min"] || "",
       amount_max: params["amount_max"] || "",
+      internal: params["internal"] || "all",
       filter: params["filter"] || "all",
       statement_id: params["statement_id"] || nil
     }
@@ -45,12 +48,14 @@ defmodule GranaiWeb.TransactionsLive do
       [page: page, per_page: @per_page]
       |> maybe_add_opt(:search, filters.search)
       |> maybe_add_opt(:bank, filters.bank)
+      |> maybe_add_opt(:statement_type, filters.statement_type)
       |> maybe_add_opt(:type, filters.type)
       |> maybe_add_opt(:category_id, filters.category_id)
       |> maybe_add_opt(:date_from, parse_date(filters.date_from))
       |> maybe_add_opt(:date_to, parse_date(filters.date_to))
       |> maybe_add_opt(:amount_min, parse_decimal(filters.amount_min))
       |> maybe_add_opt(:amount_max, parse_decimal(filters.amount_max))
+      |> maybe_add_opt(:internal, filters.internal)
       |> maybe_add_opt(:bank_statement_id, parse_int_opt(filters.statement_id))
 
     opts =
@@ -61,6 +66,8 @@ defmodule GranaiWeb.TransactionsLive do
 
     {transactions, total} = Banking.list_transactions_paginated(user_id, opts)
     total_pages = max(1, ceil(total / @per_page))
+    summary = Banking.transactions_summary(user_id, opts)
+    internal_count = Enum.count(transactions, & &1.is_internal_transfer)
 
     statement_info =
       case filters.statement_id do
@@ -79,6 +86,8 @@ defmodule GranaiWeb.TransactionsLive do
       |> assign(:transactions, transactions)
       |> assign(:editing_id, nil)
       |> assign(:statement_info, statement_info)
+      |> assign(:summary, summary)
+      |> assign(:internal_count, internal_count)
 
     {:noreply, socket}
   end
@@ -89,12 +98,14 @@ defmodule GranaiWeb.TransactionsLive do
       %{
         search: params["search"] || "",
         bank: params["bank"] || "all",
+        statement_type: params["statement_type"] || "all",
         type: params["type"] || "all",
         category_id: params["category_id"] || "all",
         date_from: params["date_from"] || "",
         date_to: params["date_to"] || "",
         amount_min: params["amount_min"] || "",
-        amount_max: params["amount_max"] || ""
+        amount_max: params["amount_max"] || "",
+        internal: params["internal"] || "all"
       }
       |> maybe_keep_statement(socket.assigns.filters)
       |> build_query_string()
@@ -122,6 +133,18 @@ defmodule GranaiWeb.TransactionsLive do
     filters = %{socket.assigns.filters | filter: filter}
     query_params = build_query_string(filters)
     {:noreply, push_patch(socket, to: "/transactions?#{query_params}")}
+  end
+
+  def handle_event("toggle-description", %{"id" => id}, socket) do
+    id = String.to_integer(id)
+    expanded = socket.assigns.expanded_ids
+
+    expanded =
+      if MapSet.member?(expanded, id),
+        do: MapSet.delete(expanded, id),
+        else: MapSet.put(expanded, id)
+
+    {:noreply, assign(socket, :expanded_ids, expanded)}
   end
 
   def handle_event("edit-category", %{"id" => id}, socket) do
@@ -243,10 +266,18 @@ defmodule GranaiWeb.TransactionsLive do
                 </select>
               </div>
               <div>
+                <select name="statement_type" class="select select-bordered select-sm w-full">
+                  <option value="all" selected={@filters.statement_type == "all"}>Extrato e Fatura</option>
+                  <option value="extrato" selected={@filters.statement_type == "extrato"}>Extrato</option>
+                  <option value="fatura" selected={@filters.statement_type == "fatura"}>Fatura</option>
+                </select>
+              </div>
+              <div>
                 <select name="type" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.type == "all"}>Todos os tipos</option>
+                  <option value="all" selected={@filters.type == "all"}>Todas transações</option>
                   <option value="debit" selected={@filters.type == "debit"}>Despesas</option>
                   <option value="credit" selected={@filters.type == "credit"}>Receitas</option>
+                  <option value="investment" selected={@filters.type == "investment"}>Investimentos</option>
                 </select>
               </div>
               <div>
@@ -257,13 +288,8 @@ defmodule GranaiWeb.TransactionsLive do
                   </option>
                 </select>
               </div>
-              <div>
-                <button type="button" phx-click="clear_filters" class="btn btn-ghost btn-sm w-full">
-                  Limpar filtros
-                </button>
-              </div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
               <div>
                 <label class="text-xs opacity-50 mb-1 block">Data início</label>
                 <input type="date" name="date_from" value={@filters.date_from} class="input input-bordered input-sm w-full" />
@@ -280,27 +306,41 @@ defmodule GranaiWeb.TransactionsLive do
                 <label class="text-xs opacity-50 mb-1 block">Valor máximo</label>
                 <input type="number" name="amount_max" value={@filters.amount_max} step="0.01" placeholder="0,00" class="input input-bordered input-sm w-full" />
               </div>
+              <div>
+                <label class="text-xs opacity-50 mb-1 block">Internas</label>
+                <select name="internal" class="select select-bordered select-sm w-full">
+                  <option value="all" selected={@filters.internal == "all"}>Todas</option>
+                  <option value="hide" selected={@filters.internal == "hide"}>Ocultar internas</option>
+                  <option value="only" selected={@filters.internal == "only"}>Apenas internas</option>
+                </select>
+              </div>
             </div>
           </form>
-          <div class="flex gap-2 mt-3">
-            <button
-              phx-click="filter"
-              phx-value-filter="all"
-              class={["btn btn-xs", (@filters.filter == "all" && "btn-primary") || "btn-ghost"]}
-            >
-              Todas
-            </button>
-            <button
-              phx-click="filter"
-              phx-value-filter="uncategorized"
-              class={["btn btn-xs", (@filters.filter == "uncategorized" && "btn-primary") || "btn-ghost"]}
-            >
-              Sem Categoria
+          <div class="flex justify-end mt-3">
+            <button type="button" phx-click="clear_filters" class="btn btn-ghost btn-xs">
+              Limpar filtros
             </button>
           </div>
         </div>
 
-        <div class="text-sm opacity-60 mb-3">{@total} transação(ões) encontrada(s)</div>
+        <div class="flex items-center gap-4 text-sm mb-3 flex-wrap">
+          <span class="opacity-60" :if={@total == 0}>Nenhuma transação</span>
+          <span class="opacity-60" :if={@total > 1}>{@total} transações</span>
+          <span class="opacity-60" :if={@total == 1}> {@total} transação</span>
+          <span class="text-error font-medium">
+            Despesas: R$ {format_br_number(@summary.total_expenses)}
+          </span>
+          <span class="text-success font-medium">
+            Receitas: R$ {format_br_number(@summary.total_income)}
+          </span>
+          <span :if={Decimal.compare(@summary.total_investments, 0) == :gt} class="text-info font-medium">
+            Investimentos: R$ {format_br_number(@summary.total_investments)}
+          </span>
+          <span :if={@internal_count > 0} class="opacity-50" title="Transferências internas excluídas dos totais">
+            <.icon name="hero-arrows-right-left" class="size-3 inline" />
+            {@internal_count} interna(s) excluída(s)
+          </span>
+        </div>
 
         <div :if={@transactions == []} class="text-center py-16">
           <.icon name="hero-document-magnifying-glass" class="size-16 mx-auto mb-4 opacity-20" />
@@ -323,11 +363,28 @@ defmodule GranaiWeb.TransactionsLive do
               </tr>
             </thead>
             <tbody>
-              <tr :for={txn <- @transactions} class="hover">
+              <tr :for={txn <- @transactions} class={["hover", txn.is_internal_transfer && "opacity-50"]}>
                 <td class="text-sm whitespace-nowrap">{Calendar.strftime(txn.date, "%d/%m/%Y")}</td>
                 <td class="text-sm max-w-xs">
-                  <div class="truncate" title={txn.original_description || txn.description}>
-                    {txn.description}
+                  <div class="flex items-center gap-2">
+                    <span
+                      class={[
+                        "cursor-pointer hover:opacity-70",
+                        !MapSet.member?(@expanded_ids, txn.id) && "truncate"
+                      ]}
+                      phx-click="toggle-description"
+                      phx-value-id={txn.id}
+                      title={if !MapSet.member?(@expanded_ids, txn.id), do: txn.original_description || txn.description}
+                    >
+                      {txn.description}
+                    </span>
+                    <span
+                      :if={txn.is_internal_transfer}
+                      class="badge badge-xs badge-ghost shrink-0 opacity-60"
+                      title="Transferência interna — excluída dos totais"
+                    >
+                      interna
+                    </span>
                   </div>
                 </td>
                 <td>
@@ -336,26 +393,22 @@ defmodule GranaiWeb.TransactionsLive do
                   </span>
                 </td>
                 <td>
-                  <div :if={@editing_id == txn.id} class="flex items-center gap-2">
-                    <form phx-submit="save-category" class="flex items-center gap-2">
-                      <input type="hidden" name="txn_id" value={txn.id} />
-                      <select name="category_id" class="select select-bordered select-xs">
-                        <option
-                          :for={cat <- @categories}
-                          value={cat.id}
-                          selected={txn.category_id == cat.id}
-                        >
-                          {cat.name}
-                        </option>
-                      </select>
-                      <button type="submit" class="btn btn-xs btn-success">
-                        <.icon name="hero-check" class="size-3" />
-                      </button>
-                      <button type="button" phx-click="cancel-edit" class="btn btn-xs btn-ghost">
-                        <.icon name="hero-x-mark" class="size-3" />
-                      </button>
-                    </form>
-                  </div>
+                  <form
+                    :if={@editing_id == txn.id}
+                    phx-change="save-category"
+                    phx-click-away="cancel-edit"
+                  >
+                    <input type="hidden" name="txn_id" value={txn.id} />
+                    <select name="category_id" class="select select-bordered select-xs">
+                      <option
+                        :for={cat <- @categories}
+                        value={cat.id}
+                        selected={txn.category_id == cat.id}
+                      >
+                        {cat.name}
+                      </option>
+                    </select>
+                  </form>
                   <button
                     :if={@editing_id != txn.id}
                     phx-click="edit-category"

@@ -47,8 +47,8 @@ defmodule GranaiWeb.Router do
       live "/dashboard", DashboardLive, :index
       live "/upload", UploadLive, :index
       live "/transactions", TransactionsLive, :index
-      live "/statements", StatementsLive, :index
       live "/analysis", AnalysisLive, :index
+      live "/categories", CategoriesLive, :index
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end

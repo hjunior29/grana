@@ -36,10 +36,10 @@ defmodule GranaiWeb.Layouts do
               <.link navigate={~p"/transactions"} class="text-sm">Transações</.link>
             </li>
             <li>
-              <.link navigate={~p"/statements"} class="text-sm">Extratos</.link>
+              <.link navigate={~p"/categories"} class="text-sm">Categorias</.link>
             </li>
             <li>
-              <.link navigate={~p"/upload"} class="text-sm">Upload</.link>
+              <.link navigate={~p"/upload"} class="text-sm">Uploads</.link>
             </li>
             <li>
               <details class="dropdown dropdown-end">
