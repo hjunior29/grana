@@ -380,7 +380,7 @@ defmodule GranaiWeb.DashboardLive do
 
         <div :if={@summary.transaction_count > 0}>
           <%!-- Stat Cards --%>
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+          <div :if={@selected_type != "fatura"} class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
             <.link
               navigate={transactions_url(assigns, %{type: "credit"})}
               class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
@@ -461,7 +461,7 @@ defmodule GranaiWeb.DashboardLive do
             </.link>
           </div>
 
-          <div :if={@uncategorized_count > 0} class="alert alert-warning mb-6">
+          <div :if={@uncategorized_count > 0 and @selected_type != "fatura"} class="alert alert-warning mb-6">
             <.icon name="hero-exclamation-triangle" class="size-5" />
             <span>Você tem {@uncategorized_count} transações sem categoria.</span>
             <.link navigate={~p"/transactions?filter=uncategorized"} class="btn btn-sm btn-ghost">
@@ -470,7 +470,7 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Charts: Category + Daily/Monthly --%>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div :if={@selected_type != "fatura"} class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div class="card bg-base-200 p-6">
               <h3 class="font-semibold mb-4">Despesas por Categoria</h3>
               <div
@@ -573,7 +573,7 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Top Expenses / Top Income --%>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div :if={@selected_type != "fatura"} class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div class="card bg-base-200 p-6">
               <h3 class="font-semibold mb-4">Top Despesas</h3>
               <div class="space-y-1">
@@ -620,9 +620,9 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Income vs Expenses Chart --%>
-          <div :if={@monthly_ie != []} class="card bg-base-200 p-6 mb-6">
+          <div :if={@monthly_ie != [] and @selected_type != "fatura"} class="card bg-base-200 p-6 mb-6">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 class="font-semibold">Receitas vs Despesas — {@selected_year}</h3>
+              <h3 class="font-semibold">Receitas vs Despesas</h3>
               <div class="flex items-center gap-3 text-sm">
                 <span class={[
                   "font-semibold",
@@ -647,7 +647,7 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Installments --%>
-          <div :if={@installment_summary.active_count > 0} class="mb-8">
+          <div :if={@installment_summary.active_count > 0 and @selected_type != "extrato"} class="mb-8">
             <div class="card bg-base-200 p-6 mb-6">
               <h3 class="font-semibold mb-4">Parcelas Ativas</h3>
               <div class="overflow-x-auto">

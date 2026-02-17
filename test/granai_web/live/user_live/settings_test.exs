@@ -33,7 +33,7 @@ defmodule GranaiWeb.UserLive.SettingsTest do
         |> live(~p"/users/settings")
         |> follow_redirect(conn, ~p"/users/log-in")
 
-      assert conn.resp_body =~ "You must re-authenticate to access this page."
+      assert conn.resp_body =~ "Você deve fazer login para acessar esta página."
     end
   end
 
@@ -118,7 +118,7 @@ defmodule GranaiWeb.UserLive.SettingsTest do
       assert get_session(new_password_conn, :user_token) != get_session(conn, :user_token)
 
       assert Phoenix.Flash.get(new_password_conn.assigns.flash, :info) =~
-               "Password updated successfully"
+               "Senha atualizada com sucesso"
 
       assert Accounts.get_user_by_email_and_password(user.email, new_password)
     end

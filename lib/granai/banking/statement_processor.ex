@@ -6,7 +6,7 @@ defmodule Granai.Banking.StatementProcessor do
   def process(file_content, bank, statement_type, user_id, filename) do
     categories = Banking.ensure_default_categories(user_id)
 
-    parsed = parse_file(file_content, bank, statement_type, filename)
+    parsed = parse_file(file_content, bank, statement_type, filename, user_id)
 
     case parsed do
       {:error, reason} ->
@@ -64,10 +64,10 @@ defmodule Granai.Banking.StatementProcessor do
     end
   end
 
-  defp parse_file(file_content, bank, statement_type, filename) do
+  defp parse_file(file_content, bank, statement_type, filename, user_id) do
     case file_type(filename) do
       :pdf ->
-        case PdfExtractor.extract(file_content, bank) do
+        case PdfExtractor.extract(file_content, bank, user_id) do
           {:ok, transactions} -> transactions
           {:error, reason} -> {:error, reason}
         end
@@ -112,7 +112,7 @@ defmodule Granai.Banking.StatementProcessor do
       items ->
         descriptions = Enum.map(items, & &1.description)
 
-        case AICategorizer.categorize_batch(descriptions, categories) do
+        case AICategorizer.categorize_batch(descriptions, categories, user_id) do
           {:ok, ai_category_ids} ->
             ai_map =
               Enum.zip(descriptions, ai_category_ids)

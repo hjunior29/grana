@@ -28,6 +28,7 @@ defmodule GranaiWeb.AnalysisLive do
       |> assign(:available_months, months)
       |> assign(:analyses, analyses)
       |> assign(:loading, false)
+      |> assign(:show_api_key_alert, false)
       |> assign(:filters, %{
         year: current_year,
         month: 0,
@@ -58,18 +59,29 @@ defmodule GranaiWeb.AnalysisLive do
 
   def handle_event("analyze", _params, socket) do
     %{current_scope: scope, filters: filters, granaim_prompt: prompt} = socket.assigns
-    socket = assign(socket, :loading, true)
 
-    Task.async(fn ->
-      granaim = case prompt do
-        "" -> nil
-        p -> p
-      end
+    case Granai.Accounts.get_user_ai_config(scope.user.id) do
+      {:error, :no_api_key} ->
+        {:noreply, assign(socket, :show_api_key_alert, true)}
 
-      AIAnalyzer.analyze_with_filters(scope.user.id, filters, granaim)
-    end)
+      {:ok, _config} ->
+        socket = assign(socket, :loading, true)
 
-    {:noreply, socket}
+        Task.async(fn ->
+          granaim = case prompt do
+            "" -> nil
+            p -> p
+          end
+
+          AIAnalyzer.analyze_with_filters(scope.user.id, filters, granaim)
+        end)
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("dismiss_api_alert", _params, socket) do
+    {:noreply, assign(socket, :show_api_key_alert, false)}
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
@@ -315,6 +327,33 @@ defmodule GranaiWeb.AnalysisLive do
             </div>
           </div>
         </div>
+
+        <dialog
+          :if={@show_api_key_alert}
+          class="modal modal-open"
+          phx-window-keydown="dismiss_api_alert"
+          phx-key="Escape"
+        >
+          <div class="modal-box">
+            <h3 class="text-lg font-bold">API Key não configurada</h3>
+            <p class="py-4 opacity-70">
+              Para usar funcionalidades de IA (análise, categorização automática e extração de PDFs),
+              você precisa configurar uma API Key do Google Gemini.
+            </p>
+            <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
+              <li>Acesse <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">Google AI Studio</a></li>
+              <li>Crie uma API Key gratuita</li>
+              <li>Cole a chave nas Configurações</li>
+            </ol>
+            <div class="modal-action">
+              <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>
+              <.link navigate={~p"/users/settings"} class="btn btn-primary">Ir para Configurações</.link>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button phx-click="dismiss_api_alert">close</button>
+          </form>
+        </dialog>
 
         <dialog
           :if={@delete_target}

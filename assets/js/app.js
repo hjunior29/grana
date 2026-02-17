@@ -84,7 +84,7 @@ const CategoryChart = {
     let startAngle = -Math.PI / 2
 
     data.forEach(item => {
-      const sliceAngle = (item.value / total) * 2 * Math.PI
+      const sliceAngle = Math.min((item.value / total) * 2 * Math.PI, 2 * Math.PI - 0.001)
       const endAngle = startAngle + sliceAngle
       const largeArc = sliceAngle > Math.PI ? 1 : 0
 
@@ -360,41 +360,41 @@ const ProgressBar = {
   mounted() {
     this.realProgress = parseFloat(this.el.dataset.progress) || 0
     this.displayed = 0
+    this.isAI = this.el.dataset.ai === "true"
     this.bar = this.el.querySelector("progress")
     this.pctEl = this.el.querySelector("[data-pct]")
     this.tick()
   },
   updated() {
     const newTarget = parseFloat(this.el.dataset.progress) || 0
-    if (newTarget !== this.realProgress) {
+    const newAI = this.el.dataset.ai === "true"
+    if (newTarget !== this.realProgress || newAI !== this.isAI) {
       this.realProgress = newTarget
+      this.isAI = newAI
       this.tick()
     }
   },
   tick() {
     if (this.raf) cancelAnimationFrame(this.raf)
-    const isAI = this.el.dataset.ai === "true"
     const step = () => {
       const target = this.realProgress
       if (this.displayed < target) {
-        // Snap quickly to real progress
         const diff = target - this.displayed
         this.displayed += Math.max(0.5, diff * 0.15)
         if (this.displayed > target) this.displayed = target
         this.update()
         this.raf = requestAnimationFrame(step)
-      } else if (isAI && target < 100) {
-        // AI only: fake creep while waiting for Gemini
+      } else if (this.isAI && target < 100) {
         const total = parseInt(this.el.dataset.total) || 1
         const slotSize = 100 / total
-        const ceiling = target + slotSize * 0.85
-        if (this.displayed < ceiling) {
-          this.displayed += 0.06
+        const ceiling = target + slotSize * 0.92
+        const remaining = ceiling - this.displayed
+        if (remaining > 0.01) {
+          this.displayed += Math.max(0.01, remaining * 0.007)
           this.update()
         }
         this.raf = requestAnimationFrame(step)
       } else if (this.displayed < 100) {
-        // Local: stay at real progress, keep loop alive for next update
         this.raf = requestAnimationFrame(step)
       }
     }

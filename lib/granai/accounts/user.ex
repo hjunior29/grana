@@ -9,6 +9,10 @@ defmodule Granai.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
 
+    field :ai_provider, :string, default: "gemini"
+    field :ai_model, :string, default: "gemini-2.0-flash"
+    field :ai_api_key, :string, redact: true
+
     timestamps(type: :utc_datetime)
   end
 
@@ -128,5 +132,12 @@ defmodule Granai.Accounts.User do
   def valid_password?(_, _) do
     Bcrypt.no_user_verify()
     false
+  end
+
+  def ai_settings_changeset(user, attrs \\ %{}) do
+    user
+    |> cast(attrs, [:ai_provider, :ai_model, :ai_api_key])
+    |> validate_inclusion(:ai_provider, ["gemini"])
+    |> validate_inclusion(:ai_model, ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"])
   end
 end

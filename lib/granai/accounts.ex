@@ -301,4 +301,34 @@ defmodule Granai.Accounts do
       end
     end)
   end
+
+  ## AI Settings
+
+  def change_user_ai_settings(user, attrs \\ %{}) do
+    User.ai_settings_changeset(user, attrs)
+  end
+
+  def update_user_ai_settings(user, attrs) do
+    user
+    |> User.ai_settings_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def get_user_ai_config(user_id) do
+    user = get_user!(user_id)
+    api_key = user.ai_api_key
+
+    case api_key do
+      nil ->
+        {:error, :no_api_key}
+
+      key ->
+        {:ok,
+         %{
+           provider: user.ai_provider || "gemini",
+           model: user.ai_model || "gemini-2.0-flash",
+           api_key: key
+         }}
+    end
+  end
 end

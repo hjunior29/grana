@@ -1,34 +1,32 @@
 defmodule Granai.Banking.AIAnalyzer do
+  alias Granai.Accounts
   alias Granai.Banking
+  alias Granai.AI.Provider
 
   def analyze_month(user_id, year, month) do
-    api_key = Application.get_env(:granai, :gemini_api_key) || System.get_env("GEMINI_API_KEY")
-
-    case api_key do
-      nil -> {:error, "GEMINI_API_KEY not configured"}
-      key -> do_analyze(user_id, year, month, key)
+    case Accounts.get_user_ai_config(user_id) do
+      {:error, :no_api_key} -> {:error, :no_api_key}
+      {:ok, config} -> do_analyze(user_id, year, month, config)
     end
   end
 
   def analyze_with_filters(user_id, filters, granaim_prompt \\ nil) do
-    api_key = Application.get_env(:granai, :gemini_api_key) || System.get_env("GEMINI_API_KEY")
-
-    case api_key do
-      nil -> {:error, "GEMINI_API_KEY not configured"}
-      key -> do_analyze_filtered(user_id, filters, granaim_prompt, key)
+    case Accounts.get_user_ai_config(user_id) do
+      {:error, :no_api_key} -> {:error, :no_api_key}
+      {:ok, config} -> do_analyze_filtered(user_id, filters, granaim_prompt, config)
     end
   end
 
-  defp do_analyze(user_id, year, month, api_key) do
+  defp do_analyze(user_id, year, month, config) do
     summary = Banking.monthly_summary(user_id, year, month)
 
     case summary.transaction_count do
       0 -> {:error, "Nenhuma transação encontrada neste período"}
-      _ -> call_gemini(build_prompt(summary, year, month), api_key)
+      _ -> call_ai(build_prompt(summary, year, month), config)
     end
   end
 
-  defp do_analyze_filtered(user_id, filters, granaim_prompt, api_key) do
+  defp do_analyze_filtered(user_id, filters, granaim_prompt, config) do
     month = filters[:month] || filters["month"]
     year = filters[:year] || filters["year"]
     bank = filters[:bank] || filters["bank"]
@@ -58,7 +56,7 @@ defmodule Granai.Banking.AIAnalyzer do
 
         filter_desc = build_filter_desc(bank, type)
         prompt = build_filtered_prompt(summary, period, filter_desc, granaim_prompt)
-        call_gemini(prompt, api_key)
+        call_ai(prompt, config)
     end
   end
 
@@ -182,32 +180,17 @@ defmodule Granai.Banking.AIAnalyzer do
     """
   end
 
-  defp call_gemini(prompt, api_key) do
-    url =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=#{api_key}"
+  defp call_ai(prompt, config) do
+    ai_config = Map.merge(config, %{temperature: 0.3, max_output_tokens: 1024})
 
-    body = %{
-      contents: [%{parts: [%{text: prompt}]}],
-      generationConfig: %{temperature: 0.3, maxOutputTokens: 1024}
-    }
-
-    case Req.post(url, json: body) do
-      {:ok, %{status: 200, body: response_body}} ->
-        parse_response(response_body)
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, "Gemini API error: #{status} - #{inspect(body)}"}
-
-      {:error, reason} ->
-        {:error, "Request failed: #{inspect(reason)}"}
+    case Provider.generate_content(prompt, ai_config) do
+      {:ok, response_body} -> parse_response(response_body)
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp parse_response(response_body) do
-    text =
-      response_body
-      |> get_in(["candidates", Access.at(0), "content", "parts", Access.at(0), "text"])
-      |> to_string()
+    text = Provider.extract_text(response_body)
 
     json_text =
       case Regex.run(~r/\{.*\}/s, text) do

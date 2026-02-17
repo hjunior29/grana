@@ -22,6 +22,7 @@ defmodule GranaiWeb.UploadLive do
       |> assign(:progress_ai, false)
       |> assign(:delete_target, nil)
       |> assign(:selected_ids, MapSet.new())
+      |> assign(:show_api_key_alert, false)
       |> allow_upload(:statements,
         accept: ~w(.csv .pdf),
         max_entries: 12,
@@ -76,6 +77,11 @@ defmodule GranaiWeb.UploadLive do
     bank = socket.assigns.bank
     statement_type = socket.assigns.statement_type
 
+    has_pdf =
+      Enum.any?(socket.assigns.uploads.statements.entries, fn entry ->
+        String.ends_with?(String.downcase(entry.client_name), ".pdf")
+      end)
+
     cond do
       is_nil(bank) ->
         {:noreply, put_flash(socket, :error, "Selecione um banco antes de fazer upload")}
@@ -83,11 +89,26 @@ defmodule GranaiWeb.UploadLive do
       is_nil(statement_type) ->
         {:noreply, put_flash(socket, :error, "Selecione o tipo (extrato ou fatura)")}
 
+      has_pdf ->
+        case Granai.Accounts.get_user_ai_config(scope.user.id) do
+          {:error, :no_api_key} ->
+            {:noreply, assign(socket, :show_api_key_alert, true)}
+
+          {:ok, _config} ->
+            socket = assign(socket, :processing, true)
+            send(self(), {:process_uploads, bank, statement_type, scope.user.id})
+            {:noreply, socket}
+        end
+
       true ->
         socket = assign(socket, :processing, true)
         send(self(), {:process_uploads, bank, statement_type, scope.user.id})
         {:noreply, socket}
     end
+  end
+
+  def handle_event("dismiss_api_alert", _params, socket) do
+    {:noreply, assign(socket, :show_api_key_alert, false)}
   end
 
   def handle_event("cancel-upload", %{"ref" => ref}, socket) do
@@ -666,6 +687,31 @@ defmodule GranaiWeb.UploadLive do
             </form>
           </dialog>
         </div>
+        <dialog
+          :if={@show_api_key_alert}
+          class="modal modal-open"
+          phx-window-keydown="dismiss_api_alert"
+          phx-key="Escape"
+        >
+          <div class="modal-box">
+            <h3 class="text-lg font-bold">API Key não configurada</h3>
+            <p class="py-4 opacity-70">
+              Para processar arquivos PDF, é necessário configurar uma API Key do Google Gemini. A IA é usada para extrair as transações do PDF.
+            </p>
+            <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
+              <li>Acesse <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">Google AI Studio</a></li>
+              <li>Crie uma API Key gratuita</li>
+              <li>Cole a chave nas Configurações</li>
+            </ol>
+            <div class="modal-action">
+              <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>
+              <.link navigate={~p"/users/settings"} class="btn btn-primary">Ir para Configurações</.link>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button phx-click="dismiss_api_alert">close</button>
+          </form>
+        </dialog>
       </div>
     </Layouts.app>
     """
