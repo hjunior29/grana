@@ -1,14 +1,15 @@
 defmodule Granai.Banking.AICategorizer do
-  def categorize_batch(descriptions, categories) when is_list(descriptions) do
-    api_key = Application.get_env(:granai, :gemini_api_key) || System.get_env("GEMINI_API_KEY")
+  alias Granai.Accounts
+  alias Granai.AI.Provider
 
-    case api_key do
-      nil -> {:error, "GEMINI_API_KEY not configured"}
-      key -> do_categorize(descriptions, categories, key)
+  def categorize_batch(descriptions, categories, user_id) when is_list(descriptions) do
+    case Accounts.get_user_ai_config(user_id) do
+      {:error, :no_api_key} -> {:error, :no_api_key}
+      {:ok, config} -> do_categorize(descriptions, categories, config)
     end
   end
 
-  defp do_categorize(descriptions, categories, api_key) do
+  defp do_categorize(descriptions, categories, config) do
     category_names = Enum.map(categories, & &1.name) |> Enum.join(", ")
 
     numbered_descriptions =
@@ -27,31 +28,16 @@ defmodule Granai.Banking.AICategorizer do
     If unsure, use "Sem Categoria". No explanation, just the JSON array.
     """
 
-    url =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=#{api_key}"
+    ai_config = Map.merge(config, %{temperature: 0.1, max_output_tokens: 2048})
 
-    body = %{
-      contents: [%{parts: [%{text: prompt}]}],
-      generationConfig: %{temperature: 0.1, maxOutputTokens: 2048}
-    }
-
-    case Req.post(url, json: body) do
-      {:ok, %{status: 200, body: response_body}} ->
-        parse_response(response_body, categories)
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, "Gemini API error: #{status} - #{inspect(body)}"}
-
-      {:error, reason} ->
-        {:error, "Request failed: #{inspect(reason)}"}
+    case Provider.generate_content(prompt, ai_config) do
+      {:ok, response_body} -> parse_response(response_body, categories)
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp parse_response(response_body, categories) do
-    text =
-      response_body
-      |> get_in(["candidates", Access.at(0), "content", "parts", Access.at(0), "text"])
-      |> to_string()
+    text = Provider.extract_text(response_body)
 
     json_text =
       case Regex.run(~r/\[.*\]/s, text) do

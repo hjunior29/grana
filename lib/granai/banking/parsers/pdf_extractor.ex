@@ -1,42 +1,22 @@
 defmodule Granai.Banking.Parsers.PdfExtractor do
+  alias Granai.Accounts
+  alias Granai.AI.Provider
   alias Granai.Banking.Parsers.InstallmentParser
 
-  def extract(pdf_bytes, bank) do
-    api_key = Application.get_env(:granai, :gemini_api_key) || System.get_env("GEMINI_API_KEY")
-
-    case api_key do
-      nil -> {:error, "GEMINI_API_KEY not configured"}
-      key -> do_extract(pdf_bytes, bank, key)
+  def extract(pdf_bytes, bank, user_id) do
+    case Accounts.get_user_ai_config(user_id) do
+      {:error, :no_api_key} -> {:error, :no_api_key}
+      {:ok, config} -> do_extract(pdf_bytes, bank, config)
     end
   end
 
-  defp do_extract(pdf_bytes, bank, api_key) do
+  defp do_extract(pdf_bytes, bank, config) do
     base64 = Base.encode64(pdf_bytes)
+    ai_config = Map.merge(config, %{temperature: 0.1, max_output_tokens: 8192, receive_timeout: 120_000})
 
-    url =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=#{api_key}"
-
-    body = %{
-      contents: [
-        %{
-          parts: [
-            %{inline_data: %{mime_type: "application/pdf", data: base64}},
-            %{text: prompt_for(bank)}
-          ]
-        }
-      ],
-      generationConfig: %{temperature: 0.1, maxOutputTokens: 8192}
-    }
-
-    case Req.post(url, json: body, receive_timeout: 120_000) do
-      {:ok, %{status: 200, body: response_body}} ->
-        parse_response(response_body)
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, "Gemini API error: #{status} - #{inspect(body)}"}
-
-      {:error, reason} ->
-        {:error, "Request failed: #{inspect(reason)}"}
+    case Provider.generate_content_with_file(base64, "application/pdf", prompt_for(bank), ai_config) do
+      {:ok, response_body} -> parse_response(response_body)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -110,10 +90,7 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
   end
 
   defp parse_response(response_body) do
-    text =
-      response_body
-      |> get_in(["candidates", Access.at(0), "content", "parts", Access.at(0), "text"])
-      |> to_string()
+    text = Provider.extract_text(response_body)
 
     json_text =
       case Regex.run(~r/\[.*\]/s, text) do

@@ -18,6 +18,7 @@ defmodule GranaiWeb.TransactionsLive do
       |> assign(:banks, banks)
       |> assign(:editing_id, nil)
       |> assign(:expanded_ids, MapSet.new())
+      |> assign(:selected_ids, MapSet.new())
       |> assign(:statement_info, nil)
 
     {:ok, socket}
@@ -85,6 +86,7 @@ defmodule GranaiWeb.TransactionsLive do
       |> assign(:total, total)
       |> assign(:transactions, transactions)
       |> assign(:editing_id, nil)
+      |> assign(:selected_ids, MapSet.new())
       |> assign(:statement_info, statement_info)
       |> assign(:summary, summary)
       |> assign(:internal_count, internal_count)
@@ -173,6 +175,52 @@ defmodule GranaiWeb.TransactionsLive do
       |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
 
     {:noreply, socket}
+  end
+
+  def handle_event("toggle-select", %{"id" => id}, socket) do
+    id = String.to_integer(id)
+    selected = socket.assigns.selected_ids
+
+    selected =
+      if MapSet.member?(selected, id),
+        do: MapSet.delete(selected, id),
+        else: MapSet.put(selected, id)
+
+    {:noreply, assign(socket, :selected_ids, selected)}
+  end
+
+  def handle_event("toggle-select-all", _params, socket) do
+    %{transactions: transactions, selected_ids: selected} = socket.assigns
+    page_ids = MapSet.new(transactions, & &1.id)
+
+    selected =
+      if MapSet.subset?(page_ids, selected),
+        do: MapSet.difference(selected, page_ids),
+        else: MapSet.union(selected, page_ids)
+
+    {:noreply, assign(socket, :selected_ids, selected)}
+  end
+
+  def handle_event("bulk-categorize", %{"category_id" => category_id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    ids = MapSet.to_list(socket.assigns.selected_ids)
+    cat_id = String.to_integer(category_id)
+
+    {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
+
+    query_params = build_query_string(socket.assigns.filters)
+
+    socket =
+      socket
+      |> assign(:selected_ids, MapSet.new())
+      |> put_flash(:info, "#{count} transação(ões) atualizada(s)")
+      |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
+
+    {:noreply, socket}
+  end
+
+  def handle_event("clear-selection", _params, socket) do
+    {:noreply, assign(socket, :selected_ids, MapSet.new())}
   end
 
   defp maybe_keep_statement(params, %{statement_id: nil}), do: params
@@ -350,6 +398,22 @@ defmodule GranaiWeb.TransactionsLive do
           </a>
         </div>
 
+        <div
+          :if={MapSet.size(@selected_ids) > 0}
+          class="flex items-center gap-3 flex-wrap bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4"
+        >
+          <span class="text-sm font-medium">
+            {MapSet.size(@selected_ids)} selecionada(s)
+          </span>
+          <form phx-submit="bulk-categorize" class="flex items-center gap-2">
+            <select name="category_id" class="select select-bordered select-sm">
+              <option :for={cat <- @categories} value={cat.id}>{cat.name}</option>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+          </form>
+          <button phx-click="clear-selection" class="btn btn-ghost btn-sm">Limpar</button>
+        </div>
+
         <div :if={@transactions == []} class="text-center py-16">
           <.icon name="hero-document-magnifying-glass" class="size-16 mx-auto mb-4 opacity-20" />
           <h2 class="text-xl font-semibold mb-2">Nenhuma transação encontrada</h2>
@@ -363,6 +427,14 @@ defmodule GranaiWeb.TransactionsLive do
           <table class="table">
             <thead>
               <tr>
+                <th class="w-8">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-xs"
+                    checked={all_selected?(@transactions, @selected_ids)}
+                    phx-click="toggle-select-all"
+                  />
+                </th>
                 <th>Data</th>
                 <th>Descrição</th>
                 <th>Banco</th>
@@ -372,6 +444,15 @@ defmodule GranaiWeb.TransactionsLive do
             </thead>
             <tbody>
               <tr :for={txn <- @transactions} class={["hover", txn.is_internal_transfer && "opacity-50"]}>
+                <td>
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-xs"
+                    checked={MapSet.member?(@selected_ids, txn.id)}
+                    phx-click="toggle-select"
+                    phx-value-id={txn.id}
+                  />
+                </td>
                 <td class="text-sm whitespace-nowrap">{Calendar.strftime(txn.date, "%d/%m/%Y")}</td>
                 <td class="text-sm max-w-xs">
                   <div class="flex items-center gap-2">
@@ -506,6 +587,11 @@ defmodule GranaiWeb.TransactionsLive do
     |> Enum.join(".")
     |> String.reverse()
     |> Kernel.<>(",#{dec_part}")
+  end
+
+  defp all_selected?([], _selected), do: false
+  defp all_selected?(transactions, selected) do
+    Enum.all?(transactions, &MapSet.member?(selected, &1.id))
   end
 
   defp page_range(_current, total) when total <= 7, do: Enum.to_list(1..total)

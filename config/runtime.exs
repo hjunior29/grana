@@ -42,7 +42,6 @@ end
 
 config :granai, GranaiWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
-config :granai, :gemini_api_key, System.get_env("GEMINI_API_KEY")
 
 if config_env() == :prod do
   database_url =

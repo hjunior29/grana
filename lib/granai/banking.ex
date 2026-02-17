@@ -273,6 +273,13 @@ defmodule Granai.Banking do
     |> Repo.update()
   end
 
+  def bulk_update_categories(transaction_ids, category_id, user_id) do
+    from(t in Transaction,
+      where: t.id in ^transaction_ids and t.user_id == ^user_id
+    )
+    |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
+  end
+
   def bulk_insert_transactions(transactions_attrs) do
     now = DateTime.utc_now(:second)
 
@@ -507,10 +514,12 @@ defmodule Granai.Banking do
       ]) ->
         Map.get(cat_map, "Educação")
 
-      String.contains?(desc_lower, ["transferência recebida", "transferencia recebida"]) ->
+      String.contains?(desc_lower, ["salário", "salario", "folha de pagamento", "pro-labore", "pró-labore"]) ->
         Map.get(cat_map, "Salário")
 
       String.contains?(desc_lower, [
+        "transferência recebida",
+        "transferencia recebida",
         "transferência enviada",
         "transferencia enviada",
         "transferencia pix",

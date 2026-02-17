@@ -9,7 +9,7 @@ defmodule GranaiWeb.UserSessionController do
   end
 
   def create(conn, params) do
-    create(conn, params, "Welcome back!")
+    create(conn, params, "Bem vindo de volta!")
   end
 
   # magic link login
@@ -56,7 +56,7 @@ defmodule GranaiWeb.UserSessionController do
 
     conn
     |> put_session(:user_return_to, ~p"/users/settings")
-    |> create(params, "Password updated successfully!")
+    |> create(params, "Senha atualizada com sucesso!")
   end
 
   def delete(conn, _params) do
