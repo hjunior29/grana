@@ -23,7 +23,12 @@ defmodule GranaiWeb.UserLive.Settings do
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <h4 class="text-sm font-medium opacity-70 mb-3">Email</h4>
-              <.form for={@email_form} id="email_form" phx-submit="update_email" phx-change="validate_email">
+              <.form
+                for={@email_form}
+                id="email_form"
+                phx-submit="update_email"
+                phx-change="validate_email"
+              >
                 <.input
                   field={@email_form[:email]}
                   type="email"
@@ -31,7 +36,9 @@ defmodule GranaiWeb.UserLive.Settings do
                   autocomplete="username"
                   required
                 />
-                <.button class="btn btn-primary w-full btn-sm" phx-disable-with="Alterando...">Alterar Email</.button>
+                <.button class="btn btn-primary w-full btn-sm" phx-disable-with="Alterando...">
+                  Alterar Email
+                </.button>
               </.form>
             </div>
             <div>
@@ -78,21 +85,47 @@ defmodule GranaiWeb.UserLive.Settings do
             <.icon name="hero-cpu-chip" class="size-5 opacity-60" />
             <h3 class="text-lg font-semibold">LLM</h3>
           </div>
-          <p class="text-sm opacity-50 mb-4 ml-8">Provider de IA usado para análises, categorização e extração de PDFs</p>
-          <.form for={@ai_form} id="ai_form" phx-submit="update_ai_settings" phx-change="validate_ai_settings" autocomplete="off" data-form-type="other">
+          <p class="text-sm opacity-50 mb-4 ml-8">
+            Provider de IA usado para análises, categorização e extração de PDFs
+          </p>
+          <.form
+            for={@ai_form}
+            id="ai_form"
+            phx-submit="update_ai_settings"
+            phx-change="validate_ai_settings"
+            autocomplete="off"
+            data-form-type="other"
+          >
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label class="text-sm font-medium block mb-1">Provider</label>
                 <select name="user[ai_provider]" class="select select-bordered w-full">
-                  <option value="gemini" selected={@ai_form[:ai_provider].value == "gemini"}>Google Gemini</option>
+                  <option value="gemini" selected={@ai_form[:ai_provider].value == "gemini"}>
+                    Google Gemini
+                  </option>
                 </select>
               </div>
               <div>
                 <label class="text-sm font-medium block mb-1">Modelo</label>
                 <select name="user[ai_model]" class="select select-bordered w-full">
-                  <option value="gemini-2.0-flash" selected={@ai_form[:ai_model].value == "gemini-2.0-flash"}>Gemini 2.0 Flash</option>
-                  <option value="gemini-2.5-flash" selected={@ai_form[:ai_model].value == "gemini-2.5-flash"}>Gemini 2.5 Flash</option>
-                  <option value="gemini-2.5-pro" selected={@ai_form[:ai_model].value == "gemini-2.5-pro"}>Gemini 2.5 Pro</option>
+                  <option
+                    value="gemini-2.0-flash"
+                    selected={@ai_form[:ai_model].value == "gemini-2.0-flash"}
+                  >
+                    Gemini 2.0 Flash
+                  </option>
+                  <option
+                    value="gemini-2.5-flash"
+                    selected={@ai_form[:ai_model].value == "gemini-2.5-flash"}
+                  >
+                    Gemini 2.5 Flash
+                  </option>
+                  <option
+                    value="gemini-2.5-pro"
+                    selected={@ai_form[:ai_model].value == "gemini-2.5-pro"}
+                  >
+                    Gemini 2.5 Pro
+                  </option>
                 </select>
               </div>
             </div>
@@ -109,7 +142,11 @@ defmodule GranaiWeb.UserLive.Settings do
                   data-lpignore="true"
                   data-form-type="other"
                 />
-                <button type="button" phx-click="toggle_api_key_visibility" class="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-70 transition-opacity">
+                <button
+                  type="button"
+                  phx-click="toggle_api_key_visibility"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-70 transition-opacity"
+                >
                   <.icon :if={!@show_api_key} name="hero-eye" class="size-5 cursor-pointer" />
                   <.icon :if={@show_api_key} name="hero-eye-slash" class="size-5 cursor-pointer" />
                 </button>
@@ -146,8 +183,7 @@ defmodule GranaiWeb.UserLive.Settings do
             phx-click="show_delete_modal"
             class="btn btn-error btn-outline btn-sm"
           >
-            <.icon name="hero-trash" class="size-4" />
-            Excluir Minha Conta
+            <.icon name="hero-trash" class="size-4" /> Excluir Minha Conta
           </button>
         </div>
 
@@ -164,7 +200,9 @@ defmodule GranaiWeb.UserLive.Settings do
             </p>
             <div class="modal-action">
               <button type="button" phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
-              <button phx-click="confirm_delete" class="btn btn-error">Excluir Permanentemente</button>
+              <button phx-click="confirm_delete" class="btn btn-error">
+                Excluir Permanentemente
+              </button>
             </div>
           </div>
           <form method="dialog" class="modal-backdrop">

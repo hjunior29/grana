@@ -21,7 +21,7 @@ defmodule GranaiWeb.AnalysisLive do
 
     socket =
       socket
-      |> assign(:page_title, "Análise IA")
+      |> assign(:page_title, "Análise")
       |> assign(:banks, banks)
       |> assign(:available_years, years)
       |> assign(:available_months, months)
@@ -246,7 +246,7 @@ defmodule GranaiWeb.AnalysisLive do
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
         <div class="mb-8">
-          <h1 class="text-3xl font-bold tracking-tight">Análise IA</h1>
+          <h1 class="text-3xl font-bold tracking-tight">Análise</h1>
           <p class="text-sm opacity-60 mt-1">Insights inteligentes sobre suas finanças</p>
         </div>
 
@@ -313,21 +313,30 @@ defmodule GranaiWeb.AnalysisLive do
               <button
                 phx-click="select_source"
                 phx-value-source="all"
-                class={["btn btn-xs", (@filters.statement_type == "all" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs",
+                  (@filters.statement_type == "all" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 Todas
               </button>
               <button
                 phx-click="select_source"
                 phx-value-source="extrato"
-                class={["btn btn-xs gap-1", (@filters.statement_type == "extrato" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@filters.statement_type == "extrato" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 <.icon name="hero-banknotes" class="size-3" /> Extrato
               </button>
               <button
                 phx-click="select_source"
                 phx-value-source="fatura"
-                class={["btn btn-xs gap-1", (@filters.statement_type == "fatura" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@filters.statement_type == "fatura" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 <.icon name="hero-credit-card" class="size-3" /> Fatura
               </button>
@@ -407,7 +416,11 @@ defmodule GranaiWeb.AnalysisLive do
               class="flex items-center gap-2 mb-3 group cursor-pointer"
             >
               <.icon
-                name={if MapSet.member?(@collapsed_years, year), do: "hero-chevron-right", else: "hero-chevron-down"}
+                name={
+                  if MapSet.member?(@collapsed_years, year),
+                    do: "hero-chevron-right",
+                    else: "hero-chevron-down"
+                }
                 class="size-4 opacity-40 group-hover:opacity-70 transition-opacity"
               />
               <h3 class="text-lg font-bold">{year}</h3>
@@ -428,28 +441,55 @@ defmodule GranaiWeb.AnalysisLive do
                           {format_score(analysis.result_json["nota"])}
                         </span>
                         <div class="min-w-0">
-                          <h4 class="font-semibold text-sm truncate">{analysis.result_json["titulo"]}</h4>
+                          <h4 class="font-semibold text-sm truncate">
+                            {analysis.result_json["titulo"]}
+                          </h4>
                           <div class="flex flex-wrap items-center gap-1 mt-0.5">
-                            <span class="text-xs opacity-40">{format_datetime_br(analysis.inserted_at)}</span>
-                            <span :if={analysis.filters_json["month"] && analysis.filters_json["month"] != 0} class="badge badge-xs badge-ghost">
+                            <span class="text-xs opacity-40">
+                              {format_datetime_br(analysis.inserted_at)}
+                            </span>
+                            <span
+                              :if={
+                                analysis.filters_json["month"] && analysis.filters_json["month"] != 0
+                              }
+                              class="badge badge-xs badge-ghost"
+                            >
                               {Banking.month_name(analysis.filters_json["month"])}
                             </span>
-                            <span :if={analysis.filters_json["month"] == 0} class="badge badge-xs badge-ghost">
+                            <span
+                              :if={analysis.filters_json["month"] == 0}
+                              class="badge badge-xs badge-ghost"
+                            >
                               Ano todo
                             </span>
-                            <span :if={analysis.filters_json["bank"] && analysis.filters_json["bank"] != "all"} class="badge badge-xs badge-ghost">
+                            <span
+                              :if={
+                                analysis.filters_json["bank"] &&
+                                  analysis.filters_json["bank"] != "all"
+                              }
+                              class="badge badge-xs badge-ghost"
+                            >
                               {String.capitalize(analysis.filters_json["bank"])}
                             </span>
-                            <span :if={source_label(analysis.filters_json["statement_type"])} class="badge badge-xs badge-ghost">
+                            <span
+                              :if={source_label(analysis.filters_json["statement_type"])}
+                              class="badge badge-xs badge-ghost"
+                            >
                               {source_label(analysis.filters_json["statement_type"])}
                             </span>
-                            <span :if={type_label(analysis.filters_json["type"])} class="badge badge-xs badge-ghost">
+                            <span
+                              :if={type_label(analysis.filters_json["type"])}
+                              class="badge badge-xs badge-ghost"
+                            >
                               {type_label(analysis.filters_json["type"])}
                             </span>
                           </div>
                         </div>
                       </div>
-                      <p :if={analysis.prompt && analysis.prompt != ""} class="text-xs opacity-30 italic mt-1 truncate ml-13">
+                      <p
+                        :if={analysis.prompt && analysis.prompt != ""}
+                        class="text-xs opacity-30 italic mt-1 truncate ml-13"
+                      >
                         "{analysis.prompt}"
                       </p>
                     </div>
@@ -469,7 +509,10 @@ defmodule GranaiWeb.AnalysisLive do
                       :for={ponto <- analysis.result_json["pontos"] || []}
                       class="flex items-start gap-2 text-sm"
                     >
-                      <.icon name={elem(ponto_icon(ponto["tipo"]), 0)} class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"} />
+                      <.icon
+                        name={elem(ponto_icon(ponto["tipo"]), 0)}
+                        class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
+                      />
                       <span class="opacity-80">{ponto["texto"]}</span>
                     </div>
                   </div>
@@ -508,10 +551,18 @@ defmodule GranaiWeb.AnalysisLive do
                         <span :if={analysis.filters_json["year"]} class="badge badge-xs badge-ghost">
                           {analysis.filters_json["year"]}
                         </span>
-                        <span :if={analysis.filters_json["month"] && analysis.filters_json["month"] != 0} class="badge badge-xs badge-ghost">
+                        <span
+                          :if={analysis.filters_json["month"] && analysis.filters_json["month"] != 0}
+                          class="badge badge-xs badge-ghost"
+                        >
                           {Banking.month_name(analysis.filters_json["month"])}
                         </span>
-                        <span :if={analysis.filters_json["bank"] && analysis.filters_json["bank"] != "all"} class="badge badge-xs badge-ghost">
+                        <span
+                          :if={
+                            analysis.filters_json["bank"] && analysis.filters_json["bank"] != "all"
+                          }
+                          class="badge badge-xs badge-ghost"
+                        >
                           {String.capitalize(analysis.filters_json["bank"])}
                         </span>
                       </div>
@@ -571,13 +622,20 @@ defmodule GranaiWeb.AnalysisLive do
               Para usar funcionalidades de IA, você precisa configurar uma API Key do Google Gemini.
             </p>
             <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
-              <li>Acesse <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">Google AI Studio</a></li>
+              <li>
+                Acesse
+                <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">
+                  Google AI Studio
+                </a>
+              </li>
               <li>Crie uma API Key gratuita</li>
               <li>Cole a chave nas Configurações</li>
             </ol>
             <div class="modal-action">
               <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>
-              <.link navigate={~p"/users/settings"} class="btn btn-primary">Ir para Configurações</.link>
+              <.link navigate={~p"/users/settings"} class="btn btn-primary">
+                Ir para Configurações
+              </.link>
             </div>
           </div>
           <form method="dialog" class="modal-backdrop">
