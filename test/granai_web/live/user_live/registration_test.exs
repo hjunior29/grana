@@ -39,6 +39,8 @@ defmodule GranaiWeb.UserLive.RegistrationTest do
     test "creates account but does not log in", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/register")
 
+      lv |> element("#terms_checkbox") |> render_click()
+
       email = unique_user_email()
       form = form(lv, "#registration_form", user: valid_user_attributes(email: email))
 
@@ -54,6 +56,8 @@ defmodule GranaiWeb.UserLive.RegistrationTest do
       {:ok, lv, _html} = live(conn, ~p"/users/register")
 
       user = user_fixture(%{email: "test@email.com"})
+
+      lv |> element("#terms_checkbox") |> render_click()
 
       result =
         lv
