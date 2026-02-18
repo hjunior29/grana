@@ -59,7 +59,7 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
       conn = follow_trigger_action(form, conn)
 
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~
-               "User confirmed successfully"
+               "Usuário confirmou com sucesso"
 
       assert Accounts.get_user!(user.id).confirmed_at
       # we are logged in now

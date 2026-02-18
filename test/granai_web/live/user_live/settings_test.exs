@@ -21,7 +21,7 @@ defmodule GranaiWeb.UserLive.SettingsTest do
 
       assert {:redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/log-in"
-      assert %{"error" => "You must log in to access this page."} = flash
+      assert %{"error" => "Você precisa estar logado para acessar esta página."} = flash
     end
 
     test "redirects if user is not in sudo mode", %{conn: conn} do
@@ -206,7 +206,7 @@ defmodule GranaiWeb.UserLive.SettingsTest do
       assert {:redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/log-in"
       assert %{"error" => message} = flash
-      assert message == "You must log in to access this page."
+      assert message == "Você precisa estar logado para acessar esta página."
     end
   end
 end

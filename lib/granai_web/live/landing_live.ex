@@ -1106,8 +1106,7 @@ defmodule GranaiWeb.LandingLive do
               <p class="text-lg opacity-60 mb-8">
                 O Granai funciona com a <strong class="text-base-content">sua própria API Key</strong>
                 do Google Gemini.
-                Isso significa que a plataforma não tem custo de infraestrutura de IA — e seus dados financeiros
-                nunca passam por nossos servidores.
+                Isso significa que a plataforma não tem custo de infraestrutura de IA.
               </p>
 
               <div class="space-y-5">
@@ -1118,7 +1117,7 @@ defmodule GranaiWeb.LandingLive do
                   <div>
                     <p class="font-semibold text-sm mb-1">Traga sua própria API Key (BYOK)</p>
                     <p class="text-sm opacity-60">
-                      Você usa sua chave gratuita do Google AI Studio. A IA roda diretamente na sua conta Google — sem intermediários.
+                      Você usa sua chave. A IA roda diretamente na sua conta, sem intermediários.
                     </p>
                   </div>
                 </div>
@@ -1130,7 +1129,7 @@ defmodule GranaiWeb.LandingLive do
                   <div>
                     <p class="font-semibold text-sm mb-1">Custo zero</p>
                     <p class="text-sm opacity-60">
-                      Como você traz sua própria chave, não cobramos nada pelo uso da plataforma. O plano gratuito do Gemini já é suficiente para uso pessoal.
+                      Como você traz sua própria chave, não cobramos nada pelo uso da plataforma.
                     </p>
                   </div>
                 </div>
@@ -1142,7 +1141,7 @@ defmodule GranaiWeb.LandingLive do
                   <div>
                     <p class="font-semibold text-sm mb-1">100% dos dados sob seu controle</p>
                     <p class="text-sm opacity-60">
-                      Seus extratos são processados localmente. As análises de IA são feitas diretamente entre você e o Google. Nenhum dado financeiro é armazenado em servidores terceiros.
+                      Seus extratos são processados localmente. As análises de IA são feitas diretamente entre você e sua LLM. Nenhum dado financeiro é armazenado em servidores terceiros.
                     </p>
                   </div>
                 </div>

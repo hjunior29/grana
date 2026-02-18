@@ -60,7 +60,7 @@ defmodule GranaiWeb.UserSessionControllerTest do
           "user" => %{"email" => user.email, "password" => "invalid_password"}
         })
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Email ou senha inválidos."
       assert redirected_to(conn) == ~p"/users/log-in"
     end
   end
@@ -90,7 +90,7 @@ defmodule GranaiWeb.UserSessionControllerTest do
 
       assert get_session(conn, :user_token)
       assert redirected_to(conn) == ~p"/dashboard"
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "User confirmed successfully."
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Usuário confirmou com sucesso."
       assert Accounts.get_user!(user.id).confirmed_at
     end
 
@@ -101,7 +101,7 @@ defmodule GranaiWeb.UserSessionControllerTest do
         })
 
       assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
-               "The link is invalid or it has expired."
+               "O link é inválido ou expirou."
 
       assert redirected_to(conn) == ~p"/users/log-in"
     end
@@ -112,14 +112,14 @@ defmodule GranaiWeb.UserSessionControllerTest do
       conn = conn |> log_in_user(user) |> delete(~p"/users/log-out")
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :user_token)
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Logged out successfully"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Saiu com sucesso"
     end
 
     test "succeeds even if the user is not logged in", %{conn: conn} do
       conn = delete(conn, ~p"/users/log-out")
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :user_token)
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Logged out successfully"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Saiu com sucesso"
     end
   end
 end

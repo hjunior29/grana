@@ -25,12 +25,12 @@ defmodule GranaiWeb.UserLive.Confirmation do
           <.button
             name={@form[:remember_me].name}
             value="true"
-            phx-disable-with="Confirming..."
+            phx-disable-with="Confirmando..."
             class="btn btn-primary w-full"
           >
             Confirme e mantenha-me logado
           </.button>
-          <.button phx-disable-with="Confirming..." class="btn btn-primary btn-soft w-full mt-2">
+          <.button phx-disable-with="Confirmando..." class="btn btn-primary btn-soft w-full mt-2">
             Confirme apenas desta vez
           </.button>
         </.form>
