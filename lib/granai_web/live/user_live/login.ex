@@ -136,7 +136,7 @@ defmodule GranaiWeb.UserLive.Login do
     end
 
     info =
-      "Se seu email estiver no nosso sistema, você receberá instruções para login em breve."
+      "Se seu email estiver no nosso sistema, você receberá instruções para entrar em breve."
 
     {:noreply,
      socket

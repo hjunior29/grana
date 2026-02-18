@@ -268,18 +268,21 @@ const IncomeExpensesChart = {
     const maxVal = Math.max(...data.map(d => Math.max(d.income, d.expenses)))
     if (maxVal === 0) return
 
-    const width = 700
-    const height = 220
+    const width = 1000
+    const height = 350
     const padding = {top: 20, right: 10, bottom: 35, left: 10}
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
     const groupWidth = chartWidth / data.length
-    const barWidth = Math.max(6, groupWidth * 0.35)
+    const barGap = 3
+    const barWidth = Math.max(8, (groupWidth - barGap) * 0.42)
 
-    let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-56">`
+    let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-80 sm:h-96">`
 
     data.forEach((item, i) => {
-      const x = padding.left + (i * groupWidth) + groupWidth * 0.15
+      const groupX = padding.left + (i * groupWidth)
+      const pairWidth = barWidth * 2 + barGap
+      const x = groupX + (groupWidth - pairWidth) / 2
       const incomeH = (item.income / maxVal) * chartHeight
       const expenseH = (item.expenses / maxVal) * chartHeight
 
@@ -287,8 +290,8 @@ const IncomeExpensesChart = {
       const expUrl = item.expenses_url ? ` data-ie-url="${item.expenses_url}"` : ""
 
       svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="fill-success opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
-      svg += `<rect x="${x + barWidth + 2}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="fill-error opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
-      svg += `<text x="${x + barWidth}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${item.label}</text>`
+      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="fill-error opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
+      svg += `<text x="${groupX + groupWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${item.label}</text>`
     })
 
     svg += `</svg>`

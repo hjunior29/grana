@@ -140,7 +140,13 @@ defmodule GranaiWeb.DashboardLive do
         _ -> Banking.daily_spending(user_id, year, month, opts)
       end
 
-    monthly_ie = Banking.monthly_income_expenses(user_id, year, opts)
+    all_monthly_ie = Banking.monthly_income_expenses(user_id, year, opts)
+
+    monthly_ie =
+      case view_mode do
+        "year" -> all_monthly_ie
+        _ -> Enum.filter(all_monthly_ie, &(&1.month == month))
+      end
     uncat_count = Banking.uncategorized_count(user_id)
 
     daily_avg = calculate_daily_avg(summary, daily)
@@ -564,7 +570,12 @@ defmodule GranaiWeb.DashboardLive do
                 data-daily={daily_chart_data(assigns)}
               >
                 <div class="space-y-1">
-                  <div :for={day <- @daily_spending} class="flex items-center gap-2">
+                  <div
+                    :for={day <- @daily_spending}
+                    class="flex items-center gap-2 cursor-pointer"
+                    data-day-date={Calendar.strftime(day.date, "%d/%m")}
+                    data-day-value={day.total}
+                  >
                     <span class="text-xs w-10 opacity-60">
                       {Calendar.strftime(day.date, "%d/%m")}
                     </span>
@@ -627,7 +638,7 @@ defmodule GranaiWeb.DashboardLive do
                   <span class="flex-1 text-sm truncate">{txn.description}</span>
                   <span
                     :if={txn.category}
-                    class="badge badge-xs shrink-0"
+                    class="badge badge-sm shrink-0"
                     style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
                   >
                     {txn.category.name}
@@ -651,7 +662,7 @@ defmodule GranaiWeb.DashboardLive do
                   <span class="flex-1 text-sm truncate">{txn.description}</span>
                   <span
                     :if={txn.category}
-                    class="badge badge-xs shrink-0"
+                    class="badge badge-sm shrink-0"
                     style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
                   >
                     {txn.category.name}
