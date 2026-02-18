@@ -254,25 +254,28 @@ defmodule GranaiWeb.DashboardLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-8">
-          <h1 class="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p class="text-sm opacity-60 mt-1">Visão geral das suas finanças</p>
+        <div class="mb-4 sm:mb-8 text-center sm:text-left">
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p class="text-xs sm:text-sm opacity-60 mt-1">Visão geral das suas finanças</p>
         </div>
 
-        <div :if={@available_years != []} class="mb-6 space-y-2">
+        <div :if={@available_years != []} class="mb-4 sm:mb-6 space-y-2">
           <%!-- Row 1: Year + Month --%>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
             <div class="flex gap-1">
               <button
                 :for={y <- @available_years}
                 phx-click="select_year"
                 phx-value-year={y}
-                class={["btn btn-sm", (y == @selected_year && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs sm:btn-sm",
+                  (y == @selected_year && "btn-primary") || "btn-ghost"
+                ]}
               >
                 {y}
               </button>
             </div>
-            <div class="divider divider-horizontal mx-0"></div>
+            <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
             <div class="flex flex-wrap gap-1">
               <button
                 phx-click="select_month"
@@ -287,7 +290,8 @@ defmodule GranaiWeb.DashboardLive do
                 phx-value-month={m}
                 class={[
                   "btn btn-xs",
-                  ((@view_mode == "month" and m == @selected_month) && "btn-primary") || "btn-ghost"
+                  ((@view_mode == "month" and m == @selected_month) && "btn-primary") ||
+                    "btn-ghost"
                 ]}
               >
                 {Banking.month_name_short(m)}
@@ -296,9 +300,9 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Row 2: Bank + Statement Type + Transaction Type --%>
-          <div class="flex flex-wrap items-center gap-3">
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3">
             <div :if={@banks != []} class="flex items-center gap-1">
-              <span class="text-xs opacity-40 mr-1">Banco</span>
+              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
               <button
                 phx-click="select_bank"
                 phx-value-bank="all"
@@ -313,11 +317,11 @@ defmodule GranaiWeb.DashboardLive do
                 class={["btn btn-xs gap-1", (@selected_bank == b && "btn-primary") || "btn-ghost"]}
               >
                 <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
-                {String.capitalize(b)}
+                <span class="hidden sm:inline">{String.capitalize(b)}</span>
               </button>
             </div>
             <div class="flex items-center gap-1">
-              <span class="text-xs opacity-40 mr-1">Fonte</span>
+              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
               <button
                 phx-click="select_type"
                 phx-value-type="all"
@@ -333,7 +337,8 @@ defmodule GranaiWeb.DashboardLive do
                   (@selected_type == "extrato" && "btn-primary") || "btn-ghost"
                 ]}
               >
-                <.icon name="hero-banknotes" class="size-3" /> Extrato
+                <.icon name="hero-banknotes" class="size-3" />
+                <span class="hidden sm:inline">Extrato</span>
               </button>
               <button
                 phx-click="select_type"
@@ -343,11 +348,12 @@ defmodule GranaiWeb.DashboardLive do
                   (@selected_type == "fatura" && "btn-primary") || "btn-ghost"
                 ]}
               >
-                <.icon name="hero-credit-card" class="size-3" /> Fatura
+                <.icon name="hero-credit-card" class="size-3" />
+                <span class="hidden sm:inline">Fatura</span>
               </button>
             </div>
             <div class="flex items-center gap-1">
-              <span class="text-xs opacity-40 mr-1">Tipo</span>
+              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
               <button
                 phx-click="select_txn_type"
                 phx-value-txn_type="all"
@@ -383,17 +389,18 @@ defmodule GranaiWeb.DashboardLive do
                   (@selected_txn_type == "investment" && "btn-primary") || "btn-ghost"
                 ]}
               >
-                Investimentos
+                <span class="hidden sm:inline">Investimentos</span>
+                <span class="sm:hidden">Invest.</span>
               </button>
             </div>
           </div>
         </div>
 
-        <div :if={@summary.transaction_count == 0} class="text-center py-16">
-          <.icon name="hero-chart-bar" class="size-16 mx-auto mb-4 opacity-20" />
-          <h2 class="text-xl font-semibold mb-2">Nenhuma transação encontrada</h2>
-          <p class="opacity-60 mb-6">Faça upload de um extrato bancário para começar</p>
-          <.link navigate={~p"/upload"} class="btn btn-primary">
+        <div :if={@summary.transaction_count == 0} class="text-center py-10 sm:py-16">
+          <.icon name="hero-chart-bar" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
+          <h2 class="text-lg sm:text-xl font-semibold mb-2">Nenhuma transação encontrada</h2>
+          <p class="opacity-60 mb-6 text-sm">Faça upload de um extrato bancário para começar</p>
+          <.link navigate={~p"/upload"} class="btn btn-primary btn-sm sm:btn-md">
             <.icon name="hero-cloud-arrow-up" class="size-5" /> Upload
           </.link>
         </div>
@@ -402,87 +409,87 @@ defmodule GranaiWeb.DashboardLive do
           <%!-- Stat Cards --%>
           <div
             :if={@selected_type != "fatura"}
-            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8"
+            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8"
           >
             <.link
               navigate={transactions_url(assigns, %{type: "credit"})}
-              class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-xs">Receitas</div>
-              <div class="stat-value text-success text-lg">
+              <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
+              <div class="stat-value text-success text-sm sm:text-lg">
                 {format_currency(@summary.total_income)}
               </div>
-              <div class="stat-desc">
+              <div class="stat-desc text-[10px] sm:text-xs">
                 {@summary.income_count} transações
               </div>
             </.link>
 
             <.link
               navigate={transactions_url(assigns, %{type: "debit"})}
-              class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-xs">Despesas</div>
-              <div class="stat-value text-error text-lg">
+              <div class="stat-title text-[10px] sm:text-xs">Despesas</div>
+              <div class="stat-value text-error text-sm sm:text-lg">
                 {format_currency(@summary.total_expenses)}
               </div>
-              <div class="stat-desc">
+              <div class="stat-desc text-[10px] sm:text-xs">
                 {@summary.expense_count} transações{if @summary.refund_count > 0,
-                  do: " (#{@summary.refund_count} estornos)",
+                  do: " (#{@summary.refund_count} est.)",
                   else: ""}
               </div>
             </.link>
 
             <.link
               navigate={transactions_url(assigns, %{type: "investment"})}
-              class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-xs">Investimentos</div>
-              <div class="stat-value text-info text-lg">
+              <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
+              <div class="stat-value text-info text-sm sm:text-lg">
                 {format_currency(@summary.total_investments)}
               </div>
-              <div class="stat-desc">
+              <div class="stat-desc text-[10px] sm:text-xs">
                 {@summary.investment_count} transações
               </div>
             </.link>
 
             <.link
               navigate={transactions_url(assigns)}
-              class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-xs">Saldo Livre</div>
+              <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
               <div class={[
-                "stat-value text-lg",
+                "stat-value text-sm sm:text-lg",
                 (Decimal.compare(@summary.balance, 0) == :lt && "text-error") || "text-success"
               ]}>
                 {format_currency(@summary.balance)}
               </div>
-              <div class="stat-desc">
+              <div class="stat-desc text-[10px] sm:text-xs">
                 {if @uncategorized_count > 0,
-                  do: "#{@uncategorized_count} sem categoria",
-                  else: "Tudo categorizado"}
+                  do: "#{@uncategorized_count} sem cat.",
+                  else: "Categorizado"}
               </div>
             </.link>
 
             <.link
               navigate={transactions_url(assigns, %{type: "debit"})}
-              class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-xs">Média Diária</div>
-              <div class="stat-value text-lg">
+              <div class="stat-title text-[10px] sm:text-xs">Média Diária</div>
+              <div class="stat-value text-sm sm:text-lg">
                 {format_currency(@daily_avg)}
               </div>
-              <div class="stat-desc">em despesas</div>
+              <div class="stat-desc text-[10px] sm:text-xs">em despesas</div>
             </.link>
 
             <.link
               navigate={transactions_url(assigns)}
-              class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-xs">Transações</div>
-              <div class="stat-value text-lg">
+              <div class="stat-title text-[10px] sm:text-xs">Transações</div>
+              <div class="stat-value text-sm sm:text-lg">
                 {@summary.transaction_count}
               </div>
-              <div class="stat-desc truncate">{@top_category}</div>
+              <div class="stat-desc text-[10px] sm:text-xs truncate">{@top_category}</div>
             </.link>
           </div>
 
@@ -498,9 +505,12 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Charts: Category + Daily/Monthly --%>
-          <div :if={@selected_type != "fatura"} class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div class="card bg-base-200 p-6">
-              <h3 class="font-semibold mb-4">Despesas por Categoria</h3>
+          <div
+            :if={@selected_type != "fatura"}
+            class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6"
+          >
+            <div class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
               <div
                 id="category-chart"
                 phx-hook="CategoryChart"
@@ -546,8 +556,8 @@ defmodule GranaiWeb.DashboardLive do
             </div>
 
             <%!-- Daily Chart (month view) --%>
-            <div :if={@view_mode == "month"} class="card bg-base-200 p-6">
-              <h3 class="font-semibold mb-4">Gastos Diários</h3>
+            <div :if={@view_mode == "month"} class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
               <div
                 id="daily-chart"
                 phx-hook="DailyChart"
@@ -573,8 +583,8 @@ defmodule GranaiWeb.DashboardLive do
             </div>
 
             <%!-- Monthly Spending Chart (year view) --%>
-            <div :if={@view_mode == "year"} class="card bg-base-200 p-6">
-              <h3 class="font-semibold mb-4">Gastos Mensais</h3>
+            <div :if={@view_mode == "year"} class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Mensais</h3>
               <div
                 id="monthly-spending-chart"
                 phx-hook="DailyChart"
@@ -601,9 +611,12 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Top Expenses / Top Income --%>
-          <div :if={@selected_type != "fatura"} class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div class="card bg-base-200 p-6">
-              <h3 class="font-semibold mb-4">Top Despesas</h3>
+          <div
+            :if={@selected_type != "fatura"}
+            class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6"
+          >
+            <div class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
               <div class="space-y-1">
                 <.link
                   :for={txn <- top_expenses(@summary.transactions, 10)}
@@ -626,8 +639,8 @@ defmodule GranaiWeb.DashboardLive do
               </div>
             </div>
 
-            <div class="card bg-base-200 p-6">
-              <h3 class="font-semibold mb-4">Top Receitas</h3>
+            <div class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
               <div class="space-y-1">
                 <.link
                   :for={txn <- top_income(@summary.transactions, 10)}
@@ -654,10 +667,10 @@ defmodule GranaiWeb.DashboardLive do
           <%!-- Income vs Expenses Chart --%>
           <div
             :if={@monthly_ie != [] and @selected_type != "fatura"}
-            class="card bg-base-200 p-6 mb-6"
+            class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
           >
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 class="font-semibold">Receitas vs Despesas</h3>
+              <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
               <div class="flex items-center gap-3 text-sm">
                 <span class={[
                   "font-semibold",
@@ -697,10 +710,10 @@ defmodule GranaiWeb.DashboardLive do
           <%!-- Installments --%>
           <div
             :if={@installment_summary.active_count > 0 and @selected_type != "extrato"}
-            class="mb-8"
+            class="mb-4 sm:mb-8"
           >
-            <div class="card bg-base-200 p-6 mb-6">
-              <h3 class="font-semibold mb-4">Parcelas Ativas</h3>
+            <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Parcelas Ativas</h3>
               <div class="overflow-x-auto">
                 <table class="table">
                   <thead>
@@ -757,8 +770,8 @@ defmodule GranaiWeb.DashboardLive do
               </div>
             </div>
 
-            <div :if={@installment_projections != []} class="card bg-base-200 p-6 mb-6">
-              <h3 class="font-semibold mb-4">Projeção de Parcelas</h3>
+            <div :if={@installment_projections != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Projeção de Parcelas</h3>
               <div
                 id="projection-chart"
                 phx-hook="ProjectionChart"
@@ -767,29 +780,29 @@ defmodule GranaiWeb.DashboardLive do
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="stat-title text-xs">Parcelas Ativas</div>
-                <div class="stat-value text-warning text-lg">
+            <div class="grid grid-cols-3 gap-2 sm:gap-4">
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Parcelas Ativas</div>
+                <div class="stat-value text-warning text-sm sm:text-lg">
                   {@installment_summary.active_count}
                 </div>
-                <div class="stat-desc">compras parceladas</div>
+                <div class="stat-desc text-[10px] sm:text-xs">parceladas</div>
               </div>
 
-              <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="stat-title text-xs">Gasto Mensal em Parcelas</div>
-                <div class="stat-value text-warning text-lg">
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Mensal Parcelas</div>
+                <div class="stat-value text-warning text-sm sm:text-lg">
                   {format_currency(@installment_summary.this_month_total)}
                 </div>
-                <div class="stat-desc">por mês</div>
+                <div class="stat-desc text-[10px] sm:text-xs">por mês</div>
               </div>
 
-              <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="stat-title text-xs">Total Restante</div>
-                <div class="stat-value text-warning text-lg">
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Total Restante</div>
+                <div class="stat-value text-warning text-sm sm:text-lg">
                   {format_currency(@installment_summary.total_remaining)}
                 </div>
-                <div class="stat-desc">em parcelas futuras</div>
+                <div class="stat-desc text-[10px] sm:text-xs">futuras</div>
               </div>
             </div>
           </div>

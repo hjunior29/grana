@@ -481,6 +481,18 @@ liveSocket.connect()
 
 window.liveSocket = liveSocket
 
+// Close <details> dropdowns when clicking outside or navigating
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.dropdown[open]").forEach(details => {
+    if (!details.contains(e.target)) {
+      details.removeAttribute("open")
+    }
+  })
+})
+window.addEventListener("phx:navigate", () => {
+  document.querySelectorAll("details.dropdown[open]").forEach(d => d.removeAttribute("open"))
+})
+
 if (process.env.NODE_ENV === "development") {
   window.addEventListener("phx:live_reload:attached", ({detail: reloader}) => {
     reloader.enableServerLogs()

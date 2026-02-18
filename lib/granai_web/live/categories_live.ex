@@ -78,10 +78,12 @@ defmodule GranaiWeb.CategoriesLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-8 flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold tracking-tight">Categorias</h1>
-            <p class="text-sm opacity-60 mt-1">Gerencie as categorias de suas transações</p>
+        <div class="mb-4 sm:mb-8 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
+          <div class="text-center sm:text-left">
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Categorias</h1>
+            <p class="text-xs sm:text-sm opacity-60 mt-1">
+              Gerencie as categorias de suas transações
+            </p>
           </div>
           <button phx-click="new_category" class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="size-4" /> Nova Categoria
