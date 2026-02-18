@@ -47,7 +47,7 @@ defmodule Granai.Banking.Parsers.BradescoFatura do
       String.starts_with?(trimmed, "Descri") or
       String.starts_with?(trimmed, "Cota") or
       String.contains?(trimmed, "ao M") or
-      String.contains?(trimmed, "Pr") and String.contains?(trimmed, "Per") or
+      (String.contains?(trimmed, "Pr") and String.contains?(trimmed, "Per")) or
       String.starts_with?(trimmed, "Pagamento de contas") or
       String.starts_with?(trimmed, "Parcelamento") or
       String.starts_with?(trimmed, "Compras parceladas") or
@@ -77,7 +77,10 @@ defmodule Granai.Banking.Parsers.BradescoFatura do
                   _ ->
                     trimmed_desc = String.trim(description)
                     cleaned_desc = clean_description(trimmed_desc)
-                    {final_desc, inst_current, inst_total} = InstallmentParser.extract(cleaned_desc)
+
+                    {final_desc, inst_current, inst_total} =
+                      InstallmentParser.extract(cleaned_desc)
+
                     group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
 
                     %{
@@ -128,7 +131,9 @@ defmodule Granai.Banking.Parsers.BradescoFatura do
     cleaned = String.trim(str)
 
     case cleaned do
-      "" -> nil
+      "" ->
+        nil
+
       _ ->
         cleaned
         |> String.replace(".", "")

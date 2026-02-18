@@ -29,7 +29,7 @@ defmodule GranaiWeb.CategoriesLive do
     "hero-bolt",
     "hero-star",
     "hero-sparkles",
-    "hero-rocket-launch",
+    "hero-rocket-launch"
   ]
 
   @available_colors [
@@ -106,9 +106,18 @@ defmodule GranaiWeb.CategoriesLive do
                   <span>{get_stat(cat.id, @stats, :rule_count)} regras</span>
                 </div>
               </div>
-              <div :if={cat.kind == "investment"} class="badge badge-sm badge-info shrink-0">Investimento</div>
-              <div :if={cat.kind == "income"} class="badge badge-sm badge-success shrink-0">Receita</div>
-              <div :if={cat.is_system && cat.kind == "expense"} class="badge badge-sm badge-ghost shrink-0">Sistema</div>
+              <div :if={cat.kind == "investment"} class="badge badge-sm badge-info shrink-0">
+                Investimento
+              </div>
+              <div :if={cat.kind == "income"} class="badge badge-sm badge-success shrink-0">
+                Receita
+              </div>
+              <div
+                :if={cat.is_system && cat.kind == "expense"}
+                class="badge badge-sm badge-ghost shrink-0"
+              >
+                Sistema
+              </div>
             </div>
             <div class="flex gap-2 justify-end">
               <button
@@ -201,7 +210,13 @@ defmodule GranaiWeb.CategoriesLive do
               <label class="label"><span class="label-text">Tipo</span></label>
               <div class="flex gap-2">
                 <button
-                  :for={{value, label} <- [{"expense", "Despesa"}, {"investment", "Investimento"}, {"income", "Receita"}]}
+                  :for={
+                    {value, label} <- [
+                      {"expense", "Despesa"},
+                      {"investment", "Investimento"},
+                      {"income", "Receita"}
+                    ]
+                  }
                   type="button"
                   phx-click="select_kind"
                   phx-value-kind={value}
@@ -267,13 +282,18 @@ defmodule GranaiWeb.CategoriesLive do
         <div class="modal-box">
           <h3 class="text-lg font-bold">Remover categoria</h3>
           <p class="py-4 opacity-70">
-            Tem certeza que deseja remover a categoria
-            <span class="font-semibold">{@delete_target.name}</span>?
+            Tem certeza que deseja remover a categoria <span class="font-semibold">{@delete_target.name}</span>?
           </p>
-          <p :if={get_stat(@delete_target.id, @stats, :transaction_count) > 0} class="text-sm opacity-60 mb-2">
+          <p
+            :if={get_stat(@delete_target.id, @stats, :transaction_count) > 0}
+            class="text-sm opacity-60 mb-2"
+          >
             {get_stat(@delete_target.id, @stats, :transaction_count)} transações ficarão sem categoria.
           </p>
-          <p :if={get_stat(@delete_target.id, @stats, :rule_count) > 0} class="text-sm opacity-60 mb-2">
+          <p
+            :if={get_stat(@delete_target.id, @stats, :rule_count) > 0}
+            class="text-sm opacity-60 mb-2"
+          >
             {get_stat(@delete_target.id, @stats, :rule_count)} regras serão removidas.
           </p>
           <div class="modal-action">
@@ -338,7 +358,14 @@ defmodule GranaiWeb.CategoriesLive do
   def handle_event("save_category", %{"name" => name}, socket) do
     user_id = socket.assigns.current_scope.user.id
     form = socket.assigns.form
-    attrs = %{name: String.trim(name), icon: form["icon"], color: form["color"], kind: form["kind"], user_id: user_id}
+
+    attrs = %{
+      name: String.trim(name),
+      icon: form["icon"],
+      color: form["color"],
+      kind: form["kind"],
+      user_id: user_id
+    }
 
     result =
       case socket.assigns.form_mode do
@@ -350,7 +377,11 @@ defmodule GranaiWeb.CategoriesLive do
       {:ok, _} ->
         categories = Banking.list_categories(user_id)
         stats = Banking.category_stats(user_id)
-        msg = if socket.assigns.form_mode == :new, do: "Categoria criada!", else: "Categoria atualizada!"
+
+        msg =
+          if socket.assigns.form_mode == :new,
+            do: "Categoria criada!",
+            else: "Categoria atualizada!"
 
         socket =
           socket

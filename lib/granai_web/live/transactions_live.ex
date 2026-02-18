@@ -72,7 +72,9 @@ defmodule GranaiWeb.TransactionsLive do
 
     statement_info =
       case filters.statement_id do
-        nil -> nil
+        nil ->
+          nil
+
         id ->
           stmt = Banking.get_statement!(String.to_integer(id))
           %{id: stmt.id, filename: stmt.filename, bank: stmt.bank}
@@ -240,6 +242,7 @@ defmodule GranaiWeb.TransactionsLive do
 
   defp parse_date(""), do: nil
   defp parse_date(nil), do: nil
+
   defp parse_date(str) do
     case Date.from_iso8601(str) do
       {:ok, date} -> date
@@ -249,6 +252,7 @@ defmodule GranaiWeb.TransactionsLive do
 
   defp parse_decimal(""), do: nil
   defp parse_decimal(nil), do: nil
+
   defp parse_decimal(str) do
     case Decimal.parse(str) do
       {d, _} -> d
@@ -257,6 +261,7 @@ defmodule GranaiWeb.TransactionsLive do
   end
 
   defp parse_int_opt(nil), do: nil
+
   defp parse_int_opt(str) do
     case Integer.parse(str) do
       {n, _} -> n
@@ -265,6 +270,7 @@ defmodule GranaiWeb.TransactionsLive do
   end
 
   defp parse_int(nil, default), do: default
+
   defp parse_int(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {n, _} when n > 0 -> n
@@ -315,9 +321,15 @@ defmodule GranaiWeb.TransactionsLive do
               </div>
               <div>
                 <select name="statement_type" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.statement_type == "all"}>Extrato e Fatura</option>
-                  <option value="extrato" selected={@filters.statement_type == "extrato"}>Extrato</option>
-                  <option value="fatura" selected={@filters.statement_type == "fatura"}>Fatura</option>
+                  <option value="all" selected={@filters.statement_type == "all"}>
+                    Extrato e Fatura
+                  </option>
+                  <option value="extrato" selected={@filters.statement_type == "extrato"}>
+                    Extrato
+                  </option>
+                  <option value="fatura" selected={@filters.statement_type == "fatura"}>
+                    Fatura
+                  </option>
                 </select>
               </div>
               <div>
@@ -325,13 +337,21 @@ defmodule GranaiWeb.TransactionsLive do
                   <option value="all" selected={@filters.type == "all"}>Todas transações</option>
                   <option value="debit" selected={@filters.type == "debit"}>Despesas</option>
                   <option value="credit" selected={@filters.type == "credit"}>Receitas</option>
-                  <option value="investment" selected={@filters.type == "investment"}>Investimentos</option>
+                  <option value="investment" selected={@filters.type == "investment"}>
+                    Investimentos
+                  </option>
                 </select>
               </div>
               <div>
                 <select name="category_id" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.category_id == "all"}>Todas categorias</option>
-                  <option :for={cat <- @categories} value={cat.id} selected={@filters.category_id == to_string(cat.id)}>
+                  <option value="all" selected={@filters.category_id == "all"}>
+                    Todas categorias
+                  </option>
+                  <option
+                    :for={cat <- @categories}
+                    value={cat.id}
+                    selected={@filters.category_id == to_string(cat.id)}
+                  >
                     {cat.name}
                   </option>
                 </select>
@@ -340,25 +360,51 @@ defmodule GranaiWeb.TransactionsLive do
             <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
               <div>
                 <label class="text-xs opacity-50 mb-1 block">Data início</label>
-                <input type="date" name="date_from" value={@filters.date_from} class="input input-bordered input-sm w-full" />
+                <input
+                  type="date"
+                  name="date_from"
+                  value={@filters.date_from}
+                  class="input input-bordered input-sm w-full"
+                />
               </div>
               <div>
                 <label class="text-xs opacity-50 mb-1 block">Data fim</label>
-                <input type="date" name="date_to" value={@filters.date_to} class="input input-bordered input-sm w-full" />
+                <input
+                  type="date"
+                  name="date_to"
+                  value={@filters.date_to}
+                  class="input input-bordered input-sm w-full"
+                />
               </div>
               <div>
                 <label class="text-xs opacity-50 mb-1 block">Valor mínimo</label>
-                <input type="number" name="amount_min" value={@filters.amount_min} step="0.01" placeholder="0,00" class="input input-bordered input-sm w-full" />
+                <input
+                  type="number"
+                  name="amount_min"
+                  value={@filters.amount_min}
+                  step="0.01"
+                  placeholder="0,00"
+                  class="input input-bordered input-sm w-full"
+                />
               </div>
               <div>
                 <label class="text-xs opacity-50 mb-1 block">Valor máximo</label>
-                <input type="number" name="amount_max" value={@filters.amount_max} step="0.01" placeholder="0,00" class="input input-bordered input-sm w-full" />
+                <input
+                  type="number"
+                  name="amount_max"
+                  value={@filters.amount_max}
+                  step="0.01"
+                  placeholder="0,00"
+                  class="input input-bordered input-sm w-full"
+                />
               </div>
               <div>
                 <label class="text-xs opacity-50 mb-1 block">Internas</label>
                 <select name="internal" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.internal == "all"}>Todas</option>
-                  <option value="hide" selected={@filters.internal == "hide"}>Ocultar internas</option>
+                  <option value="hide" selected={@filters.internal == "hide"}>
+                    Ocultar internas
+                  </option>
                   <option value="only" selected={@filters.internal == "only"}>Apenas internas</option>
                 </select>
               </div>
@@ -372,19 +418,26 @@ defmodule GranaiWeb.TransactionsLive do
         </div>
 
         <div class="flex items-center gap-4 text-sm mb-3 flex-wrap">
-          <span class="opacity-60" :if={@total == 0}>Nenhuma transação</span>
-          <span class="opacity-60" :if={@total > 1}>{@total} transações</span>
-          <span class="opacity-60" :if={@total == 1}> {@total} transação</span>
+          <span :if={@total == 0} class="opacity-60">Nenhuma transação</span>
+          <span :if={@total > 1} class="opacity-60">{@total} transações</span>
+          <span :if={@total == 1} class="opacity-60">{@total} transação</span>
           <span class="text-error font-medium">
             Despesas: R$ {format_br_number(@summary.total_expenses)}
           </span>
           <span class="text-success font-medium">
             Receitas: R$ {format_br_number(@summary.total_income)}
           </span>
-          <span :if={Decimal.compare(@summary.total_investments, 0) == :gt} class="text-info font-medium">
+          <span
+            :if={Decimal.compare(@summary.total_investments, 0) == :gt}
+            class="text-info font-medium"
+          >
             Investimentos: R$ {format_br_number(@summary.total_investments)}
           </span>
-          <span :if={@internal_count > 0} class="opacity-50" title="Transferências internas excluídas dos totais">
+          <span
+            :if={@internal_count > 0}
+            class="opacity-50"
+            title="Transferências internas excluídas dos totais"
+          >
             <.icon name="hero-arrows-right-left" class="size-3 inline" />
             {@internal_count} interna(s) excluída(s)
           </span>
@@ -393,8 +446,7 @@ defmodule GranaiWeb.TransactionsLive do
             href={"/transactions/export?#{build_query_string(@filters)}"}
             class="btn btn-sm gap-1 ml-auto"
           >
-            <.icon name="hero-arrow-down-tray" class="size-4" />
-            Exportar CSV
+            <.icon name="hero-arrow-down-tray" class="size-4" /> Exportar CSV
           </a>
         </div>
 
@@ -443,7 +495,10 @@ defmodule GranaiWeb.TransactionsLive do
               </tr>
             </thead>
             <tbody>
-              <tr :for={txn <- @transactions} class={["hover", txn.is_internal_transfer && "opacity-50"]}>
+              <tr
+                :for={txn <- @transactions}
+                class={["hover", txn.is_internal_transfer && "opacity-50"]}
+              >
                 <td>
                   <input
                     type="checkbox"
@@ -463,7 +518,10 @@ defmodule GranaiWeb.TransactionsLive do
                       ]}
                       phx-click="toggle-description"
                       phx-value-id={txn.id}
-                      title={if !MapSet.member?(@expanded_ids, txn.id), do: txn.original_description || txn.description}
+                      title={
+                        if !MapSet.member?(@expanded_ids, txn.id),
+                          do: txn.original_description || txn.description
+                      }
                     >
                       {txn.description}
                     </span>
@@ -488,7 +546,10 @@ defmodule GranaiWeb.TransactionsLive do
                     phx-click-away="cancel-edit"
                   >
                     <input type="hidden" name="txn_id" value={txn.id} />
-                    <select name="category_id" class="select select-bordered select-xs w-auto min-w-0 max-w-36 text-xs py-0 h-6 min-h-0">
+                    <select
+                      name="category_id"
+                      class="select select-bordered select-xs w-auto min-w-0 max-w-36 text-xs py-0 h-6 min-h-0"
+                    >
                       <option
                         :for={cat <- @categories}
                         value={cat.id}
@@ -568,10 +629,12 @@ defmodule GranaiWeb.TransactionsLive do
   defp bank_logo(_), do: ~p"/images/logo-32.png"
 
   defp format_amount(txn) do
-    prefix = case txn.type do
-      "credit" -> "+ "
-      _ -> "- "
-    end
+    prefix =
+      case txn.type do
+        "credit" -> "+ "
+        _ -> "- "
+      end
+
     "#{prefix}R$ #{format_br_number(txn.amount)}"
   end
 
@@ -590,6 +653,7 @@ defmodule GranaiWeb.TransactionsLive do
   end
 
   defp all_selected?([], _selected), do: false
+
   defp all_selected?(transactions, selected) do
     Enum.all?(transactions, &MapSet.member?(selected, &1.id))
   end

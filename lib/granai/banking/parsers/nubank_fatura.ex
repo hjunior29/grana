@@ -76,5 +76,4 @@ defmodule Granai.Banking.Parsers.NubankFatura do
         :error
     end
   end
-
 end

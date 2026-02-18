@@ -9,6 +9,10 @@ defmodule GranaiWeb.Layouts do
     default: nil,
     doc: "the current scope"
 
+  attr :hide_nav, :boolean,
+    default: false,
+    doc: "hide the navigation bar"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -24,7 +28,7 @@ defmodule GranaiWeb.Layouts do
             <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Granai</span>
           </.link>
         </div>
-        <div :if={@current_scope} class="flex-none">
+        <div :if={@current_scope && !@hide_nav} class="flex-none">
           <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
             <li>
               <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
@@ -96,19 +100,19 @@ defmodule GranaiWeb.Layouts do
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        {gettext("Attempting to reconnect")}
+        {gettext("Tentando reconectar...")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
 
       <.flash
         id="server-error"
         kind={:error}
-        title={gettext("Something went wrong!")}
+        title={gettext("Algo deu errado!")}
         phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        {gettext("Attempting to reconnect")}
+        {gettext("Tentando reconectar...")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
     </div>

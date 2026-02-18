@@ -6,7 +6,7 @@ defmodule GranaiWeb.UserLive.Login do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
       <div class="mx-auto max-w-sm space-y-4">
         <div class="text-center">
           <.header>
@@ -98,6 +98,14 @@ defmodule GranaiWeb.UserLive.Login do
           Criar uma conta
         </.link>
 
+        <div :if={!@current_scope} class="text-center mt-4">
+          <.link
+            navigate={~p"/terms"}
+            class="text-xs opacity-50 hover:opacity-80 hover:underline transition-opacity"
+          >
+            Termos de Uso e Política de Privacidade
+          </.link>
+        </div>
       </div>
     </Layouts.app>
     """

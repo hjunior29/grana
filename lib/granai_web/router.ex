@@ -22,6 +22,7 @@ defmodule GranaiWeb.Router do
 
     live_session :public, on_mount: [{GranaiWeb.UserAuth, :mount_current_scope}] do
       live "/", LandingLive, :index
+      live "/terms", TermsLive, :index
     end
   end
 

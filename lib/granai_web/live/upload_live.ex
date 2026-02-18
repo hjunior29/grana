@@ -308,7 +308,7 @@ defmodule GranaiWeb.UploadLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="max-w-6xl mx-auto">
+      <div class="max-w-6xl mx-auto scrollbar-gutter">
         <div class="mb-8">
           <h1 class="text-3xl font-bold tracking-tight">Upload</h1>
           <p class="text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
@@ -329,8 +329,7 @@ defmodule GranaiWeb.UploadLive do
             phx-value-tab="historico"
             class={["tab", @tab == "historico" && "tab-active"]}
           >
-            <.icon name="hero-document-text" class="size-4 mr-1" />
-            Histórico
+            <.icon name="hero-document-text" class="size-4 mr-1" /> Histórico
             <span :if={@total > 0} class="badge badge-sm ml-1">{@total}</span>
           </button>
         </div>
@@ -435,7 +434,11 @@ defmodule GranaiWeb.UploadLive do
                   phx-drop-target={!@processing && @uploads.statements.ref}
                   phx-hook="DropZone"
                 >
-                  <.live_file_input upload={@uploads.statements} class="hidden" disabled={@processing} />
+                  <.live_file_input
+                    upload={@uploads.statements}
+                    class="hidden"
+                    disabled={@processing}
+                  />
                   <label
                     for={!@processing && @uploads.statements.ref}
                     class={[
@@ -508,8 +511,7 @@ defmodule GranaiWeb.UploadLive do
                     </div>
                     <span data-pct class="text-sm font-mono opacity-60">0%</span>
                   </div>
-                  <progress class="progress progress-primary w-full" value="0" max="100">
-                  </progress>
+                  <progress class="progress progress-primary w-full" value="0" max="100"></progress>
                 </div>
               </div>
             </form>
@@ -667,10 +669,8 @@ defmodule GranaiWeb.UploadLive do
             <div class="modal-box">
               <h3 class="text-lg font-bold">Remover extrato</h3>
               <p :if={match?({:single, _}, @delete_target)} class="py-4 opacity-70">
-                Tem certeza que deseja remover o extrato
-                <span class="font-semibold">{elem(@delete_target, 1).filename}</span>?
-                Todas as {elem(@delete_target, 1).total_transactions}
-                transações associadas serão removidas permanentemente.
+                Tem certeza que deseja remover o extrato <span class="font-semibold">{elem(@delete_target, 1).filename}</span>?
+                Todas as {elem(@delete_target, 1).total_transactions} transações associadas serão removidas permanentemente.
               </p>
               <p :if={match?({:bulk, _}, @delete_target)} class="py-4 opacity-70">
                 Tem certeza que deseja remover
@@ -699,13 +699,20 @@ defmodule GranaiWeb.UploadLive do
               Para processar arquivos PDF, é necessário configurar uma API Key do Google Gemini. A IA é usada para extrair as transações do PDF.
             </p>
             <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
-              <li>Acesse <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">Google AI Studio</a></li>
+              <li>
+                Acesse
+                <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">
+                  Google AI Studio
+                </a>
+              </li>
               <li>Crie uma API Key gratuita</li>
               <li>Cole a chave nas Configurações</li>
             </ol>
             <div class="modal-action">
               <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>
-              <.link navigate={~p"/users/settings"} class="btn btn-primary">Ir para Configurações</.link>
+              <.link navigate={~p"/users/settings"} class="btn btn-primary">
+                Ir para Configurações
+              </.link>
             </div>
           </div>
           <form method="dialog" class="modal-backdrop">

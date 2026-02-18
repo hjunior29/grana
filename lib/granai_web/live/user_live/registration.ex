@@ -7,7 +7,7 @@ defmodule GranaiWeb.UserLive.Registration do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
       <div class="mx-auto max-w-sm">
         <div class="text-center">
           <.header>
@@ -32,7 +32,27 @@ defmodule GranaiWeb.UserLive.Registration do
             phx-mounted={JS.focus()}
           />
 
-          <.button phx-disable-with="Criando conta..." class="btn btn-primary w-full">
+          <div class="flex items-start gap-2 my-4">
+            <input
+              type="checkbox"
+              id="terms_checkbox"
+              phx-click="toggle_terms"
+              checked={@terms_accepted}
+              class="checkbox checkbox-primary checkbox-sm mt-0.5 cursor-pointer"
+            />
+            <label for="terms_checkbox" class="text-sm opacity-70 cursor-pointer select-none">
+              Li e concordo com os
+              <.link navigate={~p"/terms"} class="text-primary hover:underline">
+                Termos de Uso e Política de Privacidade
+              </.link>
+            </label>
+          </div>
+
+          <.button
+            disabled={!@terms_accepted}
+            phx-disable-with="Criando conta..."
+            class="btn btn-primary w-full"
+          >
             Crie sua conta
           </.button>
         </.form>
@@ -50,10 +70,22 @@ defmodule GranaiWeb.UserLive.Registration do
   def mount(_params, _session, socket) do
     changeset = Accounts.change_user_email(%User{}, %{}, validate_unique: false)
 
-    {:ok, assign_form(socket, changeset), temporary_assigns: [form: nil]}
+    {:ok,
+     socket
+     |> assign_form(changeset)
+     |> assign(:terms_accepted, false), temporary_assigns: [form: nil]}
   end
 
   @impl true
+  def handle_event("toggle_terms", _params, socket) do
+    {:noreply, assign(socket, :terms_accepted, !socket.assigns.terms_accepted)}
+  end
+
+  def handle_event("save", _params, %{assigns: %{terms_accepted: false}} = socket) do
+    {:noreply,
+     put_flash(socket, :error, "Você precisa aceitar os Termos de Uso para criar uma conta.")}
+  end
+
   def handle_event("save", %{"user" => user_params}, socket) do
     case Accounts.register_user(user_params) do
       {:ok, user} ->

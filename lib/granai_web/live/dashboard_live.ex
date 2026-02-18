@@ -210,8 +210,13 @@ defmodule GranaiWeb.DashboardLive do
   # --- URL helpers ---
 
   defp transactions_url(assigns, extra \\ %{}) do
-    %{selected_year: year, selected_month: month, view_mode: mode,
-      selected_bank: bank, selected_type: st_type} = assigns
+    %{
+      selected_year: year,
+      selected_month: month,
+      view_mode: mode,
+      selected_bank: bank,
+      selected_type: st_type
+    } = assigns
 
     base =
       %{}
@@ -282,7 +287,7 @@ defmodule GranaiWeb.DashboardLive do
                 phx-value-month={m}
                 class={[
                   "btn btn-xs",
-                  (@view_mode == "month" and m == @selected_month && "btn-primary") || "btn-ghost"
+                  ((@view_mode == "month" and m == @selected_month) && "btn-primary") || "btn-ghost"
                 ]}
               >
                 {Banking.month_name_short(m)}
@@ -323,14 +328,20 @@ defmodule GranaiWeb.DashboardLive do
               <button
                 phx-click="select_type"
                 phx-value-type="extrato"
-                class={["btn btn-xs gap-1", (@selected_type == "extrato" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@selected_type == "extrato" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 <.icon name="hero-banknotes" class="size-3" /> Extrato
               </button>
               <button
                 phx-click="select_type"
                 phx-value-type="fatura"
-                class={["btn btn-xs gap-1", (@selected_type == "fatura" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@selected_type == "fatura" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 <.icon name="hero-credit-card" class="size-3" /> Fatura
               </button>
@@ -347,21 +358,30 @@ defmodule GranaiWeb.DashboardLive do
               <button
                 phx-click="select_txn_type"
                 phx-value-txn_type="debit"
-                class={["btn btn-xs gap-1", (@selected_txn_type == "debit" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@selected_txn_type == "debit" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 Despesas
               </button>
               <button
                 phx-click="select_txn_type"
                 phx-value-txn_type="credit"
-                class={["btn btn-xs gap-1", (@selected_txn_type == "credit" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@selected_txn_type == "credit" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 Receitas
               </button>
               <button
                 phx-click="select_txn_type"
                 phx-value-txn_type="investment"
-                class={["btn btn-xs gap-1", (@selected_txn_type == "investment" && "btn-primary") || "btn-ghost"]}
+                class={[
+                  "btn btn-xs gap-1",
+                  (@selected_txn_type == "investment" && "btn-primary") || "btn-ghost"
+                ]}
               >
                 Investimentos
               </button>
@@ -380,7 +400,10 @@ defmodule GranaiWeb.DashboardLive do
 
         <div :if={@summary.transaction_count > 0}>
           <%!-- Stat Cards --%>
-          <div :if={@selected_type != "fatura"} class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+          <div
+            :if={@selected_type != "fatura"}
+            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8"
+          >
             <.link
               navigate={transactions_url(assigns, %{type: "credit"})}
               class="stat bg-base-200 rounded-xl p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
@@ -403,7 +426,9 @@ defmodule GranaiWeb.DashboardLive do
                 {format_currency(@summary.total_expenses)}
               </div>
               <div class="stat-desc">
-                {@summary.expense_count} transações{if @summary.refund_count > 0, do: " (#{@summary.refund_count} estornos)", else: ""}
+                {@summary.expense_count} transações{if @summary.refund_count > 0,
+                  do: " (#{@summary.refund_count} estornos)",
+                  else: ""}
               </div>
             </.link>
 
@@ -461,7 +486,10 @@ defmodule GranaiWeb.DashboardLive do
             </.link>
           </div>
 
-          <div :if={@uncategorized_count > 0 and @selected_type != "fatura"} class="alert alert-warning mb-6">
+          <div
+            :if={@uncategorized_count > 0 and @selected_type != "fatura"}
+            class="alert alert-warning mb-6"
+          >
             <.icon name="hero-exclamation-triangle" class="size-5" />
             <span>Você tem {@uncategorized_count} transações sem categoria.</span>
             <.link navigate={~p"/transactions?filter=uncategorized"} class="btn btn-sm btn-ghost">
@@ -591,7 +619,9 @@ defmodule GranaiWeb.DashboardLive do
                   >
                     {txn.category.name}
                   </span>
-                  <span class="text-sm font-medium text-error whitespace-nowrap">{format_currency(Decimal.abs(txn.amount))}</span>
+                  <span class="text-sm font-medium text-error whitespace-nowrap">
+                    {format_currency(Decimal.abs(txn.amount))}
+                  </span>
                 </.link>
               </div>
             </div>
@@ -613,28 +643,46 @@ defmodule GranaiWeb.DashboardLive do
                   >
                     {txn.category.name}
                   </span>
-                  <span class="text-sm font-medium text-success whitespace-nowrap">{format_currency(Decimal.abs(txn.amount))}</span>
+                  <span class="text-sm font-medium text-success whitespace-nowrap">
+                    {format_currency(Decimal.abs(txn.amount))}
+                  </span>
                 </.link>
               </div>
             </div>
           </div>
 
           <%!-- Income vs Expenses Chart --%>
-          <div :if={@monthly_ie != [] and @selected_type != "fatura"} class="card bg-base-200 p-6 mb-6">
+          <div
+            :if={@monthly_ie != [] and @selected_type != "fatura"}
+            class="card bg-base-200 p-6 mb-6"
+          >
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h3 class="font-semibold">Receitas vs Despesas</h3>
               <div class="flex items-center gap-3 text-sm">
                 <span class={[
                   "font-semibold",
-                  if(Decimal.compare(@summary.balance, 0) == :lt, do: "text-error", else: "text-success")
+                  if(Decimal.compare(@summary.balance, 0) == :lt,
+                    do: "text-error",
+                    else: "text-success"
+                  )
                 ]}>
-                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(@summary.balance)}
+                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(
+                    @summary.balance
+                  )}
                 </span>
-                <span :if={Decimal.compare(@summary.total_income, 0) == :gt} class={[
-                  "badge badge-sm",
-                  if(Decimal.compare(@summary.balance, 0) == :lt, do: "badge-error", else: "badge-success")
-                ]}>
-                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(@summary)}
+                <span
+                  :if={Decimal.compare(@summary.total_income, 0) == :gt}
+                  class={[
+                    "badge badge-sm",
+                    if(Decimal.compare(@summary.balance, 0) == :lt,
+                      do: "badge-error",
+                      else: "badge-success"
+                    )
+                  ]}
+                >
+                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(
+                    @summary
+                  )}
                 </span>
               </div>
             </div>
@@ -647,7 +695,10 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <%!-- Installments --%>
-          <div :if={@installment_summary.active_count > 0 and @selected_type != "extrato"} class="mb-8">
+          <div
+            :if={@installment_summary.active_count > 0 and @selected_type != "extrato"}
+            class="mb-8"
+          >
             <div class="card bg-base-200 p-6 mb-6">
               <h3 class="font-semibold mb-4">Parcelas Ativas</h3>
               <div class="overflow-x-auto">
@@ -693,7 +744,12 @@ defmodule GranaiWeb.DashboardLive do
                         </div>
                       </td>
                       <td class="text-right text-sm font-medium text-warning">
-                        {format_currency(Decimal.mult(Decimal.abs(txn.amount), txn.installment_total - txn.installment_current))}
+                        {format_currency(
+                          Decimal.mult(
+                            Decimal.abs(txn.amount),
+                            txn.installment_total - txn.installment_current
+                          )
+                        )}
                       </td>
                     </tr>
                   </tbody>

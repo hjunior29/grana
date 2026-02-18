@@ -12,9 +12,16 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
 
   defp do_extract(pdf_bytes, bank, config) do
     base64 = Base.encode64(pdf_bytes)
-    ai_config = Map.merge(config, %{temperature: 0.1, max_output_tokens: 8192, receive_timeout: 120_000})
 
-    case Provider.generate_content_with_file(base64, "application/pdf", prompt_for(bank), ai_config) do
+    ai_config =
+      Map.merge(config, %{temperature: 0.1, max_output_tokens: 8192, receive_timeout: 120_000})
+
+    case Provider.generate_content_with_file(
+           base64,
+           "application/pdf",
+           prompt_for(bank),
+           ai_config
+         ) do
       {:ok, response_body} -> parse_response(response_body)
       {:error, reason} -> {:error, reason}
     end
@@ -115,7 +122,12 @@ defmodule Granai.Banking.Parsers.PdfExtractor do
     end
   end
 
-  defp parse_transaction(%{"date" => date_str, "description" => desc, "amount" => amount, "type" => type})
+  defp parse_transaction(%{
+         "date" => date_str,
+         "description" => desc,
+         "amount" => amount,
+         "type" => type
+       })
        when is_binary(date_str) and is_binary(desc) and is_binary(type) do
     case parse_date(date_str) do
       {:ok, date} ->

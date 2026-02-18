@@ -56,13 +56,23 @@ defmodule Granai.Banking do
       %{name: "Lazer", icon: "hero-musical-note", color: "#EC4899", kind: "expense"},
       %{name: "Educação", icon: "hero-academic-cap", color: "#06B6D4", kind: "expense"},
       %{name: "Compras", icon: "hero-shopping-bag", color: "#F97316", kind: "expense"},
-      %{name: "Transferências", icon: "hero-arrows-right-left", color: "#6366F1", kind: "expense"},
+      %{
+        name: "Transferências",
+        icon: "hero-arrows-right-left",
+        color: "#6366F1",
+        kind: "expense"
+      },
       %{name: "Investimentos", icon: "hero-chart-bar", color: "#10B981", kind: "investment"},
       %{name: "Rendimentos", icon: "hero-sparkles", color: "#14B8A6", kind: "income"},
       %{name: "Pagamentos", icon: "hero-credit-card", color: "#64748B", kind: "expense"},
       %{name: "Salário", icon: "hero-banknotes", color: "#22C55E", kind: "income"},
       %{name: "Assinaturas", icon: "hero-arrow-path", color: "#A855F7", kind: "expense"},
-      %{name: "Sem Categoria", icon: "hero-question-mark-circle", color: "#9CA3AF", kind: "expense"}
+      %{
+        name: "Sem Categoria",
+        icon: "hero-question-mark-circle",
+        color: "#9CA3AF",
+        kind: "expense"
+      }
     ]
 
     Enum.each(defaults, fn cat_attrs ->
@@ -514,7 +524,13 @@ defmodule Granai.Banking do
       ]) ->
         Map.get(cat_map, "Educação")
 
-      String.contains?(desc_lower, ["salário", "salario", "folha de pagamento", "pro-labore", "pró-labore"]) ->
+      String.contains?(desc_lower, [
+        "salário",
+        "salario",
+        "folha de pagamento",
+        "pro-labore",
+        "pró-labore"
+      ]) ->
         Map.get(cat_map, "Salário")
 
       String.contains?(desc_lower, [
@@ -897,6 +913,7 @@ defmodule Granai.Banking do
       total =
         Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
           remaining = txn.installment_total - txn.installment_current
+
           if offset < remaining do
             Decimal.add(acc, Decimal.abs(txn.amount))
           else
