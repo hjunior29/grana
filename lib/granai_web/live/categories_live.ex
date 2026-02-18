@@ -322,7 +322,8 @@ defmodule GranaiWeb.CategoriesLive do
   end
 
   def handle_event("edit_category", %{"id" => id}, socket) do
-    category = Banking.get_category!(String.to_integer(id))
+    user_id = socket.assigns.current_scope.user.id
+    category = Banking.get_category!(String.to_integer(id), user_id)
 
     socket =
       socket
@@ -404,7 +405,8 @@ defmodule GranaiWeb.CategoriesLive do
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
-    category = Banking.get_category!(String.to_integer(id))
+    user_id = socket.assigns.current_scope.user.id
+    category = Banking.get_category!(String.to_integer(id), user_id)
     {:noreply, assign(socket, :delete_target, category)}
   end
 

@@ -5,7 +5,7 @@ defmodule Granai.AI.Providers.Gemini do
 
   @impl true
   def generate_content(prompt, config) do
-    url = "#{@base_url}/#{config.model}:generateContent?key=#{config.api_key}"
+    url = "#{@base_url}/#{config.model}:generateContent"
 
     body = %{
       contents: [%{parts: [%{text: prompt}]}],
@@ -17,7 +17,7 @@ defmodule Granai.AI.Providers.Gemini do
 
   @impl true
   def generate_content_with_file(file_base64, mime, prompt, config) do
-    url = "#{@base_url}/#{config.model}:generateContent?key=#{config.api_key}"
+    url = "#{@base_url}/#{config.model}:generateContent"
 
     body = %{
       contents: [
@@ -49,7 +49,9 @@ defmodule Granai.AI.Providers.Gemini do
         do: [receive_timeout: config.receive_timeout],
         else: []
 
-    case Req.post(url, [json: body] ++ opts) do
+    headers = [{"x-goog-api-key", config.api_key}]
+
+    case Req.post(url, [json: body, headers: headers] ++ opts) do
       {:ok, %{status: 200, body: resp}} ->
         {:ok, resp}
 

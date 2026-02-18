@@ -12,7 +12,11 @@ defmodule Granai.Banking do
     |> Repo.all()
   end
 
-  def get_category!(id), do: Repo.get!(Category, id)
+  def get_category!(id, user_id) do
+    Category
+    |> where([c], c.id == ^id and (is_nil(c.user_id) or c.user_id == ^user_id))
+    |> Repo.one!()
+  end
 
   def create_category(attrs) do
     %Category{}
@@ -117,7 +121,11 @@ defmodule Granai.Banking do
     {statements, total}
   end
 
-  def get_statement!(id), do: Repo.get!(BankStatement, id)
+  def get_statement!(id, user_id) do
+    BankStatement
+    |> where([s], s.id == ^id and s.user_id == ^user_id)
+    |> Repo.one!()
+  end
 
   def create_statement(attrs) do
     %BankStatement{}
@@ -271,9 +279,10 @@ defmodule Granai.Banking do
   defp filter_by_internal(query, "hide"), do: where(query, [t], t.is_internal_transfer == false)
   defp filter_by_internal(query, "only"), do: where(query, [t], t.is_internal_transfer == true)
 
-  def get_transaction!(id) do
+  def get_transaction!(id, user_id) do
     Transaction
-    |> Repo.get!(id)
+    |> where([t], t.id == ^id and t.user_id == ^user_id)
+    |> Repo.one!()
     |> Repo.preload([:category, :bank_statement])
   end
 

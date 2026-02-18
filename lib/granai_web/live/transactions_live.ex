@@ -76,7 +76,7 @@ defmodule GranaiWeb.TransactionsLive do
           nil
 
         id ->
-          stmt = Banking.get_statement!(String.to_integer(id))
+          stmt = Banking.get_statement!(String.to_integer(id), user_id)
           %{id: stmt.id, filename: stmt.filename, bank: stmt.bank}
       end
 
@@ -161,7 +161,7 @@ defmodule GranaiWeb.TransactionsLive do
 
   def handle_event("save-category", %{"txn_id" => id, "category_id" => category_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    transaction = Banking.get_transaction!(String.to_integer(id))
+    transaction = Banking.get_transaction!(String.to_integer(id), user_id)
     cat_id = String.to_integer(category_id)
 
     {:ok, _} = Banking.update_transaction(transaction, %{category_id: cat_id})
