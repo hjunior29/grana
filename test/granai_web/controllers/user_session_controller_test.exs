@@ -60,7 +60,7 @@ defmodule GranaiWeb.UserSessionControllerTest do
           "user" => %{"email" => user.email, "password" => "invalid_password"}
         })
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Email ou senha inválidos."
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Email ou senha inválidos"
       assert redirected_to(conn) == ~p"/users/log-in"
     end
   end

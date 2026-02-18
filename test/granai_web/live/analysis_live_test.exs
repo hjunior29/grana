@@ -8,19 +8,18 @@ defmodule GranaiWeb.AnalysisLiveTest do
   test "renders analysis page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/analysis")
     assert html =~ "Análise"
-    assert html =~ "Obtenha insights inteligentes"
+    assert html =~ "Insights inteligentes sobre suas finanças"
   end
 
   test "shows filter controls", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/analysis")
-    assert html =~ "Configurar Análise"
-    assert html =~ "Analisar"
-    assert html =~ "Ano todo"
+    assert html =~ "Pergunte algo sobre suas finanças"
+    assert html =~ "Analisar com IA"
   end
 
   test "shows empty history", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/analysis")
-    assert html =~ "Nenhuma análise encontrada"
+    assert html =~ "Nenhuma análise ainda"
   end
 
   test "redirects unauthenticated users", %{conn: _conn} do
