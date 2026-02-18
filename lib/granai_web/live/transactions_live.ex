@@ -283,9 +283,11 @@ defmodule GranaiWeb.TransactionsLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-8">
-          <h1 class="text-3xl font-bold tracking-tight">Transações</h1>
-          <p class="text-sm opacity-60 mt-1">Visualize e gerencie todas as suas transações</p>
+        <div class="mb-4 sm:mb-8 text-center sm:text-left">
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Transações</h1>
+          <p class="text-xs sm:text-sm opacity-60 mt-1">
+            Visualize e gerencie todas as suas transações
+          </p>
         </div>
 
         <div :if={@statement_info} class="mb-4">

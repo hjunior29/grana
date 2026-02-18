@@ -309,9 +309,9 @@ defmodule GranaiWeb.UploadLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto scrollbar-gutter">
-        <div class="mb-8">
-          <h1 class="text-3xl font-bold tracking-tight">Upload</h1>
-          <p class="text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
+        <div class="mb-4 sm:mb-8 text-center sm:text-left">
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Upload</h1>
+          <p class="text-xs sm:text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
         </div>
 
         <div role="tablist" class="tabs tabs-border mb-8">

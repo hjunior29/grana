@@ -18,17 +18,20 @@ defmodule GranaiWeb.Layouts do
   def app(assigns) do
     ~H"""
     <div class="min-h-screen flex flex-col">
-      <header class="navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-4 sm:px-6 lg:px-8">
+      <header class="navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-3 sm:px-6 lg:px-8 min-h-12">
         <div class="flex-1">
           <.link
             navigate={if @current_scope, do: ~p"/dashboard", else: ~p"/"}
             class="flex items-center gap-2 text-xl font-bold tracking-tight"
           >
-            <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
-            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Granai</span>
+            <img src={~p"/images/logo-32.png"} alt="" class="w-6 h-6 sm:w-7 sm:h-7" />
+            <span style="font-family: 'Grand Hotel', cursive" class="text-xl sm:text-2xl">
+              Granai
+            </span>
           </.link>
         </div>
-        <div :if={@current_scope && !@hide_nav} class="flex-none">
+        <%!-- Desktop nav --%>
+        <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">
           <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
             <li>
               <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
@@ -47,7 +50,7 @@ defmodule GranaiWeb.Layouts do
             </li>
             <li>
               <details class="dropdown dropdown-end">
-                <summary class="btn-md btn-ghost ">
+                <summary class="btn-md btn-ghost">
                   <.icon name="hero-user-circle" class="size-5" />
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
@@ -67,9 +70,56 @@ defmodule GranaiWeb.Layouts do
             </li>
           </ul>
         </div>
+        <%!-- Mobile hamburger menu --%>
+        <div :if={@current_scope && !@hide_nav} class="flex md:hidden flex-none">
+          <details class="dropdown dropdown-end">
+            <summary class="btn btn-ghost btn-sm px-2">
+              <.icon name="hero-bars-3" class="size-5" />
+            </summary>
+            <ul class="dropdown-content menu bg-base-200 rounded-box w-52 p-2 shadow-xl z-50 mt-2">
+              <li>
+                <.link navigate={~p"/dashboard"}>
+                  <.icon name="hero-chart-bar" class="size-4" /> Dashboard
+                </.link>
+              </li>
+              <li>
+                <.link navigate={~p"/analysis"}>
+                  <.icon name="hero-sparkles" class="size-4" /> Análise
+                </.link>
+              </li>
+              <li>
+                <.link navigate={~p"/transactions"}>
+                  <.icon name="hero-list-bullet" class="size-4" /> Transações
+                </.link>
+              </li>
+              <li>
+                <.link navigate={~p"/categories"}>
+                  <.icon name="hero-tag" class="size-4" /> Categorias
+                </.link>
+              </li>
+              <li>
+                <.link navigate={~p"/upload"}>
+                  <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
+                </.link>
+              </li>
+              <hr class="my-1 opacity-30" />
+              <li class="py-1 text-xs opacity-50">{@current_scope.user.email}</li>
+              <li>
+                <.link navigate={~p"/users/settings"}>
+                  <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
+                </.link>
+              </li>
+              <li>
+                <.link href={~p"/users/log-out"} method="delete">
+                  <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> Sair
+                </.link>
+              </li>
+            </ul>
+          </details>
+        </div>
       </header>
 
-      <main class="flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <main class="flex-1 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
         {render_slot(@inner_block)}
       </main>
     </div>

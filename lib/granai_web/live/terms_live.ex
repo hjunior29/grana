@@ -250,7 +250,7 @@ defmodule GranaiWeb.TermsLive do
 
         <div class="mt-12 pt-8 border-t border-base-content/10 text-center">
           <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
-            Voltar para o início
+            Li os Termos de Uso e Política de Privacidade
           </.link>
         </div>
       </div>
