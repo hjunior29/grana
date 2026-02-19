@@ -128,6 +128,7 @@ defmodule Grana.Accounts.UserNotifier do
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" rel="stylesheet">
     </head>
     <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:32px 16px;">
@@ -137,7 +138,7 @@ defmodule Grana.Accounts.UserNotifier do
               <!-- Header -->
               <tr>
                 <td style="background:linear-gradient(135deg,#9B8EC4 0%,#7C6DB0 100%);padding:28px 32px;text-align:center;">
-                  <span style="font-family:'Georgia','Times New Roman',serif;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">Grana</span>
+                  <span style="font-family:'Grand Hotel',cursive;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">Grana</span>
                 </td>
               </tr>
               <!-- Body -->
