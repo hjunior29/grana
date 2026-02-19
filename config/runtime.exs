@@ -43,6 +43,28 @@ end
 config :granai, GranaiWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# In dev, set SMTP_IN_DEV=true in .env to send real emails via SMTP
+# instead of the local mailbox at /dev/mailbox
+if config_env() == :dev and System.get_env("SMTP_IN_DEV") == "true" do
+  if smtp_host = System.get_env("SMTP_HOST") do
+    config :granai, :smtp_available, true
+
+    config :granai, :smtp_config,
+      relay: smtp_host,
+      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+      username: System.get_env("SMTP_USERNAME"),
+      password: System.get_env("SMTP_PASSWORD"),
+      tls: :always,
+      tls_options: [verify: :verify_none],
+      auth: :always,
+      ssl: false
+
+    config :granai, :mail_from,
+      name: System.get_env("MAIL_FROM_NAME") || "Granai",
+      address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
+  end
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
@@ -120,21 +142,23 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :granai, Granai.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+  # ## Configuring the mailer (SMTP)
+  smtp_host =
+    System.get_env("SMTP_HOST") ||
+      raise "environment variable SMTP_HOST is missing."
+
+  config :granai, Granai.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: smtp_host,
+    port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+    username: System.get_env("SMTP_USERNAME"),
+    password: System.get_env("SMTP_PASSWORD"),
+    tls: :always,
+    tls_options: [verify: :verify_none],
+    auth: :always,
+    ssl: false
+
+  config :granai, :mail_from,
+    name: System.get_env("MAIL_FROM_NAME") || "Granai",
+    address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
 end

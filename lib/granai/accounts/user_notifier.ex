@@ -4,42 +4,11 @@ defmodule Granai.Accounts.UserNotifier do
   alias Granai.Mailer
   alias Granai.Accounts.User
 
-  # Delivers the email using the application mailer.
-  defp deliver(recipient, subject, body) do
-    email =
-      new()
-      |> to(recipient)
-      |> from({"Granai", "contact@example.com"})
-      |> subject(subject)
-      |> text_body(body)
-
-    with {:ok, _metadata} <- Mailer.deliver(email) do
-      {:ok, email}
-    end
-  end
-
-  @doc """
-  Deliver instructions to update a user email.
-  """
-  def deliver_update_email_instructions(user, url) do
-    deliver(user.email, "Update email instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can change your email by visiting the URL below:
-
-    #{url}
-
-    If you didn't request this change, please ignore this.
-
-    ==============================
-    """)
-  end
+  # --- Public API ---
 
   @doc """
   Deliver instructions to log in with a magic link.
+  Dispatches to confirmation or magic link based on user state.
   """
   def deliver_login_instructions(user, url) do
     case user do
@@ -48,37 +17,201 @@ defmodule Granai.Accounts.UserNotifier do
     end
   end
 
+  @doc """
+  Deliver instructions to update a user email.
+  """
+  def deliver_update_email_instructions(user, url) do
+    deliver(
+      user.email,
+      "Confirme seu novo email — Granai",
+      email_html(
+        "Alteração de email",
+        """
+        <p>Olá, <strong>#{user.email}</strong>!</p>
+        <p>Recebemos uma solicitação para alterar o email da sua conta Granai.</p>
+        <p>Clique no botão abaixo para confirmar o novo endereço:</p>
+        """,
+        url,
+        "Confirmar novo email",
+        "Se você não solicitou esta alteração, ignore este email. Seu email atual continuará o mesmo."
+      ),
+      email_text(
+        "Alteração de email",
+        "Recebemos uma solicitação para alterar o email da sua conta Granai.\n\nClique no link abaixo para confirmar:",
+        url,
+        "Se você não solicitou esta alteração, ignore este email."
+      )
+    )
+  end
+
+  # --- Private emails ---
+
   defp deliver_magic_link_instructions(user, url) do
-    deliver(user.email, "Log in instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can log into your account by visiting the URL below:
-
-    #{url}
-
-    If you didn't request this email, please ignore this.
-
-    ==============================
-    """)
+    deliver(
+      user.email,
+      "Seu link de acesso — Granai",
+      email_html(
+        "Entrar na sua conta",
+        """
+        <p>Olá, <strong>#{user.email}</strong>!</p>
+        <p>Você solicitou um link para entrar na sua conta Granai.</p>
+        <p>Clique no botão abaixo para acessar:</p>
+        """,
+        url,
+        "Entrar na minha conta",
+        "Este link expira em 10 minutos. Se você não solicitou este acesso, ignore este email."
+      ),
+      email_text(
+        "Entrar na sua conta",
+        "Você solicitou um link para entrar na sua conta Granai.\n\nClique no link abaixo para acessar:",
+        url,
+        "Este link expira em 10 minutos. Se você não solicitou este acesso, ignore este email."
+      )
+    )
   end
 
   defp deliver_confirmation_instructions(user, url) do
-    deliver(user.email, "Confirmation instructions", """
+    deliver(
+      user.email,
+      "Confirme sua conta — Granai",
+      email_html(
+        "Bem-vindo ao Granai!",
+        """
+        <p>Olá, <strong>#{user.email}</strong>!</p>
+        <p>Obrigado por criar sua conta no <strong>Granai</strong>!</p>
+        <p>Para começar a organizar suas finanças, confirme seu email clicando no botão abaixo:</p>
+        """,
+        url,
+        "Confirmar minha conta",
+        "Se você não criou uma conta no Granai, ignore este email."
+      ),
+      email_text(
+        "Bem-vindo ao Granai!",
+        "Obrigado por criar sua conta no Granai!\n\nPara começar, confirme seu email clicando no link abaixo:",
+        url,
+        "Se você não criou uma conta no Granai, ignore este email."
+      )
+    )
+  end
 
-    ==============================
+  # --- Delivery ---
 
-    Hi #{user.email},
+  defp deliver(recipient, subject, html, text) do
+    {from_name, from_address} = mail_from()
 
-    You can confirm your account by visiting the URL below:
+    email =
+      new()
+      |> to(recipient)
+      |> from({from_name, from_address})
+      |> subject(subject)
+      |> html_body(html)
+      |> text_body(text)
+
+    with {:ok, _metadata} <- Mailer.deliver(email, Mailer.smtp_config()) do
+      {:ok, email}
+    end
+  end
+
+  defp mail_from do
+    config = Application.get_env(:granai, :mail_from, [])
+    {Keyword.get(config, :name, "Granai"), Keyword.get(config, :address, "noreply@example.com")}
+  end
+
+  # --- HTML Template ---
+
+  defp email_html(heading, content, url, button_text, footer_note) do
+    year = Date.utc_today().year
+
+    ~s"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:32px 16px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+              <!-- Header -->
+              <tr>
+                <td style="background:linear-gradient(135deg,#9B8EC4 0%,#7C6DB0 100%);padding:28px 32px;text-align:center;">
+                  <span style="font-family:'Georgia','Times New Roman',serif;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">Granai</span>
+                </td>
+              </tr>
+              <!-- Body -->
+              <tr>
+                <td style="padding:32px 32px 16px;">
+                  <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#18181b;line-height:1.3;">#{heading}</h1>
+                  <div style="font-size:15px;line-height:1.7;color:#3f3f46;">
+                    #{content}
+                  </div>
+                </td>
+              </tr>
+              <!-- CTA -->
+              <tr>
+                <td style="padding:8px 32px 28px;" align="center">
+                  <table role="presentation" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="background-color:#8B7CB8;border-radius:8px;">
+                        <a href="#{url}" target="_blank" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">#{button_text}</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <!-- URL fallback -->
+              <tr>
+                <td style="padding:0 32px 24px;">
+                  <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.5;">Se o botão não funcionar, copie e cole este link no navegador:</p>
+                  <p style="margin:6px 0 0;font-size:12px;word-break:break-all;">
+                    <a href="#{url}" style="color:#7C6DB0;text-decoration:underline;">#{url}</a>
+                  </p>
+                </td>
+              </tr>
+              <!-- Divider -->
+              <tr>
+                <td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e4e4e7;margin:0;"></td>
+              </tr>
+              <!-- Footer note -->
+              <tr>
+                <td style="padding:20px 32px 28px;">
+                  <p style="margin:0;font-size:13px;color:#a1a1aa;line-height:1.5;">#{footer_note}</p>
+                </td>
+              </tr>
+            </table>
+            <!-- Branding -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+              <tr>
+                <td style="padding:20px 32px;text-align:center;">
+                  <p style="margin:0;font-size:12px;color:#a1a1aa;">&copy; #{year} Granai &mdash; Suas finanças sob controle</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    """
+  end
+
+  # --- Text fallback ---
+
+  defp email_text(heading, content, url, footer_note) do
+    """
+    #{heading}
+    ========================================
+
+    #{content}
 
     #{url}
 
-    If you didn't create an account with us, please ignore this.
+    ----------------------------------------
+    #{footer_note}
 
-    ==============================
-    """)
+    (c) #{Date.utc_today().year} Granai - Suas financas sob controle
+    """
   end
 end
