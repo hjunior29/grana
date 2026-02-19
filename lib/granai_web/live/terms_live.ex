@@ -43,8 +43,8 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.1. Aceitação dos Termos</h3>
             <p>
-              Ao acessar e utilizar a plataforma Grana ("Plataforma"), você concorda com os presentes
-              Termos de Uso. Caso não concorde com qualquer disposição, não utilize a Plataforma.
+              Ao acessar e utilizar a plataforma Grana, você concorda com os presentes
+              Termos de Uso. Caso não concorde com qualquer disposição, não utilize a plataforma.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.2. Descrição do Serviço</h3>
@@ -60,19 +60,15 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.3. Modelo BYOK (Bring Your Own Key)</h3>
             <p>
-              As funcionalidades de inteligência artificial do Grana utilizam o modelo BYOK (Bring Your Own Key).
-              O usuário é responsável por fornecer sua própria chave de API do Google Gemini nas configurações
+              As funcionalidades de inteligência artificial do Grana utilizam o modelo BYOK (Bring Your Own Key). O usuário é responsável por fornecer sua própria chave de API do Google Gemini nas configurações
               da plataforma. As requisições de IA são realizadas diretamente entre o navegador do usuário e os
-              servidores do Google, utilizando a chave fornecida pelo próprio usuário.
-            </p>
-            <p>
-              O Grana não se responsabiliza por custos associados ao uso da API Key do usuário junto ao
+              servidores do Google, utilizando a chave fornecida pelo próprio usuário. O Grana não se responsabiliza por custos associados ao uso da API Key do usuário junto ao
               provedor de IA, nem por eventuais limitações de uso impostas pelo provedor.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.4. Cadastro e Conta</h3>
             <p>
-              Para utilizar a Plataforma, o usuário deve criar uma conta fornecendo um endereço de e-mail válido.
+              Para utilizar a plataforma, o usuário deve criar uma conta fornecendo um endereço de e-mail válido.
               O usuário é responsável por manter a segurança de suas credenciais de acesso e por todas as
               atividades realizadas em sua conta.
             </p>
@@ -80,9 +76,9 @@ defmodule GranaiWeb.TermsLive do
             <h3 class="text-lg font-semibold mt-6 mb-2">1.5. Uso Adequado</h3>
             <p>O usuário compromete-se a:</p>
             <ul class="list-disc list-inside space-y-1 ml-4">
-              <li>Utilizar a Plataforma apenas para fins pessoais e lícitos</li>
+              <li>Utilizar a plataforma apenas para fins pessoais e lícitos</li>
               <li>Não tentar acessar dados de outros usuários</li>
-              <li>Não utilizar a Plataforma para atividades fraudulentas</li>
+              <li>Não utilizar a plataforma para atividades fraudulentas</li>
               <li>Não realizar engenharia reversa ou tentativas de exploração de vulnerabilidades</li>
             </ul>
 
@@ -90,13 +86,13 @@ defmodule GranaiWeb.TermsLive do
             <p>
               O Grana é oferecido "como está" (as is), sem garantias de disponibilidade ininterrupta.
               O serviço pode ser descontinuado ou modificado a qualquer momento, sem aviso prévio.
-              O Grana não se responsabiliza por perdas decorrentes de indisponibilidade da Plataforma.
+              O Grana não se responsabiliza por perdas decorrentes de indisponibilidade da plataforma.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.7. Gratuidade</h3>
             <p>
               A utilização do Grana é gratuita. Não há cobrança de assinatura, taxas ou valores pelo
-              uso da Plataforma. O usuário arca apenas com eventuais custos de sua API Key junto ao
+              uso da plataforma. O usuário arca apenas com eventuais custos de sua API Key junto ao
               provedor de IA, caso exceda os limites do plano gratuito.
             </p>
 
@@ -139,7 +135,7 @@ defmodule GranaiWeb.TermsLive do
             <h3 class="text-lg font-semibold mt-6 mb-2">2.2. Finalidade do Tratamento</h3>
             <p>Os dados são tratados exclusivamente para:</p>
             <ul class="list-disc list-inside space-y-1 ml-4">
-              <li>Prover as funcionalidades da Plataforma (categorização, dashboards, análises)</li>
+              <li>Prover as funcionalidades da plataforma (categorização, dashboards, análises)</li>
               <li>Manter o histórico financeiro do usuário entre sessões</li>
               <li>Aplicar regras de categorização aprendidas pelo sistema</li>
               <li>Autenticação e segurança da conta</li>
@@ -163,7 +159,7 @@ defmodule GranaiWeb.TermsLive do
             </p>
             <ul class="list-disc list-inside space-y-1 ml-4">
               <li>
-                <strong>Google Gemini (IA):</strong> quando o usuário utiliza funcionalidades de IA,
+                <strong>Google Gemini:</strong> quando o usuário utiliza funcionalidades de IA,
                 dados financeiros resumidos são enviados diretamente ao Google utilizando a API Key
                 do próprio usuário. O Grana não intermedia nem armazena essas comunicações.
               </li>
@@ -186,7 +182,7 @@ defmodule GranaiWeb.TermsLive do
             <p>O usuário tem direito a:</p>
             <ul class="list-disc list-inside space-y-1 ml-4">
               <li>
-                <strong>Acesso:</strong> consultar todos os dados pessoais armazenados na Plataforma
+                <strong>Acesso:</strong> consultar todos os dados pessoais armazenados na plataforma
               </li>
               <li>
                 <strong>Correção:</strong>
@@ -194,11 +190,11 @@ defmodule GranaiWeb.TermsLive do
               </li>
               <li>
                 <strong>Eliminação:</strong>
-                excluir completamente sua conta e todos os dados associados a qualquer momento, através das configurações da Plataforma
+                excluir completamente sua conta e todos os dados associados a qualquer momento, através das configurações da plataforma
               </li>
               <li>
                 <strong>Revogação do consentimento:</strong>
-                deixar de utilizar a Plataforma e excluir sua conta
+                deixar de utilizar a plataforma e excluir sua conta
               </li>
               <li><strong>Portabilidade:</strong> exportar suas transações em formato CSV</li>
             </ul>
@@ -230,7 +226,7 @@ defmodule GranaiWeb.TermsLive do
             <p>
               O Grana reserva-se o direito de alterar estes Termos e esta Política de Privacidade a
               qualquer momento. As alterações serão publicadas nesta página com a data de atualização.
-              O uso continuado da Plataforma após as alterações constitui aceite dos novos termos.
+              O uso continuado da plataforma após as alterações constitui aceite dos novos termos.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">3.2. Legislação Aplicável</h3>
