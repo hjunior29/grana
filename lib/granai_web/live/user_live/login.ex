@@ -51,7 +51,7 @@ defmodule GranaiWeb.UserLive.Login do
             required
             phx-mounted={JS.focus()}
           />
-          <.button class="btn btn-primary w-full">
+          <.button class="btn btn-primary w-full" phx-disable-with="Enviando...">
             Entrar com email
           </.button>
         </.form>
@@ -145,6 +145,7 @@ defmodule GranaiWeb.UserLive.Login do
   end
 
   defp local_mail_adapter? do
-    Application.get_env(:granai, Granai.Mailer)[:adapter] == Swoosh.Adapters.Local
+    Application.get_env(:granai, Granai.Mailer)[:adapter] == Swoosh.Adapters.Local and
+      not Application.get_env(:granai, :smtp_available, false)
   end
 end
