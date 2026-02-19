@@ -1,7 +1,7 @@
-defmodule Granai.Banking.Parsers.NubankTest do
+defmodule Grana.Banking.Parsers.NubankTest do
   use ExUnit.Case, async: true
 
-  alias Granai.Banking.Parsers.Nubank
+  alias Grana.Banking.Parsers.Nubank
 
   @sample_csv """
   Data,Valor,Identificador,Descrição

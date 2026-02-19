@@ -4,8 +4,8 @@ defmodule GranaiWeb.UserAuth do
   import Plug.Conn
   import Phoenix.Controller
 
-  alias Granai.Accounts
-  alias Granai.Accounts.Scope
+  alias Grana.Accounts
+  alias Grana.Accounts.Scope
 
   # Make the remember me cookie valid for 14 days. This should match
   # the session validity setting in UserToken.

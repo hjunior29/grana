@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.AddKindToCategories do
+defmodule Grana.Repo.Migrations.AddKindToCategories do
   use Ecto.Migration
 
   def change do

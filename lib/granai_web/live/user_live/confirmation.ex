@@ -1,7 +1,7 @@
 defmodule GranaiWeb.UserLive.Confirmation do
   use GranaiWeb, :live_view
 
-  alias Granai.Accounts
+  alias Grana.Accounts
 
   @impl true
   def render(assigns) do

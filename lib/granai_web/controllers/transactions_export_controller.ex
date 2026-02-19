@@ -1,8 +1,8 @@
 defmodule GranaiWeb.TransactionsExportController do
   use GranaiWeb, :controller
 
-  alias Granai.Banking
-  alias Granai.Banking.CsvExporter
+  alias Grana.Banking
+  alias Grana.Banking.CsvExporter
 
   def export(conn, params) do
     user_id = conn.assigns.current_scope.user.id

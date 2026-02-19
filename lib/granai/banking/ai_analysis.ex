@@ -1,4 +1,4 @@
-defmodule Granai.Banking.AIAnalysis do
+defmodule Grana.Banking.AIAnalysis do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -7,7 +7,7 @@ defmodule Granai.Banking.AIAnalysis do
     field :filters_json, :map
     field :result_json, :map
 
-    belongs_to :user, Granai.Accounts.User
+    belongs_to :user, Grana.Accounts.User
 
     timestamps(type: :utc_datetime)
   end

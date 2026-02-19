@@ -1,7 +1,7 @@
-defmodule Granai.Accounts.UserToken do
+defmodule Grana.Accounts.UserToken do
   use Ecto.Schema
   import Ecto.Query
-  alias Granai.Accounts.UserToken
+  alias Grana.Accounts.UserToken
 
   @hash_algorithm :sha256
   @rand_size 32
@@ -17,7 +17,7 @@ defmodule Granai.Accounts.UserToken do
     field :context, :string
     field :sent_to, :string
     field :authenticated_at, :utc_datetime
-    belongs_to :user, Granai.Accounts.User
+    belongs_to :user, Grana.Accounts.User
 
     timestamps(type: :utc_datetime, updated_at: false)
   end

@@ -1,12 +1,12 @@
-defmodule Granai.Accounts do
+defmodule Grana.Accounts do
   @moduledoc """
   The Accounts context.
   """
 
   import Ecto.Query, warn: false
-  alias Granai.Repo
+  alias Grana.Repo
 
-  alias Granai.Accounts.{User, UserToken, UserNotifier}
+  alias Grana.Accounts.{User, UserToken, UserNotifier}
 
   ## Database getters
 
@@ -99,7 +99,7 @@ defmodule Granai.Accounts do
   @doc """
   Returns an `%Ecto.Changeset{}` for changing the user email.
 
-  See `Granai.Accounts.User.email_changeset/3` for a list of supported options.
+  See `Grana.Accounts.User.email_changeset/3` for a list of supported options.
 
   ## Examples
 
@@ -135,7 +135,7 @@ defmodule Granai.Accounts do
   @doc """
   Returns an `%Ecto.Changeset{}` for changing the user password.
 
-  See `Granai.Accounts.User.password_changeset/3` for a list of supported options.
+  See `Grana.Accounts.User.password_changeset/3` for a list of supported options.
 
   ## Examples
 

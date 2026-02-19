@@ -14,7 +14,7 @@ defmodule GranaiWeb.TermsLive do
         <div class="flex-1">
           <a href="/" class="flex items-center gap-2 text-xl font-bold tracking-tight">
             <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
-            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Granai</span>
+            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Grana</span>
           </a>
         </div>
         <div class="flex-none">
@@ -43,13 +43,13 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.1. Aceitação dos Termos</h3>
             <p>
-              Ao acessar e utilizar a plataforma Granai ("Plataforma"), você concorda com os presentes
+              Ao acessar e utilizar a plataforma Grana ("Plataforma"), você concorda com os presentes
               Termos de Uso. Caso não concorde com qualquer disposição, não utilize a Plataforma.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.2. Descrição do Serviço</h3>
             <p>
-              O Granai é uma plataforma de gestão financeira pessoal que permite ao usuário:
+              O Grana é uma plataforma de gestão financeira pessoal que permite ao usuário:
             </p>
             <ul class="list-disc list-inside space-y-1 ml-4">
               <li>Fazer upload de extratos bancários em formato CSV e PDF</li>
@@ -60,13 +60,13 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.3. Modelo BYOK (Bring Your Own Key)</h3>
             <p>
-              As funcionalidades de inteligência artificial do Granai utilizam o modelo BYOK (Bring Your Own Key).
+              As funcionalidades de inteligência artificial do Grana utilizam o modelo BYOK (Bring Your Own Key).
               O usuário é responsável por fornecer sua própria chave de API do Google Gemini nas configurações
               da plataforma. As requisições de IA são realizadas diretamente entre o navegador do usuário e os
               servidores do Google, utilizando a chave fornecida pelo próprio usuário.
             </p>
             <p>
-              O Granai não se responsabiliza por custos associados ao uso da API Key do usuário junto ao
+              O Grana não se responsabiliza por custos associados ao uso da API Key do usuário junto ao
               provedor de IA, nem por eventuais limitações de uso impostas pelo provedor.
             </p>
 
@@ -88,21 +88,21 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.6. Disponibilidade</h3>
             <p>
-              O Granai é oferecido "como está" (as is), sem garantias de disponibilidade ininterrupta.
+              O Grana é oferecido "como está" (as is), sem garantias de disponibilidade ininterrupta.
               O serviço pode ser descontinuado ou modificado a qualquer momento, sem aviso prévio.
-              O Granai não se responsabiliza por perdas decorrentes de indisponibilidade da Plataforma.
+              O Grana não se responsabiliza por perdas decorrentes de indisponibilidade da Plataforma.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.7. Gratuidade</h3>
             <p>
-              A utilização do Granai é gratuita. Não há cobrança de assinatura, taxas ou valores pelo
+              A utilização do Grana é gratuita. Não há cobrança de assinatura, taxas ou valores pelo
               uso da Plataforma. O usuário arca apenas com eventuais custos de sua API Key junto ao
               provedor de IA, caso exceda os limites do plano gratuito.
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">1.8. Limitação de Responsabilidade</h3>
             <p>
-              O Granai é uma ferramenta auxiliar de organização financeira e não constitui assessoria
+              O Grana é uma ferramenta auxiliar de organização financeira e não constitui assessoria
               financeira, contábil ou tributária. As análises geradas por IA são meramente informativas.
               O usuário é o único responsável por suas decisões financeiras.
             </p>
@@ -112,12 +112,12 @@ defmodule GranaiWeb.TermsLive do
           <section>
             <h2 class="text-xl font-bold mb-4">2. Política de Privacidade</h2>
             <p>
-              Esta Política de Privacidade descreve como o Granai coleta, utiliza e protege seus dados
+              Esta Política de Privacidade descreve como o Grana coleta, utiliza e protege seus dados
               pessoais, em conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018 — LGPD).
             </p>
 
             <h3 class="text-lg font-semibold mt-6 mb-2">2.1. Dados Coletados</h3>
-            <p>O Granai coleta e armazena os seguintes dados:</p>
+            <p>O Grana coleta e armazena os seguintes dados:</p>
             <ul class="list-disc list-inside space-y-1 ml-4">
               <li>
                 <strong>Dados de cadastro:</strong> endereço de e-mail e senha (hash criptográfico)
@@ -157,7 +157,7 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">2.4. Compartilhamento de Dados</h3>
             <p>
-              O Granai <strong>não compartilha, vende ou transfere</strong>
+              O Grana <strong>não compartilha, vende ou transfere</strong>
               dados pessoais ou financeiros
               do usuário com terceiros, exceto:
             </p>
@@ -165,7 +165,7 @@ defmodule GranaiWeb.TermsLive do
               <li>
                 <strong>Google Gemini (IA):</strong> quando o usuário utiliza funcionalidades de IA,
                 dados financeiros resumidos são enviados diretamente ao Google utilizando a API Key
-                do próprio usuário. O Granai não intermedia nem armazena essas comunicações.
+                do próprio usuário. O Grana não intermedia nem armazena essas comunicações.
               </li>
               <li>
                 <strong>Obrigação legal:</strong> quando exigido por ordem judicial ou determinação
@@ -216,7 +216,7 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">2.8. Cookies</h3>
             <p>
-              O Granai utiliza cookies estritamente necessários para o funcionamento da autenticação
+              O Grana utiliza cookies estritamente necessários para o funcionamento da autenticação
               e manutenção da sessão do usuário. Não são utilizados cookies de rastreamento,
               analytics ou publicidade.
             </p>
@@ -228,7 +228,7 @@ defmodule GranaiWeb.TermsLive do
 
             <h3 class="text-lg font-semibold mt-6 mb-2">3.1. Alterações</h3>
             <p>
-              O Granai reserva-se o direito de alterar estes Termos e esta Política de Privacidade a
+              O Grana reserva-se o direito de alterar estes Termos e esta Política de Privacidade a
               qualquer momento. As alterações serão publicadas nesta página com a data de atualização.
               O uso continuado da Plataforma após as alterações constitui aceite dos novos termos.
             </p>
@@ -249,9 +249,9 @@ defmodule GranaiWeb.TermsLive do
         </div>
 
         <div class="mt-12 pt-8 border-t border-base-content/10 text-center">
-          <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
+          <button class="btn btn-primary" onclick="history.back()">
             Li os Termos de Uso e Política de Privacidade
-          </.link>
+          </button>
         </div>
       </div>
     </div>

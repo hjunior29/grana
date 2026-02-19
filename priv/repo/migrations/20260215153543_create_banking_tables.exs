@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.CreateBankingTables do
+defmodule Grana.Repo.Migrations.CreateBankingTables do
   use Ecto.Migration
 
   def change do

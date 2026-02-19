@@ -1,7 +1,7 @@
-defmodule Granai.Banking.Parsers.PdfExtractor do
-  alias Granai.Accounts
-  alias Granai.AI.Provider
-  alias Granai.Banking.Parsers.InstallmentParser
+defmodule Grana.Banking.Parsers.PdfExtractor do
+  alias Grana.Accounts
+  alias Grana.AI.Provider
+  alias Grana.Banking.Parsers.InstallmentParser
 
   def extract(pdf_bytes, bank, user_id) do
     case Accounts.get_user_ai_config(user_id) do

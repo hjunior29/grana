@@ -1,8 +1,8 @@
 defmodule GranaiWeb.UserSessionControllerTest do
   use GranaiWeb.ConnCase, async: true
 
-  import Granai.AccountsFixtures
-  alias Granai.Accounts
+  import Grana.AccountsFixtures
+  alias Grana.Accounts
 
   setup do
     %{unconfirmed_user: unconfirmed_user_fixture(), user: user_fixture()}

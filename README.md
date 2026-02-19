@@ -1,4 +1,4 @@
-# Granai
+# Grana
 
 To start your Phoenix server:
 

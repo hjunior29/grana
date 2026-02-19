@@ -27,7 +27,7 @@ defmodule GranaiWeb.Router do
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
-  if Application.compile_env(:granai, :dev_routes) do
+  if Application.compile_env(:grana, :dev_routes) do
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do

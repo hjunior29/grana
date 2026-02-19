@@ -1,8 +1,8 @@
-defmodule Granai.Accounts.UserNotifier do
+defmodule Grana.Accounts.UserNotifier do
   import Swoosh.Email
 
-  alias Granai.Mailer
-  alias Granai.Accounts.User
+  alias Grana.Mailer
+  alias Grana.Accounts.User
 
   # --- Public API ---
 
@@ -23,12 +23,12 @@ defmodule Granai.Accounts.UserNotifier do
   def deliver_update_email_instructions(user, url) do
     deliver(
       user.email,
-      "Confirme seu novo email — Granai",
+      "Confirme seu novo email — Grana",
       email_html(
         "Alteração de email",
         """
         <p>Olá, <strong>#{user.email}</strong>!</p>
-        <p>Recebemos uma solicitação para alterar o email da sua conta Granai.</p>
+        <p>Recebemos uma solicitação para alterar o email da sua conta Grana.</p>
         <p>Clique no botão abaixo para confirmar o novo endereço:</p>
         """,
         url,
@@ -37,7 +37,7 @@ defmodule Granai.Accounts.UserNotifier do
       ),
       email_text(
         "Alteração de email",
-        "Recebemos uma solicitação para alterar o email da sua conta Granai.\n\nClique no link abaixo para confirmar:",
+        "Recebemos uma solicitação para alterar o email da sua conta Grana.\n\nClique no link abaixo para confirmar:",
         url,
         "Se você não solicitou esta alteração, ignore este email."
       )
@@ -49,12 +49,12 @@ defmodule Granai.Accounts.UserNotifier do
   defp deliver_magic_link_instructions(user, url) do
     deliver(
       user.email,
-      "Seu link de acesso — Granai",
+      "Seu link de acesso — Grana",
       email_html(
         "Entrar na sua conta",
         """
         <p>Olá, <strong>#{user.email}</strong>!</p>
-        <p>Você solicitou um link para entrar na sua conta Granai.</p>
+        <p>Você solicitou um link para entrar na sua conta Grana.</p>
         <p>Clique no botão abaixo para acessar:</p>
         """,
         url,
@@ -63,7 +63,7 @@ defmodule Granai.Accounts.UserNotifier do
       ),
       email_text(
         "Entrar na sua conta",
-        "Você solicitou um link para entrar na sua conta Granai.\n\nClique no link abaixo para acessar:",
+        "Você solicitou um link para entrar na sua conta Grana.\n\nClique no link abaixo para acessar:",
         url,
         "Este link expira em 10 minutos. Se você não solicitou este acesso, ignore este email."
       )
@@ -73,23 +73,23 @@ defmodule Granai.Accounts.UserNotifier do
   defp deliver_confirmation_instructions(user, url) do
     deliver(
       user.email,
-      "Confirme sua conta — Granai",
+      "Confirme sua conta — Grana",
       email_html(
-        "Bem-vindo ao Granai!",
+        "Bem-vindo ao Grana!",
         """
         <p>Olá, <strong>#{user.email}</strong>!</p>
-        <p>Obrigado por criar sua conta no <strong>Granai</strong>!</p>
+        <p>Obrigado por criar sua conta no <strong>Grana</strong>!</p>
         <p>Para começar a organizar suas finanças, confirme seu email clicando no botão abaixo:</p>
         """,
         url,
         "Confirmar minha conta",
-        "Se você não criou uma conta no Granai, ignore este email."
+        "Se você não criou uma conta no Grana, ignore este email."
       ),
       email_text(
-        "Bem-vindo ao Granai!",
-        "Obrigado por criar sua conta no Granai!\n\nPara começar, confirme seu email clicando no link abaixo:",
+        "Bem-vindo ao Grana!",
+        "Obrigado por criar sua conta no Grana!\n\nPara começar, confirme seu email clicando no link abaixo:",
         url,
-        "Se você não criou uma conta no Granai, ignore este email."
+        "Se você não criou uma conta no Grana, ignore este email."
       )
     )
   end
@@ -113,8 +113,8 @@ defmodule Granai.Accounts.UserNotifier do
   end
 
   defp mail_from do
-    config = Application.get_env(:granai, :mail_from, [])
-    {Keyword.get(config, :name, "Granai"), Keyword.get(config, :address, "noreply@example.com")}
+    config = Application.get_env(:grana, :mail_from, [])
+    {Keyword.get(config, :name, "Grana"), Keyword.get(config, :address, "noreply@example.com")}
   end
 
   # --- HTML Template ---
@@ -137,7 +137,7 @@ defmodule Granai.Accounts.UserNotifier do
               <!-- Header -->
               <tr>
                 <td style="background:linear-gradient(135deg,#9B8EC4 0%,#7C6DB0 100%);padding:28px 32px;text-align:center;">
-                  <span style="font-family:'Georgia','Times New Roman',serif;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">Granai</span>
+                  <span style="font-family:'Georgia','Times New Roman',serif;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">Grana</span>
                 </td>
               </tr>
               <!-- Body -->
@@ -185,7 +185,7 @@ defmodule Granai.Accounts.UserNotifier do
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
               <tr>
                 <td style="padding:20px 32px;text-align:center;">
-                  <p style="margin:0;font-size:12px;color:#a1a1aa;">&copy; #{year} Granai &mdash; Suas finanças sob controle</p>
+                  <p style="margin:0;font-size:12px;color:#a1a1aa;">&copy; #{year} Grana &mdash; Suas finanças sob controle</p>
                 </td>
               </tr>
             </table>
@@ -211,7 +211,7 @@ defmodule Granai.Accounts.UserNotifier do
     ----------------------------------------
     #{footer_note}
 
-    (c) #{Date.utc_today().year} Granai - Suas financas sob controle
+    (c) #{Date.utc_today().year} Grana - Suas financas sob controle
     """
   end
 end

@@ -1,5 +1,5 @@
-defmodule Granai.Banking.Parsers.BradescoFatura do
-  alias Granai.Banking.Parsers.InstallmentParser
+defmodule Grana.Banking.Parsers.BradescoFatura do
+  alias Grana.Banking.Parsers.InstallmentParser
 
   def parse(csv_content) do
     content = normalize_encoding(csv_content)

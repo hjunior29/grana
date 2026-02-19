@@ -2,7 +2,7 @@ defmodule GranaiWeb.UserLive.RegistrationTest do
   use GranaiWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
   describe "Registration page" do
     test "renders registration page", %{conn: conn} do

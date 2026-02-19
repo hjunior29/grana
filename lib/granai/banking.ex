@@ -1,7 +1,7 @@
-defmodule Granai.Banking do
+defmodule Grana.Banking do
   import Ecto.Query
-  alias Granai.Repo
-  alias Granai.Banking.{BankStatement, Transaction, Category, CategoryRule, AIAnalysis}
+  alias Grana.Repo
+  alias Grana.Banking.{BankStatement, Transaction, Category, CategoryRule, AIAnalysis}
 
   # Categories
 

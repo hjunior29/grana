@@ -21,5 +21,5 @@ defmodule GranaiWeb.Gettext do
 
   See the [Gettext Docs](https://hexdocs.pm/gettext) for detailed usage.
   """
-  use Gettext.Backend, otp_app: :granai
+  use Gettext.Backend, otp_app: :grana
 end

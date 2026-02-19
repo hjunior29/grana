@@ -1,9 +1,9 @@
-defmodule Granai.Banking.AIAnalyzerTest do
-  use Granai.DataCase, async: false
+defmodule Grana.Banking.AIAnalyzerTest do
+  use Grana.DataCase, async: false
 
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
-  alias Granai.Banking.AIAnalyzer
+  alias Grana.Banking.AIAnalyzer
 
   describe "analyze_with_filters/3" do
     test "returns error when no API key is configured" do

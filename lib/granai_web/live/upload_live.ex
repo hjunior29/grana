@@ -1,8 +1,8 @@
 defmodule GranaiWeb.UploadLive do
   use GranaiWeb, :live_view
 
-  alias Granai.Banking
-  alias Granai.Banking.StatementProcessor
+  alias Grana.Banking
+  alias Grana.Banking.StatementProcessor
 
   @per_page 20
 
@@ -90,7 +90,7 @@ defmodule GranaiWeb.UploadLive do
         {:noreply, put_flash(socket, :error, "Selecione o tipo (extrato ou fatura)")}
 
       has_pdf ->
-        case Granai.Accounts.get_user_ai_config(scope.user.id) do
+        case Grana.Accounts.get_user_ai_config(scope.user.id) do
           {:error, :no_api_key} ->
             {:noreply, assign(socket, :show_api_key_alert, true)}
 

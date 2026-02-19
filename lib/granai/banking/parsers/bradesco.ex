@@ -1,5 +1,5 @@
-defmodule Granai.Banking.Parsers.Bradesco do
-  alias Granai.Banking.Parsers.InstallmentParser
+defmodule Grana.Banking.Parsers.Bradesco do
+  alias Grana.Banking.Parsers.InstallmentParser
 
   def parse(csv_content) do
     csv_content

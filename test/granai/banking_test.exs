@@ -1,9 +1,9 @@
-defmodule Granai.BankingTest do
-  use Granai.DataCase
+defmodule Grana.BankingTest do
+  use Grana.DataCase
 
-  alias Granai.Banking
+  alias Grana.Banking
 
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
   setup do
     user = user_fixture()

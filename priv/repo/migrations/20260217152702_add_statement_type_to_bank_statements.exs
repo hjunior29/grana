@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.AddStatementTypeToBankStatements do
+defmodule Grana.Repo.Migrations.AddStatementTypeToBankStatements do
   use Ecto.Migration
 
   def change do

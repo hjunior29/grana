@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.AddInstallmentFields do
+defmodule Grana.Repo.Migrations.AddInstallmentFields do
   use Ecto.Migration
 
   def change do

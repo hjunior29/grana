@@ -32,7 +32,7 @@ defmodule GranaiWeb.ConnCase do
   end
 
   setup tags do
-    Granai.DataCase.setup_sandbox(tags)
+    Grana.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 
@@ -45,8 +45,8 @@ defmodule GranaiWeb.ConnCase do
   test context.
   """
   def register_and_log_in_user(%{conn: conn} = context) do
-    user = Granai.AccountsFixtures.user_fixture()
-    scope = Granai.Accounts.Scope.for_user(user)
+    user = Grana.AccountsFixtures.user_fixture()
+    scope = Grana.Accounts.Scope.for_user(user)
 
     opts =
       context
@@ -62,7 +62,7 @@ defmodule GranaiWeb.ConnCase do
   It returns an updated `conn`.
   """
   def log_in_user(conn, user, opts \\ []) do
-    token = Granai.Accounts.generate_user_session_token(user)
+    token = Grana.Accounts.generate_user_session_token(user)
 
     maybe_set_token_authenticated_at(token, opts[:token_authenticated_at])
 
@@ -74,6 +74,6 @@ defmodule GranaiWeb.ConnCase do
   defp maybe_set_token_authenticated_at(_token, nil), do: nil
 
   defp maybe_set_token_authenticated_at(token, authenticated_at) do
-    Granai.AccountsFixtures.override_token_authenticated_at(token, authenticated_at)
+    Grana.AccountsFixtures.override_token_authenticated_at(token, authenticated_at)
   end
 end

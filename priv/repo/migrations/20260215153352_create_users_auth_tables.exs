@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.CreateUsersAuthTables do
+defmodule Grana.Repo.Migrations.CreateUsersAuthTables do
   use Ecto.Migration
 
   def change do

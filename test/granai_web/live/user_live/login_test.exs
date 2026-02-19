@@ -2,7 +2,7 @@ defmodule GranaiWeb.UserLive.LoginTest do
   use GranaiWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
   describe "login page" do
     test "renders login page", %{conn: conn} do
@@ -27,7 +27,7 @@ defmodule GranaiWeb.UserLive.LoginTest do
 
       assert html =~ "Se seu email estiver no nosso sistema"
 
-      assert Granai.Repo.get_by!(Granai.Accounts.UserToken, user_id: user.id).context ==
+      assert Grana.Repo.get_by!(Grana.Accounts.UserToken, user_id: user.id).context ==
                "login"
     end
 

@@ -2,9 +2,9 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
   use GranaiWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
-  alias Granai.Accounts
+  alias Grana.Accounts
 
   setup do
     %{unconfirmed_user: unconfirmed_user_fixture(), confirmed_user: user_fixture()}

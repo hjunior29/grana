@@ -1,5 +1,5 @@
-defmodule Granai.AI.Providers.Gemini do
-  @behaviour Granai.AI.Provider
+defmodule Grana.AI.Providers.Gemini do
+  @behaviour Grana.AI.Provider
 
   @base_url "https://generativelanguage.googleapis.com/v1beta/models"
 

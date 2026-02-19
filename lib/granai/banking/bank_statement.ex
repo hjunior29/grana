@@ -1,4 +1,4 @@
-defmodule Granai.Banking.BankStatement do
+defmodule Grana.Banking.BankStatement do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -11,8 +11,8 @@ defmodule Granai.Banking.BankStatement do
     field :period_end, :date
     field :total_transactions, :integer, default: 0
 
-    belongs_to :user, Granai.Accounts.User
-    has_many :transactions, Granai.Banking.Transaction
+    belongs_to :user, Grana.Accounts.User
+    has_many :transactions, Grana.Banking.Transaction
 
     timestamps(type: :utc_datetime)
   end

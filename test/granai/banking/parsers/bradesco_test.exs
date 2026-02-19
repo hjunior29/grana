@@ -1,7 +1,7 @@
-defmodule Granai.Banking.Parsers.BradescoTest do
+defmodule Grana.Banking.Parsers.BradescoTest do
   use ExUnit.Case, async: true
 
-  alias Granai.Banking.Parsers.Bradesco
+  alias Grana.Banking.Parsers.Bradesco
 
   @sample_csv """
   Extrato de: Ag: 2274 | Conta: 51093-9;;;;;

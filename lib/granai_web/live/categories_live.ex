@@ -1,7 +1,7 @@
 defmodule GranaiWeb.CategoriesLive do
   use GranaiWeb, :live_view
 
-  alias Granai.Banking
+  alias Grana.Banking
   alias GranaiWeb.Layouts
 
   @available_icons [

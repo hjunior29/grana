@@ -1,7 +1,7 @@
 defmodule GranaiWeb.UserSessionController do
   use GranaiWeb, :controller
 
-  alias Granai.Accounts
+  alias Grana.Accounts
   alias GranaiWeb.UserAuth
 
   def create(conn, %{"_action" => "confirmed"} = params) do

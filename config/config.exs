@@ -7,32 +7,32 @@
 # General application configuration
 import Config
 
-config :granai, :scopes,
+config :grana, :scopes,
   user: [
     default: true,
-    module: Granai.Accounts.Scope,
+    module: Grana.Accounts.Scope,
     assign_key: :current_scope,
     access_path: [:user, :id],
     schema_key: :user_id,
     schema_type: :id,
     schema_table: :users,
-    test_data_fixture: Granai.AccountsFixtures,
+    test_data_fixture: Grana.AccountsFixtures,
     test_setup_helper: :register_and_log_in_user
   ]
 
-config :granai,
-  ecto_repos: [Granai.Repo],
+config :grana,
+  ecto_repos: [Grana.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint
-config :granai, GranaiWeb.Endpoint,
+config :grana, GranaiWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: GranaiWeb.ErrorHTML, json: GranaiWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Granai.PubSub,
+  pubsub_server: Grana.PubSub,
   live_view: [signing_salt: "fwC0GpPV"]
 
 # Configure the mailer
@@ -42,12 +42,12 @@ config :granai, GranaiWeb.Endpoint,
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
-config :granai, Granai.Mailer, adapter: Swoosh.Adapters.Local
+config :grana, Grana.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",
-  granai: [
+  grana: [
     args:
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
@@ -57,7 +57,7 @@ config :esbuild,
 # Configure tailwind (the version is required)
 config :tailwind,
   version: "4.1.12",
-  granai: [
+  grana: [
     args: ~w(
       --input=assets/css/app.css
       --output=priv/static/assets/css/app.css

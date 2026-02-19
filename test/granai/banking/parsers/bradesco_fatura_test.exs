@@ -1,7 +1,7 @@
-defmodule Granai.Banking.Parsers.BradescoFaturaTest do
+defmodule Grana.Banking.Parsers.BradescoFaturaTest do
   use ExUnit.Case, async: true
 
-  alias Granai.Banking.Parsers.BradescoFatura
+  alias Grana.Banking.Parsers.BradescoFatura
 
   test "parses fatura transactions" do
     csv = """

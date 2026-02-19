@@ -1,10 +1,10 @@
-defmodule Granai.AccountsTest do
-  use Granai.DataCase
+defmodule Grana.AccountsTest do
+  use Grana.DataCase
 
-  alias Granai.Accounts
+  alias Grana.Accounts
 
-  import Granai.AccountsFixtures
-  alias Granai.Accounts.{User, UserToken}
+  import Grana.AccountsFixtures
+  alias Grana.Accounts.{User, UserToken}
 
   describe "get_user_by_email/1" do
     test "does not return the user if the email does not exist" do

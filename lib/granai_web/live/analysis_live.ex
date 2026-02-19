@@ -1,8 +1,8 @@
 defmodule GranaiWeb.AnalysisLive do
   use GranaiWeb, :live_view
 
-  alias Granai.Banking
-  alias Granai.Banking.AIAnalyzer
+  alias Grana.Banking
+  alias Grana.Banking.AIAnalyzer
 
   @impl true
   def mount(_params, _session, socket) do
@@ -79,7 +79,7 @@ defmodule GranaiWeb.AnalysisLive do
   def handle_event("analyze", _params, socket) do
     %{current_scope: scope, filters: filters, granaim_prompt: prompt} = socket.assigns
 
-    case Granai.Accounts.get_user_ai_config(scope.user.id) do
+    case Grana.Accounts.get_user_ai_config(scope.user.id) do
       {:error, :no_api_key} ->
         {:noreply, assign(socket, :show_api_key_alert, true)}
 

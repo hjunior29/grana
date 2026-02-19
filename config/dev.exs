@@ -1,7 +1,7 @@
 import Config
 
 # Configure your database
-config :granai, Granai.Repo,
+config :grana, Grana.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
@@ -16,7 +16,7 @@ config :granai, Granai.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-config :granai, GranaiWeb.Endpoint,
+config :grana, GranaiWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}],
@@ -25,8 +25,8 @@ config :granai, GranaiWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "91NSNglA6HyjO5zEbpZvXmnqVPMb6TNj29mwuhvZPR0hOCVwij64SoADfh8Uux6i",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:granai, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:granai, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:grana, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:grana, ~w(--watch)]}
   ]
 
 # ## SSL Support
@@ -53,7 +53,7 @@ config :granai, GranaiWeb.Endpoint,
 # different ports.
 
 # Reload browser tabs when matching files change.
-config :granai, GranaiWeb.Endpoint,
+config :grana, GranaiWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
     patterns: [
@@ -68,7 +68,7 @@ config :granai, GranaiWeb.Endpoint,
   ]
 
 # Enable dev routes for dashboard and mailbox
-config :granai, dev_routes: true
+config :grana, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"

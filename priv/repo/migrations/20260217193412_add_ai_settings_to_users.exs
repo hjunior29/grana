@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.AddAiSettingsToUsers do
+defmodule Grana.Repo.Migrations.AddAiSettingsToUsers do
   use Ecto.Migration
 
   def change do
