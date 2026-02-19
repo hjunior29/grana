@@ -1,8 +1,8 @@
 defmodule GranaiWeb.UserLive.Registration do
   use GranaiWeb, :live_view
 
-  alias Granai.Accounts
-  alias Granai.Accounts.User
+  alias Grana.Accounts
+  alias Grana.Accounts.User
 
   @impl true
   def render(assigns) do

@@ -26,7 +26,7 @@ defmodule GranaiWeb.Layouts do
           >
             <img src={~p"/images/logo-32.png"} alt="" class="w-6 h-6 sm:w-7 sm:h-7" />
             <span style="font-family: 'Grand Hotel', cursive" class="text-xl sm:text-2xl">
-              Granai
+              Grana
             </span>
           </.link>
         </div>

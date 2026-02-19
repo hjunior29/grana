@@ -2,11 +2,11 @@ defmodule GranaiWeb.UserAuthTest do
   use GranaiWeb.ConnCase, async: true
 
   alias Phoenix.LiveView
-  alias Granai.Accounts
-  alias Granai.Accounts.Scope
+  alias Grana.Accounts
+  alias Grana.Accounts.Scope
   alias GranaiWeb.UserAuth
 
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
   @remember_me_cookie "_granai_web_user_remember_me"
   @remember_me_cookie_max_age 60 * 60 * 24 * 14

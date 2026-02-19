@@ -1,6 +1,6 @@
-defmodule Granai.Banking.AICategorizer do
-  alias Granai.Accounts
-  alias Granai.AI.Provider
+defmodule Grana.Banking.AICategorizer do
+  alias Grana.Accounts
+  alias Grana.AI.Provider
 
   def categorize_batch(descriptions, categories, user_id) when is_list(descriptions) do
     case Accounts.get_user_ai_config(user_id) do

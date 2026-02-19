@@ -32,24 +32,24 @@ end
 # If you use `mix release`, you need to explicitly enable the server
 # by passing the PHX_SERVER=true when you start it:
 #
-#     PHX_SERVER=true bin/granai start
+#     PHX_SERVER=true bin/grana start
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 if System.get_env("PHX_SERVER") do
-  config :granai, GranaiWeb.Endpoint, server: true
+  config :grana, GranaiWeb.Endpoint, server: true
 end
 
-config :granai, GranaiWeb.Endpoint,
+config :grana, GranaiWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 # In dev, set SMTP_IN_DEV=true in .env to send real emails via SMTP
 # instead of the local mailbox at /dev/mailbox
 if config_env() == :dev and System.get_env("SMTP_IN_DEV") == "true" do
   if smtp_host = System.get_env("SMTP_HOST") do
-    config :granai, :smtp_available, true
+    config :grana, :smtp_available, true
 
-    config :granai, :smtp_config,
+    config :grana, :smtp_config,
       relay: smtp_host,
       port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
       username: System.get_env("SMTP_USERNAME"),
@@ -59,8 +59,8 @@ if config_env() == :dev and System.get_env("SMTP_IN_DEV") == "true" do
       auth: :always,
       ssl: false
 
-    config :granai, :mail_from,
-      name: System.get_env("MAIL_FROM_NAME") || "Granai",
+    config :grana, :mail_from,
+      name: System.get_env("MAIL_FROM_NAME") || "Grana",
       address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
   end
 end
@@ -75,7 +75,7 @@ if config_env() == :prod do
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
-  config :granai, Granai.Repo,
+  config :grana, Grana.Repo,
     # ssl: true,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
@@ -97,9 +97,9 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
-  config :granai, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :grana, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  config :granai, GranaiWeb.Endpoint,
+  config :grana, GranaiWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
       # Enable IPv6 and bind on all interfaces.
@@ -115,7 +115,7 @@ if config_env() == :prod do
   # To get SSL working, you will need to add the `https` key
   # to your endpoint configuration:
   #
-  #     config :granai, GranaiWeb.Endpoint,
+  #     config :grana, GranaiWeb.Endpoint,
   #       https: [
   #         ...,
   #         port: 443,
@@ -137,7 +137,7 @@ if config_env() == :prod do
   # We also recommend setting `force_ssl` in your config/prod.exs,
   # ensuring no data is ever sent via http, always redirecting to https:
   #
-  #     config :granai, GranaiWeb.Endpoint,
+  #     config :grana, GranaiWeb.Endpoint,
   #       force_ssl: [hsts: true]
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
@@ -147,7 +147,7 @@ if config_env() == :prod do
     System.get_env("SMTP_HOST") ||
       raise "environment variable SMTP_HOST is missing."
 
-  config :granai, Granai.Mailer,
+  config :grana, Grana.Mailer,
     adapter: Swoosh.Adapters.SMTP,
     relay: smtp_host,
     port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
@@ -158,7 +158,7 @@ if config_env() == :prod do
     auth: :always,
     ssl: false
 
-  config :granai, :mail_from,
-    name: System.get_env("MAIL_FROM_NAME") || "Granai",
+  config :grana, :mail_from,
+    name: System.get_env("MAIL_FROM_NAME") || "Grana",
     address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
 end

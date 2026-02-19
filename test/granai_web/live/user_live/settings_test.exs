@@ -1,9 +1,9 @@
 defmodule GranaiWeb.UserLive.SettingsTest do
   use GranaiWeb.ConnCase, async: true
 
-  alias Granai.Accounts
+  alias Grana.Accounts
   import Phoenix.LiveViewTest
-  import Granai.AccountsFixtures
+  import Grana.AccountsFixtures
 
   describe "Settings page" do
     test "renders settings page", %{conn: conn} do

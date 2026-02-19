@@ -1,4 +1,4 @@
-defmodule Granai.Banking.Transaction do
+defmodule Grana.Banking.Transaction do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -14,9 +14,9 @@ defmodule Granai.Banking.Transaction do
     field :installment_group_id, :string
     field :is_internal_transfer, :boolean, default: false
 
-    belongs_to :bank_statement, Granai.Banking.BankStatement
-    belongs_to :user, Granai.Accounts.User
-    belongs_to :category, Granai.Banking.Category
+    belongs_to :bank_statement, Grana.Banking.BankStatement
+    belongs_to :user, Grana.Accounts.User
+    belongs_to :category, Grana.Banking.Category
 
     timestamps(type: :utc_datetime)
   end

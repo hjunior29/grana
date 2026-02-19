@@ -14,7 +14,7 @@ defmodule GranaiWeb.LandingLive do
         <div class="flex-1">
           <a href="/" class="flex items-center gap-2 text-xl font-bold tracking-tight">
             <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
-            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Granai</span>
+            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Grana</span>
           </a>
         </div>
         <div class="flex-none">
@@ -38,7 +38,7 @@ defmodule GranaiWeb.LandingLive do
         <div class="max-w-4xl mx-auto text-center">
           <img
             src={~p"/images/logo-animated.gif"}
-            alt="Granai"
+            alt="Grana"
             class="w-40 h-40 mx-auto mb-8 drop-shadow-xl"
           />
           <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-tight mb-6">
@@ -1104,7 +1104,7 @@ defmodule GranaiWeb.LandingLive do
                 Seus dados, sua chave
               </h2>
               <p class="text-lg opacity-60 mb-8">
-                O Granai funciona com a <strong class="text-base-content">sua própria API Key</strong>
+                O Grana funciona com a <strong class="text-base-content">sua própria API Key</strong>
                 do Google Gemini.
                 Isso significa que a plataforma não tem custo de infraestrutura de IA.
               </p>
@@ -1194,7 +1194,7 @@ defmodule GranaiWeb.LandingLive do
         <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <a href="/" class="flex items-center gap-2 text-xl font-bold tracking-tight">
             <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
-            <span style="font-family: 'Grand Hotel', cursive">Granai</span>
+            <span style="font-family: 'Grand Hotel', cursive">Grana</span>
           </a>
           <div class="flex items-center gap-6 text-sm">
             <.link navigate={~p"/terms"} class="opacity-50 hover:opacity-80 transition-opacity">

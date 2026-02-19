@@ -1,7 +1,7 @@
 defmodule GranaiWeb.UserLive.Login do
   use GranaiWeb, :live_view
 
-  alias Granai.Accounts
+  alias Grana.Accounts
 
   @impl true
   def render(assigns) do
@@ -145,7 +145,7 @@ defmodule GranaiWeb.UserLive.Login do
   end
 
   defp local_mail_adapter? do
-    Application.get_env(:granai, Granai.Mailer)[:adapter] == Swoosh.Adapters.Local and
-      not Application.get_env(:granai, :smtp_available, false)
+    Application.get_env(:grana, Grana.Mailer)[:adapter] == Swoosh.Adapters.Local and
+      not Application.get_env(:grana, :smtp_available, false)
   end
 end

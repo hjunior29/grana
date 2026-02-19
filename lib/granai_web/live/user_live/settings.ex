@@ -3,7 +3,7 @@ defmodule GranaiWeb.UserLive.Settings do
 
   on_mount {GranaiWeb.UserAuth, :require_sudo_mode}
 
-  alias Granai.Accounts
+  alias Grana.Accounts
 
   @impl true
   def render(assigns) do

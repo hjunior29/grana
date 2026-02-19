@@ -1,5 +1,5 @@
-defmodule Granai.Banking.Parsers.NubankFatura do
-  alias Granai.Banking.Parsers.InstallmentParser
+defmodule Grana.Banking.Parsers.NubankFatura do
+  alias Grana.Banking.Parsers.InstallmentParser
 
   def parse(csv_content) do
     csv_content

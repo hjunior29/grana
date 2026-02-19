@@ -1,5 +1,5 @@
-defmodule Granai.Repo do
+defmodule Grana.Repo do
   use Ecto.Repo,
-    otp_app: :granai,
+    otp_app: :grana,
     adapter: Ecto.Adapters.Postgres
 end

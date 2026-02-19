@@ -1,4 +1,4 @@
-defmodule Granai.Banking.Category do
+defmodule Grana.Banking.Category do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -9,7 +9,7 @@ defmodule Granai.Banking.Category do
     field :kind, :string, default: "expense"
     field :is_system, :boolean, default: false
 
-    belongs_to :user, Granai.Accounts.User
+    belongs_to :user, Grana.Accounts.User
 
     timestamps(type: :utc_datetime)
   end

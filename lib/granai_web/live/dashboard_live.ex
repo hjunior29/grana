@@ -1,7 +1,7 @@
 defmodule GranaiWeb.DashboardLive do
   use GranaiWeb, :live_view
 
-  alias Granai.Banking
+  alias Grana.Banking
 
   @impl true
   def mount(_params, _session, socket) do

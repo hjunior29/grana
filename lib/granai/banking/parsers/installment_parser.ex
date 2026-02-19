@@ -1,4 +1,4 @@
-defmodule Granai.Banking.Parsers.InstallmentParser do
+defmodule Grana.Banking.Parsers.InstallmentParser do
   @doc """
   Extracts installment information from transaction descriptions.
 

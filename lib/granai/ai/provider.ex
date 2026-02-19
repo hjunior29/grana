@@ -1,4 +1,4 @@
-defmodule Granai.AI.Provider do
+defmodule Grana.AI.Provider do
   @callback generate_content(prompt :: String.t(), config :: map()) ::
               {:ok, map()} | {:error, any()}
 
@@ -23,5 +23,5 @@ defmodule Granai.AI.Provider do
     |> to_string()
   end
 
-  defp provider_module("gemini"), do: Granai.AI.Providers.Gemini
+  defp provider_module("gemini"), do: Grana.AI.Providers.Gemini
 end

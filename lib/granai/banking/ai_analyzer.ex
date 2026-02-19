@@ -1,7 +1,7 @@
-defmodule Granai.Banking.AIAnalyzer do
-  alias Granai.Accounts
-  alias Granai.Banking
-  alias Granai.AI.Provider
+defmodule Grana.Banking.AIAnalyzer do
+  alias Grana.Accounts
+  alias Grana.Banking
+  alias Grana.AI.Provider
 
   def analyze_with_filters(user_id, filters, granaim_prompt \\ nil) do
     case Accounts.get_user_ai_config(user_id) do

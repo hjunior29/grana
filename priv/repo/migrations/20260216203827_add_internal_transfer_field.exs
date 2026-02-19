@@ -1,4 +1,4 @@
-defmodule Granai.Repo.Migrations.AddInternalTransferField do
+defmodule Grana.Repo.Migrations.AddInternalTransferField do
   use Ecto.Migration
 
   def change do

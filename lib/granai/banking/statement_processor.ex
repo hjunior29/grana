@@ -1,7 +1,7 @@
-defmodule Granai.Banking.StatementProcessor do
-  alias Granai.Banking
-  alias Granai.Banking.Parsers.{Nubank, NubankFatura, Bradesco, BradescoFatura, PdfExtractor}
-  alias Granai.Banking.AICategorizer
+defmodule Grana.Banking.StatementProcessor do
+  alias Grana.Banking
+  alias Grana.Banking.Parsers.{Nubank, NubankFatura, Bradesco, BradescoFatura, PdfExtractor}
+  alias Grana.Banking.AICategorizer
 
   def process(file_content, bank, statement_type, user_id, filename) do
     categories = Banking.ensure_default_categories(user_id)

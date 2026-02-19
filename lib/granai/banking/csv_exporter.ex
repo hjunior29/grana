@@ -1,4 +1,4 @@
-defmodule Granai.Banking.CsvExporter do
+defmodule Grana.Banking.CsvExporter do
   @bom <<0xEF, 0xBB, 0xBF>>
   @separator ";"
   @headers ["Data", "Descrição", "Valor", "Tipo", "Categoria"]

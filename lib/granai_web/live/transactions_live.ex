@@ -1,7 +1,7 @@
 defmodule GranaiWeb.TransactionsLive do
   use GranaiWeb, :live_view
 
-  alias Granai.Banking
+  alias Grana.Banking
 
   @per_page 50
 

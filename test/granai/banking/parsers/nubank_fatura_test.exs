@@ -1,7 +1,7 @@
-defmodule Granai.Banking.Parsers.NubankFaturaTest do
+defmodule Grana.Banking.Parsers.NubankFaturaTest do
   use ExUnit.Case, async: true
 
-  alias Granai.Banking.Parsers.NubankFatura
+  alias Grana.Banking.Parsers.NubankFatura
 
   test "parses charges as debit" do
     csv = "date,title,amount\n2026-01-28,Google One,96.99\n"

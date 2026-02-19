@@ -1,12 +1,12 @@
-defmodule Granai.Banking.CategoryRule do
+defmodule Grana.Banking.CategoryRule do
   use Ecto.Schema
   import Ecto.Changeset
 
   schema "category_rules" do
     field :pattern, :string
 
-    belongs_to :user, Granai.Accounts.User
-    belongs_to :category, Granai.Banking.Category
+    belongs_to :user, Grana.Accounts.User
+    belongs_to :category, Grana.Banking.Category
 
     timestamps(type: :utc_datetime)
   end
