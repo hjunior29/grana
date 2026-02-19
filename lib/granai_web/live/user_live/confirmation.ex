@@ -22,16 +22,12 @@ defmodule GranaiWeb.UserLive.Confirmation do
           phx-trigger-action={@trigger_submit}
         >
           <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
-          <.button
-            name={@form[:remember_me].name}
-            value="true"
-            phx-disable-with="Confirmando..."
-            class="btn btn-primary w-full"
-          >
-            Confirme e mantenha-me logado
-          </.button>
-          <.button phx-disable-with="Confirmando..." class="btn btn-primary btn-soft w-full mt-2">
-            Confirme apenas desta vez
+          <label class="flex items-center gap-2 cursor-pointer mb-4">
+            <input type="checkbox" name={@form[:remember_me].name} value="true" checked class="checkbox checkbox-sm checkbox-primary" />
+            <span class="text-sm">Manter conectado</span>
+          </label>
+          <.button phx-disable-with="Confirmando..." class="btn btn-primary w-full">
+            Confirmar
           </.button>
         </.form>
 
@@ -50,16 +46,12 @@ defmodule GranaiWeb.UserLive.Confirmation do
               Entrar
             </.button>
           <% else %>
-            <.button
-              name={@form[:remember_me].name}
-              value="true"
-              phx-disable-with="Entrando..."
-              class="btn btn-primary w-full"
-            >
-              Entrar e manter-me conectado
-            </.button>
-            <.button phx-disable-with="Entrando..." class="btn btn-primary btn-soft w-full mt-2">
-              Entrar apenas desta vez
+            <label class="flex items-center gap-2 cursor-pointer mb-4">
+              <input type="checkbox" name={@form[:remember_me].name} value="true" checked class="checkbox checkbox-sm checkbox-primary" />
+              <span class="text-sm">Manter conectado</span>
+            </label>
+            <.button phx-disable-with="Entrando..." class="btn btn-primary w-full">
+              Entrar
             </.button>
           <% end %>
         </.form>

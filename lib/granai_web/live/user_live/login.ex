@@ -80,11 +80,12 @@ defmodule GranaiWeb.UserLive.Login do
             label="Senha"
             autocomplete="current-password"
           />
-          <.button class="btn btn-primary w-full" name={@form[:remember_me].name} value="true">
-            Entrar e manter conectado
-          </.button>
-          <.button class="btn btn-primary btn-soft w-full mt-2">
-            Entrar apenas desta vez
+          <label class="flex items-center gap-2 cursor-pointer mb-4">
+            <input type="checkbox" name={@form[:remember_me].name} value="true" checked class="checkbox checkbox-sm checkbox-primary" />
+            <span class="text-sm">Manter conectado</span>
+          </label>
+          <.button class="btn btn-primary w-full">
+            Entrar
           </.button>
         </.form>
 
