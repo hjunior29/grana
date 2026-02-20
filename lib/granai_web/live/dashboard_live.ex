@@ -149,7 +149,12 @@ defmodule GranaiWeb.DashboardLive do
       end
     uncat_count = Banking.uncategorized_count(user_id)
 
-    daily_avg = calculate_daily_avg(summary, daily)
+    expense_avg =
+      case view_mode do
+        "year" -> calculate_monthly_avg(summary, all_monthly_ie)
+        _ -> calculate_daily_avg(summary, daily)
+      end
+
     top_category = calculate_top_category(summary)
 
     installment_opts =
@@ -166,7 +171,7 @@ defmodule GranaiWeb.DashboardLive do
     |> assign(:daily_spending, daily)
     |> assign(:monthly_ie, monthly_ie)
     |> assign(:uncategorized_count, uncat_count)
-    |> assign(:daily_avg, daily_avg)
+    |> assign(:expense_avg, expense_avg)
     |> assign(:top_category, top_category)
     |> assign(:installment_summary, installment_summary)
     |> assign(:installment_projections, installment_projections)
@@ -185,6 +190,16 @@ defmodule GranaiWeb.DashboardLive do
     days_with_spending = length(daily)
 
     case days_with_spending do
+      0 -> Decimal.new(0)
+      n -> Decimal.div(summary.total_expenses, n) |> Decimal.round(2)
+    end
+  end
+
+  defp calculate_monthly_avg(summary, monthly_ie) do
+    months_with_expenses =
+      Enum.count(monthly_ie, fn m -> Decimal.gt?(m.expenses, Decimal.new(0)) end)
+
+    case months_with_expenses do
       0 -> Decimal.new(0)
       n -> Decimal.div(summary.total_expenses, n) |> Decimal.round(2)
     end
@@ -509,9 +524,11 @@ defmodule GranaiWeb.DashboardLive do
               navigate={transactions_url(assigns, %{type: "debit"})}
               class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
-              <div class="stat-title text-[10px] sm:text-xs">Média Diária</div>
+              <div class="stat-title text-[10px] sm:text-xs">
+                {if @view_mode == "year", do: "Média Mensal", else: "Média Diária"}
+              </div>
               <div class="stat-value text-sm sm:text-lg">
-                {format_currency(@daily_avg)}
+                {format_currency(@expense_avg)}
               </div>
               <div class="stat-desc text-[10px] sm:text-xs">em despesas</div>
             </.link>
