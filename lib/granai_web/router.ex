@@ -29,11 +29,13 @@ defmodule GranaiWeb.Router do
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:grana, :dev_routes) do
     import Phoenix.LiveDashboard.Router
+    use ErrorTracker.Web, :router
 
     scope "/dev" do
       pipe_through :browser
 
       live_dashboard "/dashboard", metrics: GranaiWeb.Telemetry
+      error_tracker_dashboard "/errors"
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
