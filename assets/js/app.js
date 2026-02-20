@@ -341,7 +341,7 @@ const ProjectionChart = {
       const x = padding.left + (i * (chartWidth / data.length)) + 2
       const y = padding.top + chartHeight - barHeight
 
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity" data-proj-label="${item.label}" data-proj-value="${item.value}"></rect>`
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${item.label}" data-proj-value="${item.value}"></rect>`
       svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${item.label}</text>`
     })
 
