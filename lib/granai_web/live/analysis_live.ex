@@ -19,6 +19,12 @@ defmodule GranaiWeb.AnalysisLive do
         [] -> Date.utc_today().year
       end
 
+    current_month =
+      months
+      |> Enum.filter(fn {y, _m} -> y == current_year end)
+      |> Enum.map(fn {_y, m} -> m end)
+      |> Enum.max(fn -> 0 end)
+
     socket =
       socket
       |> assign(:page_title, "Análise")
@@ -31,7 +37,7 @@ defmodule GranaiWeb.AnalysisLive do
       |> assign(:collapsed_years, MapSet.new())
       |> assign(:filters, %{
         year: current_year,
-        month: 0,
+        month: current_month,
         bank: "all",
         type: "all",
         statement_type: "all"
