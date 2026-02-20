@@ -414,21 +414,28 @@ defmodule GranaiWeb.DashboardLive do
         <div :if={@summary.transaction_count > 0}>
           <%!-- Stat Cards --%>
           <div
-            :if={@selected_type != "fatura"}
             class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8"
           >
-            <.link
-              navigate={transactions_url(assigns, %{type: "credit"})}
-              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-            >
-              <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
-              <div class="stat-value text-success text-sm sm:text-lg">
-                {format_currency(@summary.total_income)}
+            <%= if @summary.income_count == 0 do %>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
+                <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
+                <div class="stat-value text-sm sm:text-lg">—</div>
+                <div class="stat-desc text-[10px] sm:text-xs">Sem receitas no período</div>
               </div>
-              <div class="stat-desc text-[10px] sm:text-xs">
-                {@summary.income_count} transações
-              </div>
-            </.link>
+            <% else %>
+              <.link
+                navigate={transactions_url(assigns, %{type: "credit"})}
+                class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              >
+                <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
+                <div class="stat-value text-success text-sm sm:text-lg">
+                  {format_currency(@summary.total_income)}
+                </div>
+                <div class="stat-desc text-[10px] sm:text-xs">
+                  {@summary.income_count} transações
+                </div>
+              </.link>
+            <% end %>
 
             <.link
               navigate={transactions_url(assigns, %{type: "debit"})}
@@ -445,36 +452,52 @@ defmodule GranaiWeb.DashboardLive do
               </div>
             </.link>
 
-            <.link
-              navigate={transactions_url(assigns, %{type: "investment"})}
-              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-            >
-              <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
-              <div class="stat-value text-info text-sm sm:text-lg">
-                {format_currency(@summary.total_investments)}
+            <%= if @summary.investment_count == 0 do %>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
+                <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
+                <div class="stat-value text-sm sm:text-lg">—</div>
+                <div class="stat-desc text-[10px] sm:text-xs">Sem invest. no período</div>
               </div>
-              <div class="stat-desc text-[10px] sm:text-xs">
-                {@summary.investment_count} transações
-              </div>
-            </.link>
+            <% else %>
+              <.link
+                navigate={transactions_url(assigns, %{type: "investment"})}
+                class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              >
+                <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
+                <div class="stat-value text-info text-sm sm:text-lg">
+                  {format_currency(@summary.total_investments)}
+                </div>
+                <div class="stat-desc text-[10px] sm:text-xs">
+                  {@summary.investment_count} transações
+                </div>
+              </.link>
+            <% end %>
 
-            <.link
-              navigate={transactions_url(assigns)}
-              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-            >
-              <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
-              <div class={[
-                "stat-value text-sm sm:text-lg",
-                (Decimal.compare(@summary.balance, 0) == :lt && "text-error") || "text-success"
-              ]}>
-                {format_currency(@summary.balance)}
+            <%= if @summary.income_count == 0 do %>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
+                <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
+                <div class="stat-value text-sm sm:text-lg">—</div>
+                <div class="stat-desc text-[10px] sm:text-xs">Sem receitas para saldo</div>
               </div>
-              <div class="stat-desc text-[10px] sm:text-xs">
-                {if @uncategorized_count > 0,
-                  do: "#{@uncategorized_count} sem cat.",
-                  else: "Categorizado"}
-              </div>
-            </.link>
+            <% else %>
+              <.link
+                navigate={transactions_url(assigns)}
+                class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+              >
+                <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
+                <div class={[
+                  "stat-value text-sm sm:text-lg",
+                  (Decimal.compare(@summary.balance, 0) == :lt && "text-error") || "text-success"
+                ]}>
+                  {format_currency(@summary.balance)}
+                </div>
+                <div class="stat-desc text-[10px] sm:text-xs">
+                  {if @uncategorized_count > 0,
+                    do: "#{@uncategorized_count} sem cat.",
+                    else: "Categorizado"}
+                </div>
+              </.link>
+            <% end %>
 
             <.link
               navigate={transactions_url(assigns, %{type: "debit"})}
@@ -500,7 +523,7 @@ defmodule GranaiWeb.DashboardLive do
           </div>
 
           <div
-            :if={@uncategorized_count > 0 and @selected_type != "fatura"}
+            :if={@uncategorized_count > 0}
             class="alert alert-warning mb-6"
           >
             <.icon name="hero-exclamation-triangle" class="size-5" />
@@ -512,7 +535,6 @@ defmodule GranaiWeb.DashboardLive do
 
           <%!-- Charts: Category + Daily/Monthly --%>
           <div
-            :if={@selected_type != "fatura"}
             class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6"
           >
             <div class="card bg-base-200 p-4 sm:p-6">
@@ -623,7 +645,6 @@ defmodule GranaiWeb.DashboardLive do
 
           <%!-- Top Expenses / Top Income --%>
           <div
-            :if={@selected_type != "fatura"}
             class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6"
           >
             <div class="card bg-base-200 p-4 sm:p-6">
@@ -650,73 +671,93 @@ defmodule GranaiWeb.DashboardLive do
               </div>
             </div>
 
-            <div class="card bg-base-200 p-4 sm:p-6">
-              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
-              <div class="space-y-1">
-                <.link
-                  :for={txn <- top_income(@summary.transactions, 10)}
-                  navigate={txn_url(assigns, txn)}
-                  class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
-                >
-                  <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                  <span class="flex-1 text-sm truncate">{txn.description}</span>
-                  <span
-                    :if={txn.category}
-                    class="badge badge-sm shrink-0"
-                    style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-                  >
-                    {txn.category.name}
-                  </span>
-                  <span class="text-sm font-medium text-success whitespace-nowrap">
-                    {format_currency(Decimal.abs(txn.amount))}
-                  </span>
-                </.link>
+            <%= if @summary.income_count == 0 do %>
+              <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
+                <div class="text-center">
+                  <h3 class="font-semibold text-sm sm:text-base mb-2">Top Receitas</h3>
+                  <p class="text-xs opacity-70">Sem receitas no período</p>
+                </div>
               </div>
-            </div>
+            <% else %>
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
+                <div class="space-y-1">
+                  <.link
+                    :for={txn <- top_income(@summary.transactions, 10)}
+                    navigate={txn_url(assigns, txn)}
+                    class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                  >
+                    <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
+                    <span class="flex-1 text-sm truncate">{txn.description}</span>
+                    <span
+                      :if={txn.category}
+                      class="badge badge-sm shrink-0"
+                      style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
+                    >
+                      {txn.category.name}
+                    </span>
+                    <span class="text-sm font-medium text-success whitespace-nowrap">
+                      {format_currency(Decimal.abs(txn.amount))}
+                    </span>
+                  </.link>
+                </div>
+              </div>
+            <% end %>
           </div>
 
           <%!-- Income vs Expenses Chart --%>
-          <div
-            :if={@monthly_ie != [] and @selected_type != "fatura"}
-            class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
-              <div class="flex items-center gap-3 text-sm">
-                <span class={[
-                  "font-semibold",
-                  if(Decimal.compare(@summary.balance, 0) == :lt,
-                    do: "text-error",
-                    else: "text-success"
-                  )
-                ]}>
-                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(
-                    @summary.balance
-                  )}
-                </span>
-                <span
-                  :if={Decimal.compare(@summary.total_income, 0) == :gt}
-                  class={[
-                    "badge badge-sm",
-                    if(Decimal.compare(@summary.balance, 0) == :lt,
-                      do: "badge-error",
-                      else: "badge-success"
-                    )
-                  ]}
-                >
-                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(
-                    @summary
-                  )}
-                </span>
+          <%= if @summary.income_count == 0 do %>
+            <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
+              <div class="flex items-center justify-center py-8">
+                <div class="text-center">
+                  <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
+                  <p class="text-xs opacity-70">Sem receitas no período para comparação</p>
+                </div>
               </div>
             </div>
+          <% else %>
             <div
-              id="income-expenses-chart"
-              phx-hook="IncomeExpensesChart"
-              data-monthly={monthly_ie_chart_data(assigns)}
+              :if={@monthly_ie != []}
+              class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
             >
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
+                <div class="flex items-center gap-3 text-sm">
+                  <span class={[
+                    "font-semibold",
+                    if(Decimal.compare(@summary.balance, 0) == :lt,
+                      do: "text-error",
+                      else: "text-success"
+                    )
+                  ]}>
+                    {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(
+                      @summary.balance
+                    )}
+                  </span>
+                  <span
+                    :if={Decimal.compare(@summary.total_income, 0) == :gt}
+                    class={[
+                      "badge badge-sm",
+                      if(Decimal.compare(@summary.balance, 0) == :lt,
+                        do: "badge-error",
+                        else: "badge-success"
+                      )
+                    ]}
+                  >
+                    {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(
+                      @summary
+                    )}
+                  </span>
+                </div>
+              </div>
+              <div
+                id="income-expenses-chart"
+                phx-hook="IncomeExpensesChart"
+                data-monthly={monthly_ie_chart_data(assigns)}
+              >
+              </div>
             </div>
-          </div>
+          <% end %>
 
           <%!-- Installments --%>
           <div
