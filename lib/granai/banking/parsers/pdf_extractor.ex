@@ -22,8 +22,15 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
            prompt_for(bank),
            ai_config
          ) do
-      {:ok, response_body} -> parse_response(response_body)
-      {:error, reason} -> {:error, reason}
+      {:ok, response_body} ->
+        if bank == "outro" do
+          parse_response_with_metadata(response_body)
+        else
+          parse_response(response_body)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -75,6 +82,34 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
     """
   end
 
+  defp prompt_for("outro") do
+    """
+    Analise este documento bancário em PDF e extraia as informações.
+
+    1. Identifique o BANCO emissor do documento (ex: itau, inter, c6bank, santander, nubank, bradesco, etc.)
+       Use nome em minúsculo, sem espaços, sem acentos (ex: "itau", "bancodobrasil", "c6bank")
+    2. Identifique o TIPO de documento: "extrato" (conta corrente, movimentações) ou "fatura" (cartão de crédito)
+    3. Extraia TODAS as transações individuais
+
+    Para cada transação, extraia:
+    - date: data no formato DD/MM/YYYY
+    - description: descrição completa da transação incluindo tipo e estabelecimento/destinatário
+    - amount: valor absoluto como número decimal com ponto (ex: 142.50, não 142,50)
+    - type: "credit" para entradas/recebimentos ou "debit" para saídas/pagamentos/compras
+
+    REGRAS:
+    - IGNORE subtotais, saldos iniciais/finais, cabeçalhos, linhas de resumo
+    - Valores devem ser POSITIVOS (sem sinal negativo)
+    - Inclua TODAS as transações individuais do documento
+    - PRESERVE informações de parcelas na descrição (ex: "Parcela 1/3", "2/6")
+    - Para transferências Pix, inclua o nome do destinatário/remetente
+    - A descrição deve ser completa e descritiva
+
+    Retorne APENAS JSON, sem explicações:
+    {"bank": "nome_do_banco", "document_type": "extrato", "transactions": [{"date": "01/01/2026", "description": "Descrição", "amount": 100.00, "type": "debit"}, ...]}
+    """
+  end
+
   defp prompt_for(_bank) do
     """
     Extraia TODAS as transações deste extrato bancário em formato PDF.
@@ -115,6 +150,47 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
         case parsed do
           [] -> {:error, "No transactions found in PDF"}
           items -> {:ok, items}
+        end
+
+      _ ->
+        {:error, "Falha ao processar resposta da IA"}
+    end
+  end
+
+  defp parse_response_with_metadata(response_body) do
+    text = Provider.extract_text(response_body)
+
+    json_text =
+      case Regex.run(~r/\{.*\}/s, text) do
+        [match] -> match
+        _ -> text
+      end
+
+    case Jason.decode(json_text) do
+      {:ok, %{"bank" => bank, "document_type" => doc_type, "transactions" => transactions}}
+      when is_binary(bank) and is_binary(doc_type) and is_list(transactions) ->
+        parsed =
+          transactions
+          |> Enum.map(&parse_transaction/1)
+          |> Enum.reject(&is_nil/1)
+
+        case parsed do
+          [] ->
+            {:error, "No transactions found in PDF"}
+
+          items ->
+            {:ok, items, %{detected_bank: String.downcase(String.trim(bank)), detected_type: doc_type}}
+        end
+
+      {:ok, %{"transactions" => transactions}} when is_list(transactions) ->
+        parsed =
+          transactions
+          |> Enum.map(&parse_transaction/1)
+          |> Enum.reject(&is_nil/1)
+
+        case parsed do
+          [] -> {:error, "No transactions found in PDF"}
+          items -> {:ok, items, %{detected_bank: "desconhecido", detected_type: "extrato"}}
         end
 
       _ ->

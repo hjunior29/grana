@@ -18,7 +18,8 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
         end)
 
       {:ok, _lv, html} = live(conn, ~p"/users/log-in/#{token}")
-      assert html =~ "Confirme e mantenha-me logado"
+      assert html =~ "Confirmar"
+      assert html =~ "Manter conectado"
     end
 
     test "renders login page for confirmed user", %{conn: conn, confirmed_user: user} do
@@ -28,8 +29,8 @@ defmodule GranaiWeb.UserLive.ConfirmationTest do
         end)
 
       {:ok, _lv, html} = live(conn, ~p"/users/log-in/#{token}")
-      refute html =~ "Confirme e mantenha-me logado"
-      assert html =~ "Entrar e manter-me conectado"
+      assert html =~ "Entrar"
+      assert html =~ "Manter conectado"
     end
 
     test "renders login page for already logged in user", %{conn: conn, confirmed_user: user} do

@@ -30,7 +30,6 @@ defmodule Grana.Banking.BankStatement do
       :user_id
     ])
     |> validate_required([:bank, :filename, :user_id])
-    |> validate_inclusion(:bank, ["nubank", "bradesco"])
     |> validate_inclusion(:status, ["processing", "completed", "error"])
     |> validate_inclusion(:statement_type, ["extrato", "fatura"])
   end

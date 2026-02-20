@@ -435,6 +435,43 @@ defmodule GranaiWeb.LandingLive do
                   </select>
                 </div>
               </div>
+              <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
+                <div>
+                  <label class="text-xs opacity-50 mb-1 block">Data início</label>
+                  <input type="date" class="input input-bordered input-sm w-full" disabled />
+                </div>
+                <div>
+                  <label class="text-xs opacity-50 mb-1 block">Data fim</label>
+                  <input type="date" class="input input-bordered input-sm w-full" disabled />
+                </div>
+                <div>
+                  <label class="text-xs opacity-50 mb-1 block">Valor mínimo</label>
+                  <input
+                    type="number"
+                    placeholder="0,00"
+                    class="input input-bordered input-sm w-full"
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label class="text-xs opacity-50 mb-1 block">Valor máximo</label>
+                  <input
+                    type="number"
+                    placeholder="0,00"
+                    class="input input-bordered input-sm w-full"
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label class="text-xs opacity-50 mb-1 block">Internas</label>
+                  <select class="select select-bordered select-sm w-full" disabled>
+                    <option>Todas</option>
+                  </select>
+                </div>
+              </div>
+              <div class="flex justify-end mt-3">
+                <span class="btn btn-error btn-xs cursor-default">Limpar filtros</span>
+              </div>
             </div>
 
             <div class="flex items-center gap-4 text-sm mb-3 flex-wrap">
@@ -442,6 +479,9 @@ defmodule GranaiWeb.LandingLive do
               <span class="text-error font-medium">Despesas: R$ 1.991,30</span>
               <span class="text-success font-medium">Receitas: R$ 5.745,80</span>
               <span class="text-info font-medium">Investimentos: R$ 245,80</span>
+              <a class="btn btn-sm gap-1 ml-auto cursor-default">
+                <.icon name="hero-arrow-down-tray" class="size-4" /> Exportar CSV
+              </a>
             </div>
 
             <div class="overflow-x-auto">
@@ -519,19 +559,404 @@ defmodule GranaiWeb.LandingLive do
         </div>
       </section>
 
+      <%!-- Dashboard Preview --%>
+      <section id="dashboard-preview" class="py-24 px-4">
+        <div class="text-center mb-16">
+          <div class="badge badge-primary badge-outline mb-4">Passo 3</div>
+        </div>
+        <div class="max-w-6xl mx-auto">
+          <div class="text-center mb-16">
+            <p
+              style="font-family: 'Grand Hotel', cursive"
+              class="text-primary text-5xl mb-3"
+            >
+              Visão completa
+            </p>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              Dashboard inteligente
+            </h2>
+            <p class="text-lg opacity-60 max-w-xl mx-auto">
+              Veja para onde vai cada centavo com gráficos interativos e resumos detalhados
+            </p>
+          </div>
+
+          <div class="rounded-2xl border border-base-content/10 bg-base-200/30 p-4 md:p-8 shadow-xl">
+            <div class="mb-4 sm:mb-6 space-y-2">
+              <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+                <div class="flex gap-1">
+                  <span class="btn btn-xs sm:btn-sm btn-ghost cursor-default">2025</span>
+                  <span class="btn btn-xs sm:btn-sm btn-primary cursor-default">2026</span>
+                </div>
+                <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+                <div class="flex flex-wrap gap-1">
+                  <span class="btn btn-xs btn-ghost cursor-default">Ano</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Jan</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Fev</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Mar</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Abr</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Mai</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Jun</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Jul</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Ago</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div class="flex items-center gap-1">
+                  <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Todos</span>
+                  <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                    <img src={~p"/images/nubank-logo.png"} alt="" class="w-4 h-4 rounded-full" />
+                    <span class="hidden sm:inline cursor-default">Nubank</span>
+                  </span>
+                  <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                    <img src={~p"/images/bradesco-logo.png"} alt="" class="w-4 h-4 rounded-full" />
+                    <span class="hidden sm:inline cursor-default">Bradesco</span>
+                  </span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                  <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                    <.icon name="hero-banknotes" class="size-3" /> <span class="hidden sm:inline cursor-default">Extrato</span>
+                  </span>
+                  <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                    <.icon name="hero-credit-card" class="size-3" /> <span class="hidden sm:inline cursor-default">Fatura</span>
+                  </span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Despesas</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Receitas</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">
+                    <span class="hidden sm:inline">Investimentos</span>
+                    <span class="sm:hidden">Invest.</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
+                <div class="stat-value text-success text-sm sm:text-lg">R$ 8.450,00</div>
+                <div class="stat-desc text-[10px] sm:text-xs">12 transações</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Despesas</div>
+                <div class="stat-value text-error text-sm sm:text-lg">R$ 5.797,40</div>
+                <div class="stat-desc text-[10px] sm:text-xs">47 transações</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
+                <div class="stat-value text-info text-sm sm:text-lg">R$ 1.200,00</div>
+                <div class="stat-desc text-[10px] sm:text-xs">3 transações</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
+                <div class="stat-value text-success text-sm sm:text-lg">R$ 2.652,60</div>
+                <div class="stat-desc text-[10px] sm:text-xs">Categorizado</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Média Diária</div>
+                <div class="stat-value text-sm sm:text-lg">R$ 193,24</div>
+                <div class="stat-desc text-[10px] sm:text-xs">em despesas</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Transações</div>
+                <div class="stat-value text-sm sm:text-lg">62</div>
+                <div class="stat-desc text-[10px] sm:text-xs">Alimentação lidera</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
+                <div
+                  id="landing-cat-hook"
+                  phx-hook="CategoryChart"
+                  data-categories={Jason.encode!([
+                    %{name: "Alimentação", value: 1847.0, color: "#F59E0B"},
+                    %{name: "Moradia", value: 1500.0, color: "#8B5CF6"},
+                    %{name: "Transporte", value: 650.0, color: "#3B82F6"},
+                    %{name: "Compras", value: 520.0, color: "#F97316"},
+                    %{name: "Lazer", value: 480.0, color: "#EC4899"},
+                    %{name: "Saúde", value: 320.0, color: "#EF4444"},
+                    %{name: "Pagamentos", value: 290.0, color: "#64748B"},
+                    %{name: "Assinaturas", value: 190.0, color: "#A855F7"}
+                  ])}
+                >
+                  <div class="space-y-3">
+                    <div
+                      :for={
+                        {name, value, pct, color} <- [
+                          {"Alimentação", "R$ 1.847", "32%", "#F59E0B"},
+                          {"Moradia", "R$ 1.500", "26%", "#8B5CF6"},
+                          {"Transporte", "R$ 650", "11%", "#3B82F6"},
+                          {"Compras", "R$ 520", "9%", "#F97316"},
+                          {"Lazer", "R$ 480", "8%", "#EC4899"},
+                          {"Saúde", "R$ 320", "6%", "#EF4444"},
+                          {"Pagamentos", "R$ 290", "5%", "#64748B"},
+                          {"Assinaturas", "R$ 190", "3%", "#A855F7"}
+                        ]
+                      }
+                      class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2"
+                    >
+                      <div
+                        class="w-3 h-3 rounded-full shrink-0"
+                        style={"background-color: #{color}"}
+                      />
+                      <span class="flex-1 text-sm truncate">{name}</span>
+                      <span class="text-sm font-medium">{value}</span>
+                      <span class="text-xs opacity-50">{pct}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
+                <div
+                  id="landing-daily-hook"
+                  phx-hook="DailyChart"
+                  data-daily={Jason.encode!([
+                    %{date: "02/01", value: 145.90},
+                    %{date: "03/01", value: 47.50},
+                    %{date: "05/01", value: 320.00},
+                    %{date: "07/01", value: 587.32},
+                    %{date: "08/01", value: 68.90},
+                    %{date: "10/01", value: 487.32},
+                    %{date: "12/01", value: 175.00},
+                    %{date: "14/01", value: 89.90},
+                    %{date: "15/01", value: 245.00},
+                    %{date: "17/01", value: 382.50},
+                    %{date: "19/01", value: 120.00},
+                    %{date: "22/01", value: 289.90},
+                    %{date: "25/01", value: 198.00},
+                    %{date: "27/01", value: 410.80},
+                    %{date: "30/01", value: 259.36}
+                  ])}
+                >
+                  <div class="space-y-1">
+                    <div
+                      :for={
+                        {day, pct, val} <- [
+                          {"02/01", 25, "R$ 145,90"},
+                          {"03/01", 8, "R$ 47,50"},
+                          {"05/01", 55, "R$ 320,00"},
+                          {"07/01", 100, "R$ 587,32"},
+                          {"08/01", 12, "R$ 68,90"},
+                          {"10/01", 83, "R$ 487,32"},
+                          {"12/01", 30, "R$ 175,00"},
+                          {"14/01", 15, "R$ 89,90"},
+                          {"15/01", 42, "R$ 245,00"},
+                          {"17/01", 65, "R$ 382,50"},
+                          {"19/01", 20, "R$ 120,00"},
+                          {"22/01", 50, "R$ 289,90"},
+                          {"25/01", 35, "R$ 198,00"},
+                          {"27/01", 70, "R$ 410,80"},
+                          {"30/01", 45, "R$ 259,36"}
+                        ]
+                      }
+                      class="flex items-center gap-2"
+                    >
+                      <span class="text-xs w-10 opacity-60">{day}</span>
+                      <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                        <div
+                          class="bg-primary h-full rounded-full"
+                          style={"width: #{pct}%"}
+                        />
+                      </div>
+                      <span class="text-xs font-medium w-20 text-right">{val}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
+                <div class="space-y-1">
+                  <div
+                    :for={
+                      {date, desc, cat, color, val} <- [
+                        {"03/01", "Aluguel Janeiro", "Moradia", "#8B5CF6", "R$ 1.500,00"},
+                        {"10/01", "Supermercado Extra", "Alimentação", "#F59E0B", "R$ 487,32"},
+                        {"17/01", "Farmácia São João", "Saúde", "#EF4444", "R$ 320,00"},
+                        {"22/01", "Shopping - Roupas", "Compras", "#F97316", "R$ 289,90"},
+                        {"07/01", "Posto Shell", "Transporte", "#3B82F6", "R$ 250,00"},
+                        {"15/01", "Conta de Luz", "Moradia", "#8B5CF6", "R$ 245,00"},
+                        {"19/01", "iFood", "Alimentação", "#F59E0B", "R$ 198,00"}
+                      ]
+                    }
+                    class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2"
+                  >
+                    <span class="text-xs opacity-50 w-12">{date}</span>
+                    <span class="flex-1 text-sm truncate">{desc}</span>
+                    <span
+                      class="badge badge-xs shrink-0"
+                      style={"background-color: #{color}20; color: #{color}; border-color: #{color}40"}
+                    >
+                      {cat}
+                    </span>
+                    <span class="text-sm font-medium text-error whitespace-nowrap">{val}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
+                <div class="space-y-1">
+                  <div
+                    :for={
+                      {date, desc, cat, color, val} <- [
+                        {"05/01", "Salário", "Salário", "#22C55E", "R$ 5.800,00"},
+                        {"15/01", "Freelance Design", "Salário", "#22C55E", "R$ 1.500,00"},
+                        {"20/01", "Rendimento CDB", "Investimentos", "#3B82F6", "R$ 850,00"},
+                        {"25/01", "Cashback Nubank", "Outros", "#64748B", "R$ 187,50"},
+                        {"28/01", "Venda Marketplace", "Outros", "#64748B", "R$ 112,50"}
+                      ]
+                    }
+                    class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2"
+                  >
+                    <span class="text-xs opacity-50 w-12">{date}</span>
+                    <span class="flex-1 text-sm truncate">{desc}</span>
+                    <span
+                      class="badge badge-xs shrink-0"
+                      style={"background-color: #{color}20; color: #{color}; border-color: #{color}40"}
+                    >
+                      {cat}
+                    </span>
+                    <span class="text-sm font-medium text-success whitespace-nowrap">{val}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
+                <div class="flex items-center gap-3 text-sm">
+                  <span class="font-semibold text-success">+R$ 2.652,60</span>
+                  <span class="badge badge-sm badge-success">economizou 31,4%</span>
+                </div>
+              </div>
+              <div
+                id="landing-ie-hook"
+                phx-hook="IncomeExpensesChart"
+                data-monthly={Jason.encode!([
+                  %{label: "Jan", income: 8450.0, expenses: 5797.0}
+                ])}
+              >
+              </div>
+            </div>
+
+            <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Parcelas Ativas</h3>
+              <div class="overflow-x-auto">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Descrição</th>
+                      <th>Categoria</th>
+                      <th>Valor/mês</th>
+                      <th>Progresso</th>
+                      <th class="text-right">Restante</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      :for={
+                        {desc, cat, color, val, curr, total, remaining} <- [
+                          {"iPhone 15 Pro Max", "Compras", "#F97316", "R$ 549,90", 4, 12,
+                           "R$ 4.399,20"},
+                          {"TV Samsung 65 pol.", "Compras", "#F97316", "R$ 283,25", 7, 10,
+                           "R$ 849,75"},
+                          {"Curso Data Science", "Educação", "#3B82F6", "R$ 199,90", 2, 6,
+                           "R$ 799,60"},
+                          {"Sofá Retrátil", "Moradia", "#8B5CF6", "R$ 416,50", 1, 8,
+                           "R$ 2.915,50"},
+                          {"PlayStation 5", "Lazer", "#EC4899", "R$ 449,90", 3, 5, "R$ 899,80"}
+                        ]
+                      }
+                      class="hover"
+                    >
+                      <td class="text-sm max-w-xs truncate">{desc}</td>
+                      <td>
+                        <span
+                          class="badge badge-sm"
+                          style={"background-color: #{color}20; color: #{color}; border-color: #{color}40"}
+                        >
+                          {cat}
+                        </span>
+                      </td>
+                      <td class="text-sm font-medium">{val}</td>
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <progress
+                            class="progress progress-warning w-20"
+                            value={curr}
+                            max={total}
+                          />
+                          <span class="text-xs opacity-60">{curr}/{total}</span>
+                        </div>
+                      </td>
+                      <td class="text-right text-sm font-medium text-warning">{remaining}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Projeção de Parcelas</h3>
+              <div
+                id="landing-projection-hook"
+                phx-hook="ProjectionChart"
+                data-projections={Jason.encode!([
+                  %{label: "Fev", value: 1899.45},
+                  %{label: "Mar", value: 1899.45},
+                  %{label: "Abr", value: 1449.55},
+                  %{label: "Mai", value: 1166.30},
+                  %{label: "Jun", value: 966.40},
+                  %{label: "Jul", value: 966.40},
+                  %{label: "Ago", value: 966.40},
+                  %{label: "Set", value: 549.90}
+                ])}
+              >
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 sm:gap-4">
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Parcelas Ativas</div>
+                <div class="stat-value text-warning text-sm sm:text-lg">5</div>
+                <div class="stat-desc text-[10px] sm:text-xs">parceladas</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Mensal Parcelas</div>
+                <div class="stat-value text-warning text-sm sm:text-lg">R$ 1.899,45</div>
+                <div class="stat-desc text-[10px] sm:text-xs">por mês</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+                <div class="stat-title text-[10px] sm:text-xs">Total Restante</div>
+                <div class="stat-value text-warning text-sm sm:text-lg">R$ 9.863,85</div>
+                <div class="stat-desc text-[10px] sm:text-xs">futuras</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <%!-- Step 3: AI Analysis --%>
-      <section class="py-24 px-4">
+      <section class="py-24 px-4 bg-base-200/50">
         <style>
-          .ai-stage { position: relative; overflow: hidden; }
-
-          .ai-loading { animation: aiLoading 10s ease-in-out infinite; }
-          @keyframes aiLoading {
-            0%, 3%   { opacity: 0; transform: scale(0.98); }
-            8%       { opacity: 1; transform: scale(1); }
-            35%      { opacity: 1; }
-            43%, 100%{ opacity: 0; }
+          .ai-demo { display: grid; overflow: hidden; }
+          .ai-demo-phase {
+            grid-area: 1 / 1;
+            transition: opacity 500ms ease, transform 500ms ease;
           }
-
           .ai-skeleton {
             background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
             background-size: 200% 100%;
@@ -542,30 +967,9 @@ defmodule GranaiWeb.LandingLive do
             0%   { background-position: 200% 0; }
             100% { background-position: -200% 0; }
           }
-
-          .ai-spinner { animation: aiSpinnerFade 10s ease-in-out infinite; }
-          @keyframes aiSpinnerFade {
-            0%, 5%   { opacity: 0; }
-            10%, 30% { opacity: 1; }
-            38%, 100%{ opacity: 0; }
-          }
-
-          .ai-result {
-            position: absolute; inset: 0;
-            animation: aiResult 10s ease-in-out infinite;
-          }
-          @keyframes aiResult {
-            0%, 38%  { opacity: 0; transform: translateY(6px); }
-            46%      { opacity: 1; transform: translateY(0); }
-            88%      { opacity: 1; transform: translateY(0); }
-            95%, 100%{ opacity: 0; transform: translateY(-3px); }
-          }
         </style>
 
         <div class="max-w-6xl mx-auto">
-          <div class="text-center mb-16">
-            <div class="badge badge-primary badge-outline mb-4">Passo 3</div>
-          </div>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <p
@@ -612,50 +1016,166 @@ defmodule GranaiWeb.LandingLive do
               </div>
             </div>
 
-            <div class="ai-stage">
-              <div class="ai-loading card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-6 shadow-xl">
-                <div class="flex items-center gap-2 mb-5">
-                  <.icon name="hero-sparkles" class="size-5 text-primary" />
-                  <h3 class="font-semibold">Análise Inteligente</h3>
+            <div id="landing-ai-demo" phx-hook="LandingAIDemo" class="ai-demo">
+              <%!-- Phase 1: Input --%>
+              <div data-ai-input class="ai-demo-phase">
+                <div class="mb-3 space-y-2">
+                  <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+                    <div class="flex gap-1">
+                      <span class="btn btn-xs sm:btn-sm btn-primary cursor-default">2026</span>
+                    </div>
+                    <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+                    <div class="flex flex-wrap gap-1">
+                      <span class="btn btn-xs btn-ghost cursor-default">Ano</span>
+                      <span class="btn btn-xs btn-primary cursor-default">Jan</span>
+                      <span class="btn btn-xs btn-ghost cursor-default">Fev</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
+                      <span class="btn btn-xs btn-ghost cursor-default">Todos</span>
+                      <span class="btn btn-xs btn-primary gap-1 cursor-default">
+                        <img src={~p"/images/nubank-logo.png"} alt="" class="w-4 h-4 rounded-full" />
+                        <span class="hidden sm:inline">Nubank</span>
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
+                      <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                      <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                        <.icon name="hero-banknotes" class="size-3" />
+                        <span class="hidden sm:inline">Extrato</span>
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
+                      <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                      <span class="btn btn-xs btn-ghost cursor-default">Despesas</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="flex items-center gap-3 mb-6 ai-spinner">
-                  <span class="loading loading-spinner loading-sm text-primary"></span>
-                  <span class="text-sm opacity-60">Analisando seus dados...</span>
-                </div>
-
-                <div class="space-y-3">
-                  <div class="ai-skeleton h-4 w-full"></div>
-                  <div class="ai-skeleton h-4 w-4/5"></div>
-                  <div class="ai-skeleton h-3 w-3/5 mt-4"></div>
-                  <div class="ai-skeleton h-3 w-4/5"></div>
-                  <div class="ai-skeleton h-10 w-full mt-4"></div>
-                  <div class="ai-skeleton h-3 w-3/4 mt-4"></div>
+                <div class="card bg-base-200 p-4 sm:p-6">
+                  <div class="mb-3 sm:mb-4">
+                    <label class="block text-sm font-semibold leading-6 mb-1">
+                      Pergunte algo sobre suas finanças (opcional)
+                    </label>
+                    <textarea
+                      data-ai-textarea
+                      placeholder="Ex: Onde posso economizar? Qual categoria cresceu mais?"
+                      class="textarea textarea-bordered w-full text-sm"
+                      rows="2"
+                      readonly
+                      tabindex="-1"
+                    ></textarea>
+                  </div>
+                  <button
+                    data-ai-button
+                    class="btn btn-primary btn-sm sm:btn-md gap-2 transition-transform cursor-default"
+                    tabindex="-1"
+                  >
+                    <.icon name="hero-sparkles" class="size-4" /> Analisar com IA
+                  </button>
                 </div>
               </div>
 
-              <div class="ai-result card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-6 shadow-xl">
-                <div class="flex items-center gap-2 mb-4">
-                  <.icon name="hero-sparkles" class="size-5 text-primary" />
-                  <h3 class="font-semibold">Análise Inteligente</h3>
+              <%!-- Phase 2: Loading --%>
+              <div data-ai-loading class="ai-demo-phase" style="opacity: 0; transform: translateY(6px)">
+                <div class="card bg-base-200 p-4 sm:p-6 mb-4">
+                  <div class="flex items-center gap-3">
+                    <span class="loading loading-spinner loading-sm text-primary"></span>
+                    <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
+                  </div>
                 </div>
 
-                <p class="text-sm mb-4 font-medium">
+                <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
+                  <div class="flex items-center gap-3 mb-5">
+                    <div class="ai-skeleton w-10 h-10 rounded-lg shrink-0"></div>
+                    <div class="flex-1 space-y-2">
+                      <div class="ai-skeleton h-4 w-3/5"></div>
+                      <div class="ai-skeleton h-3 w-2/5"></div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div class="ai-skeleton h-4 w-full"></div>
+                    <div class="ai-skeleton h-4 w-4/5"></div>
+                    <div class="ai-skeleton h-3 w-3/5 mt-4"></div>
+                    <div class="ai-skeleton h-3 w-4/5"></div>
+                    <div class="ai-skeleton h-3 w-3/4"></div>
+                    <div class="ai-skeleton h-3 w-2/3"></div>
+                    <div class="ai-skeleton h-3 w-4/5"></div>
+                    <div class="ai-skeleton h-10 w-full mt-4"></div>
+                    <div class="ai-skeleton h-16 w-full mt-4 rounded-lg"></div>
+                  </div>
+                </div>
+              </div>
+
+              <%!-- Phase 3: Result --%>
+              <div data-ai-result class="ai-demo-phase" style="opacity: 0; transform: translateY(6px)">
+              <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 mb-1">
+                      <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold border shrink-0 text-success bg-success/15 border-success/30">
+                        7.8
+                      </span>
+                      <div class="min-w-0">
+                        <h4 class="font-semibold text-sm">Saúde financeira de Janeiro</h4>
+                        <div class="flex flex-wrap items-center gap-1 mt-0.5">
+                          <span class="text-xs opacity-40">19/02/2026 às 14:32</span>
+                          <span class="badge badge-xs badge-ghost">Janeiro</span>
+                          <span class="badge badge-xs badge-ghost">Nubank</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13">
+                      "Onde posso economizar nesse mês?"
+                    </p>
+                  </div>
+                </div>
+
+                <p class="text-sm opacity-80 mb-4">
                   Seus gastos com alimentação representam 32% do total — acima da média recomendada de 25%.
-                  Moradia está dentro do esperado.
+                  Moradia está dentro do esperado. O saldo livre de R$ 2.652 indica margem saudável.
                 </p>
 
                 <div class="space-y-2 mb-4">
                   <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
+                    <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                    <span class="opacity-80">
+                      Receita mensal consistente com média de R$ 8.450 — bom controle de renda
+                    </span>
+                  </div>
+                  <div class="flex items-start gap-2 text-sm">
+                    <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                    <span class="opacity-80">
+                      Moradia representa 18% do orçamento — dentro do recomendado (até 30%)
+                    </span>
+                  </div>
+                  <div class="flex items-start gap-2 text-sm">
+                    <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
                     <span class="opacity-80">
                       Gastos com delivery aumentaram 40% em relação ao mês anterior
+                    </span>
+                  </div>
+                  <div class="flex items-start gap-2 text-sm">
+                    <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
+                    <span class="opacity-80">
+                      Alimentação a 32% do total — acima do recomendado de 25%
                     </span>
                   </div>
                   <div class="flex items-start gap-2 text-sm">
                     <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
                     <span class="opacity-80">
                       3 assinaturas detectadas — considere revisar se todas estão em uso
+                    </span>
+                  </div>
+                  <div class="flex items-start gap-2 text-sm">
+                    <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
+                    <span class="opacity-80">
+                      Cozinhar em casa 3x por semana pode economizar até R$ 400/mês
                     </span>
                   </div>
                 </div>
@@ -667,243 +1187,18 @@ defmodule GranaiWeb.LandingLive do
                   </span>
                 </div>
 
-                <div class="flex items-start gap-2 text-sm bg-success/10 rounded-lg p-3">
-                  <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
-                  <span class="opacity-80">
-                    Cozinhar em casa 3x por semana pode economizar até R$ 400/mês em alimentação
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <%!-- Dashboard Preview --%>
-      <section id="dashboard-preview" class="py-24 px-4 bg-base-200/50">
-        <div class="max-w-6xl mx-auto">
-          <div class="text-center mb-16">
-            <p
-              style="font-family: 'Grand Hotel', cursive"
-              class="text-primary text-5xl mb-3"
-            >
-              Visão completa
-            </p>
-            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-              Dashboard inteligente
-            </h2>
-            <p class="text-lg opacity-60 max-w-xl mx-auto">
-              Veja para onde vai cada centavo com gráficos interativos e resumos detalhados
-            </p>
-          </div>
-
-          <div class="rounded-2xl border border-base-content/10 bg-base-200/30 p-4 md:p-8 shadow-xl">
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-              <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
-                <div class="stat-title text-xs">Receitas</div>
-                <div class="stat-value text-success text-lg">R$ 8.450,00</div>
-                <div class="stat-desc">12 transações</div>
-              </div>
-              <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
-                <div class="stat-title text-xs">Despesas</div>
-                <div class="stat-value text-error text-lg">R$ 5.797,40</div>
-                <div class="stat-desc">47 transações</div>
-              </div>
-              <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
-                <div class="stat-title text-xs">Investimentos</div>
-                <div class="stat-value text-info text-lg">R$ 1.200,00</div>
-                <div class="stat-desc">3 transações</div>
-              </div>
-              <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
-                <div class="stat-title text-xs">Saldo Livre</div>
-                <div class="stat-value text-success text-lg">R$ 2.652,60</div>
-                <div class="stat-desc">Tudo categorizado</div>
-              </div>
-              <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
-                <div class="stat-title text-xs">Média Diária</div>
-                <div class="stat-value text-lg">R$ 193,24</div>
-                <div class="stat-desc">em despesas</div>
-              </div>
-              <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
-                <div class="stat-title text-xs">Transações</div>
-                <div class="stat-value text-lg">62</div>
-                <div class="stat-desc">Alimentação lidera</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <div class="card bg-base-100 p-6 shadow-sm" id="landing-donut">
-                <h3 class="font-semibold mb-4">Despesas por Categoria</h3>
-                <div class="flex flex-col sm:flex-row items-center gap-6">
-                  <svg viewBox="0 0 180 180" class="w-44 h-44 shrink-0">
-                    <g transform="rotate(-90 90 90)">
-                      <circle
-                        :for={
-                          {name, value, pct_label, color, dash, offset} <- [
-                            {"Alimentação", "1847.00", "32%", "#F59E0B", "140.74 439.82", "0"},
-                            {"Moradia", "1500.00", "26%", "#8B5CF6", "114.35 439.82", "-140.74"},
-                            {"Transporte", "650.00", "11%", "#3B82F6", "48.38 439.82", "-255.09"},
-                            {"Compras", "520.00", "9%", "#F97316", "39.58 439.82", "-303.47"},
-                            {"Lazer", "480.00", "8%", "#EC4899", "36.50 439.82", "-343.05"},
-                            {"Saúde", "320.00", "6%", "#EF4444", "24.19 439.82", "-379.55"},
-                            {"Pagamentos", "290.00", "5%", "#64748B", "21.99 439.82", "-403.74"},
-                            {"Assinaturas", "190.00", "3%", "#A855F7", "14.07 439.82", "-425.73"}
-                          ]
-                        }
-                        cx="90"
-                        cy="90"
-                        r="70"
-                        fill="none"
-                        stroke={color}
-                        stroke-width="22"
-                        stroke-dasharray={dash}
-                        stroke-dashoffset={offset}
-                        class="cursor-pointer"
-                        style="transition: opacity 0.15s"
-                        data-tip-name={name}
-                        data-tip-value={value}
-                        data-tip-pct={pct_label}
-                      />
-                    </g>
-                    <text
-                      x="90"
-                      y="85"
-                      text-anchor="middle"
-                      class="fill-base-content text-xs opacity-50"
-                    >
-                      Total
-                    </text>
-                    <text
-                      x="90"
-                      y="100"
-                      text-anchor="middle"
-                      class="fill-base-content text-sm font-bold"
-                    >
-                      R$ 5.797
-                    </text>
-                  </svg>
-                  <div class="space-y-2 flex-1 w-full">
-                    <div
-                      :for={
-                        {name, value, pct, color} <- [
-                          {"Alimentação", "R$ 1.847", "32%", "#F59E0B"},
-                          {"Moradia", "R$ 1.500", "26%", "#8B5CF6"},
-                          {"Transporte", "R$ 650", "11%", "#3B82F6"},
-                          {"Compras", "R$ 520", "9%", "#F97316"},
-                          {"Lazer", "R$ 480", "8%", "#EC4899"},
-                          {"Saúde", "R$ 320", "6%", "#EF4444"},
-                          {"Pagamentos", "R$ 290", "5%", "#64748B"},
-                          {"Assinaturas", "R$ 190", "3%", "#A855F7"}
-                        ]
-                      }
-                      class="flex items-center gap-2"
-                    >
-                      <div class="w-2.5 h-2.5 rounded-full shrink-0" style={"background:#{color}"} />
-                      <span class="text-xs flex-1 truncate">{name}</span>
-                      <span class="text-xs font-medium">{value}</span>
-                      <span class="text-xs opacity-40 w-8 text-right">{pct}</span>
-                    </div>
+                <div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
+                    <span class="text-xs font-medium text-primary">Resposta</span>
                   </div>
+                  <p class="text-sm opacity-80">
+                    Para economizar, foque em reduzir gastos com delivery e alimentação fora de casa.
+                    Planeje refeições semanais e aproveite promoções do supermercado. Revise suas 3 assinaturas
+                    e cancele as que não usa ativamente.
+                  </p>
                 </div>
               </div>
-
-              <div class="card bg-base-100 p-6 shadow-sm" id="landing-daily">
-                <h3 class="font-semibold mb-4">Gastos Diários</h3>
-                <div class="space-y-1">
-                  <div
-                    :for={
-                      {day, pct, val} <- [
-                        {"02/01", 25, "R$ 145,90"},
-                        {"03/01", 8, "R$ 47,50"},
-                        {"05/01", 55, "R$ 320,00"},
-                        {"07/01", 100, "R$ 587,32"},
-                        {"08/01", 12, "R$ 68,90"},
-                        {"10/01", 83, "R$ 487,32"},
-                        {"12/01", 30, "R$ 175,00"},
-                        {"14/01", 15, "R$ 89,90"},
-                        {"15/01", 42, "R$ 245,00"},
-                        {"17/01", 65, "R$ 382,50"},
-                        {"19/01", 20, "R$ 120,00"},
-                        {"22/01", 50, "R$ 289,90"},
-                        {"25/01", 35, "R$ 198,00"},
-                        {"27/01", 70, "R$ 410,80"},
-                        {"30/01", 45, "R$ 259,36"}
-                      ]
-                    }
-                    class="flex items-center gap-2 cursor-pointer"
-                    data-tip-name={day}
-                    data-tip-value={val}
-                  >
-                    <span class="text-xs w-10 opacity-60">{day}</span>
-                    <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
-                      <div
-                        class="bg-primary h-full rounded-full transition-opacity"
-                        style={"width: #{pct}%"}
-                      />
-                    </div>
-                    <span class="text-xs font-medium w-20 text-right">{val}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div class="card bg-base-100 p-6 shadow-sm">
-                <h3 class="font-semibold mb-4">Top Despesas</h3>
-                <div class="space-y-1">
-                  <div
-                    :for={
-                      {date, desc, cat, color, val} <- [
-                        {"03/01", "Aluguel Janeiro", "Moradia", "#8B5CF6", "R$ 1.500,00"},
-                        {"10/01", "Supermercado Extra", "Alimentação", "#F59E0B", "R$ 487,32"},
-                        {"17/01", "Farmácia São João", "Saúde", "#EF4444", "R$ 320,00"},
-                        {"22/01", "Shopping - Roupas", "Compras", "#F97316", "R$ 289,90"},
-                        {"07/01", "Posto Shell", "Transporte", "#3B82F6", "R$ 250,00"},
-                        {"15/01", "Conta de Luz", "Moradia", "#8B5CF6", "R$ 245,00"},
-                        {"19/01", "iFood", "Alimentação", "#F59E0B", "R$ 198,00"}
-                      ]
-                    }
-                    class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2"
-                  >
-                    <span class="text-xs opacity-50 w-12">{date}</span>
-                    <span class="flex-1 text-sm truncate">{desc}</span>
-                    <span
-                      class="badge badge-xs shrink-0"
-                      style={"background-color: #{color}20; color: #{color}; border-color: #{color}40"}
-                    >
-                      {cat}
-                    </span>
-                    <span class="text-sm font-medium text-error whitespace-nowrap">{val}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="card bg-base-100 p-6 shadow-sm">
-                <h3 class="font-semibold mb-4">Top Receitas</h3>
-                <div class="space-y-1">
-                  <div
-                    :for={
-                      {date, desc, cat, color, val} <- [
-                        {"05/01", "Salário", "Salário", "#22C55E", "R$ 5.800,00"},
-                        {"15/01", "Freelance Design", "Salário", "#22C55E", "R$ 1.500,00"},
-                        {"20/01", "Rendimento CDB", "Investimentos", "#3B82F6", "R$ 850,00"},
-                        {"25/01", "Cashback Nubank", "Outros", "#64748B", "R$ 187,50"},
-                        {"28/01", "Venda Marketplace", "Outros", "#64748B", "R$ 112,50"}
-                      ]
-                    }
-                    class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2"
-                  >
-                    <span class="text-xs opacity-50 w-12">{date}</span>
-                    <span class="flex-1 text-sm truncate">{desc}</span>
-                    <span
-                      class="badge badge-xs shrink-0"
-                      style={"background-color: #{color}20; color: #{color}; border-color: #{color}40"}
-                    >
-                      {cat}
-                    </span>
-                    <span class="text-sm font-medium text-success whitespace-nowrap">{val}</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -1210,26 +1505,6 @@ defmodule GranaiWeb.LandingLive do
         </div>
       </footer>
 
-      <script>
-        (function() {
-          function setup(id, fmt) {
-            var el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener("mousemove", function(e) {
-              var t = e.target.closest("[data-tip-name]");
-              if (!t) return hideTooltip(el);
-              showTooltip(el, e, fmt(t.dataset));
-            });
-            el.addEventListener("mouseleave", function() { hideTooltip(el); });
-          }
-          setup("landing-donut", function(d) {
-            return "<strong>" + d.tipName + "</strong><br>" + fmtBRL(parseFloat(d.tipValue)) + " · " + d.tipPct;
-          });
-          setup("landing-daily", function(d) {
-            return "<strong>" + d.tipName + "</strong><br>" + d.tipValue;
-          });
-        })();
-      </script>
     </div>
     """
   end

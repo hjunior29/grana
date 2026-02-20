@@ -65,7 +65,24 @@ defmodule GranaiWeb.UploadLive do
   end
 
   def handle_event("select-bank", %{"bank" => bank}, socket) do
-    {:noreply, assign(socket, bank: bank, statement_type: nil)}
+    # Cancel any existing uploads when switching bank
+    socket =
+      Enum.reduce(socket.assigns.uploads.statements.entries, socket, fn entry, acc ->
+        cancel_upload(acc, :statements, entry.ref)
+      end)
+
+    accept = if bank == "outro", do: ~w(.pdf), else: ~w(.csv .pdf)
+
+    socket =
+      socket
+      |> assign(bank: bank, statement_type: nil)
+      |> allow_upload(:statements,
+        accept: accept,
+        max_entries: 12,
+        max_file_size: 5_000_000
+      )
+
+    {:noreply, socket}
   end
 
   def handle_event("select-type", %{"type" => type}, socket) do
@@ -82,6 +99,8 @@ defmodule GranaiWeb.UploadLive do
         String.ends_with?(String.downcase(entry.client_name), ".pdf")
       end)
 
+    needs_api_key = has_pdf or bank == "outro"
+
     cond do
       is_nil(bank) ->
         {:noreply, put_flash(socket, :error, "Selecione um banco antes de fazer upload")}
@@ -89,7 +108,7 @@ defmodule GranaiWeb.UploadLive do
       is_nil(statement_type) ->
         {:noreply, put_flash(socket, :error, "Selecione o tipo (extrato ou fatura)")}
 
-      has_pdf ->
+      needs_api_key ->
         case Grana.Accounts.get_user_ai_config(scope.user.id) do
           {:error, :no_api_key} ->
             {:noreply, assign(socket, :show_api_key_alert, true)}
@@ -294,8 +313,16 @@ defmodule GranaiWeb.UploadLive do
     {:noreply, socket}
   end
 
+  defp format_error("No transactions found in file", "outro") do
+    "Nenhuma transação encontrada no arquivo."
+  end
+
   defp format_error("No transactions found in file", bank) do
     "Nenhuma transação encontrada. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
+  end
+
+  defp format_error("No transactions found in PDF", "outro") do
+    "Nenhuma transação encontrada no PDF."
   end
 
   defp format_error("No transactions found in PDF", bank) do
@@ -335,7 +362,7 @@ defmodule GranaiWeb.UploadLive do
         </div>
 
         <div :if={@tab == "upload"}>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <button
               phx-click="select-bank"
               phx-value-bank="nubank"
@@ -374,6 +401,25 @@ defmodule GranaiWeb.UploadLive do
                 <div class="text-left">
                   <h3 class="font-semibold text-lg">Bradesco</h3>
                   <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              phx-click="select-bank"
+              phx-value-bank="outro"
+              class={[
+                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                (@bank == "outro" && "border-primary") || "border-transparent"
+              ]}
+            >
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+                  <.icon name="hero-building-library" class="size-6 opacity-60" />
+                </div>
+                <div class="text-left">
+                  <h3 class="font-semibold text-lg">Outro banco</h3>
+                  <p class="text-sm opacity-70">Qualquer banco via PDF + IA</p>
                 </div>
               </div>
             </button>
@@ -448,7 +494,11 @@ defmodule GranaiWeb.UploadLive do
                   >
                     <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
                     <p class="font-medium">
-                      Arraste arquivos CSV ou PDF, ou clique para selecionar
+                      <%= if @bank == "outro" do %>
+                        Arraste arquivos PDF, ou clique para selecionar
+                      <% else %>
+                        Arraste arquivos CSV ou PDF, ou clique para selecionar
+                      <% end %>
                     </p>
                     <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
                   </label>
@@ -766,10 +816,12 @@ defmodule GranaiWeb.UploadLive do
 
   defp extrato_tip("nubank"), do: "Recomendado: CSV"
   defp extrato_tip("bradesco"), do: "Recomendado: PDF"
+  defp extrato_tip("outro"), do: "Apenas PDF"
   defp extrato_tip(_), do: ""
 
   defp fatura_tip("nubank"), do: "Recomendado: CSV"
   defp fatura_tip("bradesco"), do: "Recomendado: CSV"
+  defp fatura_tip("outro"), do: "Apenas PDF"
   defp fatura_tip(_), do: ""
 
   defp type_badge_class("fatura"), do: "badge-warning"
