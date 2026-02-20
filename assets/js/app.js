@@ -456,6 +456,120 @@ const ActiveNav = {
   }
 }
 
+const LandingAIDemo = {
+  mounted() {
+    this.textarea = this.el.querySelector("[data-ai-textarea]")
+    this.button = this.el.querySelector("[data-ai-button]")
+    this.inputPhase = this.el.querySelector("[data-ai-input]")
+    this.loadingPhase = this.el.querySelector("[data-ai-loading]")
+    this.resultPhase = this.el.querySelector("[data-ai-result]")
+    this._destroyed = false
+    this._running = false
+
+    this.observer = new IntersectionObserver(([entry]) => {
+      if (this._destroyed) return
+      if (entry.isIntersecting && !this._running) {
+        this._running = true
+        this.runLoop()
+      } else if (!entry.isIntersecting) {
+        this._running = false
+        this.reset()
+      }
+    }, { threshold: 0.2 })
+    this.observer.observe(this.el)
+  },
+
+  destroyed() {
+    this._destroyed = true
+    this._running = false
+    if (this.observer) this.observer.disconnect()
+  },
+
+  reset() {
+    this.textarea.value = ""
+    this.inputPhase.style.opacity = "1"
+    this.inputPhase.style.transform = "translateY(0)"
+    this.loadingPhase.style.opacity = "0"
+    this.loadingPhase.style.transform = "translateY(6px)"
+    this.resultPhase.style.opacity = "0"
+    this.resultPhase.style.transform = "translateY(6px)"
+  },
+
+  async runLoop() {
+    while (this._running && !this._destroyed) {
+      await this.runSequence()
+      if (!this._running || this._destroyed) break
+      await this.sleep(1500)
+    }
+  },
+
+  async runSequence() {
+    const text = "Onde posso economizar nesse mês?"
+
+    // Reset all phases
+    this.reset()
+
+    // Initial pause
+    await this.sleep(800)
+    if (!this._running) return
+
+    // 1. Typing animation — character by character
+    for (let i = 0; i < text.length; i++) {
+      if (!this._running) return
+      this.textarea.value = text.substring(0, i + 1)
+      await this.sleep(50 + Math.random() * 50)
+    }
+
+    // Pause after typing
+    await this.sleep(600)
+    if (!this._running) return
+
+    // 2. Button click simulation — press/release
+    this.button.classList.add("btn-active")
+    this.button.style.transform = "scale(0.95)"
+    await this.sleep(150)
+    this.button.classList.remove("btn-active")
+    this.button.style.transform = ""
+
+    // Short pause before fade
+    await this.sleep(400)
+    if (!this._running) return
+
+    // 3. Fade out input card
+    this.inputPhase.style.opacity = "0"
+    this.inputPhase.style.transform = "translateY(-6px)"
+    await this.sleep(500)
+    if (!this._running) return
+
+    // 4. Fade in loading skeleton
+    this.loadingPhase.style.opacity = "1"
+    this.loadingPhase.style.transform = "translateY(0)"
+    await this.sleep(3000)
+    if (!this._running) return
+
+    // 5. Fade out loading
+    this.loadingPhase.style.opacity = "0"
+    this.loadingPhase.style.transform = "translateY(-6px)"
+    await this.sleep(500)
+    if (!this._running) return
+
+    // 6. Fade in result
+    this.resultPhase.style.opacity = "1"
+    this.resultPhase.style.transform = "translateY(0)"
+    await this.sleep(4000)
+    if (!this._running) return
+
+    // 7. Fade out result
+    this.resultPhase.style.opacity = "0"
+    this.resultPhase.style.transform = "translateY(-3px)"
+    await this.sleep(600)
+  },
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+}
+
 const Hooks = {
   ...colocatedHooks,
   CategoryChart,
@@ -467,6 +581,7 @@ const Hooks = {
   DropZone,
   ProgressBar,
   ActiveNav,
+  LandingAIDemo,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

@@ -15,52 +15,83 @@ defmodule Grana.Banking.StatementProcessor do
       [] ->
         {:error, "No transactions found in file"}
 
-      transactions ->
-        {period_start, period_end} = get_period(transactions)
+      {transactions, detected_bank} when is_list(transactions) ->
+        do_process(transactions, detected_bank, statement_type, user_id, filename, categories)
 
-        {:ok, statement} =
-          Banking.create_statement(%{
-            bank: bank,
-            filename: filename,
-            statement_type: statement_type,
-            user_id: user_id,
-            period_start: period_start,
-            period_end: period_end,
-            status: "processing"
-          })
+      transactions when is_list(transactions) ->
+        do_process(transactions, bank, statement_type, user_id, filename, categories)
+    end
+  end
 
-        categorized_transactions = categorize_all(transactions, categories, user_id)
+  defp do_process(transactions, bank, statement_type, user_id, filename, categories) do
+    {period_start, period_end} = get_period(transactions)
 
-        entries =
-          Enum.map(categorized_transactions, fn txn ->
-            %{
-              date: txn.date,
-              description: txn.description,
-              original_description: txn.original_description,
-              amount: txn.amount,
-              type: txn.type,
-              identifier: txn.identifier,
-              installment_current: txn[:installment_current],
-              installment_total: txn[:installment_total],
-              installment_group_id: txn[:installment_group_id],
-              bank_statement_id: statement.id,
-              user_id: user_id,
-              category_id: txn.category_id
-            }
-          end)
+    {:ok, statement} =
+      Banking.create_statement(%{
+        bank: bank,
+        filename: filename,
+        statement_type: statement_type,
+        user_id: user_id,
+        period_start: period_start,
+        period_end: period_end,
+        status: "processing"
+      })
 
-        entries = deduplicate(entries, user_id)
+    categorized_transactions = categorize_all(transactions, categories, user_id)
 
-        {count, _} = Banking.bulk_insert_transactions(entries)
+    entries =
+      Enum.map(categorized_transactions, fn txn ->
+        %{
+          date: txn.date,
+          description: txn.description,
+          original_description: txn.original_description,
+          amount: txn.amount,
+          type: txn.type,
+          identifier: txn.identifier,
+          installment_current: txn[:installment_current],
+          installment_total: txn[:installment_total],
+          installment_group_id: txn[:installment_group_id],
+          bank_statement_id: statement.id,
+          user_id: user_id,
+          category_id: txn.category_id
+        }
+      end)
 
-        Banking.update_statement(statement, %{
-          status: "completed",
-          total_transactions: count
-        })
+    entries = deduplicate(entries, user_id)
 
-        Banking.detect_internal_transfers(user_id)
+    {count, _} = Banking.bulk_insert_transactions(entries)
 
-        {:ok, %{statement_id: statement.id, transaction_count: count}}
+    Banking.update_statement(statement, %{
+      status: "completed",
+      total_transactions: count
+    })
+
+    Banking.detect_internal_transfers(user_id)
+
+    {:ok, %{statement_id: statement.id, transaction_count: count}}
+  end
+
+  defp parse_file(file_content, "outro", statement_type, filename, user_id) do
+    case file_type(filename) do
+      :pdf ->
+        case PdfExtractor.extract(file_content, "outro", user_id) do
+          {:ok, transactions, %{detected_bank: detected_bank, detected_type: detected_type}} ->
+            if detected_type != statement_type do
+              type_label = if detected_type == "fatura", do: "uma fatura", else: "um extrato"
+              selected_label = if statement_type == "fatura", do: "fatura", else: "extrato"
+
+              {:error,
+               "O documento parece ser #{type_label}, mas foi selecionado #{selected_label}. Selecione o tipo correto e tente novamente."}
+            else
+              {transactions, detected_bank}
+            end
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      :csv ->
+        {:error, "Arquivos CSV não são suportados para \"Outro banco\". Use PDF."}
     end
   end
 
