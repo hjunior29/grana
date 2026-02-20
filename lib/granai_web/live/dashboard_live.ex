@@ -152,8 +152,14 @@ defmodule GranaiWeb.DashboardLive do
     daily_avg = calculate_daily_avg(summary, daily)
     top_category = calculate_top_category(summary)
 
-    installment_summary = Banking.installment_projection_summary(user_id, opts)
-    installment_projections = Banking.monthly_installment_projections(user_id, 12, opts)
+    installment_opts =
+      case view_mode do
+        "year" -> opts
+        _ -> opts ++ [year: year, month: month]
+      end
+
+    installment_summary = Banking.installment_projection_summary(user_id, installment_opts)
+    installment_projections = Banking.monthly_installment_projections(user_id, 12, installment_opts)
 
     socket
     |> assign(:summary, summary)

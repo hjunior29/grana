@@ -868,6 +868,17 @@ defmodule Grana.Banking do
     base = filter_by_bank(base, Keyword.get(opts, :bank), user_id)
     base = filter_by_statement_type(base, Keyword.get(opts, :statement_type), user_id)
 
+    base =
+      case {Keyword.get(opts, :year), Keyword.get(opts, :month)} do
+        {year, month} when is_integer(year) and is_integer(month) and month > 0 ->
+          date_from = Date.new!(year, month, 1)
+          date_to = Date.new!(year, month, Date.days_in_month(date_from))
+          base |> where([t], t.date >= ^date_from and t.date <= ^date_to)
+
+        _ ->
+          base
+      end
+
     subquery =
       base
       |> group_by([t], t.installment_group_id)
@@ -912,11 +923,19 @@ defmodule Grana.Banking do
 
   def monthly_installment_projections(user_id, months_ahead \\ 12, opts \\ []) do
     installments = list_active_installments(user_id, opts)
-    today = Date.utc_today()
+
+    start_date =
+      case {Keyword.get(opts, :year), Keyword.get(opts, :month)} do
+        {year, month} when is_integer(year) and is_integer(month) and month > 0 ->
+          Date.new!(year, month, 1)
+
+        _ ->
+          Date.utc_today()
+      end
 
     0..(months_ahead - 1)
     |> Enum.map(fn offset ->
-      projected_date = Date.new!(today.year, today.month, 1) |> Date.shift(month: offset)
+      projected_date = Date.new!(start_date.year, start_date.month, 1) |> Date.shift(month: offset)
       month_label = "#{month_name_short(projected_date.month)}/#{projected_date.year}"
 
       total =
