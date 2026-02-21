@@ -281,6 +281,22 @@ defmodule GranaiWeb.UserAuth do
     end
   end
 
+  @doc """
+  Plug for routes that require the user to be an admin.
+  """
+  def require_admin_user(conn, _opts) do
+    admin_email = Application.get_env(:grana, :admin_email)
+    user = conn.assigns.current_scope && conn.assigns.current_scope.user
+
+    if user && admin_email && user.email == admin_email do
+      conn
+    else
+      conn
+      |> resp(404, "Not Found")
+      |> halt()
+    end
+  end
+
   defp maybe_store_return_to(%{method: "GET"} = conn) do
     put_session(conn, :user_return_to, current_path(conn))
   end

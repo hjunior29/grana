@@ -26,16 +26,23 @@ defmodule GranaiWeb.Router do
     end
   end
 
+  # Error tracker (available in all environments, admin-only)
+  use ErrorTracker.Web, :router
+
+  scope "/admin" do
+    pipe_through [:browser, :require_authenticated_user, :require_admin_user]
+
+    error_tracker_dashboard "/errors"
+  end
+
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:grana, :dev_routes) do
     import Phoenix.LiveDashboard.Router
-    use ErrorTracker.Web, :router
 
     scope "/dev" do
       pipe_through :browser
 
       live_dashboard "/dashboard", metrics: GranaiWeb.Telemetry
-      error_tracker_dashboard "/errors"
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end

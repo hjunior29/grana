@@ -1,8 +1,10 @@
 defmodule GranaiWeb.Layouts do
   use GranaiWeb, :html
 
-  @dev_routes Application.compile_env(:grana, :dev_routes)
-  defp dev_routes?, do: @dev_routes
+  defp admin_user?(scope) do
+    admin_email = Application.get_env(:grana, :admin_email)
+    scope && scope.user && admin_email && scope.user.email == admin_email
+  end
 
   embed_templates "layouts/*"
 
@@ -58,9 +60,9 @@ defmodule GranaiWeb.Layouts do
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
                   <li class="px-3 py-2 text-xs opacity-50">{@current_scope.user.email}</li>
-                  <%= if dev_routes?() do %>
+                  <%= if admin_user?(@current_scope) do %>
                     <li>
-                      <.link href="/dev/errors" target="_blank">
+                      <.link href="/admin/errors" target="_blank">
                         <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
                       </.link>
                     </li>
@@ -119,9 +121,9 @@ defmodule GranaiWeb.Layouts do
                   <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
                 </.link>
               </li>
-              <%= if dev_routes?() do %>
+              <%= if admin_user?(@current_scope) do %>
                 <li>
-                  <.link href="/dev/errors" target="_blank">
+                  <.link href="/admin/errors" target="_blank">
                     <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
                   </.link>
                 </li>
