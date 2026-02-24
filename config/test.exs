@@ -12,13 +12,13 @@ config :grana, Grana.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  database: "granai_test#{System.get_env("MIX_TEST_PARTITION")}",
+  database: "grana_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :grana, GranaiWeb.Endpoint,
+config :grana, GranaWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "Br3CLjLNbS9RxyqPc44qFkZehkGe+aYAZSUcazX8pdKqGNzRrI5LFpcFayN/zUN7",
   server: false

@@ -1,8 +1,0 @@
-defmodule GranaiWeb.PageControllerTest do
-  use GranaiWeb.ConnCase
-
-  test "GET / shows landing page", %{conn: conn} do
-    conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Controle total"
-  end
-end

@@ -39,10 +39,10 @@ end
 config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
 
 if System.get_env("PHX_SERVER") do
-  config :grana, GranaiWeb.Endpoint, server: true
+  config :grana, GranaWeb.Endpoint, server: true
 end
 
-config :grana, GranaiWeb.Endpoint,
+config :grana, GranaWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 # In dev, set SMTP_IN_DEV=true in .env to send real emails via SMTP
@@ -101,7 +101,7 @@ if config_env() == :prod do
 
   config :grana, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  config :grana, GranaiWeb.Endpoint,
+  config :grana, GranaWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
       # Enable IPv6 and bind on all interfaces.
@@ -117,7 +117,7 @@ if config_env() == :prod do
   # To get SSL working, you will need to add the `https` key
   # to your endpoint configuration:
   #
-  #     config :grana, GranaiWeb.Endpoint,
+  #     config :grana, GranaWeb.Endpoint,
   #       https: [
   #         ...,
   #         port: 443,
@@ -139,7 +139,7 @@ if config_env() == :prod do
   # We also recommend setting `force_ssl` in your config/prod.exs,
   # ensuring no data is ever sent via http, always redirecting to https:
   #
-  #     config :grana, GranaiWeb.Endpoint,
+  #     config :grana, GranaWeb.Endpoint,
   #       force_ssl: [hsts: true]
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.

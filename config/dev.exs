@@ -5,7 +5,7 @@ config :grana, Grana.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  database: "granai_dev",
+  database: "grana_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
@@ -16,7 +16,7 @@ config :grana, Grana.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-config :grana, GranaiWeb.Endpoint,
+config :grana, GranaWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}],
@@ -53,7 +53,7 @@ config :grana, GranaiWeb.Endpoint,
 # different ports.
 
 # Reload browser tabs when matching files change.
-config :grana, GranaiWeb.Endpoint,
+config :grana, GranaWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
     patterns: [
@@ -62,8 +62,8 @@ config :grana, GranaiWeb.Endpoint,
       # Gettext translations
       ~r"priv/gettext/.*\.po$",
       # Router, Controllers, LiveViews and LiveComponents
-      ~r"lib/granai_web/router\.ex$",
-      ~r"lib/granai_web/(controllers|live|components)/.*\.(ex|heex)$"
+      ~r"lib/grana_web/router\.ex$",
+      ~r"lib/grana_web/(controllers|live|components)/.*\.(ex|heex)$"
     ]
   ]
 
