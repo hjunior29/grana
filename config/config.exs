@@ -25,11 +25,11 @@ config :grana,
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint
-config :grana, GranaiWeb.Endpoint,
+config :grana, GranaWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: GranaiWeb.ErrorHTML, json: GranaiWeb.ErrorJSON],
+    formats: [html: GranaWeb.ErrorHTML, json: GranaWeb.ErrorJSON],
     layout: false
   ],
   pubsub_server: Grana.PubSub,
