@@ -19,9 +19,9 @@ defmodule Grana.Investments.Institution do
   def changeset(institution, attrs) do
     institution
     |> cast(attrs, [:name, :slug, :logo_path, :is_system, :user_id])
+    |> maybe_generate_slug()
     |> validate_required([:name, :slug, :user_id])
     |> unique_constraint([:slug, :user_id])
-    |> maybe_generate_slug()
   end
 
   defp maybe_generate_slug(changeset) do
