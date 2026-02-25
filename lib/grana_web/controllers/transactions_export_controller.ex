@@ -3,6 +3,8 @@ defmodule GranaWeb.TransactionsExportController do
 
   alias Grana.Banking
   alias Grana.Banking.CsvExporter
+  alias Grana.Investments
+  alias Grana.Investments.CsvExporter, as: InvCsvExporter
 
   def export(conn, params) do
     user_id = conn.assigns.current_scope.user.id
@@ -62,6 +64,32 @@ defmodule GranaWeb.TransactionsExportController do
       {d, _} -> d
       :error -> nil
     end
+  end
+
+  def export_investments(conn, params) do
+    user_id = conn.assigns.current_scope.user.id
+
+    opts =
+      []
+      |> maybe_add(:search, params["search"])
+      |> maybe_add(:operation, params["operation"])
+      |> maybe_add(:asset_type, params["asset_type"])
+      |> maybe_add(:institution_id, parse_int(params["institution_id"]))
+      |> maybe_add(:date_from, parse_date(params["date_from"]))
+      |> maybe_add(:date_to, parse_date(params["date_to"]))
+      |> maybe_add(:amount_min, parse_decimal(params["amount_min"]))
+      |> maybe_add(:amount_max, parse_decimal(params["amount_max"]))
+
+    transactions = Investments.list_transactions(user_id, opts)
+
+    csv = InvCsvExporter.generate(transactions)
+    rand = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+    filename = "investimentos_#{Date.to_iso8601(Date.utc_today())}_#{rand}.csv"
+
+    conn
+    |> put_resp_content_type("text/csv")
+    |> put_resp_header("content-disposition", ~s[attachment; filename="#{filename}"])
+    |> send_resp(200, csv)
   end
 
   defp parse_int(nil), do: nil

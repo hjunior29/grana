@@ -21,7 +21,7 @@ defmodule Grana.MixProject do
   def application do
     [
       mod: {Grana.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :xlsxir]
     ]
   end
 
@@ -69,7 +69,8 @@ defmodule Grana.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:live_debugger, "~> 0.6.0", only: :dev},
-      {:error_tracker, "~> 0.7"}
+      {:error_tracker, "~> 0.7"},
+      {:xlsxir, "~> 1.6"}
     ]
   end
 

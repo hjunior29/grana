@@ -156,7 +156,8 @@ const DailyChart = {
       const y = padding.top + chartHeight - barHeight
 
       const urlAttr = item.url ? ` data-day-url="${item.url}"` : ""
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-primary opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${item.date}" data-day-value="${item.value}"${urlAttr}></rect>`
+      const barFill = this.el.dataset.barFill || "fill-primary"
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${item.date}" data-day-value="${item.value}"${urlAttr}></rect>`
 
       if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
         svg += `<text x="${x + barWidth / 2}" y="${height - 5}" text-anchor="middle" class="fill-base-content text-[8px] opacity-40">${item.date}</text>`
@@ -251,7 +252,9 @@ const IncomeExpensesChart = {
       const label = target.dataset.ieLabel
       const type = target.dataset.ieType
       const value = parseFloat(target.dataset.ieValue)
-      const typeLabel = type === "income" ? "Receitas" : "Despesas"
+      const incomeLabel = this.el.dataset.incomeLabel || "Receitas"
+      const expensesLabel = this.el.dataset.expensesLabel || "Despesas"
+      const typeLabel = type === "income" ? incomeLabel : expensesLabel
       showTooltip(this.el, e, `<strong>${label}</strong><br>${typeLabel}: ${fmtBRL(value)}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
@@ -289,13 +292,19 @@ const IncomeExpensesChart = {
       const incUrl = item.income_url ? ` data-ie-url="${item.income_url}"` : ""
       const expUrl = item.expenses_url ? ` data-ie-url="${item.expenses_url}"` : ""
 
-      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="fill-success opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
-      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="fill-error opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
+      const incFill = this.el.dataset.incomeFill || "fill-success"
+      const expFill = this.el.dataset.expensesFill || "fill-error"
+      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
+      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
       svg += `<text x="${groupX + groupWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${item.label}</text>`
     })
 
     svg += `</svg>`
-    svg += `<div class="flex justify-center gap-6 text-xs opacity-60 mt-1"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-success/70"></span> Receitas</span><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-error/70"></span> Despesas</span></div>`
+    const incLabel = this.el.dataset.incomeLabel || "Receitas"
+    const expLabel = this.el.dataset.expensesLabel || "Despesas"
+    const incColor = this.el.dataset.incomeColor || "bg-success/70"
+    const expColor = this.el.dataset.expensesColor || "bg-error/70"
+    svg += `<div class="flex justify-center gap-6 text-xs opacity-60 mt-1"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm ${incColor}"></span> ${incLabel}</span><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm ${expColor}"></span> ${expLabel}</span></div>`
 
     const existing = this.el.querySelector(".chart-svg")
     if (existing) {

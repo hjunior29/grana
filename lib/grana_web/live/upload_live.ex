@@ -3,6 +3,7 @@ defmodule GranaWeb.UploadLive do
 
   alias Grana.Banking
   alias Grana.Banking.StatementProcessor
+  alias Grana.Investments
 
   @per_page 20
 
@@ -12,8 +13,13 @@ defmodule GranaWeb.UploadLive do
       socket
       |> assign(:page_title, "Upload")
       |> assign(:tab, "upload")
+      |> assign(:upload_category, nil)
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
+      |> assign(:investment_provider, nil)
+      |> assign(:selected_institution, nil)
+      |> assign(:investment_institutions, [])
+      |> assign(:show_new_institution, false)
       |> assign(:processing, false)
       |> assign(:results, [])
       |> assign(:progress_current, 0)
@@ -22,6 +28,7 @@ defmodule GranaWeb.UploadLive do
       |> assign(:progress_ai, false)
       |> assign(:delete_target, nil)
       |> assign(:selected_ids, MapSet.new())
+      |> assign(:history_filter, "all")
       |> assign(:show_api_key_alert, false)
       |> allow_upload(:statements,
         accept: ~w(.csv .pdf),
@@ -36,12 +43,36 @@ defmodule GranaWeb.UploadLive do
   def handle_params(params, _uri, socket) do
     tab = params["tab"] || socket.assigns.tab
     page = parse_int(params["page"], 1)
+    history_filter = params["source"] || "all"
     user_id = socket.assigns.current_scope.user.id
 
-    {statements, total} =
-      Banking.list_statements_paginated(user_id, page: page, per_page: @per_page)
+    # Fetch all statements from both sources
+    banking_stmts =
+      if history_filter in ["all", "banking"] do
+        Banking.list_statements(user_id)
+        |> Enum.map(&normalize_banking_stmt/1)
+      else
+        []
+      end
 
+    inv_stmts =
+      if history_filter in ["all", "investment"] do
+        Investments.list_statements(user_id)
+        |> Enum.map(&normalize_inv_stmt/1)
+      else
+        []
+      end
+
+    # Merge, sort by inserted_at desc, and paginate
+    all_stmts =
+      (banking_stmts ++ inv_stmts)
+      |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+
+    total = length(all_stmts)
     total_pages = max(1, ceil(total / @per_page))
+    offset = (page - 1) * @per_page
+
+    page_stmts = Enum.slice(all_stmts, offset, @per_page)
 
     socket =
       socket
@@ -49,10 +80,52 @@ defmodule GranaWeb.UploadLive do
       |> assign(:page, page)
       |> assign(:total_pages, total_pages)
       |> assign(:total, total)
-      |> assign(:stmt_list, statements)
+      |> assign(:stmt_list, page_stmts)
+      |> assign(:history_filter, history_filter)
       |> assign(:selected_ids, MapSet.new())
 
     {:noreply, socket}
+  end
+
+  defp normalize_banking_stmt(stmt) do
+    %{
+      composite_id: "bank_#{stmt.id}",
+      raw_id: stmt.id,
+      source: "banking",
+      name: String.capitalize(stmt.bank),
+      logo: bank_logo(stmt.bank),
+      type_label: type_label(stmt.statement_type),
+      type_badge: type_badge_class(stmt.statement_type),
+      filename: stmt.filename,
+      period_start: stmt.period_start,
+      period_end: stmt.period_end,
+      total_transactions: stmt.total_transactions,
+      inserted_at: stmt.inserted_at,
+      status: stmt.status,
+      link: "/transactions?tab=banking&statement_id=#{stmt.id}"
+    }
+  end
+
+  defp normalize_inv_stmt(stmt) do
+    inst_name = if stmt.institution, do: stmt.institution.name, else: "—"
+    inst_logo = if stmt.institution && stmt.institution.logo_path, do: stmt.institution.logo_path
+
+    %{
+      composite_id: "inv_#{stmt.id}",
+      raw_id: stmt.id,
+      source: "investment",
+      name: inst_name,
+      logo: inst_logo,
+      type_label: "Investimento",
+      type_badge: "badge-success",
+      filename: stmt.filename,
+      period_start: stmt.period_start,
+      period_end: stmt.period_end,
+      total_transactions: stmt.total_transactions || 0,
+      inserted_at: stmt.inserted_at,
+      status: stmt.status,
+      link: "/transactions?tab=investments"
+    }
   end
 
   @impl true
@@ -89,7 +162,225 @@ defmodule GranaWeb.UploadLive do
     {:noreply, assign(socket, :statement_type, type)}
   end
 
+  # Upload category selection (banking vs investment)
+
+  def handle_event("select_upload_category", %{"category" => "banking"}, socket) do
+    socket =
+      socket
+      |> assign(:upload_category, "banking")
+      |> assign(:bank, nil)
+      |> assign(:statement_type, nil)
+      |> assign(:investment_provider, nil)
+      |> assign(:selected_institution, nil)
+      |> cancel_all_uploads()
+      |> allow_upload(:statements,
+        accept: ~w(.csv .pdf),
+        max_entries: 12,
+        max_file_size: 5_000_000
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("select_upload_category", %{"category" => "investment"}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    institutions = Investments.list_institutions(user_id)
+
+    socket =
+      socket
+      |> assign(:upload_category, "investment")
+      |> assign(:bank, nil)
+      |> assign(:statement_type, nil)
+      |> assign(:investment_provider, nil)
+      |> assign(:selected_institution, nil)
+      |> assign(:investment_institutions, institutions)
+      |> cancel_all_uploads()
+      |> allow_upload(:statements,
+        accept: ~w(.xlsx .xls .pdf),
+        max_entries: 12,
+        max_file_size: 5_000_000
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("select_investment_provider", %{"provider" => "b3"}, socket) do
+    socket =
+      socket
+      |> assign(:investment_provider, "b3")
+      |> assign(:selected_institution, nil)
+      |> assign(:show_new_institution, false)
+      |> cancel_all_uploads()
+      |> allow_upload(:statements,
+        accept: ~w(.xlsx .xls .pdf),
+        max_entries: 12,
+        max_file_size: 5_000_000
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("select_investment_provider", %{"provider" => "other"}, socket) do
+    socket =
+      socket
+      |> assign(:investment_provider, "other")
+      |> assign(:selected_institution, nil)
+      |> cancel_all_uploads()
+      |> allow_upload(:statements,
+        accept: ~w(.csv .pdf),
+        max_entries: 12,
+        max_file_size: 5_000_000
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("select_institution", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    institution = Investments.get_institution!(String.to_integer(id), user_id)
+
+    socket =
+      socket
+      |> assign(:selected_institution, institution)
+      |> assign(:show_new_institution, false)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle_new_institution", _params, socket) do
+    {:noreply, assign(socket, :show_new_institution, !socket.assigns.show_new_institution)}
+  end
+
+  def handle_event("save_institution", %{"name" => name}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    case Investments.create_institution(%{name: String.trim(name), user_id: user_id}) do
+      {:ok, institution} ->
+        institutions = Investments.list_institutions(user_id)
+
+        socket =
+          socket
+          |> assign(:investment_institutions, institutions)
+          |> assign(:selected_institution, institution)
+          |> assign(:show_new_institution, false)
+          |> put_flash(:info, "Instituição \"#{institution.name}\" criada")
+
+        {:noreply, socket}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Erro ao criar instituição")}
+    end
+  end
+
   def handle_event("upload", _params, socket) do
+    case socket.assigns.upload_category do
+      "investment" -> handle_investment_upload(socket)
+      _ -> handle_banking_upload(socket)
+    end
+  end
+
+  def handle_event("dismiss_api_alert", _params, socket) do
+    {:noreply, assign(socket, :show_api_key_alert, false)}
+  end
+
+  def handle_event("cancel-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :statements, ref)}
+  end
+
+  # Statement management events
+
+  def handle_event("toggle_select", %{"id" => composite_id}, socket) do
+    selected = socket.assigns.selected_ids
+
+    selected =
+      if MapSet.member?(selected, composite_id),
+        do: MapSet.delete(selected, composite_id),
+        else: MapSet.put(selected, composite_id)
+
+    {:noreply, assign(socket, :selected_ids, selected)}
+  end
+
+  def handle_event("toggle_all", _params, socket) do
+    all_ids = MapSet.new(socket.assigns.stmt_list, & &1.composite_id)
+
+    selected =
+      if MapSet.equal?(socket.assigns.selected_ids, all_ids),
+        do: MapSet.new(),
+        else: all_ids
+
+    {:noreply, assign(socket, :selected_ids, selected)}
+  end
+
+  def handle_event("confirm_delete", %{"id" => composite_id}, socket) do
+    stmt = Enum.find(socket.assigns.stmt_list, &(&1.composite_id == composite_id))
+    {:noreply, assign(socket, :delete_target, {:single, stmt})}
+  end
+
+  def handle_event("confirm_bulk_delete", _params, socket) do
+    count = MapSet.size(socket.assigns.selected_ids)
+
+    case count do
+      0 -> {:noreply, socket}
+      _ -> {:noreply, assign(socket, :delete_target, {:bulk, count})}
+    end
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    {:noreply, assign(socket, :delete_target, nil)}
+  end
+
+  def handle_event("delete", _params, socket) do
+    case socket.assigns.delete_target do
+      {:single, stmt} ->
+        delete_by_composite(stmt)
+
+        socket
+        |> assign(:delete_target, nil)
+        |> put_flash(:info, "Extrato removido com sucesso")
+        |> reload_statements()
+
+      {:bulk, _count} ->
+        selected = MapSet.to_list(socket.assigns.selected_ids)
+
+        {bank_ids, inv_ids} = split_composite_ids(selected)
+
+        if bank_ids != [], do: Banking.delete_statements(bank_ids)
+        if inv_ids != [], do: Investments.delete_statements(inv_ids)
+
+        total = length(bank_ids) + length(inv_ids)
+
+        socket
+        |> assign(:delete_target, nil)
+        |> assign(:selected_ids, MapSet.new())
+        |> put_flash(:info, "#{total} extrato(s) removido(s)")
+        |> reload_statements()
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  defp delete_by_composite(%{source: "banking", raw_id: id}) do
+    stmt = Grana.Repo.get!(Grana.Banking.BankStatement, id)
+    Banking.delete_statement(stmt)
+  end
+
+  defp delete_by_composite(%{source: "investment", raw_id: id}) do
+    stmt = Grana.Repo.get!(Grana.Investments.Statement, id)
+    Investments.delete_statement(stmt)
+  end
+
+  defp split_composite_ids(ids) do
+    Enum.reduce(ids, {[], []}, fn id, {banks, invs} ->
+      case id do
+        "bank_" <> raw -> {[String.to_integer(raw) | banks], invs}
+        "inv_" <> raw -> {banks, [String.to_integer(raw) | invs]}
+        _ -> {banks, invs}
+      end
+    end)
+  end
+
+  defp handle_banking_upload(socket) do
     %{current_scope: scope} = socket.assigns
     bank = socket.assigns.bank
     statement_type = socket.assigns.statement_type
@@ -126,85 +417,40 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
-  def handle_event("dismiss_api_alert", _params, socket) do
-    {:noreply, assign(socket, :show_api_key_alert, false)}
-  end
+  defp handle_investment_upload(socket) do
+    %{current_scope: scope} = socket.assigns
 
-  def handle_event("cancel-upload", %{"ref" => ref}, socket) do
-    {:noreply, cancel_upload(socket, :statements, ref)}
-  end
-
-  # Statement management events
-
-  def handle_event("toggle_select", %{"id" => id}, socket) do
-    id = String.to_integer(id)
-
-    selected =
-      case MapSet.member?(socket.assigns.selected_ids, id) do
-        true -> MapSet.delete(socket.assigns.selected_ids, id)
-        false -> MapSet.put(socket.assigns.selected_ids, id)
+    institution_slug =
+      case socket.assigns.investment_provider do
+        "b3" -> "b3"
+        _ -> socket.assigns.selected_institution.slug
       end
 
-    {:noreply, assign(socket, :selected_ids, selected)}
-  end
+    has_pdf =
+      Enum.any?(socket.assigns.uploads.statements.entries, fn entry ->
+        String.ends_with?(String.downcase(entry.client_name), ".pdf")
+      end)
 
-  def handle_event("toggle_all", _params, socket) do
-    all_ids = MapSet.new(socket.assigns.stmt_list, & &1.id)
+    if has_pdf do
+      case Grana.Accounts.get_user_ai_config(scope.user.id) do
+        {:error, :no_api_key} ->
+          {:noreply, assign(socket, :show_api_key_alert, true)}
 
-    selected =
-      case MapSet.equal?(socket.assigns.selected_ids, all_ids) do
-        true -> MapSet.new()
-        false -> all_ids
+        {:ok, _config} ->
+          socket = assign(socket, :processing, true)
+          send(self(), {:process_investment_uploads, institution_slug, scope.user.id})
+          {:noreply, socket}
       end
-
-    {:noreply, assign(socket, :selected_ids, selected)}
-  end
-
-  def handle_event("confirm_delete", %{"id" => id}, socket) do
-    stmt = Enum.find(socket.assigns.stmt_list, &(&1.id == String.to_integer(id)))
-    {:noreply, assign(socket, :delete_target, {:single, stmt})}
-  end
-
-  def handle_event("confirm_bulk_delete", _params, socket) do
-    count = MapSet.size(socket.assigns.selected_ids)
-
-    case count do
-      0 -> {:noreply, socket}
-      _ -> {:noreply, assign(socket, :delete_target, {:bulk, count})}
-    end
-  end
-
-  def handle_event("cancel_delete", _params, socket) do
-    {:noreply, assign(socket, :delete_target, nil)}
-  end
-
-  def handle_event("delete", _params, socket) do
-    case socket.assigns.delete_target do
-      {:single, stmt} ->
-        {:ok, _} = Banking.delete_statement(stmt)
-
-        socket
-        |> assign(:delete_target, nil)
-        |> put_flash(:info, "Extrato removido com sucesso")
-        |> reload_statements()
-
-      {:bulk, _count} ->
-        ids = MapSet.to_list(socket.assigns.selected_ids)
-        Banking.delete_statements(ids)
-
-        socket
-        |> assign(:delete_target, nil)
-        |> assign(:selected_ids, MapSet.new())
-        |> put_flash(:info, "#{length(ids)} extrato(s) removido(s)")
-        |> reload_statements()
-
-      _ ->
-        {:noreply, socket}
+    else
+      socket = assign(socket, :processing, true)
+      send(self(), {:process_investment_uploads, institution_slug, scope.user.id})
+      {:noreply, socket}
     end
   end
 
   defp reload_statements(socket) do
-    {:noreply, push_patch(socket, to: ~p"/upload?tab=historico&page=#{socket.assigns.page}")}
+    source = Map.get(socket.assigns, :history_filter, "all")
+    {:noreply, push_patch(socket, to: "/upload?tab=historico&page=#{socket.assigns.page}&source=#{source}")}
   end
 
   @impl true
@@ -237,6 +483,46 @@ defmodule GranaWeb.UploadLive do
     {:noreply,
      assign(socket,
        upload_bank: bank,
+       progress_current: 0,
+       progress_total: total,
+       progress_filename: ""
+     )}
+  end
+
+  def handle_info({:process_investment_uploads, institution_slug, user_id}, socket) do
+    file_data =
+      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
+        {:ok, {entry.client_name, File.read!(path)}}
+      end)
+
+    total = length(file_data)
+    parent = self()
+
+    Task.async(fn ->
+      file_data
+      |> Enum.with_index(1)
+      |> Enum.map(fn {{filename, content}, index} ->
+        send(parent, {:processing_file, index, total, filename})
+
+        result =
+          case Investments.StatementProcessor.process(
+                 content,
+                 institution_slug,
+                 user_id,
+                 filename
+               ) do
+            {:ok, r} -> {:ok, filename, r.transaction_count}
+            {:error, reason} -> {:error, filename, reason}
+          end
+
+        send(parent, {:file_done, index, total})
+        result
+      end)
+    end)
+
+    {:noreply,
+     assign(socket,
+       upload_bank: institution_slug,
        progress_current: 0,
        progress_total: total,
        progress_filename: ""
@@ -341,7 +627,7 @@ defmodule GranaWeb.UploadLive do
           <p class="text-xs sm:text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-8">
+        <div role="tablist" class="tabs tabs-border mb-8 -ml-4">
           <button
             role="tab"
             phx-click="switch_tab"
@@ -357,11 +643,52 @@ defmodule GranaWeb.UploadLive do
             class={["tab", @tab == "historico" && "tab-active"]}
           >
             <.icon name="hero-document-text" class="size-4 mr-1" /> Histórico
-            <span :if={@total > 0} class="badge badge-sm ml-1">{@total}</span>
           </button>
         </div>
 
         <div :if={@tab == "upload"}>
+          <%!-- Upload Category Selection --%>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <button
+              phx-click="select_upload_category"
+              phx-value-category="banking"
+              class={[
+                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                (@upload_category == "banking" && "border-primary") || "border-transparent"
+              ]}
+            >
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+                  <.icon name="hero-banknotes" class="size-6 text-info" />
+                </div>
+                <div class="text-left">
+                  <h3 class="font-semibold text-lg">Fatura / Extrato</h3>
+                  <p class="text-sm opacity-70">Conta corrente e cartão de crédito</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              phx-click="select_upload_category"
+              phx-value-category="investment"
+              class={[
+                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                (@upload_category == "investment" && "border-primary") || "border-transparent"
+              ]}
+            >
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+                  <.icon name="hero-chart-bar-square" class="size-6 text-success" />
+                </div>
+                <div class="text-left">
+                  <h3 class="font-semibold text-lg">Investimento</h3>
+                  <p class="text-sm opacity-70">Ações, FIIs, renda fixa e mais</p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div :if={@upload_category == "banking"}>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <button
               phx-click="select-bank"
@@ -566,13 +893,258 @@ defmodule GranaWeb.UploadLive do
               </div>
             </form>
           </div>
+          </div>
+
+          <%!-- Investment Upload Flow --%>
+          <div :if={@upload_category == "investment"}>
+            <%!-- Provider Selection --%>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <button
+                phx-click="select_investment_provider"
+                phx-value-provider="b3"
+                class={[
+                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@investment_provider == "b3" && "border-primary") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-4">
+                  <img
+                    src={~p"/images/b3-logo.png"}
+                    alt="B3"
+                    class="w-12 h-12 rounded-full"
+                  />
+                  <div class="text-left">
+                    <h3 class="font-semibold text-lg">B3</h3>
+                    <p class="text-sm opacity-70">Negociações da bolsa brasileira</p>
+                    <p class="text-xs opacity-50 mt-1">Recomendado: XLSX</p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                phx-click="select_investment_provider"
+                phx-value-provider="other"
+                class={[
+                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@investment_provider == "other" && "border-primary") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+                    <.icon name="hero-building-office-2" class="size-6 opacity-60" />
+                  </div>
+                  <div class="text-left">
+                    <h3 class="font-semibold text-lg">Outra Instituição</h3>
+                    <p class="text-sm opacity-70">Corretora, banco digital, etc.</p>
+                    <p class="text-xs opacity-50 mt-1">Recomendado: PDF</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <%!-- Other Institution Selection --%>
+            <div :if={@investment_provider == "other"} class="mb-8">
+              <h3 class="text-sm font-semibold mb-3 opacity-70">Selecione a instituição</h3>
+              <div class="flex flex-wrap gap-3 mb-4">
+                <button
+                  :for={inst <- @investment_institutions}
+                  :if={!inst.is_system}
+                  phx-click="select_institution"
+                  phx-value-id={inst.id}
+                  class={[
+                    "card bg-base-200 p-4 cursor-pointer transition-all hover:shadow-lg border-2 text-center min-w-[120px]",
+                    (@selected_institution && @selected_institution.id == inst.id && "border-primary") || "border-transparent"
+                  ]}
+                >
+                  <img
+                    :if={inst.logo_path}
+                    src={inst.logo_path}
+                    alt={inst.name}
+                    class="w-10 h-10 rounded-full mx-auto mb-2"
+                  />
+                  <div
+                    :if={!inst.logo_path}
+                    class="w-10 h-10 rounded-full bg-base-300 mx-auto mb-2 flex items-center justify-center"
+                  >
+                    <.icon name="hero-building-office-2" class="size-5 opacity-60" />
+                  </div>
+                  <span class="text-sm font-medium">{inst.name}</span>
+                </button>
+
+                <button
+                  phx-click="toggle_new_institution"
+                  class={[
+                    "card bg-base-200 p-4 cursor-pointer transition-all hover:shadow-lg border-2 border-dashed text-center min-w-[120px]",
+                    (@show_new_institution && "border-primary") || "border-base-content/20"
+                  ]}
+                >
+                  <div class="w-10 h-10 rounded-full bg-base-300 mx-auto mb-2 flex items-center justify-center">
+                    <.icon name="hero-plus" class="size-5 opacity-60" />
+                  </div>
+                  <span class="text-sm font-medium">Adicionar Nova</span>
+                </button>
+              </div>
+
+              <div :if={@show_new_institution} class="card bg-base-200 p-4 mb-4">
+                <form phx-submit="save_institution" class="flex items-center gap-3">
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Nome da instituição (ex: XP, Rico, Inter)"
+                    class="input input-bordered flex-1"
+                    required
+                    autocomplete="off"
+                  />
+                  <button type="submit" class="btn btn-primary btn-sm">
+                    <.icon name="hero-plus" class="size-4" /> Adicionar
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <%!-- Investment Upload Form --%>
+            <div
+              :if={@investment_provider == "b3" || (@investment_provider == "other" && @selected_institution)}
+              class="card bg-base-200 p-8 mb-8"
+            >
+              <div class="text-center mb-4">
+                <p class="text-sm opacity-60">
+                  <%= if @investment_provider == "b3" do %>
+                    Faça upload do extrato de negociação da B3 (XLSX recomendado, ou PDF)
+                  <% else %>
+                    Faça upload do extrato de {@selected_institution.name} (PDF recomendado, ou CSV)
+                  <% end %>
+                </p>
+              </div>
+              <form id="upload-form-inv" phx-submit="upload" phx-change="validate">
+                <div class="flex flex-col items-center gap-4">
+                  <div
+                    id="drop-zone-inv"
+                    class={[
+                      "w-full border-2 border-dashed rounded-xl transition-all duration-200",
+                      (!@processing && "border-base-content/20 hover:border-primary/50") ||
+                        "border-base-content/10 opacity-50 pointer-events-none"
+                    ]}
+                    phx-drop-target={!@processing && @uploads.statements.ref}
+                    phx-hook="DropZone"
+                  >
+                    <.live_file_input
+                      upload={@uploads.statements}
+                      class="hidden"
+                      disabled={@processing}
+                    />
+                    <label
+                      for={!@processing && @uploads.statements.ref}
+                      class={[
+                        "block p-8 text-center",
+                        (!@processing && "cursor-pointer") || "cursor-not-allowed"
+                      ]}
+                    >
+                      <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
+                      <p class="font-medium">
+                        <%= if @investment_provider == "b3" do %>
+                          Arraste arquivos XLSX ou PDF, ou clique para selecionar
+                        <% else %>
+                          Arraste arquivos PDF ou CSV, ou clique para selecionar
+                        <% end %>
+                      </p>
+                      <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
+                    </label>
+                  </div>
+
+                  <div :if={@uploads.statements.entries != []} class="w-full space-y-3">
+                    <div
+                      :for={entry <- @uploads.statements.entries}
+                      class="flex items-center justify-between bg-base-100 rounded-lg p-3"
+                    >
+                      <div class="flex items-center gap-3">
+                        <.icon name="hero-document-text" class="size-5 opacity-60" />
+                        <span class="text-sm font-medium">{entry.client_name}</span>
+                        <span class="badge badge-sm">{format_bytes(entry.client_size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        phx-click="cancel-upload"
+                        phx-value-ref={entry.ref}
+                        class="btn btn-ghost btn-xs btn-circle"
+                      >
+                        <.icon name="hero-x-mark" class="size-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div :for={err <- upload_errors(@uploads.statements)} class="text-error text-sm">
+                    {upload_error_to_string(err)}
+                  </div>
+
+                  <button
+                    :if={!@processing}
+                    type="submit"
+                    class="btn btn-primary btn-wide"
+                    disabled={@uploads.statements.entries == []}
+                  >
+                    Processar
+                  </button>
+
+                  <div
+                    :if={@processing}
+                    id="upload-progress-inv"
+                    phx-hook="ProgressBar"
+                    data-progress={progress_percent(@progress_current, @progress_total)}
+                    data-total={@progress_total}
+                    data-ai={to_string(@progress_ai)}
+                    class="w-full"
+                  >
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-xs"></span>
+                        <span class="text-sm">
+                          <span :if={@progress_filename != ""} class="font-medium">
+                            {@progress_filename}
+                          </span>
+                          <span :if={@progress_total > 1} class="opacity-60">
+                            — {@progress_current}/{@progress_total}
+                          </span>
+                        </span>
+                      </div>
+                      <span data-pct class="text-sm font-mono opacity-60">0%</span>
+                    </div>
+                    <progress class="progress progress-primary w-full" value="0" max="100">
+                    </progress>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
 
         <div :if={@tab == "historico"}>
+          <div class="flex items-center gap-2 mb-4">
+            <.link
+              patch={~p"/upload?tab=historico&source=all"}
+              class={["btn btn-sm", (@history_filter == "all" && "btn-primary") || "btn-ghost"]}
+            >
+              Todos
+            </.link>
+            <.link
+              patch={~p"/upload?tab=historico&source=banking"}
+              class={["btn btn-sm", (@history_filter == "banking" && "btn-primary") || "btn-ghost"]}
+            >
+              <.icon name="hero-banknotes" class="size-3.5" /> Bancários
+            </.link>
+            <.link
+              patch={~p"/upload?tab=historico&source=investment"}
+              class={["btn btn-sm", (@history_filter == "investment" && "btn-primary") || "btn-ghost"]}
+            >
+              <.icon name="hero-chart-bar" class="size-3.5" /> Investimentos
+            </.link>
+            <span class="text-sm opacity-50 ml-2">{@total} extrato(s)</span>
+          </div>
+
           <div :if={@stmt_list == []} class="text-center py-16">
             <.icon name="hero-document-text" class="size-16 mx-auto mb-4 opacity-20" />
             <h2 class="text-xl font-semibold mb-2">Nenhum extrato encontrado</h2>
-            <p class="opacity-60 mb-6">Faça upload de um extrato bancário para começar</p>
+            <p class="opacity-60 mb-6">Faça upload de um extrato para começar</p>
             <button phx-click="switch_tab" phx-value-tab="upload" class="btn btn-primary">
               <.icon name="hero-cloud-arrow-up" class="size-5" /> Upload
             </button>
@@ -603,7 +1175,7 @@ defmodule GranaWeb.UploadLive do
                         phx-click="toggle_all"
                       />
                     </th>
-                    <th>Banco</th>
+                    <th>Origem</th>
                     <th>Tipo</th>
                     <th>Arquivo</th>
                     <th>Período</th>
@@ -618,34 +1190,35 @@ defmodule GranaWeb.UploadLive do
                       <input
                         type="checkbox"
                         class="checkbox checkbox-sm"
-                        checked={MapSet.member?(@selected_ids, stmt.id)}
+                        checked={MapSet.member?(@selected_ids, stmt.composite_id)}
                         phx-click="toggle_select"
-                        phx-value-id={stmt.id}
+                        phx-value-id={stmt.composite_id}
                       />
                     </td>
                     <td>
-                      <.link
-                        navigate={~p"/transactions?statement_id=#{stmt.id}"}
-                        class="flex items-center gap-3"
-                      >
+                      <.link navigate={stmt.link} class="flex items-center gap-3">
                         <img
-                          src={bank_logo(stmt.bank)}
-                          alt={stmt.bank}
+                          :if={stmt.logo}
+                          src={stmt.logo}
+                          alt={stmt.name}
                           class="w-8 h-8 rounded-full"
                         />
-                        <span class="font-medium">{String.capitalize(stmt.bank)}</span>
+                        <div
+                          :if={!stmt.logo}
+                          class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center"
+                        >
+                          <.icon name="hero-building-library" class="size-4 opacity-60" />
+                        </div>
+                        <span class="font-medium">{stmt.name}</span>
                       </.link>
                     </td>
                     <td>
-                      <span class={["badge badge-sm", type_badge_class(stmt.statement_type)]}>
-                        {type_label(stmt.statement_type)}
+                      <span class={["badge badge-sm", stmt.type_badge]}>
+                        {stmt.type_label}
                       </span>
                     </td>
                     <td>
-                      <.link
-                        navigate={~p"/transactions?statement_id=#{stmt.id}"}
-                        class="hover:underline"
-                      >
+                      <.link navigate={stmt.link} class="hover:underline">
                         {stmt.filename}
                       </.link>
                     </td>
@@ -670,7 +1243,7 @@ defmodule GranaWeb.UploadLive do
                     <td>
                       <button
                         phx-click="confirm_delete"
-                        phx-value-id={stmt.id}
+                        phx-value-id={stmt.composite_id}
                         class="btn btn-ghost btn-xs text-error"
                       >
                         <.icon name="hero-trash" class="size-4" />
@@ -684,7 +1257,7 @@ defmodule GranaWeb.UploadLive do
             <div :if={@total_pages > 1} class="flex justify-center gap-2 mt-6">
               <.link
                 :if={@page > 1}
-                patch={~p"/upload?tab=historico&page=#{@page - 1}"}
+                patch={"/upload?tab=historico&source=#{@history_filter}&page=#{@page - 1}"}
                 class="btn btn-sm btn-ghost"
               >
                 <.icon name="hero-chevron-left" class="size-4" />
@@ -692,7 +1265,7 @@ defmodule GranaWeb.UploadLive do
               <span :for={p <- page_range(@page, @total_pages)}>
                 <.link
                   :if={is_integer(p)}
-                  patch={~p"/upload?tab=historico&page=#{p}"}
+                  patch={"/upload?tab=historico&source=#{@history_filter}&page=#{p}"}
                   class={["btn btn-sm", (p == @page && "btn-primary") || "btn-ghost"]}
                 >
                   {p}
@@ -701,7 +1274,7 @@ defmodule GranaWeb.UploadLive do
               </span>
               <.link
                 :if={@page < @total_pages}
-                patch={~p"/upload?tab=historico&page=#{@page + 1}"}
+                patch={"/upload?tab=historico&source=#{@history_filter}&page=#{@page + 1}"}
                 class="btn btn-sm btn-ghost"
               >
                 <.icon name="hero-chevron-right" class="size-4" />
@@ -724,7 +1297,7 @@ defmodule GranaWeb.UploadLive do
               </p>
               <p :if={match?({:bulk, _}, @delete_target)} class="py-4 opacity-70">
                 Tem certeza que deseja remover
-                <span class="font-semibold">{elem(@delete_target, 1)} extratos</span>
+                <span class="font-semibold">{elem(@delete_target, 1)} extrato(s)</span>
                 e todas as transações associadas? Esta ação é permanente.
               </p>
               <div class="modal-action">
@@ -772,6 +1345,12 @@ defmodule GranaWeb.UploadLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp cancel_all_uploads(socket) do
+    Enum.reduce(socket.assigns.uploads.statements.entries, socket, fn entry, acc ->
+      cancel_upload(acc, :statements, entry.ref)
+    end)
   end
 
   defp progress_percent(_current, 0), do: 0

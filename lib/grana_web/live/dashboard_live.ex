@@ -37,12 +37,25 @@ defmodule GranaWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_view_total", _params, socket) do
+    socket =
+      socket
+      |> assign(:view_mode, "total")
+      |> load_data()
+
+    {:noreply, socket}
+  end
+
   def handle_event("select_year", %{"year" => year_str}, socket) do
     year = String.to_integer(year_str)
+
+    view_mode =
+      if socket.assigns.view_mode == "total", do: "year", else: socket.assigns.view_mode
 
     socket =
       socket
       |> assign(:selected_year, year)
+      |> assign(:view_mode, view_mode)
       |> load_data()
 
     {:noreply, socket}
@@ -122,6 +135,7 @@ defmodule GranaWeb.DashboardLive do
       selected_bank: bank,
       selected_type: st_type,
       selected_txn_type: txn_type,
+      available_years: available_years,
       current_scope: scope
     } = socket.assigns
 
@@ -130,20 +144,30 @@ defmodule GranaWeb.DashboardLive do
 
     summary =
       case view_mode do
+        "total" -> Banking.all_time_summary(user_id, opts)
         "year" -> Banking.yearly_summary(user_id, year, opts)
         _ -> Banking.monthly_summary(user_id, year, month, opts)
       end
 
     daily =
       case view_mode do
-        "year" -> []
-        _ -> Banking.daily_spending(user_id, year, month, opts)
+        "month" -> Banking.daily_spending(user_id, year, month, opts)
+        _ -> []
       end
 
-    all_monthly_ie = Banking.monthly_income_expenses(user_id, year, opts)
+    all_monthly_ie =
+      case view_mode do
+        "total" ->
+          available_years
+          |> Enum.flat_map(fn y -> Banking.monthly_income_expenses(user_id, y, opts) end)
+
+        _ ->
+          Banking.monthly_income_expenses(user_id, year, opts)
+      end
 
     monthly_ie =
       case view_mode do
+        "total" -> all_monthly_ie
         "year" -> all_monthly_ie
         _ -> Enum.filter(all_monthly_ie, &(&1.month == month))
       end
@@ -151,6 +175,7 @@ defmodule GranaWeb.DashboardLive do
 
     expense_avg =
       case view_mode do
+        "total" -> calculate_monthly_avg(summary, all_monthly_ie)
         "year" -> calculate_monthly_avg(summary, all_monthly_ie)
         _ -> calculate_daily_avg(summary, daily)
       end
@@ -159,6 +184,7 @@ defmodule GranaWeb.DashboardLive do
 
     installment_opts =
       case view_mode do
+        "total" -> opts
         "year" -> opts
         _ -> opts ++ [year: year, month: month]
       end
@@ -291,12 +317,18 @@ defmodule GranaWeb.DashboardLive do
           <div class="flex flex-wrap items-center gap-1 sm:gap-2">
             <div class="flex gap-1">
               <button
+                phx-click="select_view_total"
+                class={["btn btn-xs sm:btn-sm", (@view_mode == "total" && "btn-primary") || "btn-ghost"]}
+              >
+                Todos
+              </button>
+              <button
                 :for={y <- @available_years}
                 phx-click="select_year"
                 phx-value-year={y}
                 class={[
                   "btn btn-xs sm:btn-sm",
-                  (y == @selected_year && "btn-primary") || "btn-ghost"
+                  (@view_mode != "total" && y == @selected_year && "btn-primary") || "btn-ghost"
                 ]}
               >
                 {y}
@@ -307,7 +339,7 @@ defmodule GranaWeb.DashboardLive do
               <button
                 phx-click="select_month"
                 phx-value-month="all"
-                class={["btn btn-xs", (@view_mode == "year" && "btn-primary") || "btn-ghost"]}
+                class={["btn btn-xs", (@view_mode in ["year", "total"] && "btn-primary") || "btn-ghost"]}
               >
                 Ano
               </button>
@@ -525,7 +557,7 @@ defmodule GranaWeb.DashboardLive do
               class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
             >
               <div class="stat-title text-[10px] sm:text-xs">
-                {if @view_mode == "year", do: "Média Mensal", else: "Média Diária"}
+                {if @view_mode in ["year", "total"], do: "Média Mensal", else: "Média Diária"}
               </div>
               <div class="stat-value text-sm sm:text-lg">
                 {format_currency(@expense_avg)}
@@ -607,7 +639,7 @@ defmodule GranaWeb.DashboardLive do
             </div>
 
             <%!-- Daily Chart (month view) --%>
-            <div :if={@view_mode == "month"} class="card bg-base-200 p-4 sm:p-6">
+            <div :if={@view_mode == "month" and @daily_spending != []} class="card bg-base-200 p-4 sm:p-6">
               <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
               <div
                 id="daily-chart"
@@ -729,12 +761,14 @@ defmodule GranaWeb.DashboardLive do
           </div>
 
           <%!-- Income vs Expenses Chart --%>
-          <%= if @summary.income_count == 0 do %>
+          <%= if @summary.income_count == 0 or @view_mode == "total" do %>
             <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
               <div class="flex items-center justify-center py-8">
                 <div class="text-center">
                   <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
-                  <p class="text-xs opacity-70">Sem receitas no período para comparação</p>
+                  <p class="text-xs opacity-70">
+                    {if @view_mode == "total", do: "Selecione um ano para ver comparação", else: "Sem receitas no período para comparação"}
+                  </p>
                 </div>
               </div>
             </div>
