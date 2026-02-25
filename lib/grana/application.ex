@@ -18,6 +18,11 @@ defmodule Grana.Application do
       GranaWeb.Endpoint
     ]
 
+    # Create ETS table for quote cache (owned by Application, survives process restarts)
+    if :ets.whereis(:quote_cache) == :undefined do
+      :ets.new(:quote_cache, [:set, :public, :named_table])
+    end
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Grana.Supervisor]

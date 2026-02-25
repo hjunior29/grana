@@ -652,11 +652,30 @@ defmodule Grana.Banking do
     build_summary(transactions)
   end
 
+  def all_time_summary(user_id, opts \\ []) do
+    transactions = list_transactions(user_id, opts)
+    build_summary(transactions)
+  end
+
   def yearly_summary(user_id, year, opts \\ []) do
     date_from = Date.new!(year, 1, 1)
     date_to = Date.new!(year, 12, 31)
 
-    base_opts = [date_from: date_from, date_to: date_to] ++ opts
+    base_opts =
+      case Keyword.get(opts, :statement_type) do
+        "fatura" ->
+          stmt_ids =
+            Enum.flat_map(1..12, fn month ->
+              fatura_ids_for_month(user_id, year, month, opts)
+            end)
+            |> Enum.uniq()
+
+          Keyword.delete(opts, :statement_type) ++ [bank_statement_ids: stmt_ids]
+
+        _ ->
+          [date_from: date_from, date_to: date_to] ++ opts
+      end
+
     transactions = list_transactions(user_id, base_opts)
 
     build_summary(transactions)
@@ -782,18 +801,33 @@ defmodule Grana.Banking do
       |> select([c], c.id)
 
     query =
-      Transaction
-      |> where(
-        [t],
-        t.user_id == ^user_id and t.type == "debit" and t.date >= ^date_from and
-          t.date <= ^date_to and t.is_internal_transfer == false
-      )
-      |> where([t], t.category_id not in subquery(investment_cat_ids) or is_nil(t.category_id))
+      case Keyword.get(opts, :statement_type) do
+        "fatura" ->
+          stmt_ids = fatura_ids_for_month(user_id, year, month, opts)
 
-    query = filter_by_bank(query, Keyword.get(opts, :bank), user_id)
-    query = filter_by_statement_type(query, Keyword.get(opts, :statement_type), user_id)
+          Transaction
+          |> where(
+            [t],
+            t.user_id == ^user_id and t.type == "debit" and
+              t.bank_statement_id in ^stmt_ids and t.is_internal_transfer == false
+          )
+
+        _ ->
+          base =
+            Transaction
+            |> where(
+              [t],
+              t.user_id == ^user_id and t.type == "debit" and t.date >= ^date_from and
+                t.date <= ^date_to and t.is_internal_transfer == false
+            )
+
+          base
+          |> filter_by_bank(Keyword.get(opts, :bank), user_id)
+          |> filter_by_statement_type(Keyword.get(opts, :statement_type), user_id)
+      end
 
     query
+    |> where([t], t.category_id not in subquery(investment_cat_ids) or is_nil(t.category_id))
     |> group_by([t], t.date)
     |> select([t], %{date: t.date, total: sum(fragment("ABS(?)", t.amount))})
     |> order_by([t], asc: t.date)
@@ -801,15 +835,46 @@ defmodule Grana.Banking do
   end
 
   def monthly_income_expenses(user_id, year, opts \\ []) do
+    is_fatura = Keyword.get(opts, :statement_type) == "fatura"
+
     list_opts =
-      [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)]
-      |> Keyword.merge(Keyword.take(opts, [:bank, :statement_type, :type]))
+      if is_fatura do
+        # For fatura, get all fatura statements for the year and fetch their transactions
+        stmt_ids =
+          Enum.flat_map(1..12, fn month ->
+            fatura_ids_for_month(user_id, year, month, opts)
+          end)
+          |> Enum.uniq()
+
+        Keyword.take(opts, [:bank, :type]) ++ [bank_statement_ids: stmt_ids]
+      else
+        [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)]
+        |> Keyword.merge(Keyword.take(opts, [:bank, :statement_type, :type]))
+      end
 
     transactions = list_transactions(user_id, list_opts)
 
+    # Build a statement_id -> period_end month map for fatura grouping
+    stmt_month_map =
+      if is_fatura do
+        transactions
+        |> Enum.map(& &1.bank_statement)
+        |> Enum.uniq_by(& &1.id)
+        |> Map.new(fn bs -> {bs.id, bs.period_end.month} end)
+      else
+        %{}
+      end
+
+    group_fn =
+      if is_fatura do
+        fn t -> Map.get(stmt_month_map, t.bank_statement_id, t.date.month) end
+      else
+        fn t -> t.date.month end
+      end
+
     transactions
     |> Enum.reject(& &1.is_internal_transfer)
-    |> Enum.group_by(fn t -> t.date.month end)
+    |> Enum.group_by(group_fn)
     |> Enum.map(fn {month, txns} ->
       relevant = Enum.reject(txns, &bill_payment?/1)
       {refunds, rest} = Enum.split_with(relevant, &refund?/1)

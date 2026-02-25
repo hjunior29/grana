@@ -40,3 +40,6 @@ priv/examples/*
 
 # Environment variables
 .env
+
+# ElixirLS (language server)
+/.elixir_ls/

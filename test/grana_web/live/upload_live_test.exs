@@ -8,8 +8,8 @@ defmodule GranaWeb.UploadLiveTest do
   test "renders upload page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/upload")
     assert html =~ "Upload"
-    assert html =~ "Nubank"
-    assert html =~ "Bradesco"
+    assert html =~ "Fatura / Extrato"
+    assert html =~ "Investimento"
   end
 
   test "shows page description", %{conn: conn} do
@@ -17,8 +17,16 @@ defmodule GranaWeb.UploadLiveTest do
     assert html =~ "Importe e gerencie seus extratos e faturas"
   end
 
+  test "selecting banking category shows bank selection", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/upload")
+    html = view |> element("button[phx-value-category=banking]") |> render_click()
+    assert html =~ "Nubank"
+    assert html =~ "Bradesco"
+  end
+
   test "selecting bank shows type selection", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/upload")
+    view |> element("button[phx-value-category=banking]") |> render_click()
     html = view |> element("button[phx-value-bank=nubank]") |> render_click()
     assert html =~ "Extrato"
     assert html =~ "Fatura"
