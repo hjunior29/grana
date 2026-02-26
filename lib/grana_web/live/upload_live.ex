@@ -105,7 +105,7 @@ defmodule GranaWeb.UploadLive do
 
   defp normalize_inv_stmt(stmt) do
     inst_name = if stmt.institution, do: stmt.institution.name, else: "—"
-    inst_logo = if stmt.institution && stmt.institution.logo_path, do: stmt.institution.logo_path
+    inst_logo = if stmt.institution, do: Grana.Investments.Institution.logo_url(stmt.institution)
 
     %{
       composite_id: "inv_#{stmt.id}",
@@ -909,11 +909,9 @@ defmodule GranaWeb.UploadLive do
                 ]}
               >
                 <div class="flex items-center gap-4">
-                  <img
-                    src={~p"/images/gcb-logo.png"}
-                    alt="GCB"
-                    class="w-12 h-12 rounded-full object-cover"
-                  />
+                  <div class="w-12 h-12 rounded-full overflow-hidden bg-base-300 shrink-0">
+                    <img src={~p"/images/gcb-logo.png"} alt="GCB" />
+                  </div>
                   <div class="text-left">
                     <h3 class="font-semibold text-lg">GCB</h3>
                     <p class="text-sm opacity-70">Notas fiscais, debêntures, precatórios</p>
@@ -1118,12 +1116,9 @@ defmodule GranaWeb.UploadLive do
                     </td>
                     <td>
                       <.link navigate={stmt.link} class="flex items-center gap-3">
-                        <img
-                          :if={stmt.logo}
-                          src={stmt.logo}
-                          alt={stmt.name}
-                          class="w-8 h-8 rounded-full"
-                        />
+                        <div :if={stmt.logo} class="w-8 h-8 rounded-full overflow-hidden bg-base-300 shrink-0">
+                          <img src={stmt.logo} alt={stmt.name} />
+                        </div>
                         <div
                           :if={!stmt.logo}
                           class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center"

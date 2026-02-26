@@ -46,7 +46,7 @@ defmodule Grana.Investments do
 
         inst
 
-      %{logo_path: nil} = inst ->
+      %{logo_path: existing} = inst when existing != logo_path ->
         {:ok, inst} = update_institution(inst, %{logo_path: logo_path})
         inst
 
@@ -388,7 +388,22 @@ defmodule Grana.Investments do
           Decimal.add(acc, Decimal.abs(t.total_amount))
         end)
 
-      proventos = Decimal.add(resgates, dividends)
+      nf_compras =
+        group_txns
+        |> Enum.filter(&(&1.operation == "compra" and &1.asset_type == "nota_fiscal"))
+        |> Enum.reduce(Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.total_amount))
+        end)
+
+      nf_vendas =
+        group_txns
+        |> Enum.filter(&(&1.operation == "venda" and &1.asset_type == "nota_fiscal"))
+        |> Enum.reduce(Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.total_amount))
+        end)
+
+      nf_profit = Decimal.max(Decimal.sub(nf_vendas, nf_compras), Decimal.new(0))
+      proventos = Decimal.add(dividends, nf_profit)
 
       %{key: key, aportes: aportes, resgates: resgates, proventos: proventos}
     end)
@@ -515,6 +530,18 @@ defmodule Grana.Investments do
       |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
       |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
 
+    nf_bought =
+      transactions
+      |> Enum.filter(&(&1.operation == "compra" and &1.asset_type == "nota_fiscal"))
+      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+
+    nf_sold =
+      transactions
+      |> Enum.filter(&(&1.operation == "venda" and &1.asset_type == "nota_fiscal"))
+      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+
+    nf_profit = Decimal.max(Decimal.sub(nf_sold, nf_bought), Decimal.new(0))
+
     total_fees =
       transactions
       |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.fees || Decimal.new(0)) end)
@@ -559,7 +586,7 @@ defmodule Grana.Investments do
                Decimal.compare(sold_qty, 0) == :eq and
                Decimal.compare(net_total, 0) == :gt)
 
-        inst_logo = if first.institution, do: first.institution.logo_path
+        inst_logo = if first.institution, do: Institution.logo_url(first.institution)
 
         %{
           ticker: ticker,
@@ -613,14 +640,14 @@ defmodule Grana.Investments do
       |> Enum.map(fn {ticker, txns} ->
         total = Enum.reduce(txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
         first = List.first(txns)
-        inst_logo = if first.institution, do: first.institution.logo_path
+        inst_logo = if first.institution, do: Institution.logo_url(first.institution)
         %{ticker: ticker, name: first.asset_name, type: first.asset_type,
           institution_logo: inst_logo, total: total, count: length(txns)}
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
-    # Proventos e Resultados: dividends + vendas/liquidações
-    proventos = Decimal.add(dividends, total_sold)
+    # Proventos e Resultados: dividends + lucro líquido de notas fiscais
+    proventos = Decimal.add(dividends, nf_profit)
 
     proventos_by_asset =
       transactions
@@ -634,13 +661,24 @@ defmodule Grana.Investments do
           |> Enum.filter(&(&1.operation == "venda"))
           |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
 
+        bought =
+          txns
+          |> Enum.filter(&(&1.operation == "compra"))
+          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+
         divs =
           txns
           |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
           |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
 
-        total = Decimal.add(sold, divs)
-        inst_logo = if first.institution, do: first.institution.logo_path
+        # Para nota_fiscal: resultado = vendas - compras (lucro); para outros: resultado = vendas
+        resultado =
+          if first.asset_type == "nota_fiscal",
+            do: Decimal.max(Decimal.sub(sold, bought), Decimal.new(0)),
+            else: sold
+
+        total = Decimal.add(resultado, divs)
+        inst_logo = if first.institution, do: Institution.logo_url(first.institution)
 
         %{ticker: ticker, name: first.asset_name, type: first.asset_type,
           institution_logo: inst_logo, total: total, count: length(txns)}
