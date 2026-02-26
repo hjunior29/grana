@@ -157,8 +157,8 @@ defmodule GranaWeb.InvestmentsLive do
 
     socket
     |> assign(:summary, summary)
-    |> assign(:period_dividends, period_summary.dividends)
-    |> assign(:period_dividend_by_asset, period_summary.dividend_by_asset)
+    |> assign(:period_proventos, period_summary.proventos)
+    |> assign(:period_proventos_by_asset, period_summary.proventos_by_asset)
     |> assign(:activity, activity)
   end
 
@@ -311,12 +311,9 @@ defmodule GranaWeb.InvestmentsLive do
 
             <%!-- Proventos (period) --%>
             <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all">
-              <div class="stat-title text-[10px] sm:text-xs">Proventos</div>
-              <div class={[
-                "stat-value text-sm sm:text-lg",
-                if(Decimal.compare(@period_dividends, 0) == :gt, do: "text-success", else: "")
-              ]}>
-                {format_currency(@period_dividends)}
+              <div class="stat-title text-[10px] sm:text-xs">Proventos e Resultados</div>
+              <div class="stat-value text-success text-sm sm:text-lg">
+                {format_currency(@period_proventos)}
               </div>
               <div class="stat-desc text-[10px] sm:text-xs">{period_label(@view_mode, @selected_year, @selected_month)}</div>
             </div>
@@ -348,7 +345,7 @@ defmodule GranaWeb.InvestmentsLive do
             </div>
           </div>
 
-          <%!-- Charts Row 1: Carteira por Ativo + Proventos --%>
+          <%!-- Charts Row 1: Carteira por Ativo + Proventos (recebimentos) --%>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
             <%!-- Individual Asset Donut --%>
             <%= if @summary.by_asset_individual != [] do %>
@@ -392,10 +389,10 @@ defmodule GranaWeb.InvestmentsLive do
             <% end %>
 
             <%!-- Proventos Bar Chart --%>
-            <%= if has_dividends?(@activity) do %>
+            <%= if has_proventos?(@activity) do %>
               <div class="card bg-base-200 p-4 sm:p-6">
                 <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
-                  Proventos
+                  Proventos e Resultados
                 </h3>
                 <div
                   id="inv-proventos-chart"
@@ -406,7 +403,7 @@ defmodule GranaWeb.InvestmentsLive do
                   <div class="space-y-1">
                     <div
                       :for={a <- @activity}
-                      :if={Decimal.compare(a.dividends, 0) == :gt}
+                      :if={Decimal.compare(a.proventos, 0) == :gt}
                       class="flex items-center gap-2"
                     >
                       <span class="text-xs w-10 opacity-60">
@@ -415,11 +412,11 @@ defmodule GranaWeb.InvestmentsLive do
                       <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
                         <div
                           class="bg-success h-full rounded-full transition-all"
-                          style={"width: #{activity_bar_width(a.dividends, @activity, :dividends)}%"}
+                          style={"width: #{activity_bar_width(a.proventos, @activity, :proventos)}%"}
                         />
                       </div>
-                      <span class="text-xs font-medium w-20 text-right">
-                        {format_currency(a.dividends)}
+                      <span class="text-xs font-medium w-20 text-right text-success">
+                        {format_currency(a.proventos)}
                       </span>
                     </div>
                   </div>
@@ -428,7 +425,7 @@ defmodule GranaWeb.InvestmentsLive do
             <% else %>
               <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
                 <div class="text-center">
-                  <h3 class="font-semibold text-sm sm:text-base mb-2">Proventos</h3>
+                  <h3 class="font-semibold text-sm sm:text-base mb-2">Proventos e Resultados</h3>
                   <p class="text-xs opacity-70">Sem proventos no período</p>
                 </div>
               </div>
@@ -542,8 +539,8 @@ defmodule GranaWeb.InvestmentsLive do
                     <td>
                       <div class="flex items-center gap-2">
                         <img
-                          :if={h.logo_url}
-                          src={h.logo_url}
+                          :if={h.institution_logo || h.logo_url}
+                          src={h.institution_logo || h.logo_url}
                           alt=""
                           class="w-6 h-6 rounded-full hidden sm:block"
                         />
@@ -577,10 +574,10 @@ defmodule GranaWeb.InvestmentsLive do
             </div>
           </div>
 
-          <%!-- Dividend Payers (period-filtered) --%>
-          <div :if={@period_dividend_by_asset != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+          <%!-- Maiores Pagadores de Proventos (period-filtered) --%>
+          <div :if={@period_proventos_by_asset != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
-              Maiores Pagadores de Proventos
+              Proventos e Resultados por Ativo
               <span class="text-xs font-normal opacity-50 ml-2">{period_label(@view_mode, @selected_year, @selected_month)}</span>
             </h3>
             <div class="overflow-x-auto">
@@ -589,27 +586,33 @@ defmodule GranaWeb.InvestmentsLive do
                   <tr>
                     <th>Ativo</th>
                     <th>Tipo</th>
-                    <th class="text-right">Proventos</th>
-                    <th class="text-right">Pagamentos</th>
+                    <th class="text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr :for={d <- Enum.take(@period_dividend_by_asset, 15)} class="hover">
+                  <tr :for={r <- Enum.take(@period_proventos_by_asset, 20)} class="hover">
                     <td>
-                      <div class="flex flex-col">
-                        <span class="font-medium text-sm">{d.ticker || "—"}</span>
-                        <span class="text-xs opacity-50 truncate max-w-xs">{d.name}</span>
+                      <div class="flex items-center gap-2">
+                        <img
+                          :if={r.institution_logo}
+                          src={r.institution_logo}
+                          alt=""
+                          class="w-6 h-6 rounded-full hidden sm:block"
+                        />
+                        <div class="flex flex-col">
+                          <span class="font-medium text-sm">{r.ticker || r.name}</span>
+                          <span :if={r.ticker && r.ticker != r.name} class="text-xs opacity-50 truncate max-w-xs">{r.name}</span>
+                        </div>
                       </div>
                     </td>
                     <td>
-                      <span class={["badge badge-sm", asset_type_badge(d.type)]}>
-                        {asset_type_label(d.type)}
+                      <span class={["badge badge-sm", asset_type_badge(r.type)]}>
+                        {asset_type_label(r.type)}
                       </span>
                     </td>
                     <td class="text-right text-sm font-medium text-success">
-                      {format_currency(d.total)}
+                      {format_currency(r.total)}
                     </td>
-                    <td class="text-right text-sm opacity-60">{d.count}x</td>
                   </tr>
                 </tbody>
               </table>
@@ -628,8 +631,8 @@ defmodule GranaWeb.InvestmentsLive do
     |> Enum.filter(& &1.is_active)
   end
 
-  defp has_dividends?(activity) do
-    Enum.any?(activity, fn a -> Decimal.compare(a.dividends, 0) == :gt end)
+  defp has_proventos?(activity) do
+    Enum.any?(activity, fn a -> Decimal.compare(a.proventos, 0) == :gt end)
   end
 
   defp has_aportes?(activity) do
@@ -644,6 +647,10 @@ defmodule GranaWeb.InvestmentsLive do
       |> Enum.map(&Map.get(&1, field))
       |> Enum.max(fn -> Decimal.new(1) end)
 
+    bar_pct(value, max_val)
+  end
+
+  defp bar_pct(value, max_val) do
     case Decimal.compare(max_val, 0) do
       :gt ->
         value
@@ -748,6 +755,13 @@ defmodule GranaWeb.InvestmentsLive do
   defp asset_type_label("tesouro"), do: "Tesouro"
   defp asset_type_label("cripto"), do: "Cripto"
   defp asset_type_label("fundo"), do: "Fundo"
+  defp asset_type_label("nota_fiscal"), do: "Nota Fiscal"
+  defp asset_type_label("debenture"), do: "Debênture"
+  defp asset_type_label("precatorio"), do: "Precatório"
+  defp asset_type_label("recebiveis"), do: "Receb. Judiciais"
+  defp asset_type_label("cri"), do: "CRI"
+  defp asset_type_label("cra"), do: "CRA"
+  defp asset_type_label("op_estruturada"), do: "Op. Estruturada"
   defp asset_type_label("outro"), do: "Outro"
   defp asset_type_label(_), do: "—"
 
@@ -760,6 +774,13 @@ defmodule GranaWeb.InvestmentsLive do
     "tesouro" => "#EF4444",
     "cripto" => "#F97316",
     "fundo" => "#EC4899",
+    "nota_fiscal" => "#14B8A6",
+    "debenture" => "#6366F1",
+    "precatorio" => "#D946EF",
+    "recebiveis" => "#0EA5E9",
+    "cri" => "#84CC16",
+    "cra" => "#22D3EE",
+    "op_estruturada" => "#A855F7",
     "outro" => "#9CA3AF"
   }
 
@@ -776,8 +797,18 @@ defmodule GranaWeb.InvestmentsLive do
   defp asset_type_badge("acao"), do: "badge-info"
   defp asset_type_badge("fii"), do: "badge-secondary"
   defp asset_type_badge("etf"), do: "badge-accent"
+  defp asset_type_badge("bdr"), do: "badge-warning"
   defp asset_type_badge("renda_fixa"), do: "badge-success"
   defp asset_type_badge("tesouro"), do: "badge-error"
+  defp asset_type_badge("cripto"), do: "badge-warning"
+  defp asset_type_badge("fundo"), do: "badge-primary"
+  defp asset_type_badge("nota_fiscal"), do: "badge-accent"
+  defp asset_type_badge("debenture"), do: "badge-info"
+  defp asset_type_badge("precatorio"), do: "badge-secondary"
+  defp asset_type_badge("recebiveis"), do: "badge-primary"
+  defp asset_type_badge("cri"), do: "badge-success"
+  defp asset_type_badge("cra"), do: "badge-success"
+  defp asset_type_badge("op_estruturada"), do: "badge-secondary"
   defp asset_type_badge(_), do: "badge-ghost"
 
   # --- Chart Data ---
@@ -785,7 +816,7 @@ defmodule GranaWeb.InvestmentsLive do
   defp proventos_chart_data(activity, view_mode, month) do
     activity
     |> Enum.map(fn a ->
-      %{date: format_activity_label(a.key, view_mode, month), value: Decimal.to_float(a.dividends), url: ""}
+      %{date: format_activity_label(a.key, view_mode, month), value: Decimal.to_float(a.proventos), url: ""}
     end)
     |> Jason.encode!()
   end

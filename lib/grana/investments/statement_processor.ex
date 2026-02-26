@@ -1,6 +1,6 @@
 defmodule Grana.Investments.StatementProcessor do
   alias Grana.Investments
-  alias Grana.Investments.Parsers.{B3Xlsx, GenericCsv, PdfExtractor}
+  alias Grana.Investments.Parsers.{B3Xlsx, GcbCsv, GenericCsv, PdfExtractor}
 
   def process(file_content, institution_slug, user_id, filename) do
     institution = resolve_institution(institution_slug, user_id)
@@ -23,6 +23,10 @@ defmodule Grana.Investments.StatementProcessor do
     Investments.ensure_b3_institution(user_id)
   end
 
+  defp resolve_institution("gcb", user_id) do
+    Investments.ensure_gcb_institution(user_id)
+  end
+
   defp resolve_institution(slug, user_id) do
     case Investments.get_institution_by_slug(slug, user_id) do
       nil -> raise "Instituição não encontrada: #{slug}"
@@ -33,17 +37,7 @@ defmodule Grana.Investments.StatementProcessor do
   defp do_process(transactions, institution, user_id, filename) do
     {period_start, period_end} = get_period(transactions)
 
-    {:ok, statement} =
-      Investments.create_statement(%{
-        filename: filename,
-        user_id: user_id,
-        institution_id: institution.id,
-        period_start: period_start,
-        period_end: period_end,
-        status: "processing"
-      })
-
-    entries =
+    pre_entries =
       Enum.map(transactions, fn txn ->
         %{
           date: txn.date,
@@ -58,19 +52,36 @@ defmodule Grana.Investments.StatementProcessor do
           identifier: txn[:identifier],
           original_description: txn[:original_description],
           user_id: user_id,
-          statement_id: statement.id,
           institution_id: institution.id
         }
       end)
 
-    {count, _} = Investments.bulk_insert_transactions(entries)
+    new_entries = deduplicate(pre_entries, user_id)
 
-    Investments.update_statement(statement, %{
-      status: "completed",
-      total_transactions: count
-    })
+    if new_entries == [] do
+      {:error, "Todas as transações deste arquivo já foram importadas anteriormente"}
+    else
+      {:ok, statement} =
+        Investments.create_statement(%{
+          filename: filename,
+          user_id: user_id,
+          institution_id: institution.id,
+          period_start: period_start,
+          period_end: period_end,
+          status: "processing"
+        })
 
-    {:ok, %{statement_id: statement.id, transaction_count: count}}
+      entries = Enum.map(new_entries, &Map.put(&1, :statement_id, statement.id))
+
+      {count, _} = Investments.bulk_insert_transactions(entries)
+
+      Investments.update_statement(statement, %{
+        status: "completed",
+        total_transactions: count
+      })
+
+      {:ok, %{statement_id: statement.id, transaction_count: count}}
+    end
   end
 
   defp parse_file(file_content, "b3", filename, _user_id) do
@@ -78,6 +89,14 @@ defmodule Grana.Investments.StatementProcessor do
       :xlsx -> B3Xlsx.parse(file_content)
       :pdf -> PdfExtractor.extract(file_content, "b3")
       :csv -> {:error, "B3 não suporta CSV. Use XLSX (recomendado) ou PDF."}
+    end
+  end
+
+  defp parse_file(file_content, "gcb", filename, _user_id) do
+    case file_type(filename) do
+      :csv -> GcbCsv.parse(file_content)
+      :pdf -> PdfExtractor.extract(file_content, "gcb")
+      :xlsx -> {:error, "GCB não suporta XLSX. Use CSV (recomendado) ou PDF."}
     end
   end
 
@@ -96,6 +115,39 @@ defmodule Grana.Investments.StatementProcessor do
       ".xls" -> :xlsx
       _ -> :csv
     end
+  end
+
+  defp deduplicate(entries, user_id) do
+    dates = Enum.map(entries, & &1.date)
+    date_from = Enum.min(dates, Date)
+    date_to = Enum.max(dates, Date)
+
+    existing =
+      Investments.list_transactions(user_id, date_from: date_from, date_to: date_to)
+
+    existing_freq =
+      existing
+      |> Enum.map(&fingerprint/1)
+      |> Enum.frequencies()
+
+    {kept, _freq} =
+      Enum.reduce(entries, {[], existing_freq}, fn entry, {acc, freq} ->
+        key = fingerprint(entry)
+        count = Map.get(freq, key, 0)
+
+        if count > 0 do
+          {acc, Map.put(freq, key, count - 1)}
+        else
+          {[entry | acc], freq}
+        end
+      end)
+
+    Enum.reverse(kept)
+  end
+
+  defp fingerprint(%{date: date, asset_name: name, operation: op, total_amount: amount}) do
+    normalized_amount = amount |> Decimal.round(2) |> Decimal.to_string(:normal)
+    {date, String.downcase(String.trim(name)), op, normalized_amount}
   end
 
   defp get_period(transactions) do

@@ -2,7 +2,7 @@ defmodule Grana.Investments.Transaction do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @asset_types ~w(acao fii etf bdr renda_fixa tesouro cripto fundo outro)
+  @asset_types ~w(acao fii etf bdr renda_fixa tesouro cripto fundo nota_fiscal debenture precatorio recebiveis cri cra op_estruturada outro)
   @operations ~w(compra venda dividendo jcp rendimento amortizacao taxa outro)
 
   schema "investment_transactions" do

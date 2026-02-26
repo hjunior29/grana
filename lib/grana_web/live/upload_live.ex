@@ -17,9 +17,6 @@ defmodule GranaWeb.UploadLive do
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> assign(:investment_provider, nil)
-      |> assign(:selected_institution, nil)
-      |> assign(:investment_institutions, [])
-      |> assign(:show_new_institution, false)
       |> assign(:processing, false)
       |> assign(:results, [])
       |> assign(:progress_current, 0)
@@ -124,7 +121,7 @@ defmodule GranaWeb.UploadLive do
       total_transactions: stmt.total_transactions || 0,
       inserted_at: stmt.inserted_at,
       status: stmt.status,
-      link: "/transactions?tab=investments"
+      link: "/transactions?tab=investments&statement_id=#{stmt.id}"
     }
   end
 
@@ -133,8 +130,16 @@ defmodule GranaWeb.UploadLive do
     {:noreply, socket}
   end
 
+  def handle_event("switch_tab", _params, %{assigns: %{processing: true}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, push_patch(socket, to: ~p"/upload?tab=#{tab}")}
+  end
+
+  def handle_event("select-bank", _params, %{assigns: %{processing: true}} = socket) do
+    {:noreply, socket}
   end
 
   def handle_event("select-bank", %{"bank" => bank}, socket) do
@@ -158,11 +163,19 @@ defmodule GranaWeb.UploadLive do
     {:noreply, socket}
   end
 
+  def handle_event("select-type", _params, %{assigns: %{processing: true}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("select-type", %{"type" => type}, socket) do
     {:noreply, assign(socket, :statement_type, type)}
   end
 
   # Upload category selection (banking vs investment)
+
+  def handle_event("select_upload_category", _params, %{assigns: %{processing: true}} = socket) do
+    {:noreply, socket}
+  end
 
   def handle_event("select_upload_category", %{"category" => "banking"}, socket) do
     socket =
@@ -171,7 +184,6 @@ defmodule GranaWeb.UploadLive do
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> assign(:investment_provider, nil)
-      |> assign(:selected_institution, nil)
       |> cancel_all_uploads()
       |> allow_upload(:statements,
         accept: ~w(.csv .pdf),
@@ -183,24 +195,23 @@ defmodule GranaWeb.UploadLive do
   end
 
   def handle_event("select_upload_category", %{"category" => "investment"}, socket) do
-    user_id = socket.assigns.current_scope.user.id
-    institutions = Investments.list_institutions(user_id)
-
     socket =
       socket
       |> assign(:upload_category, "investment")
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> assign(:investment_provider, nil)
-      |> assign(:selected_institution, nil)
-      |> assign(:investment_institutions, institutions)
       |> cancel_all_uploads()
       |> allow_upload(:statements,
-        accept: ~w(.xlsx .xls .pdf),
+        accept: ~w(.xlsx .xls .pdf .csv),
         max_entries: 12,
         max_file_size: 5_000_000
       )
 
+    {:noreply, socket}
+  end
+
+  def handle_event("select_investment_provider", _params, %{assigns: %{processing: true}} = socket) do
     {:noreply, socket}
   end
 
@@ -208,8 +219,6 @@ defmodule GranaWeb.UploadLive do
     socket =
       socket
       |> assign(:investment_provider, "b3")
-      |> assign(:selected_institution, nil)
-      |> assign(:show_new_institution, false)
       |> cancel_all_uploads()
       |> allow_upload(:statements,
         accept: ~w(.xlsx .xls .pdf),
@@ -220,11 +229,10 @@ defmodule GranaWeb.UploadLive do
     {:noreply, socket}
   end
 
-  def handle_event("select_investment_provider", %{"provider" => "other"}, socket) do
+  def handle_event("select_investment_provider", %{"provider" => "gcb"}, socket) do
     socket =
       socket
-      |> assign(:investment_provider, "other")
-      |> assign(:selected_institution, nil)
+      |> assign(:investment_provider, "gcb")
       |> cancel_all_uploads()
       |> allow_upload(:statements,
         accept: ~w(.csv .pdf),
@@ -233,43 +241,6 @@ defmodule GranaWeb.UploadLive do
       )
 
     {:noreply, socket}
-  end
-
-  def handle_event("select_institution", %{"id" => id}, socket) do
-    user_id = socket.assigns.current_scope.user.id
-    institution = Investments.get_institution!(String.to_integer(id), user_id)
-
-    socket =
-      socket
-      |> assign(:selected_institution, institution)
-      |> assign(:show_new_institution, false)
-
-    {:noreply, socket}
-  end
-
-  def handle_event("toggle_new_institution", _params, socket) do
-    {:noreply, assign(socket, :show_new_institution, !socket.assigns.show_new_institution)}
-  end
-
-  def handle_event("save_institution", %{"name" => name}, socket) do
-    user_id = socket.assigns.current_scope.user.id
-
-    case Investments.create_institution(%{name: String.trim(name), user_id: user_id}) do
-      {:ok, institution} ->
-        institutions = Investments.list_institutions(user_id)
-
-        socket =
-          socket
-          |> assign(:investment_institutions, institutions)
-          |> assign(:selected_institution, institution)
-          |> assign(:show_new_institution, false)
-          |> put_flash(:info, "Instituição \"#{institution.name}\" criada")
-
-        {:noreply, socket}
-
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Erro ao criar instituição")}
-    end
   end
 
   def handle_event("upload", _params, socket) do
@@ -420,11 +391,7 @@ defmodule GranaWeb.UploadLive do
   defp handle_investment_upload(socket) do
     %{current_scope: scope} = socket.assigns
 
-    institution_slug =
-      case socket.assigns.investment_provider do
-        "b3" -> "b3"
-        _ -> socket.assigns.selected_institution.slug
-      end
+    institution_slug = socket.assigns.investment_provider
 
     has_pdf =
       Enum.any?(socket.assigns.uploads.statements.entries, fn entry ->
@@ -627,12 +594,13 @@ defmodule GranaWeb.UploadLive do
           <p class="text-xs sm:text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-8 -ml-4">
+        <div role="tablist" class="tabs tabs-border mb-8 -ml-2">
           <button
             role="tab"
             phx-click="switch_tab"
             phx-value-tab="upload"
-            class={["tab", @tab == "upload" && "tab-active"]}
+            disabled={@processing}
+            class={["tab", @tab == "upload" && "tab-active", @processing && "opacity-50 cursor-not-allowed"]}
           >
             <.icon name="hero-cloud-arrow-up" class="size-4 mr-1" /> Upload
           </button>
@@ -640,18 +608,21 @@ defmodule GranaWeb.UploadLive do
             role="tab"
             phx-click="switch_tab"
             phx-value-tab="historico"
-            class={["tab", @tab == "historico" && "tab-active"]}
+            disabled={@processing}
+            class={["tab", @tab == "historico" && "tab-active", @processing && "opacity-50 cursor-not-allowed"]}
           >
             <.icon name="hero-document-text" class="size-4 mr-1" /> Histórico
+            <span :if={@total > 0} class="badge badge-sm badge-ghost ml-1"><%= @total %></span>
           </button>
         </div>
 
         <div :if={@tab == "upload"}>
           <%!-- Upload Category Selection --%>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div class={["grid grid-cols-1 md:grid-cols-2 gap-4 mb-8", @processing && "opacity-50 pointer-events-none"]}>
             <button
               phx-click="select_upload_category"
               phx-value-category="banking"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@upload_category == "banking" && "border-primary") || "border-transparent"
@@ -671,6 +642,7 @@ defmodule GranaWeb.UploadLive do
             <button
               phx-click="select_upload_category"
               phx-value-category="investment"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@upload_category == "investment" && "border-primary") || "border-transparent"
@@ -689,10 +661,11 @@ defmodule GranaWeb.UploadLive do
           </div>
 
           <div :if={@upload_category == "banking"}>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div class={["grid grid-cols-1 md:grid-cols-3 gap-6 mb-8", @processing && "opacity-50 pointer-events-none"]}>
             <button
               phx-click="select-bank"
               phx-value-bank="nubank"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@bank == "nubank" && "border-primary") || "border-transparent"
@@ -714,6 +687,7 @@ defmodule GranaWeb.UploadLive do
             <button
               phx-click="select-bank"
               phx-value-bank="bradesco"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@bank == "bradesco" && "border-primary") || "border-transparent"
@@ -735,6 +709,7 @@ defmodule GranaWeb.UploadLive do
             <button
               phx-click="select-bank"
               phx-value-bank="outro"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@bank == "outro" && "border-primary") || "border-transparent"
@@ -752,10 +727,11 @@ defmodule GranaWeb.UploadLive do
             </button>
           </div>
 
-          <div :if={@bank} class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div :if={@bank} class={["grid grid-cols-1 md:grid-cols-2 gap-4 mb-8", @processing && "opacity-50 pointer-events-none"]}>
             <button
               phx-click="select-type"
               phx-value-type="extrato"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@statement_type == "extrato" && "border-info") || "border-transparent"
@@ -776,6 +752,7 @@ defmodule GranaWeb.UploadLive do
             <button
               phx-click="select-type"
               phx-value-type="fatura"
+              disabled={@processing}
               class={[
                 "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
                 (@statement_type == "fatura" && "border-warning") || "border-transparent"
@@ -898,10 +875,11 @@ defmodule GranaWeb.UploadLive do
           <%!-- Investment Upload Flow --%>
           <div :if={@upload_category == "investment"}>
             <%!-- Provider Selection --%>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class={["grid grid-cols-1 md:grid-cols-2 gap-6 mb-8", @processing && "opacity-50 pointer-events-none"]}>
               <button
                 phx-click="select_investment_provider"
                 phx-value-provider="b3"
+                disabled={@processing}
                 class={[
                   "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
                   (@investment_provider == "b3" && "border-primary") || "border-transparent"
@@ -923,88 +901,31 @@ defmodule GranaWeb.UploadLive do
 
               <button
                 phx-click="select_investment_provider"
-                phx-value-provider="other"
+                phx-value-provider="gcb"
+                disabled={@processing}
                 class={[
                   "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                  (@investment_provider == "other" && "border-primary") || "border-transparent"
+                  (@investment_provider == "gcb" && "border-primary") || "border-transparent"
                 ]}
               >
                 <div class="flex items-center gap-4">
-                  <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
-                    <.icon name="hero-building-office-2" class="size-6 opacity-60" />
-                  </div>
+                  <img
+                    src={~p"/images/gcb-logo.png"}
+                    alt="GCB"
+                    class="w-12 h-12 rounded-full object-cover"
+                  />
                   <div class="text-left">
-                    <h3 class="font-semibold text-lg">Outra Instituição</h3>
-                    <p class="text-sm opacity-70">Corretora, banco digital, etc.</p>
-                    <p class="text-xs opacity-50 mt-1">Recomendado: PDF</p>
+                    <h3 class="font-semibold text-lg">GCB</h3>
+                    <p class="text-sm opacity-70">Notas fiscais, debêntures, precatórios</p>
+                    <p class="text-xs opacity-50 mt-1">Recomendado: CSV</p>
                   </div>
                 </div>
               </button>
             </div>
 
-            <%!-- Other Institution Selection --%>
-            <div :if={@investment_provider == "other"} class="mb-8">
-              <h3 class="text-sm font-semibold mb-3 opacity-70">Selecione a instituição</h3>
-              <div class="flex flex-wrap gap-3 mb-4">
-                <button
-                  :for={inst <- @investment_institutions}
-                  :if={!inst.is_system}
-                  phx-click="select_institution"
-                  phx-value-id={inst.id}
-                  class={[
-                    "card bg-base-200 p-4 cursor-pointer transition-all hover:shadow-lg border-2 text-center min-w-[120px]",
-                    (@selected_institution && @selected_institution.id == inst.id && "border-primary") || "border-transparent"
-                  ]}
-                >
-                  <img
-                    :if={inst.logo_path}
-                    src={inst.logo_path}
-                    alt={inst.name}
-                    class="w-10 h-10 rounded-full mx-auto mb-2"
-                  />
-                  <div
-                    :if={!inst.logo_path}
-                    class="w-10 h-10 rounded-full bg-base-300 mx-auto mb-2 flex items-center justify-center"
-                  >
-                    <.icon name="hero-building-office-2" class="size-5 opacity-60" />
-                  </div>
-                  <span class="text-sm font-medium">{inst.name}</span>
-                </button>
-
-                <button
-                  phx-click="toggle_new_institution"
-                  class={[
-                    "card bg-base-200 p-4 cursor-pointer transition-all hover:shadow-lg border-2 border-dashed text-center min-w-[120px]",
-                    (@show_new_institution && "border-primary") || "border-base-content/20"
-                  ]}
-                >
-                  <div class="w-10 h-10 rounded-full bg-base-300 mx-auto mb-2 flex items-center justify-center">
-                    <.icon name="hero-plus" class="size-5 opacity-60" />
-                  </div>
-                  <span class="text-sm font-medium">Adicionar Nova</span>
-                </button>
-              </div>
-
-              <div :if={@show_new_institution} class="card bg-base-200 p-4 mb-4">
-                <form phx-submit="save_institution" class="flex items-center gap-3">
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Nome da instituição (ex: XP, Rico, Inter)"
-                    class="input input-bordered flex-1"
-                    required
-                    autocomplete="off"
-                  />
-                  <button type="submit" class="btn btn-primary btn-sm">
-                    <.icon name="hero-plus" class="size-4" /> Adicionar
-                  </button>
-                </form>
-              </div>
-            </div>
-
             <%!-- Investment Upload Form --%>
             <div
-              :if={@investment_provider == "b3" || (@investment_provider == "other" && @selected_institution)}
+              :if={@investment_provider in ["b3", "gcb"]}
               class="card bg-base-200 p-8 mb-8"
             >
               <div class="text-center mb-4">
@@ -1012,7 +933,7 @@ defmodule GranaWeb.UploadLive do
                   <%= if @investment_provider == "b3" do %>
                     Faça upload do extrato de negociação da B3 (XLSX recomendado, ou PDF)
                   <% else %>
-                    Faça upload do extrato de {@selected_institution.name} (PDF recomendado, ou CSV)
+                    Faça upload do extrato da GCB (CSV recomendado, ou PDF)
                   <% end %>
                 </p>
               </div>
@@ -1045,7 +966,7 @@ defmodule GranaWeb.UploadLive do
                         <%= if @investment_provider == "b3" do %>
                           Arraste arquivos XLSX ou PDF, ou clique para selecionar
                         <% else %>
-                          Arraste arquivos PDF ou CSV, ou clique para selecionar
+                          Arraste arquivos CSV ou PDF, ou clique para selecionar
                         <% end %>
                       </p>
                       <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
