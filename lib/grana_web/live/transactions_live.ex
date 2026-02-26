@@ -152,7 +152,7 @@ defmodule GranaWeb.TransactionsLive do
         id ->
           stmt = Investments.get_statement!(String.to_integer(id), user_id)
           inst_name = if stmt.institution, do: stmt.institution.name, else: "—"
-          inst_logo = if stmt.institution && stmt.institution.logo_path, do: stmt.institution.logo_path
+          inst_logo = if stmt.institution, do: Grana.Investments.Institution.logo_url(stmt.institution)
           %{id: stmt.id, filename: stmt.filename, institution: inst_name, logo: inst_logo}
       end
 
@@ -713,8 +713,11 @@ defmodule GranaWeb.TransactionsLive do
               </div>
             </td>
             <td>
-              <span class="badge badge-sm badge-ghost">
-                {txn.bank_statement && String.capitalize(txn.bank_statement.bank)}
+              <span :if={txn.bank_statement} class="badge badge-sm badge-ghost gap-1">
+                <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
+                  <img src={bank_logo(txn.bank_statement.bank)} alt="" />
+                </div>
+                {String.capitalize(txn.bank_statement.bank)}
               </span>
             </td>
             <td>
@@ -799,12 +802,9 @@ defmodule GranaWeb.TransactionsLive do
     ~H"""
     <div :if={@inv_statement_info} class="mb-4">
       <div class="badge badge-lg gap-2">
-        <img
-          :if={@inv_statement_info.logo}
-          src={@inv_statement_info.logo}
-          alt=""
-          class="w-4 h-4 rounded-full"
-        />
+        <div :if={@inv_statement_info.logo} class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
+          <img src={@inv_statement_info.logo} alt="" />
+        </div>
         <.icon :if={!@inv_statement_info.logo} name="hero-chart-bar" class="size-4" />
         {@inv_statement_info.institution}: {@inv_statement_info.filename}
         <button phx-click="clear_statement" class="btn btn-ghost btn-xs btn-circle">
@@ -986,7 +986,10 @@ defmodule GranaWeb.TransactionsLive do
               </span>
             </td>
             <td>
-              <span :if={txn.institution} class="badge badge-sm badge-ghost">
+              <span :if={txn.institution} class="badge badge-sm badge-ghost gap-1">
+                <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
+                  <img src={Grana.Investments.Institution.logo_url(txn.institution)} alt="" />
+                </div>
                 {txn.institution.name}
               </span>
             </td>
@@ -1057,11 +1060,11 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   defp format_inv_amount(txn) do
-    prefix = if txn.operation in ~w(dividendo jcp rendimento amortizacao), do: "+ ", else: "- "
+    prefix = if txn.operation in ~w(venda dividendo jcp rendimento amortizacao), do: "+ ", else: "- "
     "#{prefix}R$ #{format_br_number(txn.total_amount)}"
   end
 
-  defp inv_amount_color(operation) when operation in ~w(dividendo jcp rendimento amortizacao),
+  defp inv_amount_color(operation) when operation in ~w(venda dividendo jcp rendimento amortizacao),
     do: "text-success"
 
   defp inv_amount_color(_), do: "text-error"

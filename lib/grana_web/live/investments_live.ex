@@ -10,7 +10,11 @@ defmodule GranaWeb.InvestmentsLive do
 
     available_years = Investments.available_years(user_id)
     months = Investments.available_months(user_id)
-    institutions = Investments.available_institutions(user_id)
+    alias Grana.Investments.Institution
+
+    institutions =
+      Investments.available_institutions(user_id)
+      |> Enum.map(fn inst -> %{inst | logo_path: Institution.logo_url(inst)} end)
     asset_types = Investments.available_asset_types(user_id)
     operations = Investments.available_operations(user_id)
 
@@ -155,8 +159,36 @@ defmodule GranaWeb.InvestmentsLive do
 
     activity = Investments.period_activity(user_id, view_mode, year, month, filter_opts)
 
+    # Replace NF holdings with period-based saldo (NF is short-term, not cumulative)
+    nf_period_holding =
+      period_summary.holdings
+      |> Enum.find(fn h -> h.type == "nota_fiscal" and h.is_active end)
+
+    merged_holdings =
+      summary.holdings
+      |> Enum.reject(fn h -> h.type == "nota_fiscal" end)
+      |> then(fn holdings ->
+        case nf_period_holding do
+          %{} = h ->
+            enriched = Map.merge(h, %{
+              current_price: nil,
+              current_value: h.net_total,
+              gain_loss: Decimal.new(0),
+              gain_loss_pct: Decimal.new(0),
+              change_pct: nil,
+              logo_url: nil
+            })
+            holdings ++ [enriched]
+
+          nil ->
+            holdings
+        end
+      end)
+
+    merged_summary = %{summary | holdings: merged_holdings}
+
     socket
-    |> assign(:summary, summary)
+    |> assign(:summary, merged_summary)
     |> assign(:period_proventos, period_summary.proventos)
     |> assign(:period_proventos_by_asset, period_summary.proventos_by_asset)
     |> assign(:activity, activity)
@@ -244,12 +276,9 @@ defmodule GranaWeb.InvestmentsLive do
                     "btn-ghost"
                 ]}
               >
-                <img
-                  :if={inst.logo_path}
-                  src={inst.logo_path}
-                  alt=""
-                  class="w-4 h-4 rounded-full"
-                />
+                <div :if={inst.logo_path} class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
+                  <img src={inst.logo_path} alt=""/>
+                </div>
                 <span class="hidden sm:inline">{inst.name}</span>
               </button>
             </div>
@@ -538,12 +567,9 @@ defmodule GranaWeb.InvestmentsLive do
                   <tr :for={h <- Enum.take(active_holdings(@summary.holdings), 30)} class="hover">
                     <td>
                       <div class="flex items-center gap-2">
-                        <img
-                          :if={h.institution_logo || h.logo_url}
-                          src={h.institution_logo || h.logo_url}
-                          alt=""
-                          class="w-6 h-6 rounded-full hidden sm:block"
-                        />
+                        <div :if={h.institution_logo || h.logo_url} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0 hidden sm:block">
+                          <img src={h.institution_logo || h.logo_url} alt=""/>
+                        </div>
                         <div class="flex flex-col">
                           <span class="font-medium text-sm">{h.ticker || "—"}</span>
                           <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">{h.name}</span>
@@ -593,12 +619,9 @@ defmodule GranaWeb.InvestmentsLive do
                   <tr :for={r <- Enum.take(@period_proventos_by_asset, 20)} class="hover">
                     <td>
                       <div class="flex items-center gap-2">
-                        <img
-                          :if={r.institution_logo}
-                          src={r.institution_logo}
-                          alt=""
-                          class="w-6 h-6 rounded-full hidden sm:block"
-                        />
+                        <div :if={r.institution_logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0 hidden sm:block">
+                          <img src={r.institution_logo} alt="" />
+                        </div>
                         <div class="flex flex-col">
                           <span class="font-medium text-sm">{r.ticker || r.name}</span>
                           <span :if={r.ticker && r.ticker != r.name} class="text-xs opacity-50 truncate max-w-xs">{r.name}</span>

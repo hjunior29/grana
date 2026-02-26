@@ -16,6 +16,22 @@ defmodule Grana.Investments.Institution do
     timestamps(type: :utc_datetime)
   end
 
+  @doc """
+  Derives logo path from institution slug, checking for a static file.
+  Falls back to the logo_path stored in the database.
+  """
+  def logo_url(%__MODULE__{slug: slug, logo_path: db_path}) do
+    static_path = "/images/#{slug}-logo.png"
+
+    if File.exists?(Path.join(:code.priv_dir(:grana), "static#{static_path}")) do
+      static_path
+    else
+      db_path
+    end
+  end
+
+  def logo_url(_), do: nil
+
   def changeset(institution, attrs) do
     institution
     |> cast(attrs, [:name, :slug, :logo_path, :is_system, :user_id])
