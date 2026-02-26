@@ -42,9 +42,6 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
             </li>
             <li>
-              <.link navigate={~p"/investments"} class="text-sm">Investimentos</.link>
-            </li>
-            <li>
               <.link navigate={~p"/analysis"} class="text-sm">Análise</.link>
             </li>
             <li>
@@ -95,11 +92,6 @@ defmodule GranaWeb.Layouts do
               <li>
                 <.link navigate={~p"/dashboard"}>
                   <.icon name="hero-chart-bar" class="size-4" /> Dashboard
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/investments"}>
-                  <.icon name="hero-chart-bar-square" class="size-4" /> Investimentos
                 </.link>
               </li>
               <li>
