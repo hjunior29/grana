@@ -445,8 +445,7 @@ defmodule GranaWeb.TransactionsLive do
             phx-value-tab="banking"
             class={["tab", @tab == "banking" && "tab-active"]}
           >
-            <.icon name="hero-banknotes" class="size-4 mr-1" /> Bancárias
-            <span :if={@total > 0} class="badge badge-sm ml-1">{@total}</span>
+            <.icon name="hero-banknotes" class="size-4 mr-1" /> Bancário
           </button>
           <button
             role="tab"
@@ -455,7 +454,6 @@ defmodule GranaWeb.TransactionsLive do
             class={["tab", @tab == "investments" && "tab-active"]}
           >
             <.icon name="hero-chart-bar" class="size-4 mr-1" /> Investimentos
-            <span :if={@inv_total > 0} class="badge badge-sm ml-1">{@inv_total}</span>
           </button>
         </div>
 

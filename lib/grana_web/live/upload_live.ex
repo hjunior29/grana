@@ -650,7 +650,7 @@ defmodule GranaWeb.UploadLive do
             >
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
-                  <.icon name="hero-chart-bar-square" class="size-6 text-success" />
+                  <.icon name="hero-chart-bar" class="size-6 text-success" />
                 </div>
                 <div class="text-left">
                   <h3 class="font-semibold text-lg">Investimento</h3>

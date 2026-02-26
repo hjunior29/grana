@@ -55,7 +55,6 @@ defmodule GranaWeb.Router do
     live_session :require_authenticated_user,
       on_mount: [{GranaWeb.UserAuth, :require_authenticated}] do
       live "/dashboard", DashboardLive, :index
-      live "/investments", InvestmentsLive, :index
       live "/upload", UploadLive, :index
       live "/transactions", TransactionsLive, :index
       live "/analysis", AnalysisLive, :index

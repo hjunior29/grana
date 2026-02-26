@@ -370,7 +370,7 @@ defmodule GranaWeb.InvestmentsLive do
         </div>
 
         <div :if={@summary.transaction_count == 0} class="text-center py-10 sm:py-16">
-          <.icon name="hero-chart-bar-square" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
+          <.icon name="hero-chart-bar" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
           <h2 class="text-lg sm:text-xl font-semibold mb-2">Nenhum investimento encontrado</h2>
           <p class="opacity-60 mb-6 text-sm">
             Faça upload de um extrato de investimentos para começar
