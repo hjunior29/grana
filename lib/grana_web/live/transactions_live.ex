@@ -133,7 +133,7 @@ defmodule GranaWeb.TransactionsLive do
     opts =
       [page: page, per_page: @per_page]
       |> maybe_add_opt(:search, inv_filters.search)
-      |> maybe_add_opt(:operation, inv_filters.operation)
+      |> maybe_add_opt(:operation, parse_operations(inv_filters.operation))
       |> maybe_add_opt(:asset_type, inv_filters.asset_type)
       |> maybe_add_opt(:institution_id, inv_filters.institution_id)
       |> maybe_add_opt(:date_from, parse_date(inv_filters.date_from))
@@ -380,6 +380,11 @@ defmodule GranaWeb.TransactionsLive do
   defp maybe_add_opt(opts, _key, ""), do: opts
   defp maybe_add_opt(opts, _key, "all"), do: opts
   defp maybe_add_opt(opts, key, val), do: Keyword.put(opts, key, val)
+
+  defp parse_operations(op) when is_binary(op) do
+    if String.contains?(op, ","), do: String.split(op, ","), else: op
+  end
+  defp parse_operations(op), do: op
 
   defp parse_date(""), do: nil
   defp parse_date(nil), do: nil
