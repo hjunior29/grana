@@ -212,6 +212,7 @@ defmodule Grana.Investments do
 
   defp filter_by_operation(query, nil), do: query
   defp filter_by_operation(query, "all"), do: query
+  defp filter_by_operation(query, ops) when is_list(ops), do: where(query, [t], t.operation in ^ops)
   defp filter_by_operation(query, op), do: where(query, [t], t.operation == ^op)
 
   defp filter_by_date_range(query, nil, nil), do: query

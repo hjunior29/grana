@@ -813,14 +813,12 @@ defmodule GranaWeb.DashboardLive do
           </div>
 
           <%!-- Income vs Expenses Chart --%>
-          <%= if @summary.income_count == 0 or @view_mode == "total" do %>
+          <%= if @summary.income_count == 0 do %>
             <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
               <div class="flex items-center justify-center py-8">
                 <div class="text-center">
                   <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
-                  <p class="text-xs opacity-70">
-                    {if @view_mode == "total", do: "Selecione um ano para ver comparação", else: "Sem receitas no período para comparação"}
-                  </p>
+                  <p class="text-xs opacity-70">Sem receitas no período para comparação</p>
                 </div>
               </div>
             </div>
@@ -862,7 +860,7 @@ defmodule GranaWeb.DashboardLive do
               <div
                 id="income-expenses-chart"
                 phx-hook="IncomeExpensesChart"
-                data-monthly={monthly_ie_chart_data(assigns)}
+                data-monthly={ie_chart_data(assigns)}
               >
               </div>
             </div>
@@ -1189,7 +1187,27 @@ defmodule GranaWeb.DashboardLive do
     |> Jason.encode!()
   end
 
-  defp monthly_ie_chart_data(assigns) do
+  defp ie_chart_data(%{view_mode: "total"} = assigns) do
+    assigns.monthly_ie
+    |> Enum.group_by(& &1.year)
+    |> Enum.sort_by(fn {year, _} -> year end)
+    |> Enum.map(fn {year, items} ->
+      income = Enum.reduce(items, Decimal.new(0), fn i, acc -> Decimal.add(acc, i.income) end)
+      expenses = Enum.reduce(items, Decimal.new(0), fn i, acc -> Decimal.add(acc, i.expenses) end)
+      base = %{date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)}
+
+      %{
+        label: to_string(year),
+        income: Decimal.to_float(income),
+        expenses: Decimal.to_float(expenses),
+        income_url: transactions_url(assigns, Map.put(base, :type, "credit")),
+        expenses_url: transactions_url(assigns, Map.put(base, :type, "debit"))
+      }
+    end)
+    |> Jason.encode!()
+  end
+
+  defp ie_chart_data(assigns) do
     assigns.monthly_ie
     |> Enum.map(fn item ->
       date_from = Date.new!(assigns.selected_year, item.month, 1)

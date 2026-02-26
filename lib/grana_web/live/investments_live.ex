@@ -41,6 +41,7 @@ defmodule GranaWeb.InvestmentsLive do
       |> assign(:view_mode, view_mode)
       |> assign(:selected_institution, "all")
       |> assign(:selected_asset_type, "all")
+      |> assign(:excluded_assets, MapSet.new())
       |> load_data()
 
     {:ok, socket}
@@ -107,6 +108,64 @@ defmodule GranaWeb.InvestmentsLive do
       |> load_data()
 
     {:noreply, socket}
+  end
+
+  def handle_event("chart-navigate", %{"url" => url}, socket) do
+    {:noreply, push_navigate(socket, to: url)}
+  end
+
+  def handle_event("toggle-asset", %{"id" => id}, socket) do
+    excluded = toggle_set(socket.assigns.excluded_assets, id)
+    {:noreply, assign(socket, :excluded_assets, excluded)}
+  end
+
+  def handle_event("reset-assets", _params, socket) do
+    {:noreply, assign(socket, :excluded_assets, MapSet.new())}
+  end
+
+  defp inv_transactions_url(assigns, extra) do
+    %{
+      selected_year: year,
+      selected_month: month,
+      view_mode: mode,
+      selected_institution: inst,
+      selected_asset_type: asset_type
+    } = assigns
+
+    {skip_dates, extra} = Map.pop(extra, :skip_dates, false)
+
+    base =
+      %{tab: "investments"}
+      |> then(fn p -> if inst != "all", do: Map.put(p, :institution_id, inst), else: p end)
+      |> then(fn p -> if asset_type != "all", do: Map.put(p, :asset_type, asset_type), else: p end)
+
+    base =
+      if skip_dates do
+        base
+      else
+        case mode do
+          "month" ->
+            date_from = Date.new!(year, month, 1)
+            date_to = Date.end_of_month(date_from)
+            Map.merge(base, %{date_from: date_from, date_to: date_to})
+
+          "year" ->
+            Map.merge(base, %{date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)})
+
+          "total" ->
+            base
+        end
+      end
+
+    params = Map.merge(base, extra)
+
+    qs =
+      params
+      |> Enum.reject(fn {_k, v} -> v in [nil, "", "all"] end)
+      |> Enum.map(fn {k, v} -> "#{k}=#{URI.encode_www_form(to_string(v))}" end)
+      |> Enum.join("&")
+
+    "/transactions?#{qs}"
   end
 
   defp load_data(socket) do
@@ -325,7 +384,10 @@ defmodule GranaWeb.InvestmentsLive do
           <%!-- Stat Cards --%>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
             <%!-- Patrimônio Atual (cumulative) --%>
-            <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all">
+            <.link
+              navigate={inv_transactions_url(assigns, %{skip_dates: true})}
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+            >
               <div class="stat-title text-[10px] sm:text-xs">
                 Patrimônio Atual
                 <span :if={@summary.has_quotes} class="ml-1 text-success">●</span>
@@ -336,28 +398,37 @@ defmodule GranaWeb.InvestmentsLive do
               <div class="stat-desc text-[10px] sm:text-xs">
                 {if @summary.has_quotes, do: "preço ao vivo", else: "custo-base"}
               </div>
-            </div>
+            </.link>
 
             <%!-- Proventos (period) --%>
-            <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all">
+            <.link
+              navigate={inv_transactions_url(assigns, %{operation: "dividendo,jcp,rendimento,amortizacao"})}
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+            >
               <div class="stat-title text-[10px] sm:text-xs">Proventos e Resultados</div>
               <div class="stat-value text-success text-sm sm:text-lg">
                 {format_currency(@period_proventos)}
               </div>
               <div class="stat-desc text-[10px] sm:text-xs">{period_label(@view_mode, @selected_year, @selected_month)}</div>
-            </div>
+            </.link>
 
             <%!-- Total Investido (cumulative) --%>
-            <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all">
+            <.link
+              navigate={inv_transactions_url(assigns, %{operation: "compra", skip_dates: true})}
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+            >
               <div class="stat-title text-[10px] sm:text-xs">Total Investido</div>
               <div class="stat-value text-sm sm:text-lg opacity-70">
                 {format_currency(@summary.net_position)}
               </div>
               <div class="stat-desc text-[10px] sm:text-xs">acumulado</div>
-            </div>
+            </.link>
 
             <%!-- Rentabilidade (cumulative) --%>
-            <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all">
+            <.link
+              navigate={inv_transactions_url(assigns, %{skip_dates: true})}
+              class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+            >
               <div class="stat-title text-[10px] sm:text-xs">Rentabilidade</div>
               <div class={[
                 "stat-value text-sm sm:text-lg",
@@ -371,7 +442,7 @@ defmodule GranaWeb.InvestmentsLive do
               ]}>
                 {format_pct(@summary.total_gain_loss_pct)}
               </div>
-            </div>
+            </.link>
           </div>
 
           <%!-- Charts Row 1: Carteira por Ativo + Proventos (recebimentos) --%>
@@ -385,19 +456,32 @@ defmodule GranaWeb.InvestmentsLive do
                 <div
                   id="inv-asset-chart"
                   phx-hook="CategoryChart"
-                  data-categories={individual_asset_chart_data(@summary.by_asset_individual, @summary.market_value)}
+                  data-categories={individual_asset_chart_data(assigns)}
                 >
                   <div class="space-y-2">
                     <div
                       :for={h <- Enum.take(@summary.by_asset_individual, 10)}
-                      class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 hover:bg-base-300 transition-all"
+                      phx-click="toggle-asset"
+                      phx-value-id={h.ticker || h.name}
+                      class={[
+                        "flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 transition-all cursor-pointer select-none",
+                        if(MapSet.member?(@excluded_assets, h.ticker || h.name),
+                          do: "opacity-30",
+                          else: "hover:bg-base-300"
+                        )
+                      ]}
                     >
                       <div
                         class="w-3 h-3 rounded-full shrink-0"
                         style={"background-color: #{asset_type_color(h.type)}"}
                       />
                       <div class="flex-1 min-w-0">
-                        <span class="text-sm font-medium">{h.ticker || h.name}</span>
+                        <span class={[
+                          "text-sm font-medium",
+                          MapSet.member?(@excluded_assets, h.ticker || h.name) && "line-through"
+                        ]}>
+                          {h.ticker || h.name}
+                        </span>
                         <span class="text-xs opacity-40 ml-1">{asset_type_label(h.type)}</span>
                       </div>
                       <span class="text-sm font-medium">{format_currency(h.current_value)}</span>
@@ -405,6 +489,13 @@ defmodule GranaWeb.InvestmentsLive do
                         {percentage(h.current_value, @summary.market_value)}%
                       </span>
                     </div>
+                    <button
+                      :if={MapSet.size(@excluded_assets) > 0}
+                      phx-click="reset-assets"
+                      class="text-xs text-primary hover:underline mt-1 cursor-pointer"
+                    >
+                      Mostrar todos
+                    </button>
                   </div>
                 </div>
               </div>
@@ -426,7 +517,7 @@ defmodule GranaWeb.InvestmentsLive do
                 <div
                   id="inv-proventos-chart"
                   phx-hook="DailyChart"
-                  data-daily={proventos_chart_data(@activity, @view_mode, @selected_month)}
+                  data-daily={proventos_chart_data(assigns)}
                   data-bar-fill="fill-success"
                 >
                   <div class="space-y-1">
@@ -472,7 +563,7 @@ defmodule GranaWeb.InvestmentsLive do
                 <div
                   id="inv-type-chart"
                   phx-hook="CategoryChart"
-                  data-categories={asset_type_chart_data(@summary.by_asset_type, @summary.market_value)}
+                  data-categories={asset_type_chart_data(assigns)}
                 >
                   <div class="space-y-3">
                     <div
@@ -512,7 +603,7 @@ defmodule GranaWeb.InvestmentsLive do
                 <div
                   id="inv-aportes-chart"
                   phx-hook="DailyChart"
-                  data-daily={aportes_chart_data(@activity, @view_mode, @selected_month)}
+                  data-daily={aportes_chart_data(assigns)}
                   data-bar-fill="fill-info"
                 >
                   <div class="space-y-1">
@@ -564,7 +655,12 @@ defmodule GranaWeb.InvestmentsLive do
                   </tr>
                 </thead>
                 <tbody>
-                  <tr :for={h <- Enum.take(active_holdings(@summary.holdings), 30)} class="hover">
+                  <tr
+                    :for={h <- Enum.take(active_holdings(@summary.holdings), 30)}
+                    class="hover cursor-pointer"
+                    phx-click="chart-navigate"
+                    phx-value-url={inv_transactions_url(assigns, %{search: h.ticker || h.name, skip_dates: true})}
+                  >
                     <td>
                       <div class="flex items-center gap-2">
                         <div :if={h.institution_logo || h.logo_url} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
@@ -616,7 +712,12 @@ defmodule GranaWeb.InvestmentsLive do
                   </tr>
                 </thead>
                 <tbody>
-                  <tr :for={r <- Enum.take(@period_proventos_by_asset, 20)} class="hover">
+                  <tr
+                    :for={r <- Enum.take(@period_proventos_by_asset, 20)}
+                    class="hover cursor-pointer"
+                    phx-click="chart-navigate"
+                    phx-value-url={inv_transactions_url(assigns, %{search: r.ticker || r.name, operation: "dividendo,jcp,rendimento,amortizacao"})}
+                  >
                     <td>
                       <div class="flex items-center gap-2">
                         <div :if={r.institution_logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
@@ -652,6 +753,10 @@ defmodule GranaWeb.InvestmentsLive do
   defp active_holdings(holdings) do
     holdings
     |> Enum.filter(& &1.is_active)
+  end
+
+  defp toggle_set(set, val) do
+    if MapSet.member?(set, val), do: MapSet.delete(set, val), else: MapSet.put(set, val)
   end
 
   defp has_proventos?(activity) do
@@ -836,49 +941,83 @@ defmodule GranaWeb.InvestmentsLive do
 
   # --- Chart Data ---
 
-  defp proventos_chart_data(activity, view_mode, month) do
-    activity
+  defp activity_date_range(key, assigns) do
+    case assigns.view_mode do
+      "total" ->
+        year = key
+        %{date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)}
+
+      "year" ->
+        month = key
+        date_from = Date.new!(assigns.selected_year, month, 1)
+        %{date_from: date_from, date_to: Date.end_of_month(date_from)}
+
+      "month" ->
+        day = key
+        date = Date.new!(assigns.selected_year, assigns.selected_month, day)
+        %{date_from: date, date_to: date}
+    end
+  end
+
+  defp proventos_chart_data(assigns) do
+    assigns.activity
     |> Enum.map(fn a ->
-      %{date: format_activity_label(a.key, view_mode, month), value: Decimal.to_float(a.proventos), url: ""}
+      range = activity_date_range(a.key, assigns)
+
+      %{
+        date: format_activity_label(a.key, assigns.view_mode, assigns.selected_month),
+        value: Decimal.to_float(a.proventos),
+        url: inv_transactions_url(assigns, Map.put(range, :operation, "dividendo,jcp,rendimento,amortizacao"))
+      }
     end)
     |> Jason.encode!()
   end
 
-  defp aportes_chart_data(activity, view_mode, month) do
-    activity
+  defp aportes_chart_data(assigns) do
+    assigns.activity
     |> Enum.map(fn a ->
-      %{date: format_activity_label(a.key, view_mode, month), value: Decimal.to_float(a.aportes), url: ""}
+      range = activity_date_range(a.key, assigns)
+
+      %{
+        date: format_activity_label(a.key, assigns.view_mode, assigns.selected_month),
+        value: Decimal.to_float(a.aportes),
+        url: inv_transactions_url(assigns, Map.put(range, :operation, "compra"))
+      }
     end)
     |> Jason.encode!()
   end
 
-  defp individual_asset_chart_data(by_asset_individual, market_value) do
-    total = Decimal.to_float(market_value)
+  defp individual_asset_chart_data(assigns) do
+    excluded = assigns[:excluded_assets] || MapSet.new()
+    total = Decimal.to_float(assigns.summary.market_value)
 
-    by_asset_individual
+    assigns.summary.by_asset_individual
+    |> Enum.reject(fn h -> MapSet.member?(excluded, h.ticker || h.name) end)
     |> Enum.with_index()
     |> Enum.map(fn {h, idx} ->
+      search = h.ticker || h.name
+
       %{
         name: h.ticker || h.name,
         value: Decimal.to_float(h.current_value),
         color: individual_color(idx),
-        url: ""
+        url: inv_transactions_url(assigns, %{search: search, skip_dates: true})
       }
     end)
     |> then(fn data -> if total > 0, do: data, else: [] end)
     |> Jason.encode!()
   end
 
-  defp asset_type_chart_data(by_asset_type, market_value) do
-    total = Decimal.to_float(market_value)
+  defp asset_type_chart_data(assigns) do
+    total = Decimal.to_float(assigns.summary.market_value)
 
-    by_asset_type
+    assigns.summary.by_asset_type
     |> Enum.map(fn item ->
       %{
         name: asset_type_label(item.asset_type),
         value: Decimal.to_float(item.total),
         color: asset_type_color(item.asset_type),
-        url: ""
+        url: inv_transactions_url(assigns, %{asset_type: item.asset_type, skip_dates: true})
       }
     end)
     |> then(fn data -> if total > 0, do: data, else: [] end)
