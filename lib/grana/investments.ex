@@ -389,22 +389,9 @@ defmodule Grana.Investments do
           Decimal.add(acc, Decimal.abs(t.total_amount))
         end)
 
-      nf_compras =
-        group_txns
-        |> Enum.filter(&(&1.operation == "compra" and &1.asset_type == "nota_fiscal"))
-        |> Enum.reduce(Decimal.new(0), fn t, acc ->
-          Decimal.add(acc, Decimal.abs(t.total_amount))
-        end)
-
-      nf_vendas =
-        group_txns
-        |> Enum.filter(&(&1.operation == "venda" and &1.asset_type == "nota_fiscal"))
-        |> Enum.reduce(Decimal.new(0), fn t, acc ->
-          Decimal.add(acc, Decimal.abs(t.total_amount))
-        end)
-
-      nf_profit = Decimal.max(Decimal.sub(nf_vendas, nf_compras), Decimal.new(0))
-      proventos = Decimal.add(dividends, nf_profit)
+      # Lucro realizado = vendas - compras (mínimo 0)
+      realized_profit = Decimal.max(Decimal.sub(resgates, aportes), Decimal.new(0))
+      proventos = Decimal.add(dividends, realized_profit)
 
       %{key: key, aportes: aportes, resgates: resgates, proventos: proventos}
     end)
@@ -531,18 +518,6 @@ defmodule Grana.Investments do
       |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
       |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
 
-    nf_bought =
-      transactions
-      |> Enum.filter(&(&1.operation == "compra" and &1.asset_type == "nota_fiscal"))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-    nf_sold =
-      transactions
-      |> Enum.filter(&(&1.operation == "venda" and &1.asset_type == "nota_fiscal"))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-    nf_profit = Decimal.max(Decimal.sub(nf_sold, nf_bought), Decimal.new(0))
-
     total_fees =
       transactions
       |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.fees || Decimal.new(0)) end)
@@ -647,9 +622,7 @@ defmodule Grana.Investments do
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
-    # Proventos e Resultados: dividends + lucro líquido de notas fiscais
-    proventos = Decimal.add(dividends, nf_profit)
-
+    # Proventos e Resultados por ativo: dividendos + lucro realizado (vendas - compras)
     proventos_by_asset =
       transactions
       |> Enum.filter(&(&1.operation in ~w(compra venda dividendo jcp rendimento amortizacao)))
@@ -672,13 +645,10 @@ defmodule Grana.Investments do
           |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
           |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
 
-        # Para nota_fiscal: resultado = vendas - compras (lucro); para outros: resultado = vendas
-        resultado =
-          if first.asset_type == "nota_fiscal",
-            do: Decimal.max(Decimal.sub(sold, bought), Decimal.new(0)),
-            else: sold
+        # Lucro realizado = vendas - compras (mínimo 0)
+        realized_profit = Decimal.max(Decimal.sub(sold, bought), Decimal.new(0))
 
-        total = Decimal.add(resultado, divs)
+        total = Decimal.add(realized_profit, divs)
         inst_logo = if first.institution, do: Institution.logo_url(first.institution)
 
         %{ticker: ticker, name: first.asset_name, type: first.asset_type,
@@ -686,6 +656,11 @@ defmodule Grana.Investments do
       end)
       |> Enum.filter(fn %{total: t} -> Decimal.compare(t, 0) == :gt end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+
+    # Proventos e Resultados total: soma dos resultados por ativo (dividendos + lucros realizados)
+    proventos =
+      proventos_by_asset
+      |> Enum.reduce(Decimal.new(0), fn %{total: t}, acc -> Decimal.add(acc, t) end)
 
     %{
       total_bought: total_bought,
