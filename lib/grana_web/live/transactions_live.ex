@@ -994,7 +994,7 @@ defmodule GranaWeb.TransactionsLive do
               </span>
             </td>
             <td>
-              <span class="badge badge-sm badge-outline">
+              <span class="badge badge-sm badge-outline whitespace-nowrap">
                 {asset_type_label(txn.asset_type)}
               </span>
             </td>

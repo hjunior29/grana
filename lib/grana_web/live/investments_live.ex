@@ -283,7 +283,7 @@ defmodule GranaWeb.InvestmentsLive do
               </button>
             </div>
 
-            <div :if={length(@user_asset_types) > 1} class="flex items-center gap-1">
+            <div :if={length(@user_asset_types) > 1} class="flex flex-wrap items-center gap-1">
               <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
               <button
                 phx-click="select_asset_type"
@@ -567,7 +567,7 @@ defmodule GranaWeb.InvestmentsLive do
                   <tr :for={h <- Enum.take(active_holdings(@summary.holdings), 30)} class="hover">
                     <td>
                       <div class="flex items-center gap-2">
-                        <div :if={h.institution_logo || h.logo_url} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0 hidden sm:block">
+                        <div :if={h.institution_logo || h.logo_url} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
                           <img src={h.institution_logo || h.logo_url} alt=""/>
                         </div>
                         <div class="flex flex-col">
@@ -577,7 +577,7 @@ defmodule GranaWeb.InvestmentsLive do
                       </div>
                     </td>
                     <td>
-                      <span class={["badge badge-sm", asset_type_badge(h.type)]}>
+                      <span class={["badge badge-sm whitespace-nowrap", asset_type_badge(h.type)]}>
                         {asset_type_label(h.type)}
                       </span>
                     </td>
@@ -585,7 +585,7 @@ defmodule GranaWeb.InvestmentsLive do
                     <td class="text-right text-sm hidden sm:table-cell">
                       {if h.current_price, do: format_currency(h.current_price), else: "—"}
                     </td>
-                    <td class="text-right text-sm font-medium text-info">
+                    <td class="text-right text-sm font-medium text-info whitespace-nowrap">
                       {format_currency(h.current_value)}
                     </td>
                     <td class="text-right text-sm opacity-60 hidden sm:table-cell">
@@ -619,7 +619,7 @@ defmodule GranaWeb.InvestmentsLive do
                   <tr :for={r <- Enum.take(@period_proventos_by_asset, 20)} class="hover">
                     <td>
                       <div class="flex items-center gap-2">
-                        <div :if={r.institution_logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0 hidden sm:block">
+                        <div :if={r.institution_logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
                           <img src={r.institution_logo} alt="" />
                         </div>
                         <div class="flex flex-col">
@@ -629,11 +629,11 @@ defmodule GranaWeb.InvestmentsLive do
                       </div>
                     </td>
                     <td>
-                      <span class={["badge badge-sm", asset_type_badge(r.type)]}>
+                      <span class={["badge badge-sm whitespace-nowrap", asset_type_badge(r.type)]}>
                         {asset_type_label(r.type)}
                       </span>
                     </td>
-                    <td class="text-right text-sm font-medium text-success">
+                    <td class="text-right text-sm font-medium text-success whitespace-nowrap">
                       {format_currency(r.total)}
                     </td>
                   </tr>
