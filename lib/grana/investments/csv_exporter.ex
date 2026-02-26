@@ -66,6 +66,13 @@ defmodule Grana.Investments.CsvExporter do
   defp asset_type_label("tesouro"), do: "Tesouro"
   defp asset_type_label("cripto"), do: "Cripto"
   defp asset_type_label("fundo"), do: "Fundo"
+  defp asset_type_label("nota_fiscal"), do: "Nota Fiscal"
+  defp asset_type_label("debenture"), do: "Debênture"
+  defp asset_type_label("precatorio"), do: "Precatório"
+  defp asset_type_label("recebiveis"), do: "Receb. Judiciais"
+  defp asset_type_label("cri"), do: "CRI"
+  defp asset_type_label("cra"), do: "CRA"
+  defp asset_type_label("op_estruturada"), do: "Op. Estruturada"
   defp asset_type_label("outro"), do: "Outro"
   defp asset_type_label(type), do: type
 

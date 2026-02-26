@@ -25,17 +25,29 @@ defmodule Grana.Investments do
   end
 
   def ensure_b3_institution(user_id) do
-    case get_institution_by_slug("b3", user_id) do
+    ensure_institution(user_id, "b3", "B3", "/images/b3-logo.png")
+  end
+
+  def ensure_gcb_institution(user_id) do
+    ensure_institution(user_id, "gcb", "GCB", "/images/gcb-logo.png")
+  end
+
+  defp ensure_institution(user_id, slug, name, logo_path) do
+    case get_institution_by_slug(slug, user_id) do
       nil ->
         {:ok, inst} =
           create_institution(%{
-            name: "B3",
-            slug: "b3",
-            logo_path: "/images/b3-logo.png",
+            name: name,
+            slug: slug,
+            logo_path: logo_path,
             is_system: true,
             user_id: user_id
           })
 
+        inst
+
+      %{logo_path: nil} = inst ->
+        {:ok, inst} = update_institution(inst, %{logo_path: logo_path})
         inst
 
       inst ->
@@ -86,6 +98,13 @@ defmodule Grana.Investments do
     statements = base |> limit(^per_page) |> offset(^offset) |> Repo.all()
 
     {statements, total}
+  end
+
+  def get_statement!(id, user_id) do
+    Statement
+    |> where([s], s.id == ^id and s.user_id == ^user_id)
+    |> preload(:institution)
+    |> Repo.one!()
   end
 
   def create_statement(attrs) do
@@ -179,7 +198,8 @@ defmodule Grana.Investments do
     query = filter_by_ticker(query, Keyword.get(opts, :ticker))
     query = filter_by_search(query, Keyword.get(opts, :search))
     query = filter_by_amount_min(query, Keyword.get(opts, :amount_min))
-    filter_by_amount_max(query, Keyword.get(opts, :amount_max))
+    query = filter_by_amount_max(query, Keyword.get(opts, :amount_max))
+    filter_by_statement(query, Keyword.get(opts, :statement_id))
   end
 
   defp filter_by_institution(query, nil), do: query
@@ -213,6 +233,9 @@ defmodule Grana.Investments do
 
   defp filter_by_amount_min(query, nil), do: query
   defp filter_by_amount_min(query, min), do: where(query, [t], fragment("ABS(?)", t.total_amount) >= ^min)
+
+  defp filter_by_statement(query, nil), do: query
+  defp filter_by_statement(query, id), do: where(query, [t], t.statement_id == ^id)
 
   defp filter_by_amount_max(query, nil), do: query
   defp filter_by_amount_max(query, max), do: where(query, [t], fragment("ABS(?)", t.total_amount) <= ^max)
@@ -351,6 +374,13 @@ defmodule Grana.Investments do
           Decimal.add(acc, Decimal.abs(t.total_amount))
         end)
 
+      resgates =
+        group_txns
+        |> Enum.filter(&(&1.operation == "venda"))
+        |> Enum.reduce(Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.total_amount))
+        end)
+
       dividends =
         group_txns
         |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
@@ -358,7 +388,9 @@ defmodule Grana.Investments do
           Decimal.add(acc, Decimal.abs(t.total_amount))
         end)
 
-      %{key: key, aportes: aportes, dividends: dividends}
+      proventos = Decimal.add(resgates, dividends)
+
+      %{key: key, aportes: aportes, resgates: resgates, proventos: proventos}
     end)
     |> Enum.sort_by(& &1.key)
   end
@@ -527,10 +559,13 @@ defmodule Grana.Investments do
                Decimal.compare(sold_qty, 0) == :eq and
                Decimal.compare(net_total, 0) == :gt)
 
+        inst_logo = if first.institution, do: first.institution.logo_path
+
         %{
           ticker: ticker,
           name: first.asset_name,
           type: first.asset_type,
+          institution_logo: inst_logo,
           bought_qty: bought_qty,
           sold_qty: sold_qty,
           net_qty: net_qty,
@@ -578,8 +613,39 @@ defmodule Grana.Investments do
       |> Enum.map(fn {ticker, txns} ->
         total = Enum.reduce(txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
         first = List.first(txns)
-        %{ticker: ticker, name: first.asset_name, type: first.asset_type, total: total, count: length(txns)}
+        inst_logo = if first.institution, do: first.institution.logo_path
+        %{ticker: ticker, name: first.asset_name, type: first.asset_type,
+          institution_logo: inst_logo, total: total, count: length(txns)}
       end)
+      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+
+    # Proventos e Resultados: dividends + vendas/liquidações
+    proventos = Decimal.add(dividends, total_sold)
+
+    proventos_by_asset =
+      transactions
+      |> Enum.filter(&(&1.operation in ~w(compra venda dividendo jcp rendimento amortizacao)))
+      |> Enum.group_by(&(&1.asset_ticker || &1.asset_name))
+      |> Enum.map(fn {ticker, txns} ->
+        first = List.first(txns)
+
+        sold =
+          txns
+          |> Enum.filter(&(&1.operation == "venda"))
+          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+
+        divs =
+          txns
+          |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
+          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+
+        total = Decimal.add(sold, divs)
+        inst_logo = if first.institution, do: first.institution.logo_path
+
+        %{ticker: ticker, name: first.asset_name, type: first.asset_type,
+          institution_logo: inst_logo, total: total, count: length(txns)}
+      end)
+      |> Enum.filter(fn %{total: t} -> Decimal.compare(t, 0) == :gt end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
     %{
@@ -588,11 +654,15 @@ defmodule Grana.Investments do
       dividends: dividends,
       total_fees: total_fees,
       net_position: net_position,
+      proventos: proventos,
       holdings: holdings,
       by_asset_type: by_asset_type,
       by_institution: by_institution,
       dividend_by_asset: dividend_by_asset,
+      proventos_by_asset: proventos_by_asset,
       transaction_count: length(transactions)
     }
   end
+
+
 end

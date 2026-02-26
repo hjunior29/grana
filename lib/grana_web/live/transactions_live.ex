@@ -25,6 +25,7 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:expanded_ids, MapSet.new())
       |> assign(:selected_ids, MapSet.new())
       |> assign(:statement_info, nil)
+      |> assign(:inv_statement_info, nil)
       # Investment tab data (defaults)
       |> assign(:inv_institutions, inv_institutions)
       |> assign(:inv_asset_types, inv_asset_types)
@@ -123,7 +124,8 @@ defmodule GranaWeb.TransactionsLive do
       date_from: params["date_from"] || "",
       date_to: params["date_to"] || "",
       amount_min: params["amount_min"] || "",
-      amount_max: params["amount_max"] || ""
+      amount_max: params["amount_max"] || "",
+      statement_id: params["statement_id"] || nil
     }
 
     page = parse_int(params["page"], 1)
@@ -138,10 +140,21 @@ defmodule GranaWeb.TransactionsLive do
       |> maybe_add_opt(:date_to, parse_date(inv_filters.date_to))
       |> maybe_add_opt(:amount_min, parse_decimal(inv_filters.amount_min))
       |> maybe_add_opt(:amount_max, parse_decimal(inv_filters.amount_max))
+      |> maybe_add_opt(:statement_id, parse_int_opt(inv_filters.statement_id))
 
     {transactions, total} = Investments.list_transactions_paginated(user_id, opts)
     total_pages = max(1, ceil(total / @per_page))
     summary = Investments.investments_summary(user_id, opts)
+
+    inv_statement_info =
+      case inv_filters.statement_id do
+        nil -> nil
+        id ->
+          stmt = Investments.get_statement!(String.to_integer(id), user_id)
+          inst_name = if stmt.institution, do: stmt.institution.name, else: "—"
+          inst_logo = if stmt.institution && stmt.institution.logo_path, do: stmt.institution.logo_path
+          %{id: stmt.id, filename: stmt.filename, institution: inst_name, logo: inst_logo}
+      end
 
     socket
     |> assign(:inv_filters, inv_filters)
@@ -150,6 +163,7 @@ defmodule GranaWeb.TransactionsLive do
     |> assign(:inv_total, total)
     |> assign(:inv_transactions, transactions)
     |> assign(:inv_summary, summary)
+    |> assign(:inv_statement_info, inv_statement_info)
     # Ensure banking assigns exist for tab badge
     |> maybe_assign_banking_total(user_id)
   end
@@ -218,6 +232,7 @@ defmodule GranaWeb.TransactionsLive do
             amount_min: params["amount_min"] || "",
             amount_max: params["amount_max"] || ""
           }
+          |> maybe_keep_statement(socket.assigns.inv_filters)
           |> build_query_string()
 
         {:noreply, push_patch(socket, to: "/transactions?#{query_params}")}
@@ -230,9 +245,17 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   def handle_event("clear_statement", _params, socket) do
-    filters = Map.delete(socket.assigns.filters, :statement_id) |> Map.put(:statement_id, nil)
-    query_params = build_query_string(Map.put(filters, :tab, "banking"))
-    {:noreply, push_patch(socket, to: "/transactions?#{query_params}")}
+    case socket.assigns.tab do
+      "banking" ->
+        filters = %{socket.assigns.filters | statement_id: nil}
+        query_params = build_query_string(Map.put(filters, :tab, "banking"))
+        {:noreply, push_patch(socket, to: "/transactions?#{query_params}")}
+
+      "investments" ->
+        inv_filters = %{socket.assigns.inv_filters | statement_id: nil}
+        query_params = build_query_string(Map.put(inv_filters, :tab, "investments"))
+        {:noreply, push_patch(socket, to: "/transactions?#{query_params}")}
+    end
   end
 
   def handle_event("search", %{"search" => term}, socket) do
@@ -774,6 +797,22 @@ defmodule GranaWeb.TransactionsLive do
 
   defp render_investments_tab(assigns) do
     ~H"""
+    <div :if={@inv_statement_info} class="mb-4">
+      <div class="badge badge-lg gap-2">
+        <img
+          :if={@inv_statement_info.logo}
+          src={@inv_statement_info.logo}
+          alt=""
+          class="w-4 h-4 rounded-full"
+        />
+        <.icon :if={!@inv_statement_info.logo} name="hero-chart-bar" class="size-4" />
+        {@inv_statement_info.institution}: {@inv_statement_info.filename}
+        <button phx-click="clear_statement" class="btn btn-ghost btn-xs btn-circle">
+          <.icon name="hero-x-mark" class="size-3" />
+        </button>
+      </div>
+    </div>
+
     <div class="card bg-base-200 p-4 mb-6">
       <form phx-change="apply_filters" phx-submit="apply_filters">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1053,6 +1092,13 @@ defmodule GranaWeb.TransactionsLive do
   defp asset_type_label("tesouro"), do: "Tesouro"
   defp asset_type_label("cripto"), do: "Cripto"
   defp asset_type_label("fundo"), do: "Fundo"
+  defp asset_type_label("nota_fiscal"), do: "Nota Fiscal"
+  defp asset_type_label("debenture"), do: "Debênture"
+  defp asset_type_label("precatorio"), do: "Precatório"
+  defp asset_type_label("recebiveis"), do: "Receb. Judiciais"
+  defp asset_type_label("cri"), do: "CRI"
+  defp asset_type_label("cra"), do: "CRA"
+  defp asset_type_label("op_estruturada"), do: "Op. Estruturada"
   defp asset_type_label("outro"), do: "Outro"
   defp asset_type_label(type), do: String.capitalize(type)
 

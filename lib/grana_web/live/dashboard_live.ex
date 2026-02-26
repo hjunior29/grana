@@ -159,10 +159,31 @@ defmodule GranaWeb.DashboardLive do
       case view_mode do
         "total" ->
           available_years
-          |> Enum.flat_map(fn y -> Banking.monthly_income_expenses(user_id, y, opts) end)
+          |> Enum.flat_map(fn y ->
+            Banking.monthly_income_expenses(user_id, y, opts)
+            |> Enum.map(&Map.put(&1, :year, y))
+          end)
 
         _ ->
           Banking.monthly_income_expenses(user_id, year, opts)
+      end
+
+    yearly_spending =
+      case view_mode do
+        "total" ->
+          all_monthly_ie
+          |> Enum.group_by(& &1.year)
+          |> Enum.map(fn {yr, items} ->
+            %{
+              year: yr,
+              expenses:
+                Enum.reduce(items, Decimal.new(0), fn i, acc -> Decimal.add(acc, i.expenses) end)
+            }
+          end)
+          |> Enum.sort_by(& &1.year)
+
+        _ ->
+          []
       end
 
     monthly_ie =
@@ -196,6 +217,7 @@ defmodule GranaWeb.DashboardLive do
     |> assign(:summary, summary)
     |> assign(:daily_spending, daily)
     |> assign(:monthly_ie, monthly_ie)
+    |> assign(:yearly_spending, yearly_spending)
     |> assign(:uncategorized_count, uncat_count)
     |> assign(:expense_avg, expense_avg)
     |> assign(:top_category, top_category)
@@ -285,6 +307,9 @@ defmodule GranaWeb.DashboardLive do
 
         "year" ->
           Map.merge(base, %{date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)})
+
+        "total" ->
+          base
       end
 
     params = Map.merge(base, extra)
@@ -670,6 +695,33 @@ defmodule GranaWeb.DashboardLive do
               </div>
             </div>
 
+            <%!-- Yearly Spending Chart (total view) --%>
+            <div :if={@view_mode == "total" and @yearly_spending != []} class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos por Ano</h3>
+              <div
+                id="yearly-spending-chart"
+                phx-hook="DailyChart"
+                data-daily={yearly_spending_chart_data(assigns)}
+              >
+                <div class="space-y-1">
+                  <div :for={item <- @yearly_spending} class="flex items-center gap-2">
+                    <span class="text-xs w-10 opacity-60">
+                      {item.year}
+                    </span>
+                    <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                      <div
+                        class="bg-primary h-full rounded-full transition-all"
+                        style={"width: #{yearly_bar_width(item.expenses, @yearly_spending)}%"}
+                      />
+                    </div>
+                    <span class="text-xs font-medium w-20 text-right">
+                      {format_currency(item.expenses)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <%!-- Monthly Spending Chart (year view) --%>
             <div :if={@view_mode == "year"} class="card bg-base-200 p-4 sm:p-6">
               <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Mensais</h3>
@@ -1013,6 +1065,27 @@ defmodule GranaWeb.DashboardLive do
     end
   end
 
+  defp yearly_bar_width(_expenses, []), do: 0
+
+  defp yearly_bar_width(expenses, yearly_spending) do
+    max_val =
+      yearly_spending
+      |> Enum.map(& &1.expenses)
+      |> Enum.max(fn -> Decimal.new(1) end)
+
+    case Decimal.compare(max_val, 0) do
+      :gt ->
+        expenses
+        |> Decimal.div(max_val)
+        |> Decimal.mult(100)
+        |> Decimal.round(0)
+        |> Decimal.to_integer()
+
+      _ ->
+        0
+    end
+  end
+
   defp monthly_bar_width(_expenses, []), do: 0
 
   defp monthly_bar_width(expenses, monthly_ie) do
@@ -1079,6 +1152,23 @@ defmodule GranaWeb.DashboardLive do
         date: Calendar.strftime(day.date, "%d/%m"),
         value: Decimal.to_float(day.total),
         url: transactions_url(assigns, %{date_from: day.date, date_to: day.date, type: "debit"})
+      }
+    end)
+    |> Jason.encode!()
+  end
+
+  defp yearly_spending_chart_data(assigns) do
+    assigns.yearly_spending
+    |> Enum.map(fn item ->
+      %{
+        date: to_string(item.year),
+        value: Decimal.to_float(item.expenses),
+        url:
+          transactions_url(assigns, %{
+            date_from: Date.new!(item.year, 1, 1),
+            date_to: Date.new!(item.year, 12, 31),
+            type: "debit"
+          })
       }
     end)
     |> Jason.encode!()
