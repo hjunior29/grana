@@ -3,6 +3,7 @@ defmodule GranaWeb.TransactionsLive do
 
   alias Grana.Banking
   alias Grana.Investments
+  alias Grana.Investments.Constants
 
   @per_page 50
 
@@ -93,7 +94,9 @@ defmodule GranaWeb.TransactionsLive do
 
     statement_info =
       case filters.statement_id do
-        nil -> nil
+        nil ->
+          nil
+
         id ->
           stmt = Banking.get_statement!(String.to_integer(id), user_id)
           %{id: stmt.id, filename: stmt.filename, bank: stmt.bank}
@@ -148,11 +151,16 @@ defmodule GranaWeb.TransactionsLive do
 
     inv_statement_info =
       case inv_filters.statement_id do
-        nil -> nil
+        nil ->
+          nil
+
         id ->
           stmt = Investments.get_statement!(String.to_integer(id), user_id)
           inst_name = if stmt.institution, do: stmt.institution.name, else: "—"
-          inst_logo = if stmt.institution, do: Grana.Investments.Institution.logo_url(stmt.institution)
+
+          inst_logo =
+            if stmt.institution, do: Grana.Investments.Institution.logo_url(stmt.institution)
+
           %{id: stmt.id, filename: stmt.filename, institution: inst_name, logo: inst_logo}
       end
 
@@ -384,6 +392,7 @@ defmodule GranaWeb.TransactionsLive do
   defp parse_operations(op) when is_binary(op) do
     if String.contains?(op, ","), do: String.split(op, ","), else: op
   end
+
   defp parse_operations(op), do: op
 
   defp parse_date(""), do: nil
@@ -805,7 +814,10 @@ defmodule GranaWeb.TransactionsLive do
     ~H"""
     <div :if={@inv_statement_info} class="mb-4">
       <div class="badge badge-lg gap-2">
-        <div :if={@inv_statement_info.logo} class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
+        <div
+          :if={@inv_statement_info.logo}
+          class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0"
+        >
           <img src={@inv_statement_info.logo} alt="" />
         </div>
         <.icon :if={!@inv_statement_info.logo} name="hero-chart-bar" class="size-4" />
@@ -926,10 +938,16 @@ defmodule GranaWeb.TransactionsLive do
       <span :if={Decimal.compare(@inv_summary.total_compras, 0) == :gt} class="text-info font-medium">
         Compras: R$ {format_br_number(@inv_summary.total_compras)}
       </span>
-      <span :if={Decimal.compare(@inv_summary.total_vendas, 0) == :gt} class="text-warning font-medium">
+      <span
+        :if={Decimal.compare(@inv_summary.total_vendas, 0) == :gt}
+        class="text-warning font-medium"
+      >
         Vendas: R$ {format_br_number(@inv_summary.total_vendas)}
       </span>
-      <span :if={Decimal.compare(@inv_summary.total_proventos, 0) == :gt} class="text-success font-medium">
+      <span
+        :if={Decimal.compare(@inv_summary.total_proventos, 0) == :gt}
+        class="text-success font-medium"
+      >
         Proventos: R$ {format_br_number(@inv_summary.total_proventos)}
       </span>
       <span :if={Decimal.compare(@inv_summary.total_taxas, 0) == :gt} class="text-error font-medium">
@@ -1062,27 +1080,19 @@ defmodule GranaWeb.TransactionsLive do
     "#{prefix}R$ #{format_br_number(txn.amount)}"
   end
 
+  @income_ops ~w(venda) ++ Constants.dividend_ops()
+
   defp format_inv_amount(txn) do
-    prefix = if txn.operation in ~w(venda dividendo jcp rendimento amortizacao), do: "+ ", else: "- "
+    prefix = if txn.operation in @income_ops, do: "+ ", else: "- "
     "#{prefix}R$ #{format_br_number(txn.total_amount)}"
   end
 
-  defp inv_amount_color(operation) when operation in ~w(venda dividendo jcp rendimento amortizacao),
-    do: "text-success"
-
+  defp inv_amount_color(operation) when operation in @income_ops, do: "text-success"
   defp inv_amount_color(_), do: "text-error"
 
-  defp operation_label("compra"), do: "Compra"
-  defp operation_label("venda"), do: "Venda"
-  defp operation_label("dividendo"), do: "Dividendo"
-  defp operation_label("jcp"), do: "JCP"
-  defp operation_label("rendimento"), do: "Rendimento"
-  defp operation_label("amortizacao"), do: "Amortização"
-  defp operation_label("taxa"), do: "Taxa"
-  defp operation_label("outro"), do: "Outro"
-  defp operation_label(op), do: String.capitalize(op)
+  defp operation_label(op), do: Constants.operation_label(op)
 
-  defp operation_badge_class(op) when op in ~w(dividendo jcp rendimento amortizacao),
+  defp operation_badge_class(op) when op in unquote(Constants.dividend_ops()),
     do: "badge-success"
 
   defp operation_badge_class("compra"), do: "badge-info"
@@ -1090,23 +1100,7 @@ defmodule GranaWeb.TransactionsLive do
   defp operation_badge_class("taxa"), do: "badge-error"
   defp operation_badge_class(_), do: "badge-ghost"
 
-  defp asset_type_label("acao"), do: "Ação"
-  defp asset_type_label("fii"), do: "FII"
-  defp asset_type_label("etf"), do: "ETF"
-  defp asset_type_label("bdr"), do: "BDR"
-  defp asset_type_label("renda_fixa"), do: "Renda Fixa"
-  defp asset_type_label("tesouro"), do: "Tesouro"
-  defp asset_type_label("cripto"), do: "Cripto"
-  defp asset_type_label("fundo"), do: "Fundo"
-  defp asset_type_label("nota_fiscal"), do: "Nota Fiscal"
-  defp asset_type_label("debenture"), do: "Debênture"
-  defp asset_type_label("precatorio"), do: "Precatório"
-  defp asset_type_label("recebiveis"), do: "Receb. Judiciais"
-  defp asset_type_label("cri"), do: "CRI"
-  defp asset_type_label("cra"), do: "CRA"
-  defp asset_type_label("op_estruturada"), do: "Op. Estruturada"
-  defp asset_type_label("outro"), do: "Outro"
-  defp asset_type_label(type), do: String.capitalize(type)
+  defp asset_type_label(type), do: Constants.asset_type_label(type)
 
   defp format_br_number(amount) do
     str = amount |> Decimal.round(2) |> Decimal.abs() |> Decimal.to_string(:normal)

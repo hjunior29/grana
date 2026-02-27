@@ -5,6 +5,7 @@ defmodule Grana.Investments.Parsers.PdfExtractor do
   """
 
   alias Grana.AI.Provider
+  alias Grana.Investments.Constants
 
   def extract(file_content, institution_or_user_id) do
     user_id =
@@ -65,14 +66,21 @@ defmodule Grana.Investments.Parsers.PdfExtractor do
 
     case Jason.decode(json_text) do
       {:ok, items} when is_list(items) ->
-        transactions =
-          items
-          |> Enum.map(&parse_item/1)
-          |> Enum.reject(&is_nil/1)
+        {transactions, warnings} =
+          Enum.reduce(items, {[], []}, fn item, {txns, warns} ->
+            case parse_item(item) do
+              nil ->
+                desc = item["asset_name"] || item["asset_ticker"] || "?"
+                {txns, ["Item ignorado (PDF): #{desc}" | warns]}
 
-        case transactions do
+              txn ->
+                {[txn | txns], warns}
+            end
+          end)
+
+        case Enum.reverse(transactions) do
           [] -> {:error, "Nenhuma transação encontrada no PDF"}
-          txns -> {:ok, txns}
+          txns -> {:ok, txns, Enum.reverse(warnings)}
         end
 
       _ ->
@@ -120,11 +128,9 @@ defmodule Grana.Investments.Parsers.PdfExtractor do
 
   defp parse_decimal(_), do: nil
 
-  @valid_types ~w(acao fii etf bdr renda_fixa tesouro cripto fundo outro)
-  defp validate_type(type, _default) when type in @valid_types, do: type
+  defp validate_type(type, _default) when type in unquote(Constants.asset_types()), do: type
   defp validate_type(_, default), do: default
 
-  @valid_ops ~w(compra venda dividendo jcp rendimento amortizacao taxa outro)
-  defp validate_operation(op, _default) when op in @valid_ops, do: op
+  defp validate_operation(op, _default) when op in unquote(Constants.operations()), do: op
   defp validate_operation(_, default), do: default
 end

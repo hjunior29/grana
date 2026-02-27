@@ -81,7 +81,13 @@ defmodule GranaWeb.UserLive.Login do
             autocomplete="current-password"
           />
           <label class="flex items-center gap-2 cursor-pointer mb-4">
-            <input type="checkbox" name={@form[:remember_me].name} value="true" checked class="checkbox checkbox-sm checkbox-primary" />
+            <input
+              type="checkbox"
+              name={@form[:remember_me].name}
+              value="true"
+              checked
+              class="checkbox checkbox-sm checkbox-primary"
+            />
             <span class="text-sm">Manter conectado</span>
           </label>
           <.button class="btn btn-primary w-full">

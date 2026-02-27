@@ -20,18 +20,19 @@ defmodule Grana.Investments.Parsers.B3Xlsx do
               _ -> []
             end)
 
-          result =
+          {transactions, warnings} =
             table_ids
-            |> Enum.flat_map(fn tid ->
+            |> Enum.reduce({[], []}, fn tid, {txns_acc, warns_acc} ->
               rows = Xlsxir.get_list(tid)
-              parse_sheet(rows)
+              {sheet_txns, sheet_warns} = parse_sheet(rows)
+              {txns_acc ++ sheet_txns, warns_acc ++ sheet_warns}
             end)
 
           Enum.each(table_ids, &Xlsxir.close/1)
 
-          case result do
+          case transactions do
             [] -> {:error, "Nenhuma transação encontrada no XLSX da B3"}
-            transactions -> transactions
+            _ -> {transactions, warnings}
           end
 
         {:error, reason} ->
@@ -42,17 +43,35 @@ defmodule Grana.Investments.Parsers.B3Xlsx do
     end
   end
 
-  defp parse_sheet([]), do: []
+  defp parse_sheet([]), do: {[], []}
 
   defp parse_sheet([header | rows]) do
     columns = detect_columns(header)
 
     if columns do
-      rows
-      |> Enum.map(&parse_row(&1, columns))
-      |> Enum.reject(&is_nil/1)
+      {transactions, warnings} =
+        Enum.reduce(rows, {[], []}, fn row, {txns, warns} ->
+          case parse_row(row, columns) do
+            nil ->
+              product =
+                if columns.product, do: to_string(Enum.at(row, columns.product, "")), else: ""
+
+              date = Enum.at(row, columns.date)
+
+              if date != nil and product != "" do
+                {txns, ["Linha ignorada (B3): #{product}" | warns]}
+              else
+                {txns, warns}
+              end
+
+            txn ->
+              {[txn | txns], warns}
+          end
+        end)
+
+      {Enum.reverse(transactions), Enum.reverse(warnings)}
     else
-      []
+      {[], []}
     end
   end
 

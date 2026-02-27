@@ -22,7 +22,9 @@ defmodule Grana.Repo.Migrations.CreateInvestmentsTables do
       add :period_end, :date
       add :total_transactions, :integer, default: 0
       add :user_id, references(:users, on_delete: :delete_all), null: false
-      add :institution_id, references(:investment_institutions, on_delete: :delete_all), null: false
+
+      add :institution_id, references(:investment_institutions, on_delete: :delete_all),
+        null: false
 
       timestamps(type: :utc_datetime)
     end

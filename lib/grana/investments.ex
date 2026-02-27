@@ -1,7 +1,7 @@
 defmodule Grana.Investments do
   import Ecto.Query
   alias Grana.Repo
-  alias Grana.Investments.{Institution, Statement, Transaction}
+  alias Grana.Investments.{Constants, Institution, Statement, Transaction}
 
   # Institutions
 
@@ -156,12 +156,16 @@ defmodule Grana.Investments do
     |> select([t], %{
       total_compras:
         coalesce(
-          sum(fragment("CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)),
+          sum(
+            fragment("CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+          ),
           0
         ),
       total_vendas:
         coalesce(
-          sum(fragment("CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)),
+          sum(
+            fragment("CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+          ),
           0
         ),
       total_proventos:
@@ -177,7 +181,9 @@ defmodule Grana.Investments do
         ),
       total_taxas:
         coalesce(
-          sum(fragment("CASE WHEN ? = 'taxa' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)),
+          sum(
+            fragment("CASE WHEN ? = 'taxa' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+          ),
           0
         )
     })
@@ -194,7 +200,10 @@ defmodule Grana.Investments do
     query = filter_by_institution(query, Keyword.get(opts, :institution_id))
     query = filter_by_asset_type(query, Keyword.get(opts, :asset_type))
     query = filter_by_operation(query, Keyword.get(opts, :operation))
-    query = filter_by_date_range(query, Keyword.get(opts, :date_from), Keyword.get(opts, :date_to))
+
+    query =
+      filter_by_date_range(query, Keyword.get(opts, :date_from), Keyword.get(opts, :date_to))
+
     query = filter_by_ticker(query, Keyword.get(opts, :ticker))
     query = filter_by_search(query, Keyword.get(opts, :search))
     query = filter_by_amount_min(query, Keyword.get(opts, :amount_min))
@@ -212,13 +221,18 @@ defmodule Grana.Investments do
 
   defp filter_by_operation(query, nil), do: query
   defp filter_by_operation(query, "all"), do: query
-  defp filter_by_operation(query, ops) when is_list(ops), do: where(query, [t], t.operation in ^ops)
+
+  defp filter_by_operation(query, ops) when is_list(ops),
+    do: where(query, [t], t.operation in ^ops)
+
   defp filter_by_operation(query, op), do: where(query, [t], t.operation == ^op)
 
   defp filter_by_date_range(query, nil, nil), do: query
   defp filter_by_date_range(query, from, nil), do: where(query, [t], t.date >= ^from)
   defp filter_by_date_range(query, nil, to), do: where(query, [t], t.date <= ^to)
-  defp filter_by_date_range(query, from, to), do: where(query, [t], t.date >= ^from and t.date <= ^to)
+
+  defp filter_by_date_range(query, from, to),
+    do: where(query, [t], t.date >= ^from and t.date <= ^to)
 
   defp filter_by_ticker(query, nil), do: query
   defp filter_by_ticker(query, "all"), do: query
@@ -233,13 +247,17 @@ defmodule Grana.Investments do
   end
 
   defp filter_by_amount_min(query, nil), do: query
-  defp filter_by_amount_min(query, min), do: where(query, [t], fragment("ABS(?)", t.total_amount) >= ^min)
+
+  defp filter_by_amount_min(query, min),
+    do: where(query, [t], fragment("ABS(?)", t.total_amount) >= ^min)
 
   defp filter_by_statement(query, nil), do: query
   defp filter_by_statement(query, id), do: where(query, [t], t.statement_id == ^id)
 
   defp filter_by_amount_max(query, nil), do: query
-  defp filter_by_amount_max(query, max), do: where(query, [t], fragment("ABS(?)", t.total_amount) <= ^max)
+
+  defp filter_by_amount_max(query, max),
+    do: where(query, [t], fragment("ABS(?)", t.total_amount) <= ^max)
 
   def bulk_insert_transactions(transactions_attrs) do
     now = DateTime.utc_now(:second)
@@ -269,12 +287,16 @@ defmodule Grana.Investments do
       invested =
         txns
         |> Enum.filter(&(&1.operation == "compra"))
-        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+        |> Enum.reduce(Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.total_amount))
+        end)
 
       dividends =
         txns
-        |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
-        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+        |> Enum.filter(&(&1.operation in Constants.dividend_ops()))
+        |> Enum.reduce(Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.total_amount))
+        end)
 
       %{month: month, invested: invested, dividends: dividends}
     end)
@@ -384,7 +406,7 @@ defmodule Grana.Investments do
 
       dividends =
         group_txns
-        |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
+        |> Enum.filter(&(&1.operation in Constants.dividend_ops()))
         |> Enum.reduce(Decimal.new(0), fn t, acc ->
           Decimal.add(acc, Decimal.abs(t.total_amount))
         end)
@@ -477,7 +499,9 @@ defmodule Grana.Investments do
       |> Enum.filter(& &1.is_active)
       |> Enum.group_by(& &1.type)
       |> Enum.map(fn {type, items} ->
-        total = Enum.reduce(items, Decimal.new(0), fn h, acc -> Decimal.add(acc, h.current_value) end)
+        total =
+          Enum.reduce(items, Decimal.new(0), fn h, acc -> Decimal.add(acc, h.current_value) end)
+
         %{asset_type: type, total: total, count: length(items)}
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
@@ -498,82 +522,140 @@ defmodule Grana.Investments do
 
   @doc """
   Portfolio summary - accumulated totals up to a given date (or all time).
-  Shows the real portfolio state: total bought, sold, dividends received.
+  Uses SQL aggregation for performance instead of loading all transactions.
   """
   def portfolio_summary(user_id, opts \\ []) do
-    transactions = list_transactions(user_id, opts)
+    base = build_transactions_query(user_id, opts) |> exclude(:preload) |> exclude(:order_by)
 
-    total_bought =
-      transactions
-      |> Enum.filter(&(&1.operation == "compra"))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+    # 1. Global totals (single SQL query)
+    totals =
+      base
+      |> select([t], %{
+        total_bought:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        total_sold:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        dividends:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        total_fees: coalesce(sum(t.fees), 0),
+        transaction_count: count(t.id)
+      })
+      |> Repo.one()
 
-    total_sold =
-      transactions
-      |> Enum.filter(&(&1.operation == "venda"))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+    # 2. Holdings grouped by normalized ticker/name (SQL)
+    holdings_raw =
+      base
+      |> where([t], t.operation in ^Constants.buy_sell_ops())
+      |> group_by(
+        [t],
+        fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name)
+      )
+      |> select([t], %{
+        ticker: fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name),
+        name: min(t.asset_name),
+        type: min(t.asset_type),
+        institution_id: min(t.institution_id),
+        bought_qty:
+          coalesce(
+            sum(fragment("CASE WHEN ? = 'compra' THEN ? ELSE 0 END", t.operation, t.quantity)),
+            0
+          ),
+        sold_qty:
+          coalesce(
+            sum(fragment("CASE WHEN ? = 'venda' THEN ? ELSE 0 END", t.operation, t.quantity)),
+            0
+          ),
+        bought_total:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        sold_total:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          )
+      })
+      |> Repo.all()
 
-    dividends =
-      transactions
-      |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
+    # Load all institutions referenced by any transaction in scope
+    inst_ids =
+      base
+      |> select([t], t.institution_id)
+      |> distinct(true)
+      |> Repo.all()
+      |> Enum.reject(&is_nil/1)
 
-    total_fees =
-      transactions
-      |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.fees || Decimal.new(0)) end)
+    institutions_map =
+      if inst_ids != [] do
+        Institution |> where([i], i.id in ^inst_ids) |> Repo.all() |> Map.new(&{&1.id, &1})
+      else
+        %{}
+      end
 
-    # Holdings: group by asset_ticker, calculate net quantity
     holdings =
-      transactions
-      |> Enum.filter(&(&1.operation in ~w(compra venda)))
-      |> Enum.group_by(&(&1.asset_ticker || &1.asset_name))
-      |> Enum.map(fn {ticker, txns} ->
-        bought_qty =
-          txns
-          |> Enum.filter(&(&1.operation == "compra"))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.quantity) end)
+      holdings_raw
+      |> Enum.map(fn h ->
+        net_qty = Decimal.sub(h.bought_qty, h.sold_qty)
+        net_total = Decimal.sub(h.bought_total, h.sold_total)
+        inst = Map.get(institutions_map, h.institution_id)
+        inst_logo = if inst, do: Institution.logo_url(inst)
 
-        sold_qty =
-          txns
-          |> Enum.filter(&(&1.operation == "venda"))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.quantity) end)
-
-        bought_total =
-          txns
-          |> Enum.filter(&(&1.operation == "compra"))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-        sold_total =
-          txns
-          |> Enum.filter(&(&1.operation == "venda"))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-        net_qty = Decimal.sub(bought_qty, sold_qty)
-        net_total = Decimal.sub(bought_total, sold_total)
-
-        first = List.first(txns)
-
-        # A holding is active if:
-        # - net_qty > 0 AND net_total > 0 (shares still held with real value), OR
-        # - qty was never tracked (both 0) but there's invested value with no sells (e.g. CDB)
         is_active =
           (Decimal.compare(net_qty, 0) == :gt and Decimal.compare(net_total, 0) == :gt) or
-            (Decimal.compare(bought_qty, 0) == :eq and
-               Decimal.compare(sold_qty, 0) == :eq and
+            (Decimal.compare(h.bought_qty, 0) == :eq and
+               Decimal.compare(h.sold_qty, 0) == :eq and
                Decimal.compare(net_total, 0) == :gt)
 
-        inst_logo = if first.institution, do: Institution.logo_url(first.institution)
-
         %{
-          ticker: ticker,
-          name: first.asset_name,
-          type: first.asset_type,
+          ticker: h.ticker,
+          name: h.name,
+          type: h.type,
           institution_logo: inst_logo,
-          bought_qty: bought_qty,
-          sold_qty: sold_qty,
+          bought_qty: h.bought_qty,
+          sold_qty: h.sold_qty,
           net_qty: net_qty,
-          bought_total: bought_total,
-          sold_total: sold_total,
+          bought_total: h.bought_total,
+          sold_total: h.sold_total,
           net_total: net_total,
           is_active: is_active
         }
@@ -597,76 +679,147 @@ defmodule Grana.Investments do
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
-    # By institution
+    # 3. By institution (SQL)
+    by_institution_raw =
+      base
+      |> where([t], t.operation == "compra")
+      |> group_by([t], t.institution_id)
+      |> select([t], %{
+        institution_id: t.institution_id,
+        total: coalesce(sum(fragment("ABS(?)", t.total_amount)), 0),
+        count: count(t.id)
+      })
+      |> Repo.all()
+
     by_institution =
-      transactions
-      |> Enum.filter(&(&1.operation == "compra"))
-      |> Enum.group_by(& &1.institution)
-      |> Enum.map(fn {inst, txns} ->
-        total = Enum.reduce(txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-        %{institution: inst, total: total, count: length(txns)}
+      by_institution_raw
+      |> Enum.map(fn row ->
+        inst = Map.get(institutions_map, row.institution_id)
+        %{institution: inst, total: row.total, count: row.count}
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
-    # Dividends by asset
+    # 4. Dividends by asset (SQL)
+    dividend_by_asset_raw =
+      base
+      |> where([t], t.operation in ^Constants.dividend_ops())
+      |> group_by(
+        [t],
+        fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name)
+      )
+      |> select([t], %{
+        ticker: fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name),
+        name: min(t.asset_name),
+        type: min(t.asset_type),
+        institution_id: min(t.institution_id),
+        total: coalesce(sum(fragment("ABS(?)", t.total_amount)), 0),
+        count: count(t.id)
+      })
+      |> Repo.all()
+
     dividend_by_asset =
-      transactions
-      |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
-      |> Enum.group_by(&(&1.asset_ticker || &1.asset_name))
-      |> Enum.map(fn {ticker, txns} ->
-        total = Enum.reduce(txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-        first = List.first(txns)
-        inst_logo = if first.institution, do: Institution.logo_url(first.institution)
-        %{ticker: ticker, name: first.asset_name, type: first.asset_type,
-          institution_logo: inst_logo, total: total, count: length(txns)}
+      dividend_by_asset_raw
+      |> Enum.map(fn d ->
+        inst = Map.get(institutions_map, d.institution_id)
+        inst_logo = if inst, do: Institution.logo_url(inst)
+
+        %{
+          ticker: d.ticker,
+          name: d.name,
+          type: d.type,
+          institution_logo: inst_logo,
+          total: d.total,
+          count: d.count
+        }
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
-    # Proventos e Resultados por ativo: dividendos + lucro realizado (vendas - compras)
+    # 5. Proventos by asset (SQL): dividends + max(vendas - compras, 0)
+    proventos_by_asset_raw =
+      base
+      |> where([t], t.operation in ^Constants.proventos_ops())
+      |> group_by(
+        [t],
+        fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name)
+      )
+      |> select([t], %{
+        ticker: fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name),
+        name: min(t.asset_name),
+        type: min(t.asset_type),
+        institution_id: min(t.institution_id),
+        sold:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        bought:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        divs:
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
+          ),
+        count: count(t.id)
+      })
+      |> Repo.all()
+
     proventos_by_asset =
-      transactions
-      |> Enum.filter(&(&1.operation in ~w(compra venda dividendo jcp rendimento amortizacao)))
-      |> Enum.group_by(&(&1.asset_ticker || &1.asset_name))
-      |> Enum.map(fn {ticker, txns} ->
-        first = List.first(txns)
+      proventos_by_asset_raw
+      |> Enum.map(fn p ->
+        realized_profit = Decimal.max(Decimal.sub(p.sold, p.bought), Decimal.new(0))
+        total = Decimal.add(realized_profit, p.divs)
+        inst = Map.get(institutions_map, p.institution_id)
+        inst_logo = if inst, do: Institution.logo_url(inst)
 
-        sold =
-          txns
-          |> Enum.filter(&(&1.operation == "venda"))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-        bought =
-          txns
-          |> Enum.filter(&(&1.operation == "compra"))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-        divs =
-          txns
-          |> Enum.filter(&(&1.operation in ~w(dividendo jcp rendimento amortizacao)))
-          |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.total_amount)) end)
-
-        # Lucro realizado = vendas - compras (mínimo 0)
-        realized_profit = Decimal.max(Decimal.sub(sold, bought), Decimal.new(0))
-
-        total = Decimal.add(realized_profit, divs)
-        inst_logo = if first.institution, do: Institution.logo_url(first.institution)
-
-        %{ticker: ticker, name: first.asset_name, type: first.asset_type,
-          institution_logo: inst_logo, total: total, count: length(txns)}
+        %{
+          ticker: p.ticker,
+          name: p.name,
+          type: p.type,
+          institution_logo: inst_logo,
+          total: total,
+          count: p.count
+        }
       end)
       |> Enum.filter(fn %{total: t} -> Decimal.compare(t, 0) == :gt end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
-    # Proventos e Resultados total: soma dos resultados por ativo (dividendos + lucros realizados)
     proventos =
       proventos_by_asset
       |> Enum.reduce(Decimal.new(0), fn %{total: t}, acc -> Decimal.add(acc, t) end)
 
+    # Assets that have dividends but no buy/sell holdings
+    holding_keys = holdings |> Enum.map(& &1.ticker) |> MapSet.new()
+
+    dividend_only_assets =
+      dividend_by_asset
+      |> Enum.reject(fn d -> MapSet.member?(holding_keys, d.ticker) end)
+
     %{
-      total_bought: total_bought,
-      total_sold: total_sold,
-      dividends: dividends,
-      total_fees: total_fees,
+      total_bought: totals.total_bought,
+      total_sold: totals.total_sold,
+      dividends: totals.dividends,
+      total_fees: totals.total_fees,
       net_position: net_position,
       proventos: proventos,
       holdings: holdings,
@@ -674,9 +827,8 @@ defmodule Grana.Investments do
       by_institution: by_institution,
       dividend_by_asset: dividend_by_asset,
       proventos_by_asset: proventos_by_asset,
-      transaction_count: length(transactions)
+      dividend_only_assets: dividend_only_assets,
+      transaction_count: totals.transaction_count
     }
   end
-
-
 end

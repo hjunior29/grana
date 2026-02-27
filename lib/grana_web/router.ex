@@ -32,7 +32,7 @@ defmodule GranaWeb.Router do
   scope "/admin" do
     pipe_through [:browser, :require_authenticated_user, :require_admin_user]
 
-    error_tracker_dashboard "/errors"
+    error_tracker_dashboard("/errors")
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

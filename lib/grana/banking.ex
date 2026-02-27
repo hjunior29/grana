@@ -1046,7 +1046,9 @@ defmodule Grana.Banking do
 
     0..(months_ahead - 1)
     |> Enum.map(fn offset ->
-      projected_date = Date.new!(start_date.year, start_date.month, 1) |> Date.shift(month: offset)
+      projected_date =
+        Date.new!(start_date.year, start_date.month, 1) |> Date.shift(month: offset)
+
       month_label = "#{month_name_short(projected_date.month)}/#{projected_date.year}"
 
       total =

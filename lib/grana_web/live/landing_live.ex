@@ -617,10 +617,12 @@ defmodule GranaWeb.LandingLive do
                   <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
                   <span class="btn btn-xs btn-primary cursor-default">Todas</span>
                   <span class="btn btn-xs btn-ghost gap-1 cursor-default">
-                    <.icon name="hero-banknotes" class="size-3" /> <span class="hidden sm:inline cursor-default">Extrato</span>
+                    <.icon name="hero-banknotes" class="size-3" />
+                    <span class="hidden sm:inline cursor-default">Extrato</span>
                   </span>
                   <span class="btn btn-xs btn-ghost gap-1 cursor-default">
-                    <.icon name="hero-credit-card" class="size-3" /> <span class="hidden sm:inline cursor-default">Fatura</span>
+                    <.icon name="hero-credit-card" class="size-3" />
+                    <span class="hidden sm:inline cursor-default">Fatura</span>
                   </span>
                 </div>
                 <div class="flex items-center gap-1">
@@ -671,20 +673,24 @@ defmodule GranaWeb.LandingLive do
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
               <div class="card bg-base-200 p-4 sm:p-6">
-                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
+                  Despesas por Categoria
+                </h3>
                 <div
                   id="landing-cat-hook"
                   phx-hook="CategoryChart"
-                  data-categories={Jason.encode!([
-                    %{name: "Alimentação", value: 1847.0, color: "#F59E0B"},
-                    %{name: "Moradia", value: 1500.0, color: "#8B5CF6"},
-                    %{name: "Transporte", value: 650.0, color: "#3B82F6"},
-                    %{name: "Compras", value: 520.0, color: "#F97316"},
-                    %{name: "Lazer", value: 480.0, color: "#EC4899"},
-                    %{name: "Saúde", value: 320.0, color: "#EF4444"},
-                    %{name: "Pagamentos", value: 290.0, color: "#64748B"},
-                    %{name: "Assinaturas", value: 190.0, color: "#A855F7"}
-                  ])}
+                  data-categories={
+                    Jason.encode!([
+                      %{name: "Alimentação", value: 1847.0, color: "#F59E0B"},
+                      %{name: "Moradia", value: 1500.0, color: "#8B5CF6"},
+                      %{name: "Transporte", value: 650.0, color: "#3B82F6"},
+                      %{name: "Compras", value: 520.0, color: "#F97316"},
+                      %{name: "Lazer", value: 480.0, color: "#EC4899"},
+                      %{name: "Saúde", value: 320.0, color: "#EF4444"},
+                      %{name: "Pagamentos", value: 290.0, color: "#64748B"},
+                      %{name: "Assinaturas", value: 190.0, color: "#A855F7"}
+                    ])
+                  }
                 >
                   <div class="space-y-3">
                     <div
@@ -719,23 +725,25 @@ defmodule GranaWeb.LandingLive do
                 <div
                   id="landing-daily-hook"
                   phx-hook="DailyChart"
-                  data-daily={Jason.encode!([
-                    %{date: "02/01", value: 145.90},
-                    %{date: "03/01", value: 47.50},
-                    %{date: "05/01", value: 320.00},
-                    %{date: "07/01", value: 587.32},
-                    %{date: "08/01", value: 68.90},
-                    %{date: "10/01", value: 487.32},
-                    %{date: "12/01", value: 175.00},
-                    %{date: "14/01", value: 89.90},
-                    %{date: "15/01", value: 245.00},
-                    %{date: "17/01", value: 382.50},
-                    %{date: "19/01", value: 120.00},
-                    %{date: "22/01", value: 289.90},
-                    %{date: "25/01", value: 198.00},
-                    %{date: "27/01", value: 410.80},
-                    %{date: "30/01", value: 259.36}
-                  ])}
+                  data-daily={
+                    Jason.encode!([
+                      %{date: "02/01", value: 145.90},
+                      %{date: "03/01", value: 47.50},
+                      %{date: "05/01", value: 320.00},
+                      %{date: "07/01", value: 587.32},
+                      %{date: "08/01", value: 68.90},
+                      %{date: "10/01", value: 487.32},
+                      %{date: "12/01", value: 175.00},
+                      %{date: "14/01", value: 89.90},
+                      %{date: "15/01", value: 245.00},
+                      %{date: "17/01", value: 382.50},
+                      %{date: "19/01", value: 120.00},
+                      %{date: "22/01", value: 289.90},
+                      %{date: "25/01", value: 198.00},
+                      %{date: "27/01", value: 410.80},
+                      %{date: "30/01", value: 259.36}
+                    ])
+                  }
                 >
                   <div class="space-y-1">
                     <div
@@ -845,9 +853,11 @@ defmodule GranaWeb.LandingLive do
               <div
                 id="landing-ie-hook"
                 phx-hook="IncomeExpensesChart"
-                data-monthly={Jason.encode!([
-                  %{label: "Jan", income: 8450.0, expenses: 5797.0}
-                ])}
+                data-monthly={
+                  Jason.encode!([
+                    %{label: "Jan", income: 8450.0, expenses: 5797.0}
+                  ])
+                }
               >
               </div>
             </div>
@@ -875,8 +885,7 @@ defmodule GranaWeb.LandingLive do
                            "R$ 849,75"},
                           {"Curso Data Science", "Educação", "#3B82F6", "R$ 199,90", 2, 6,
                            "R$ 799,60"},
-                          {"Sofá Retrátil", "Moradia", "#8B5CF6", "R$ 416,50", 1, 8,
-                           "R$ 2.915,50"},
+                          {"Sofá Retrátil", "Moradia", "#8B5CF6", "R$ 416,50", 1, 8, "R$ 2.915,50"},
                           {"PlayStation 5", "Lazer", "#EC4899", "R$ 449,90", 3, 5, "R$ 899,80"}
                         ]
                       }
@@ -914,16 +923,18 @@ defmodule GranaWeb.LandingLive do
               <div
                 id="landing-projection-hook"
                 phx-hook="ProjectionChart"
-                data-projections={Jason.encode!([
-                  %{label: "Fev", value: 1899.45},
-                  %{label: "Mar", value: 1899.45},
-                  %{label: "Abr", value: 1449.55},
-                  %{label: "Mai", value: 1166.30},
-                  %{label: "Jun", value: 966.40},
-                  %{label: "Jul", value: 966.40},
-                  %{label: "Ago", value: 966.40},
-                  %{label: "Set", value: 549.90}
-                ])}
+                data-projections={
+                  Jason.encode!([
+                    %{label: "Fev", value: 1899.45},
+                    %{label: "Mar", value: 1899.45},
+                    %{label: "Abr", value: 1449.55},
+                    %{label: "Mai", value: 1166.30},
+                    %{label: "Jun", value: 966.40},
+                    %{label: "Jul", value: 966.40},
+                    %{label: "Ago", value: 966.40},
+                    %{label: "Set", value: 549.90}
+                  ])
+                }
               >
               </div>
             </div>
@@ -1081,7 +1092,11 @@ defmodule GranaWeb.LandingLive do
               </div>
 
               <%!-- Phase 2: Loading --%>
-              <div data-ai-loading class="ai-demo-phase" style="opacity: 0; transform: translateY(6px)">
+              <div
+                data-ai-loading
+                class="ai-demo-phase"
+                style="opacity: 0; transform: translateY(6px)"
+              >
                 <div class="card bg-base-200 p-4 sm:p-6 mb-4">
                   <div class="flex items-center gap-3">
                     <span class="loading loading-spinner loading-sm text-primary"></span>
@@ -1114,91 +1129,91 @@ defmodule GranaWeb.LandingLive do
 
               <%!-- Phase 3: Result --%>
               <div data-ai-result class="ai-demo-phase" style="opacity: 0; transform: translateY(6px)">
-              <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
-                <div class="flex items-start justify-between gap-3 mb-3">
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 mb-1">
-                      <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold border shrink-0 text-success bg-success/15 border-success/30">
-                        7.8
-                      </span>
-                      <div class="min-w-0">
-                        <h4 class="font-semibold text-sm">Saúde financeira de Janeiro</h4>
-                        <div class="flex flex-wrap items-center gap-1 mt-0.5">
-                          <span class="text-xs opacity-40">19/02/2026 às 14:32</span>
-                          <span class="badge badge-xs badge-ghost">Janeiro</span>
-                          <span class="badge badge-xs badge-ghost">Nubank</span>
+                <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
+                  <div class="flex items-start justify-between gap-3 mb-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-3 mb-1">
+                        <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold border shrink-0 text-success bg-success/15 border-success/30">
+                          7.8
+                        </span>
+                        <div class="min-w-0">
+                          <h4 class="font-semibold text-sm">Saúde financeira de Janeiro</h4>
+                          <div class="flex flex-wrap items-center gap-1 mt-0.5">
+                            <span class="text-xs opacity-40">19/02/2026 às 14:32</span>
+                            <span class="badge badge-xs badge-ghost">Janeiro</span>
+                            <span class="badge badge-xs badge-ghost">Nubank</span>
+                          </div>
                         </div>
                       </div>
+                      <p class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13">
+                        "Onde posso economizar nesse mês?"
+                      </p>
                     </div>
-                    <p class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13">
-                      "Onde posso economizar nesse mês?"
+                  </div>
+
+                  <p class="text-sm opacity-80 mb-4">
+                    Seus gastos com alimentação representam 32% do total — acima da média recomendada de 25%.
+                    Moradia está dentro do esperado. O saldo livre de R$ 2.652 indica margem saudável.
+                  </p>
+
+                  <div class="space-y-2 mb-4">
+                    <div class="flex items-start gap-2 text-sm">
+                      <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                      <span class="opacity-80">
+                        Receita mensal consistente com média de R$ 8.450 — bom controle de renda
+                      </span>
+                    </div>
+                    <div class="flex items-start gap-2 text-sm">
+                      <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                      <span class="opacity-80">
+                        Moradia representa 18% do orçamento — dentro do recomendado (até 30%)
+                      </span>
+                    </div>
+                    <div class="flex items-start gap-2 text-sm">
+                      <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
+                      <span class="opacity-80">
+                        Gastos com delivery aumentaram 40% em relação ao mês anterior
+                      </span>
+                    </div>
+                    <div class="flex items-start gap-2 text-sm">
+                      <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
+                      <span class="opacity-80">
+                        Alimentação a 32% do total — acima do recomendado de 25%
+                      </span>
+                    </div>
+                    <div class="flex items-start gap-2 text-sm">
+                      <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
+                      <span class="opacity-80">
+                        3 assinaturas detectadas — considere revisar se todas estão em uso
+                      </span>
+                    </div>
+                    <div class="flex items-start gap-2 text-sm">
+                      <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
+                      <span class="opacity-80">
+                        Cozinhar em casa 3x por semana pode economizar até R$ 400/mês
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="alert alert-warning text-sm py-2 mb-3">
+                    <.icon name="hero-exclamation-triangle" class="size-4" />
+                    <span>
+                      Atenção: despesas com lazer estão 20% acima da média dos últimos 3 meses
+                    </span>
+                  </div>
+
+                  <div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+                    <div class="flex items-center gap-1.5 mb-1">
+                      <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
+                      <span class="text-xs font-medium text-primary">Resposta</span>
+                    </div>
+                    <p class="text-sm opacity-80">
+                      Para economizar, foque em reduzir gastos com delivery e alimentação fora de casa.
+                      Planeje refeições semanais e aproveite promoções do supermercado. Revise suas 3 assinaturas
+                      e cancele as que não usa ativamente.
                     </p>
                   </div>
                 </div>
-
-                <p class="text-sm opacity-80 mb-4">
-                  Seus gastos com alimentação representam 32% do total — acima da média recomendada de 25%.
-                  Moradia está dentro do esperado. O saldo livre de R$ 2.652 indica margem saudável.
-                </p>
-
-                <div class="space-y-2 mb-4">
-                  <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
-                    <span class="opacity-80">
-                      Receita mensal consistente com média de R$ 8.450 — bom controle de renda
-                    </span>
-                  </div>
-                  <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
-                    <span class="opacity-80">
-                      Moradia representa 18% do orçamento — dentro do recomendado (até 30%)
-                    </span>
-                  </div>
-                  <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
-                    <span class="opacity-80">
-                      Gastos com delivery aumentaram 40% em relação ao mês anterior
-                    </span>
-                  </div>
-                  <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
-                    <span class="opacity-80">
-                      Alimentação a 32% do total — acima do recomendado de 25%
-                    </span>
-                  </div>
-                  <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
-                    <span class="opacity-80">
-                      3 assinaturas detectadas — considere revisar se todas estão em uso
-                    </span>
-                  </div>
-                  <div class="flex items-start gap-2 text-sm">
-                    <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
-                    <span class="opacity-80">
-                      Cozinhar em casa 3x por semana pode economizar até R$ 400/mês
-                    </span>
-                  </div>
-                </div>
-
-                <div class="alert alert-warning text-sm py-2 mb-3">
-                  <.icon name="hero-exclamation-triangle" class="size-4" />
-                  <span>
-                    Atenção: despesas com lazer estão 20% acima da média dos últimos 3 meses
-                  </span>
-                </div>
-
-                <div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
-                  <div class="flex items-center gap-1.5 mb-1">
-                    <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
-                    <span class="text-xs font-medium text-primary">Resposta</span>
-                  </div>
-                  <p class="text-sm opacity-80">
-                    Para economizar, foque em reduzir gastos com delivery e alimentação fora de casa.
-                    Planeje refeições semanais e aproveite promoções do supermercado. Revise suas 3 assinaturas
-                    e cancele as que não usa ativamente.
-                  </p>
-                </div>
-              </div>
               </div>
             </div>
           </div>
@@ -1504,7 +1519,6 @@ defmodule GranaWeb.LandingLive do
           </div>
         </div>
       </footer>
-
     </div>
     """
   end

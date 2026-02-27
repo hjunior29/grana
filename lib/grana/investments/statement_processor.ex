@@ -5,17 +5,18 @@ defmodule Grana.Investments.StatementProcessor do
   def process(file_content, institution_slug, user_id, filename) do
     institution = resolve_institution(institution_slug, user_id)
 
-    parsed = parse_file(file_content, institution_slug, filename, user_id)
-
-    case parsed do
+    case parse_file(file_content, institution_slug, filename, user_id) do
       {:error, reason} ->
         {:error, reason}
 
-      [] ->
-        {:error, "Nenhuma transação encontrada no arquivo"}
+      {transactions, warnings} ->
+        case transactions do
+          [] ->
+            {:error, "Nenhuma transação encontrada no arquivo"}
 
-      transactions when is_list(transactions) ->
-        do_process(transactions, institution, user_id, filename)
+          _ ->
+            do_process(transactions, warnings, institution, user_id, filename)
+        end
     end
   end
 
@@ -34,7 +35,7 @@ defmodule Grana.Investments.StatementProcessor do
     end
   end
 
-  defp do_process(transactions, institution, user_id, filename) do
+  defp do_process(transactions, warnings, institution, user_id, filename) do
     {period_start, period_end} = get_period(transactions)
 
     pre_entries =
@@ -80,11 +81,17 @@ defmodule Grana.Investments.StatementProcessor do
         total_transactions: count
       })
 
-      {:ok, %{statement_id: statement.id, transaction_count: count}}
+      {:ok, %{statement_id: statement.id, transaction_count: count, warnings: warnings}}
     end
   end
 
-  defp parse_file(file_content, "b3", filename, _user_id) do
+  # Normalize parser return values to {transactions, warnings}
+  defp parse_file(file_content, institution_slug, filename, user_id) do
+    result = do_parse_file(file_content, institution_slug, filename, user_id)
+    normalize_parse_result(result)
+  end
+
+  defp do_parse_file(file_content, "b3", filename, _user_id) do
     case file_type(filename) do
       :xlsx -> B3Xlsx.parse(file_content)
       :pdf -> PdfExtractor.extract(file_content, "b3")
@@ -92,7 +99,7 @@ defmodule Grana.Investments.StatementProcessor do
     end
   end
 
-  defp parse_file(file_content, "gcb", filename, _user_id) do
+  defp do_parse_file(file_content, "gcb", filename, _user_id) do
     case file_type(filename) do
       :csv -> GcbCsv.parse(file_content)
       :pdf -> PdfExtractor.extract(file_content, "gcb")
@@ -100,13 +107,28 @@ defmodule Grana.Investments.StatementProcessor do
     end
   end
 
-  defp parse_file(file_content, _institution_slug, filename, user_id) do
+  defp do_parse_file(file_content, _institution_slug, filename, user_id) do
     case file_type(filename) do
       :csv -> GenericCsv.parse(file_content)
       :pdf -> PdfExtractor.extract(file_content, user_id)
       :xlsx -> {:error, "Apenas B3 suporta XLSX. Use CSV (recomendado) ou PDF."}
     end
   end
+
+  # Normalize different parser return formats to {transactions, warnings} or {:error, reason}
+  defp normalize_parse_result({:error, _} = error), do: error
+
+  defp normalize_parse_result({transactions, warnings})
+       when is_list(transactions) and is_list(warnings),
+       do: {transactions, warnings}
+
+  defp normalize_parse_result({:ok, transactions, warnings}) when is_list(transactions),
+    do: {transactions, warnings}
+
+  defp normalize_parse_result({:ok, transactions}) when is_list(transactions),
+    do: {transactions, []}
+
+  defp normalize_parse_result(transactions) when is_list(transactions), do: {transactions, []}
 
   defp file_type(filename) do
     case Path.extname(String.downcase(filename)) do

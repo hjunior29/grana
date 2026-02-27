@@ -19,7 +19,15 @@ defmodule Grana.Investments.Statement do
 
   def changeset(statement, attrs) do
     statement
-    |> cast(attrs, [:filename, :status, :period_start, :period_end, :total_transactions, :user_id, :institution_id])
+    |> cast(attrs, [
+      :filename,
+      :status,
+      :period_start,
+      :period_end,
+      :total_transactions,
+      :user_id,
+      :institution_id
+    ])
     |> validate_required([:filename, :user_id, :institution_id])
     |> validate_inclusion(:status, ["processing", "completed", "error"])
   end
