@@ -500,6 +500,7 @@ defmodule GranaWeb.DashboardLive do
     socket
     |> assign(:inv_summary, merged_summary)
     |> assign(:inv_period_proventos, period_summary.proventos)
+    |> assign(:inv_period_dividends, period_summary.dividends)
     |> assign(:inv_period_proventos_by_asset, period_summary.proventos_by_asset)
     |> assign(:inv_activity, activity)
   end
@@ -673,7 +674,7 @@ defmodule GranaWeb.DashboardLive do
             phx-value-month="all"
             class={["btn btn-xs", (@view_mode in ["year", "total"] && "btn-primary") || "btn-ghost"]}
           >
-            Ano
+            Todos
           </button>
           <button
             :for={m <- months_for_year(@available_months, @selected_year)}
@@ -1309,7 +1310,7 @@ defmodule GranaWeb.DashboardLive do
             phx-value-month="all"
             class={["btn btn-xs", (@inv_view_mode in ["year", "total"] && "btn-primary") || "btn-ghost"]}
           >
-            Ano
+            Todos
           </button>
           <button
             :for={m <- months_for_year(@inv_available_months, @inv_selected_year)}
@@ -1396,14 +1397,15 @@ defmodule GranaWeb.DashboardLive do
 
     <div :if={@inv_summary.transaction_count > 0}>
       <%!-- Stat Cards --%>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
-        <%!-- Patrimônio Atual (cumulative) --%>
+      <% active_count = Enum.count(@inv_summary.holdings, & &1.is_active) %>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
+        <%!-- 1. Patrimônio (cumulative) --%>
         <.link
           navigate={inv_transactions_url(assigns, %{skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
           <div class="stat-title text-[10px] sm:text-xs">
-            Patrimônio Atual
+            Patrimônio
             <span :if={@inv_summary.has_quotes} class="ml-1 text-success">●</span>
           </div>
           <div class="stat-value text-info text-sm sm:text-lg">
@@ -1414,31 +1416,62 @@ defmodule GranaWeb.DashboardLive do
           </div>
         </.link>
 
-        <%!-- Proventos (period) --%>
-        <.link
-          navigate={inv_transactions_url(assigns, %{operation: "dividendo,jcp,rendimento,amortizacao"})}
-          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-        >
-          <div class="stat-title text-[10px] sm:text-xs">Proventos e Resultados</div>
-          <div class="stat-value text-success text-sm sm:text-lg">
-            {format_currency(@inv_period_proventos)}
-          </div>
-          <div class="stat-desc text-[10px] sm:text-xs">{period_label(@inv_view_mode, @inv_selected_year, @inv_selected_month)}</div>
-        </.link>
-
-        <%!-- Total Investido (cumulative) --%>
+        <%!-- 2. Total Investido (cumulative) --%>
         <.link
           navigate={inv_transactions_url(assigns, %{operation: "compra", skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Total Investido</div>
+          <div class="stat-title text-[10px] sm:text-xs">Investido</div>
           <div class="stat-value text-sm sm:text-lg opacity-70">
             {format_currency(@inv_summary.net_position)}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">acumulado</div>
+          <div class="stat-desc text-[10px] sm:text-xs">custo-base</div>
         </.link>
 
-        <%!-- Rentabilidade (cumulative) --%>
+        <%!-- 3. Ativos (cumulative) --%>
+        <.link
+          navigate={inv_transactions_url(assigns, %{skip_dates: true})}
+          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+        >
+          <div class="stat-title text-[10px] sm:text-xs">Ativos</div>
+          <div class="stat-value text-sm sm:text-lg opacity-70">
+            {active_count}
+          </div>
+          <div class="stat-desc text-[10px] sm:text-xs truncate" title={if length(@inv_summary.by_asset_type) > 0, do: Enum.map_join(@inv_summary.by_asset_type, ", ", fn t -> "#{t.count} #{asset_type_label(t.asset_type)}" end), else: "na carteira"}>
+            {if length(@inv_summary.by_asset_type) > 0,
+              do: Enum.map_join(@inv_summary.by_asset_type, ", ", fn t -> "#{t.count} #{asset_type_label(t.asset_type)}" end),
+              else: "na carteira"}
+          </div>
+        </.link>
+
+        <%!-- 4. Dividendos (period) --%>
+        <.link
+          navigate={inv_transactions_url(assigns, %{operation: "dividendo,jcp,rendimento,amortizacao"})}
+          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+        >
+          <div class="stat-title text-[10px] sm:text-xs">Dividendos</div>
+          <div class="stat-value text-success text-sm sm:text-lg">
+            {format_currency(@inv_period_dividends)}
+          </div>
+          <div class="stat-desc text-[10px] sm:text-xs">renda passiva</div>
+        </.link>
+
+        <%!-- 5. Lucro em Vendas (period) --%>
+        <.link
+          navigate={inv_transactions_url(assigns, %{operation: "venda"})}
+          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+        >
+          <div class="stat-title text-[10px] sm:text-xs">Lucro em Vendas</div>
+          <div class={[
+            "stat-value text-sm sm:text-lg",
+            if(Decimal.compare(Decimal.sub(@inv_period_proventos, @inv_period_dividends), 0) == :gt, do: "text-success", else: "opacity-50")
+          ]}>
+            {format_currency(Decimal.sub(@inv_period_proventos, @inv_period_dividends))}
+          </div>
+          <div class="stat-desc text-[10px] sm:text-xs">ganho realizado</div>
+        </.link>
+
+        <%!-- 6. Rentabilidade (cumulative) --%>
         <.link
           navigate={inv_transactions_url(assigns, %{skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
@@ -1526,7 +1559,7 @@ defmodule GranaWeb.DashboardLive do
         <%= if has_proventos?(@inv_activity) do %>
           <div class="card bg-base-200 p-4 sm:p-6">
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
-              Proventos e Resultados
+              Dividendos e Ganhos
             </h3>
             <div
               id="inv-proventos-chart"
@@ -1559,8 +1592,8 @@ defmodule GranaWeb.DashboardLive do
         <% else %>
           <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
             <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Proventos e Resultados</h3>
-              <p class="text-xs opacity-70">Sem proventos no período</p>
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Dividendos e Ganhos</h3>
+              <p class="text-xs opacity-70">Sem ganhos no período</p>
             </div>
           </div>
         <% end %>
@@ -1710,10 +1743,10 @@ defmodule GranaWeb.DashboardLive do
         </div>
       </div>
 
-      <%!-- Maiores Pagadores de Proventos (period-filtered) --%>
+      <%!-- Ganhos por Ativo (period-filtered) --%>
       <div :if={@inv_period_proventos_by_asset != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
         <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
-          Proventos e Resultados por Ativo
+          Ganhos por Ativo
           <span class="text-xs font-normal opacity-50 ml-2">{period_label(@inv_view_mode, @inv_selected_year, @inv_selected_month)}</span>
         </h3>
         <div class="overflow-x-auto">
@@ -1730,7 +1763,7 @@ defmodule GranaWeb.DashboardLive do
                 :for={r <- Enum.take(@inv_period_proventos_by_asset, 20)}
                 class="hover cursor-pointer"
                 phx-click="chart-navigate"
-                phx-value-url={inv_transactions_url(assigns, %{search: r.ticker || r.name, operation: "dividendo,jcp,rendimento,amortizacao"})}
+                phx-value-url={inv_transactions_url(assigns, %{search: r.ticker || r.name})}
               >
                 <td>
                   <div class="flex items-center gap-2">

@@ -1049,7 +1049,7 @@ defmodule GranaWeb.UploadLive do
               patch={~p"/upload?tab=historico&source=banking"}
               class={["btn btn-sm", (@history_filter == "banking" && "btn-primary") || "btn-ghost"]}
             >
-              <.icon name="hero-banknotes" class="size-3.5" /> Bancários
+              <.icon name="hero-banknotes" class="size-3.5" /> Bancária
             </.link>
             <.link
               patch={~p"/upload?tab=historico&source=investment"}
