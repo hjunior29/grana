@@ -1,5 +1,4 @@
 defmodule Grana.Investments.CsvExporter do
-  @bom <<0xEF, 0xBB, 0xBF>>
   @separator ";"
   @headers ["Data", "Ativo", "Ticker", "Tipo Ativo", "Operação", "Quantidade", "Preço Unit.", "Valor Total", "Taxas", "Instituição"]
 
@@ -23,7 +22,7 @@ defmodule Grana.Investments.CsvExporter do
         |> Enum.join(@separator)
       end)
 
-    [@bom, Enum.join(@headers, @separator), "\r\n", Enum.join(rows, "\r\n"), "\r\n"]
+    [Enum.join(@headers, @separator), "\r\n", Enum.join(rows, "\r\n"), "\r\n"]
     |> IO.iodata_to_binary()
   end
 
