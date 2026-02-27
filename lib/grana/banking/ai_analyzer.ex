@@ -2,6 +2,7 @@ defmodule Grana.Banking.AIAnalyzer do
   alias Grana.Accounts
   alias Grana.Banking
   alias Grana.Investments
+  alias Grana.Investments.Constants
   alias Grana.AI.Provider
 
   # ── Banking Analysis ──
@@ -350,23 +351,7 @@ defmodule Grana.Banking.AIAnalyzer do
     """
   end
 
-  defp inv_asset_type_label("acao"), do: "Ações"
-  defp inv_asset_type_label("fii"), do: "FII"
-  defp inv_asset_type_label("etf"), do: "ETF"
-  defp inv_asset_type_label("bdr"), do: "BDR"
-  defp inv_asset_type_label("renda_fixa"), do: "Renda Fixa"
-  defp inv_asset_type_label("tesouro"), do: "Tesouro"
-  defp inv_asset_type_label("cripto"), do: "Cripto"
-  defp inv_asset_type_label("fundo"), do: "Fundo"
-  defp inv_asset_type_label("nota_fiscal"), do: "Nota Fiscal"
-  defp inv_asset_type_label("debenture"), do: "Debênture"
-  defp inv_asset_type_label("precatorio"), do: "Precatório"
-  defp inv_asset_type_label("recebiveis"), do: "Receb. Judiciais"
-  defp inv_asset_type_label("cri"), do: "CRI"
-  defp inv_asset_type_label("cra"), do: "CRA"
-  defp inv_asset_type_label("op_estruturada"), do: "Op. Estruturada"
-  defp inv_asset_type_label("outro"), do: "Outro"
-  defp inv_asset_type_label(type), do: String.capitalize(to_string(type))
+  defp inv_asset_type_label(type), do: Constants.asset_type_label(type)
 
   # ── AI Call ──
 

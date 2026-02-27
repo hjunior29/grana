@@ -1,6 +1,19 @@
 defmodule Grana.Investments.CsvExporter do
+  alias Grana.Investments.Constants
+
   @separator ";"
-  @headers ["Data", "Ativo", "Ticker", "Tipo Ativo", "Operação", "Quantidade", "Preço Unit.", "Valor Total", "Taxas", "Instituição"]
+  @headers [
+    "Data",
+    "Ativo",
+    "Ticker",
+    "Tipo Ativo",
+    "Operação",
+    "Quantidade",
+    "Preço Unit.",
+    "Valor Total",
+    "Taxas",
+    "Instituição"
+  ]
 
   def generate(transactions) do
     rows =
@@ -10,8 +23,8 @@ defmodule Grana.Investments.CsvExporter do
           format_date(txn.date),
           txn.asset_name || "",
           txn.asset_ticker || "",
-          asset_type_label(txn.asset_type),
-          operation_label(txn.operation),
+          Constants.asset_type_label(txn.asset_type),
+          Constants.operation_label(txn.operation),
           format_decimal(txn.quantity),
           format_decimal(txn.unit_price),
           format_amount(txn.total_amount),
@@ -36,6 +49,7 @@ defmodule Grana.Investments.CsvExporter do
   end
 
   defp format_decimal(nil), do: ""
+
   defp format_decimal(%Decimal{} = d) do
     if Decimal.compare(d, 0) == :eq do
       ""
@@ -46,34 +60,6 @@ defmodule Grana.Investments.CsvExporter do
 
   defp institution_name(%{institution: %{name: name}}), do: name
   defp institution_name(_), do: ""
-
-  defp operation_label("compra"), do: "Compra"
-  defp operation_label("venda"), do: "Venda"
-  defp operation_label("dividendo"), do: "Dividendo"
-  defp operation_label("jcp"), do: "JCP"
-  defp operation_label("rendimento"), do: "Rendimento"
-  defp operation_label("amortizacao"), do: "Amortização"
-  defp operation_label("taxa"), do: "Taxa"
-  defp operation_label("outro"), do: "Outro"
-  defp operation_label(op), do: op
-
-  defp asset_type_label("acao"), do: "Ação"
-  defp asset_type_label("fii"), do: "FII"
-  defp asset_type_label("etf"), do: "ETF"
-  defp asset_type_label("bdr"), do: "BDR"
-  defp asset_type_label("renda_fixa"), do: "Renda Fixa"
-  defp asset_type_label("tesouro"), do: "Tesouro"
-  defp asset_type_label("cripto"), do: "Cripto"
-  defp asset_type_label("fundo"), do: "Fundo"
-  defp asset_type_label("nota_fiscal"), do: "Nota Fiscal"
-  defp asset_type_label("debenture"), do: "Debênture"
-  defp asset_type_label("precatorio"), do: "Precatório"
-  defp asset_type_label("recebiveis"), do: "Receb. Judiciais"
-  defp asset_type_label("cri"), do: "CRI"
-  defp asset_type_label("cra"), do: "CRA"
-  defp asset_type_label("op_estruturada"), do: "Op. Estruturada"
-  defp asset_type_label("outro"), do: "Outro"
-  defp asset_type_label(type), do: type
 
   defp escape_field(val) when is_binary(val) do
     if String.contains?(val, [";", "\"", "\n"]) do

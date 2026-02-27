@@ -23,7 +23,13 @@ defmodule GranaWeb.UserLive.Confirmation do
         >
           <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
           <label class="flex items-center gap-2 cursor-pointer mb-4">
-            <input type="checkbox" name={@form[:remember_me].name} value="true" checked class="checkbox checkbox-sm checkbox-primary" />
+            <input
+              type="checkbox"
+              name={@form[:remember_me].name}
+              value="true"
+              checked
+              class="checkbox checkbox-sm checkbox-primary"
+            />
             <span class="text-sm">Manter conectado</span>
           </label>
           <.button phx-disable-with="Confirmando..." class="btn btn-primary w-full">
@@ -47,7 +53,13 @@ defmodule GranaWeb.UserLive.Confirmation do
             </.button>
           <% else %>
             <label class="flex items-center gap-2 cursor-pointer mb-4">
-              <input type="checkbox" name={@form[:remember_me].name} value="true" checked class="checkbox checkbox-sm checkbox-primary" />
+              <input
+                type="checkbox"
+                name={@form[:remember_me].name}
+                value="true"
+                checked
+                class="checkbox checkbox-sm checkbox-primary"
+              />
               <span class="text-sm">Manter conectado</span>
             </label>
             <.button phx-disable-with="Entrando..." class="btn btn-primary w-full">

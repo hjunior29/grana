@@ -179,7 +179,8 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
             {:error, "No transactions found in PDF"}
 
           items ->
-            {:ok, items, %{detected_bank: String.downcase(String.trim(bank)), detected_type: doc_type}}
+            {:ok, items,
+             %{detected_bank: String.downcase(String.trim(bank)), detected_type: doc_type}}
         end
 
       {:ok, %{"transactions" => transactions}} when is_list(transactions) ->

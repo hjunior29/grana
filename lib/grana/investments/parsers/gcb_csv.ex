@@ -23,18 +23,48 @@ defmodule Grana.Investments.Parsers.GcbCsv do
     "dezembro" => 12
   }
 
-  @skip_prefixes ["valor aportado", "valor resgatado", "cashback", "processando investimento", "estorno"]
+  @skip_prefixes [
+    "valor aportado",
+    "valor resgatado",
+    "cashback",
+    "processando investimento",
+    "estorno"
+  ]
 
   def parse(file_content) do
-    file_content
-    |> String.trim()
-    |> String.split(~r/\r?\n/)
-    |> Enum.drop(1)
-    |> Enum.map(&parse_csv_line/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.reject(&skip?/1)
-    |> Enum.map(&classify/1)
-    |> Enum.reject(&is_nil/1)
+    lines =
+      file_content
+      |> String.trim()
+      |> String.split(~r/\r?\n/)
+      |> Enum.drop(1)
+
+    parsed = Enum.map(lines, &parse_csv_line/1)
+
+    {valid_lines, parse_warnings} =
+      Enum.reduce(parsed, {[], []}, fn
+        nil, {acc, w} -> {acc, w}
+        line, {acc, w} -> {[line | acc], w}
+      end)
+
+    non_skipped =
+      valid_lines
+      |> Enum.reverse()
+      |> Enum.reject(&skip?/1)
+
+    {transactions, classify_warnings} =
+      Enum.reduce(non_skipped, {[], []}, fn raw, {txns, warns} ->
+        case classify(raw) do
+          nil ->
+            desc = raw[:description] || "?"
+            {txns, ["Operação não reconhecida: #{desc}" | warns]}
+
+          txn ->
+            {[txn | txns], warns}
+        end
+      end)
+
+    warnings = Enum.reverse(parse_warnings ++ classify_warnings)
+    {Enum.reverse(transactions), warnings}
   rescue
     e -> {:error, "Erro ao processar CSV da GCB: #{Exception.message(e)}"}
   end
@@ -146,61 +176,150 @@ defmodule Grana.Investments.Parsers.GcbCsv do
     cond do
       # Nota Fiscal — recompra (must be before compra, as "recompra" contains "compra")
       String.contains?(norm, "recompra de nota fiscal") ->
-        {:ok, %{asset_type: "nota_fiscal", operation: "venda", asset_name: "Nota Fiscal", ticker: nil, identifier: nil}}
+        {:ok,
+         %{
+           asset_type: "nota_fiscal",
+           operation: "venda",
+           asset_name: "Nota Fiscal",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # Nota Fiscal — liquidação (venda/retorno)
       String.contains?(norm, "liquidacao de nota fiscal") ->
-        {:ok, %{asset_type: "nota_fiscal", operation: "venda", asset_name: "Nota Fiscal", ticker: nil, identifier: nil}}
+        {:ok,
+         %{
+           asset_type: "nota_fiscal",
+           operation: "venda",
+           asset_name: "Nota Fiscal",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # Nota Fiscal — compra
       String.contains?(norm, "compra de nota fiscal") or
-        String.contains?(norm, "investimento em nota fiscal") ->
-        {:ok, %{asset_type: "nota_fiscal", operation: "compra", asset_name: "Nota Fiscal", ticker: nil, identifier: nil}}
+          String.contains?(norm, "investimento em nota fiscal") ->
+        {:ok,
+         %{
+           asset_type: "nota_fiscal",
+           operation: "compra",
+           asset_name: "Nota Fiscal",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # Debênture — resgate (check before compra to avoid false match)
       String.contains?(norm, "resgate") and String.contains?(norm, "debenture") ->
         ticker = extract_id(desc, ~r/(DEB\d+)/)
         name = extract_debenture_name(desc)
-        {:ok, %{asset_type: "debenture", operation: "venda", asset_name: name, ticker: ticker, identifier: ticker}}
+
+        {:ok,
+         %{
+           asset_type: "debenture",
+           operation: "venda",
+           asset_name: name,
+           ticker: ticker,
+           identifier: ticker
+         }}
 
       # Debênture — compra
       String.contains?(norm, "debenture") or Regex.match?(~r/investimento em deb\d+/i, norm) ->
         ticker = extract_id(desc, ~r/(DEB\d+)/)
         name = extract_debenture_name(desc)
-        {:ok, %{asset_type: "debenture", operation: "compra", asset_name: name, ticker: ticker, identifier: ticker}}
+
+        {:ok,
+         %{
+           asset_type: "debenture",
+           operation: "compra",
+           asset_name: name,
+           ticker: ticker,
+           identifier: ticker
+         }}
 
       # Precatório — compra
       String.contains?(norm, "compra de precatorio") ->
-        {:ok, %{asset_type: "precatorio", operation: "compra", asset_name: "Precatório Federal", ticker: nil, identifier: nil}}
+        {:ok,
+         %{
+           asset_type: "precatorio",
+           operation: "compra",
+           asset_name: "Precatório Federal",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # Precatório — liquidação (venda/retorno)
       String.contains?(norm, "precatorio") and String.contains?(norm, "liquidacao") ->
-        {:ok, %{asset_type: "precatorio", operation: "venda", asset_name: "Precatório Federal", ticker: nil, identifier: nil}}
+        {:ok,
+         %{
+           asset_type: "precatorio",
+           operation: "venda",
+           asset_name: "Precatório Federal",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # Criptomoeda — compra
       String.contains?(norm, "compra de criptomoeda") ->
         crypto_name = extract_after(desc, ~r/Criptomoeda\s+(.+)/i)
         {name, ticker} = crypto_info(crypto_name)
-        {:ok, %{asset_type: "cripto", operation: "compra", asset_name: name, ticker: ticker, identifier: nil}}
+
+        {:ok,
+         %{
+           asset_type: "cripto",
+           operation: "compra",
+           asset_name: name,
+           ticker: ticker,
+           identifier: nil
+         }}
 
       # Criptomoeda — venda
       String.contains?(norm, "venda de criptomoeda") ->
         crypto_name = extract_after(desc, ~r/Criptomoeda\s+(.+)/i)
         {name, ticker} = crypto_info(crypto_name)
-        {:ok, %{asset_type: "cripto", operation: "venda", asset_name: name, ticker: ticker, identifier: nil}}
+
+        {:ok,
+         %{
+           asset_type: "cripto",
+           operation: "venda",
+           asset_name: name,
+           ticker: ticker,
+           identifier: nil
+         }}
 
       # Operação Estruturada — compra
       String.contains?(norm, "compra de operacao estruturada") ->
-        {:ok, %{asset_type: "op_estruturada", operation: "compra", asset_name: "Operação Estruturada", ticker: nil, identifier: nil}}
+        {:ok,
+         %{
+           asset_type: "op_estruturada",
+           operation: "compra",
+           asset_name: "Operação Estruturada",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # Operação Estruturada — liquidação (venda/retorno)
       String.contains?(norm, "liquidacao de operacao estruturada") ->
-        {:ok, %{asset_type: "op_estruturada", operation: "venda", asset_name: "Operação Estruturada", ticker: nil, identifier: nil}}
+        {:ok,
+         %{
+           asset_type: "op_estruturada",
+           operation: "venda",
+           asset_name: "Operação Estruturada",
+           ticker: nil,
+           identifier: nil
+         }}
 
       # INSS / Recebíveis Judiciais
       String.contains?(norm, "investimento em inss") ->
         ticker = extract_id(desc, ~r/(INSS\d+)/)
-        {:ok, %{asset_type: "recebiveis", operation: "compra", asset_name: "Recebível Judicial (INSS)", ticker: ticker, identifier: ticker}}
+
+        {:ok,
+         %{
+           asset_type: "recebiveis",
+           operation: "compra",
+           asset_name: "Recebível Judicial (INSS)",
+           ticker: ticker,
+           identifier: ticker
+         }}
 
       # Fallback — operação não reconhecida
       true ->
@@ -239,7 +358,6 @@ defmodule Grana.Investments.Parsers.GcbCsv do
       true -> "Debênture"
     end
   end
-
 
   defp crypto_info(name) do
     name = String.trim(name)

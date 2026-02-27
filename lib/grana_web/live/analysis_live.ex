@@ -4,7 +4,7 @@ defmodule GranaWeb.AnalysisLive do
   alias Grana.Banking
   alias Grana.Banking.AIAnalyzer
   alias Grana.Investments
-  alias Grana.Investments.Institution
+  alias Grana.Investments.{Constants, Institution}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -347,23 +347,7 @@ defmodule GranaWeb.AnalysisLive do
   defp type_label("credit"), do: "Receitas"
   defp type_label(_), do: nil
 
-  defp inv_asset_type_label("acao"), do: "Ações"
-  defp inv_asset_type_label("fii"), do: "FII"
-  defp inv_asset_type_label("etf"), do: "ETF"
-  defp inv_asset_type_label("bdr"), do: "BDR"
-  defp inv_asset_type_label("renda_fixa"), do: "Renda Fixa"
-  defp inv_asset_type_label("tesouro"), do: "Tesouro"
-  defp inv_asset_type_label("cripto"), do: "Cripto"
-  defp inv_asset_type_label("fundo"), do: "Fundo"
-  defp inv_asset_type_label("nota_fiscal"), do: "Nota Fiscal"
-  defp inv_asset_type_label("debenture"), do: "Debênture"
-  defp inv_asset_type_label("precatorio"), do: "Precatório"
-  defp inv_asset_type_label("recebiveis"), do: "Receb. Judiciais"
-  defp inv_asset_type_label("cri"), do: "CRI"
-  defp inv_asset_type_label("cra"), do: "CRA"
-  defp inv_asset_type_label("op_estruturada"), do: "Op. Estruturada"
-  defp inv_asset_type_label("outro"), do: "Outro"
-  defp inv_asset_type_label(_), do: "—"
+  defp inv_asset_type_label(type), do: Constants.asset_type_label(type)
 
   defp filter_analyses(analyses, "banking") do
     Enum.filter(analyses, fn a ->
@@ -719,8 +703,11 @@ defmodule GranaWeb.AnalysisLive do
                 "btn-ghost"
             ]}
           >
-            <div :if={inst.logo_path} class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
-              <img src={inst.logo_path} alt=""/>
+            <div
+              :if={inst.logo_path}
+              class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0"
+            >
+              <img src={inst.logo_path} alt="" />
             </div>
             <span class="hidden sm:inline">{inst.name}</span>
           </button>
@@ -975,9 +962,7 @@ defmodule GranaWeb.AnalysisLive do
                           {analysis.filters_json["year"]}
                         </span>
                         <span
-                          :if={
-                            analysis.filters_json["month"] && analysis.filters_json["month"] != 0
-                          }
+                          :if={analysis.filters_json["month"] && analysis.filters_json["month"] != 0}
                           class="badge badge-xs badge-ghost"
                         >
                           {Banking.month_name(analysis.filters_json["month"])}

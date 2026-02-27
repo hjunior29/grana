@@ -211,7 +211,11 @@ defmodule GranaWeb.UploadLive do
     {:noreply, socket}
   end
 
-  def handle_event("select_investment_provider", _params, %{assigns: %{processing: true}} = socket) do
+  def handle_event(
+        "select_investment_provider",
+        _params,
+        %{assigns: %{processing: true}} = socket
+      ) do
     {:noreply, socket}
   end
 
@@ -417,7 +421,9 @@ defmodule GranaWeb.UploadLive do
 
   defp reload_statements(socket) do
     source = Map.get(socket.assigns, :history_filter, "all")
-    {:noreply, push_patch(socket, to: "/upload?tab=historico&page=#{socket.assigns.page}&source=#{source}")}
+
+    {:noreply,
+     push_patch(socket, to: "/upload?tab=historico&page=#{socket.assigns.page}&source=#{source}")}
   end
 
   @impl true
@@ -478,7 +484,7 @@ defmodule GranaWeb.UploadLive do
                  user_id,
                  filename
                ) do
-            {:ok, r} -> {:ok, filename, r.transaction_count}
+            {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
             {:error, reason} -> {:error, filename, reason}
           end
 
@@ -513,6 +519,7 @@ defmodule GranaWeb.UploadLive do
 
     {successes, errors} =
       Enum.split_with(results, fn
+        {:ok, _, _, _} -> true
         {:ok, _, _} -> true
         _ -> false
       end)
@@ -529,6 +536,17 @@ defmodule GranaWeb.UploadLive do
       |> assign(:progress_total, 0)
       |> assign(:progress_filename, "")
       |> assign(:progress_ai, false)
+
+    # Collect parser warnings from successful results
+    all_warnings =
+      successes
+      |> Enum.flat_map(fn
+        {:ok, filename, _count, warnings} when warnings != [] ->
+          Enum.map(warnings, &"#{filename}: #{&1}")
+
+        _ ->
+          []
+      end)
 
     socket =
       case {successes, errors} do
@@ -552,6 +570,16 @@ defmodule GranaWeb.UploadLive do
           socket
           |> put_flash(:info, "#{length(successes)} processado(s) com sucesso")
           |> put_flash(:error, Enum.join(error_msgs, " | "))
+      end
+
+    socket =
+      if all_warnings != [] do
+        warning_count = length(all_warnings)
+        summary = Enum.take(all_warnings, 5) |> Enum.join(" | ")
+        extra = if warning_count > 5, do: " (+#{warning_count - 5} mais)", else: ""
+        put_flash(socket, :warning, "#{warning_count} linha(s) ignorada(s): #{summary}#{extra}")
+      else
+        socket
       end
 
     {:noreply, socket}
@@ -600,7 +628,11 @@ defmodule GranaWeb.UploadLive do
             phx-click="switch_tab"
             phx-value-tab="upload"
             disabled={@processing}
-            class={["tab", @tab == "upload" && "tab-active", @processing && "opacity-50 cursor-not-allowed"]}
+            class={[
+              "tab",
+              @tab == "upload" && "tab-active",
+              @processing && "opacity-50 cursor-not-allowed"
+            ]}
           >
             <.icon name="hero-cloud-arrow-up" class="size-4 mr-1" /> Upload
           </button>
@@ -609,16 +641,23 @@ defmodule GranaWeb.UploadLive do
             phx-click="switch_tab"
             phx-value-tab="historico"
             disabled={@processing}
-            class={["tab", @tab == "historico" && "tab-active", @processing && "opacity-50 cursor-not-allowed"]}
+            class={[
+              "tab",
+              @tab == "historico" && "tab-active",
+              @processing && "opacity-50 cursor-not-allowed"
+            ]}
           >
             <.icon name="hero-document-text" class="size-4 mr-1" /> Histórico
-            <span :if={@total > 0} class="badge badge-sm badge-ghost ml-1"><%= @total %></span>
+            <span :if={@total > 0} class="badge badge-sm badge-ghost ml-1">{@total}</span>
           </button>
         </div>
 
         <div :if={@tab == "upload"}>
           <%!-- Upload Category Selection --%>
-          <div class={["grid grid-cols-1 md:grid-cols-2 gap-4 mb-8", @processing && "opacity-50 pointer-events-none"]}>
+          <div class={[
+            "grid grid-cols-1 md:grid-cols-2 gap-4 mb-8",
+            @processing && "opacity-50 pointer-events-none"
+          ]}>
             <button
               phx-click="select_upload_category"
               phx-value-category="banking"
@@ -661,221 +700,233 @@ defmodule GranaWeb.UploadLive do
           </div>
 
           <div :if={@upload_category == "banking"}>
-          <div class={["grid grid-cols-1 md:grid-cols-3 gap-6 mb-8", @processing && "opacity-50 pointer-events-none"]}>
-            <button
-              phx-click="select-bank"
-              phx-value-bank="nubank"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@bank == "nubank" && "border-primary") || "border-transparent"
-              ]}
-            >
-              <div class="flex items-center gap-4">
-                <img
-                  src={~p"/images/nubank-logo.png"}
-                  alt="Nubank"
-                  class="w-12 h-12 rounded-full"
-                />
-                <div class="text-left">
-                  <h3 class="font-semibold text-lg">Nubank</h3>
-                  <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              phx-click="select-bank"
-              phx-value-bank="bradesco"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@bank == "bradesco" && "border-primary") || "border-transparent"
-              ]}
-            >
-              <div class="flex items-center gap-4">
-                <img
-                  src={~p"/images/bradesco-logo.png"}
-                  alt="Bradesco"
-                  class="w-12 h-12 rounded-full"
-                />
-                <div class="text-left">
-                  <h3 class="font-semibold text-lg">Bradesco</h3>
-                  <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              phx-click="select-bank"
-              phx-value-bank="outro"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@bank == "outro" && "border-primary") || "border-transparent"
-              ]}
-            >
-              <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
-                  <.icon name="hero-building-library" class="size-6 opacity-60" />
-                </div>
-                <div class="text-left">
-                  <h3 class="font-semibold text-lg">Outro banco</h3>
-                  <p class="text-sm opacity-70">Qualquer banco via PDF + IA</p>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          <div :if={@bank} class={["grid grid-cols-1 md:grid-cols-2 gap-4 mb-8", @processing && "opacity-50 pointer-events-none"]}>
-            <button
-              phx-click="select-type"
-              phx-value-type="extrato"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@statement_type == "extrato" && "border-info") || "border-transparent"
-              ]}
-            >
-              <div class="flex items-center gap-3">
-                <.icon name="hero-banknotes" class="size-8 text-info" />
-                <div class="text-left">
-                  <h3 class="font-semibold">Extrato</h3>
-                  <p class="text-sm opacity-70">Conta corrente — entradas e saídas</p>
-                  <p class="text-xs opacity-50 mt-1">
-                    {extrato_tip(@bank)}
-                  </p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              phx-click="select-type"
-              phx-value-type="fatura"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@statement_type == "fatura" && "border-warning") || "border-transparent"
-              ]}
-            >
-              <div class="flex items-center gap-3">
-                <.icon name="hero-credit-card" class="size-8 text-warning" />
-                <div class="text-left">
-                  <h3 class="font-semibold">Fatura</h3>
-                  <p class="text-sm opacity-70">Cartão de crédito — gastos e parcelas</p>
-                  <p class="text-xs opacity-50 mt-1">
-                    {fatura_tip(@bank)}
-                  </p>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          <div :if={@bank && @statement_type} class="card bg-base-200 p-8 mb-8">
-            <form id="upload-form" phx-submit="upload" phx-change="validate">
-              <div class="flex flex-col items-center gap-4">
-                <div
-                  id="drop-zone"
-                  class={[
-                    "w-full border-2 border-dashed rounded-xl transition-all duration-200",
-                    (!@processing && "border-base-content/20 hover:border-primary/50") ||
-                      "border-base-content/10 opacity-50 pointer-events-none"
-                  ]}
-                  phx-drop-target={!@processing && @uploads.statements.ref}
-                  phx-hook="DropZone"
-                >
-                  <.live_file_input
-                    upload={@uploads.statements}
-                    class="hidden"
-                    disabled={@processing}
+            <div class={[
+              "grid grid-cols-1 md:grid-cols-3 gap-6 mb-8",
+              @processing && "opacity-50 pointer-events-none"
+            ]}>
+              <button
+                phx-click="select-bank"
+                phx-value-bank="nubank"
+                disabled={@processing}
+                class={[
+                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@bank == "nubank" && "border-primary") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-4">
+                  <img
+                    src={~p"/images/nubank-logo.png"}
+                    alt="Nubank"
+                    class="w-12 h-12 rounded-full"
                   />
-                  <label
-                    for={!@processing && @uploads.statements.ref}
-                    class={[
-                      "block p-8 text-center",
-                      (!@processing && "cursor-pointer") || "cursor-not-allowed"
-                    ]}
-                  >
-                    <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
-                    <p class="font-medium">
-                      <%= if @bank == "outro" do %>
-                        Arraste arquivos PDF, ou clique para selecionar
-                      <% else %>
-                        Arraste arquivos CSV ou PDF, ou clique para selecionar
-                      <% end %>
+                  <div class="text-left">
+                    <h3 class="font-semibold text-lg">Nubank</h3>
+                    <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                phx-click="select-bank"
+                phx-value-bank="bradesco"
+                disabled={@processing}
+                class={[
+                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@bank == "bradesco" && "border-primary") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-4">
+                  <img
+                    src={~p"/images/bradesco-logo.png"}
+                    alt="Bradesco"
+                    class="w-12 h-12 rounded-full"
+                  />
+                  <div class="text-left">
+                    <h3 class="font-semibold text-lg">Bradesco</h3>
+                    <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                phx-click="select-bank"
+                phx-value-bank="outro"
+                disabled={@processing}
+                class={[
+                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@bank == "outro" && "border-primary") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+                    <.icon name="hero-building-library" class="size-6 opacity-60" />
+                  </div>
+                  <div class="text-left">
+                    <h3 class="font-semibold text-lg">Outro banco</h3>
+                    <p class="text-sm opacity-70">Qualquer banco via PDF + IA</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div
+              :if={@bank}
+              class={[
+                "grid grid-cols-1 md:grid-cols-2 gap-4 mb-8",
+                @processing && "opacity-50 pointer-events-none"
+              ]}
+            >
+              <button
+                phx-click="select-type"
+                phx-value-type="extrato"
+                disabled={@processing}
+                class={[
+                  "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@statement_type == "extrato" && "border-info") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-3">
+                  <.icon name="hero-banknotes" class="size-8 text-info" />
+                  <div class="text-left">
+                    <h3 class="font-semibold">Extrato</h3>
+                    <p class="text-sm opacity-70">Conta corrente — entradas e saídas</p>
+                    <p class="text-xs opacity-50 mt-1">
+                      {extrato_tip(@bank)}
                     </p>
-                    <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
-                  </label>
+                  </div>
                 </div>
+              </button>
 
-                <div :if={@uploads.statements.entries != []} class="w-full space-y-3">
+              <button
+                phx-click="select-type"
+                phx-value-type="fatura"
+                disabled={@processing}
+                class={[
+                  "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
+                  (@statement_type == "fatura" && "border-warning") || "border-transparent"
+                ]}
+              >
+                <div class="flex items-center gap-3">
+                  <.icon name="hero-credit-card" class="size-8 text-warning" />
+                  <div class="text-left">
+                    <h3 class="font-semibold">Fatura</h3>
+                    <p class="text-sm opacity-70">Cartão de crédito — gastos e parcelas</p>
+                    <p class="text-xs opacity-50 mt-1">
+                      {fatura_tip(@bank)}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div :if={@bank && @statement_type} class="card bg-base-200 p-8 mb-8">
+              <form id="upload-form" phx-submit="upload" phx-change="validate">
+                <div class="flex flex-col items-center gap-4">
                   <div
-                    :for={entry <- @uploads.statements.entries}
-                    class="flex items-center justify-between bg-base-100 rounded-lg p-3"
+                    id="drop-zone"
+                    class={[
+                      "w-full border-2 border-dashed rounded-xl transition-all duration-200",
+                      (!@processing && "border-base-content/20 hover:border-primary/50") ||
+                        "border-base-content/10 opacity-50 pointer-events-none"
+                    ]}
+                    phx-drop-target={!@processing && @uploads.statements.ref}
+                    phx-hook="DropZone"
                   >
-                    <div class="flex items-center gap-3">
-                      <.icon name="hero-document-text" class="size-5 opacity-60" />
-                      <span class="text-sm font-medium">{entry.client_name}</span>
-                      <span class="badge badge-sm">{format_bytes(entry.client_size)}</span>
-                    </div>
-                    <button
-                      type="button"
-                      phx-click="cancel-upload"
-                      phx-value-ref={entry.ref}
-                      class="btn btn-ghost btn-xs btn-circle"
+                    <.live_file_input
+                      upload={@uploads.statements}
+                      class="hidden"
+                      disabled={@processing}
+                    />
+                    <label
+                      for={!@processing && @uploads.statements.ref}
+                      class={[
+                        "block p-8 text-center",
+                        (!@processing && "cursor-pointer") || "cursor-not-allowed"
+                      ]}
                     >
-                      <.icon name="hero-x-mark" class="size-4" />
-                    </button>
+                      <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
+                      <p class="font-medium">
+                        <%= if @bank == "outro" do %>
+                          Arraste arquivos PDF, ou clique para selecionar
+                        <% else %>
+                          Arraste arquivos CSV ou PDF, ou clique para selecionar
+                        <% end %>
+                      </p>
+                      <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
+                    </label>
                   </div>
-                </div>
 
-                <div :for={err <- upload_errors(@uploads.statements)} class="text-error text-sm">
-                  {upload_error_to_string(err)}
-                </div>
-
-                <button
-                  :if={!@processing}
-                  type="submit"
-                  class="btn btn-primary btn-wide"
-                  disabled={@uploads.statements.entries == []}
-                >
-                  Processar
-                </button>
-
-                <div
-                  :if={@processing}
-                  id="upload-progress"
-                  phx-hook="ProgressBar"
-                  data-progress={progress_percent(@progress_current, @progress_total)}
-                  data-total={@progress_total}
-                  data-ai={to_string(@progress_ai)}
-                  class="w-full"
-                >
-                  <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                      <span class="loading loading-spinner loading-xs"></span>
-                      <span class="text-sm">
-                        <span :if={@progress_filename != ""} class="font-medium">
-                          {@progress_filename}
-                        </span>
-                        <span :if={@progress_total > 1} class="opacity-60">
-                          — {@progress_current}/{@progress_total}
-                        </span>
-                      </span>
+                  <div :if={@uploads.statements.entries != []} class="w-full space-y-3">
+                    <div
+                      :for={entry <- @uploads.statements.entries}
+                      class="flex items-center justify-between bg-base-100 rounded-lg p-3"
+                    >
+                      <div class="flex items-center gap-3">
+                        <.icon name="hero-document-text" class="size-5 opacity-60" />
+                        <span class="text-sm font-medium">{entry.client_name}</span>
+                        <span class="badge badge-sm">{format_bytes(entry.client_size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        phx-click="cancel-upload"
+                        phx-value-ref={entry.ref}
+                        class="btn btn-ghost btn-xs btn-circle"
+                      >
+                        <.icon name="hero-x-mark" class="size-4" />
+                      </button>
                     </div>
-                    <span data-pct class="text-sm font-mono opacity-60">0%</span>
                   </div>
-                  <progress class="progress progress-primary w-full" value="0" max="100"></progress>
+
+                  <div :for={err <- upload_errors(@uploads.statements)} class="text-error text-sm">
+                    {upload_error_to_string(err)}
+                  </div>
+
+                  <button
+                    :if={!@processing}
+                    type="submit"
+                    class="btn btn-primary btn-wide"
+                    disabled={@uploads.statements.entries == []}
+                  >
+                    Processar
+                  </button>
+
+                  <div
+                    :if={@processing}
+                    id="upload-progress"
+                    phx-hook="ProgressBar"
+                    data-progress={progress_percent(@progress_current, @progress_total)}
+                    data-total={@progress_total}
+                    data-ai={to_string(@progress_ai)}
+                    class="w-full"
+                  >
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-xs"></span>
+                        <span class="text-sm">
+                          <span :if={@progress_filename != ""} class="font-medium">
+                            {@progress_filename}
+                          </span>
+                          <span :if={@progress_total > 1} class="opacity-60">
+                            — {@progress_current}/{@progress_total}
+                          </span>
+                        </span>
+                      </div>
+                      <span data-pct class="text-sm font-mono opacity-60">0%</span>
+                    </div>
+                    <progress class="progress progress-primary w-full" value="0" max="100"></progress>
+                  </div>
                 </div>
-              </div>
-            </form>
-          </div>
+              </form>
+            </div>
           </div>
 
           <%!-- Investment Upload Flow --%>
           <div :if={@upload_category == "investment"}>
             <%!-- Provider Selection --%>
-            <div class={["grid grid-cols-1 md:grid-cols-2 gap-6 mb-8", @processing && "opacity-50 pointer-events-none"]}>
+            <div class={[
+              "grid grid-cols-1 md:grid-cols-2 gap-6 mb-8",
+              @processing && "opacity-50 pointer-events-none"
+            ]}>
               <button
                 phx-click="select_investment_provider"
                 phx-value-provider="b3"
@@ -1028,8 +1079,7 @@ defmodule GranaWeb.UploadLive do
                       </div>
                       <span data-pct class="text-sm font-mono opacity-60">0%</span>
                     </div>
-                    <progress class="progress progress-primary w-full" value="0" max="100">
-                    </progress>
+                    <progress class="progress progress-primary w-full" value="0" max="100"></progress>
                   </div>
                 </div>
               </form>
@@ -1116,7 +1166,10 @@ defmodule GranaWeb.UploadLive do
                     </td>
                     <td>
                       <.link navigate={stmt.link} class="flex items-center gap-3">
-                        <div :if={stmt.logo} class="w-8 h-8 rounded-full overflow-hidden bg-base-300 shrink-0">
+                        <div
+                          :if={stmt.logo}
+                          class="w-8 h-8 rounded-full overflow-hidden bg-base-300 shrink-0"
+                        >
                           <img src={stmt.logo} alt={stmt.name} />
                         </div>
                         <div

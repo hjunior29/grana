@@ -108,7 +108,7 @@ defmodule Grana.Investments.QuoteProvider do
   end
 
   defp decimal(nil), do: Decimal.new(0)
-  defp decimal(val) when is_float(val), do: Decimal.from_float(val)
+  defp decimal(val) when is_float(val), do: val |> Decimal.from_float() |> Decimal.round(8)
   defp decimal(val) when is_integer(val), do: Decimal.new(val)
   defp decimal(val) when is_binary(val), do: Decimal.new(val)
 end

@@ -2,8 +2,7 @@ defmodule Grana.Investments.Transaction do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @asset_types ~w(acao fii etf bdr renda_fixa tesouro cripto fundo nota_fiscal debenture precatorio recebiveis cri cra op_estruturada outro)
-  @operations ~w(compra venda dividendo jcp rendimento amortizacao taxa outro)
+  alias Grana.Investments.Constants
 
   schema "investment_transactions" do
     field :date, :date
@@ -28,15 +27,34 @@ defmodule Grana.Investments.Transaction do
   def changeset(transaction, attrs) do
     transaction
     |> cast(attrs, [
-      :date, :asset_name, :asset_ticker, :asset_type, :operation,
-      :quantity, :unit_price, :total_amount, :fees, :identifier,
-      :original_description, :user_id, :statement_id, :institution_id
+      :date,
+      :asset_name,
+      :asset_ticker,
+      :asset_type,
+      :operation,
+      :quantity,
+      :unit_price,
+      :total_amount,
+      :fees,
+      :identifier,
+      :original_description,
+      :user_id,
+      :statement_id,
+      :institution_id
     ])
-    |> validate_required([:date, :asset_name, :asset_type, :operation, :total_amount, :user_id, :statement_id])
-    |> validate_inclusion(:asset_type, @asset_types)
-    |> validate_inclusion(:operation, @operations)
+    |> validate_required([
+      :date,
+      :asset_name,
+      :asset_type,
+      :operation,
+      :total_amount,
+      :user_id,
+      :statement_id
+    ])
+    |> validate_inclusion(:asset_type, Constants.asset_types())
+    |> validate_inclusion(:operation, Constants.operations())
   end
 
-  def asset_types, do: @asset_types
-  def operations, do: @operations
+  defdelegate asset_types, to: Constants
+  defdelegate operations, to: Constants
 end

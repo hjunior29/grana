@@ -3,7 +3,7 @@ defmodule GranaWeb.DashboardLive do
 
   alias Grana.Banking
   alias Grana.Investments
-  alias Grana.Investments.Institution
+  alias Grana.Investments.{Constants, Institution}
 
   # ── Mount ──
 
@@ -312,7 +312,9 @@ defmodule GranaWeb.DashboardLive do
       end
 
     installment_summary = Banking.installment_projection_summary(user_id, installment_opts)
-    installment_projections = Banking.monthly_installment_projections(user_id, 12, installment_opts)
+
+    installment_projections =
+      Banking.monthly_installment_projections(user_id, 12, installment_opts)
 
     socket
     |> assign(:summary, summary)
@@ -437,8 +439,12 @@ defmodule GranaWeb.DashboardLive do
 
     cumulative_opts =
       case view_mode do
-        "total" -> []
-        "year" -> [date_to: Date.new!(year, 12, 31)]
+        "total" ->
+          []
+
+        "year" ->
+          [date_to: Date.new!(year, 12, 31)]
+
         "month" ->
           date_start = Date.new!(year, month, 1)
           [date_to: Date.end_of_month(date_start)]
@@ -448,8 +454,12 @@ defmodule GranaWeb.DashboardLive do
 
     period_opts =
       case view_mode do
-        "total" -> []
-        "year" -> [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)]
+        "total" ->
+          []
+
+        "year" ->
+          [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)]
+
         "month" ->
           date_start = Date.new!(year, month, 1)
           [date_from: date_start, date_to: Date.end_of_month(date_start)]
@@ -799,9 +809,7 @@ defmodule GranaWeb.DashboardLive do
 
     <div :if={@summary.transaction_count > 0}>
       <%!-- Stat Cards --%>
-      <div
-        class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8"
-      >
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
         <%= if @summary.income_count == 0 do %>
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
             <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
@@ -922,9 +930,7 @@ defmodule GranaWeb.DashboardLive do
       </div>
 
       <%!-- Charts: Category + Daily/Monthly --%>
-      <div
-        class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6"
-      >
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         <div class="card bg-base-200 p-4 sm:p-6">
           <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
           <div
@@ -1004,7 +1010,10 @@ defmodule GranaWeb.DashboardLive do
         </div>
 
         <%!-- Yearly Spending Chart (total view) --%>
-        <div :if={@view_mode == "total" and @yearly_spending != []} class="card bg-base-200 p-4 sm:p-6">
+        <div
+          :if={@view_mode == "total" and @yearly_spending != []}
+          class="card bg-base-200 p-4 sm:p-6"
+        >
           <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos por Ano</h3>
           <div
             id="yearly-spending-chart"
@@ -1059,9 +1068,7 @@ defmodule GranaWeb.DashboardLive do
       </div>
 
       <%!-- Top Expenses / Top Income --%>
-      <div
-        class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6"
-      >
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         <div class="card bg-base-200 p-4 sm:p-6">
           <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
           <div class="space-y-1">
@@ -1287,7 +1294,10 @@ defmodule GranaWeb.DashboardLive do
         <div class="flex gap-1">
           <button
             phx-click="select_view_total"
-            class={["btn btn-xs sm:btn-sm", (@inv_view_mode == "total" && "btn-primary") || "btn-ghost"]}
+            class={[
+              "btn btn-xs sm:btn-sm",
+              (@inv_view_mode == "total" && "btn-primary") || "btn-ghost"
+            ]}
           >
             Todos
           </button>
@@ -1308,7 +1318,10 @@ defmodule GranaWeb.DashboardLive do
           <button
             phx-click="select_month"
             phx-value-month="all"
-            class={["btn btn-xs", (@inv_view_mode in ["year", "total"] && "btn-primary") || "btn-ghost"]}
+            class={[
+              "btn btn-xs",
+              (@inv_view_mode in ["year", "total"] && "btn-primary") || "btn-ghost"
+            ]}
           >
             Todos
           </button>
@@ -1350,8 +1363,11 @@ defmodule GranaWeb.DashboardLive do
                 "btn-ghost"
             ]}
           >
-            <div :if={inst.logo_path} class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
-              <img src={inst.logo_path} alt=""/>
+            <div
+              :if={inst.logo_path}
+              class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0"
+            >
+              <img src={inst.logo_path} alt="" />
             </div>
             <span class="hidden sm:inline">{inst.name}</span>
           </button>
@@ -1396,6 +1412,10 @@ defmodule GranaWeb.DashboardLive do
     </div>
 
     <div :if={@inv_summary.transaction_count > 0}>
+      <div :if={!@inv_summary.has_quotes} class="alert alert-warning text-xs mb-4">
+        <.icon name="hero-exclamation-triangle" class="size-4" />
+        <span>Cotações indisponíveis — valores mostram custo-base.</span>
+      </div>
       <%!-- Stat Cards --%>
       <% active_count = Enum.count(@inv_summary.holdings, & &1.is_active) %>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
@@ -1405,8 +1425,7 @@ defmodule GranaWeb.DashboardLive do
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
           <div class="stat-title text-[10px] sm:text-xs">
-            Patrimônio
-            <span :if={@inv_summary.has_quotes} class="ml-1 text-success">●</span>
+            Patrimônio <span :if={@inv_summary.has_quotes} class="ml-1 text-success">●</span>
           </div>
           <div class="stat-value text-info text-sm sm:text-lg">
             {format_currency(@inv_summary.market_value)}
@@ -1437,16 +1456,29 @@ defmodule GranaWeb.DashboardLive do
           <div class="stat-value text-sm sm:text-lg opacity-70">
             {active_count}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs truncate" title={if length(@inv_summary.by_asset_type) > 0, do: Enum.map_join(@inv_summary.by_asset_type, ", ", fn t -> "#{t.count} #{asset_type_label(t.asset_type)}" end), else: "na carteira"}>
+          <div
+            class="stat-desc text-[10px] sm:text-xs truncate"
+            title={
+              if length(@inv_summary.by_asset_type) > 0,
+                do:
+                  Enum.map_join(@inv_summary.by_asset_type, ", ", fn t ->
+                    "#{t.count} #{asset_type_label(t.asset_type)}"
+                  end),
+                else: "na carteira"
+            }
+          >
             {if length(@inv_summary.by_asset_type) > 0,
-              do: Enum.map_join(@inv_summary.by_asset_type, ", ", fn t -> "#{t.count} #{asset_type_label(t.asset_type)}" end),
+              do:
+                Enum.map_join(@inv_summary.by_asset_type, ", ", fn t ->
+                  "#{t.count} #{asset_type_label(t.asset_type)}"
+                end),
               else: "na carteira"}
           </div>
         </.link>
 
         <%!-- 4. Dividendos (period) --%>
         <.link
-          navigate={inv_transactions_url(assigns, %{operation: "dividendo,jcp,rendimento,amortizacao"})}
+          navigate={inv_transactions_url(assigns, %{operation: Constants.income_ops_csv()})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
           <div class="stat-title text-[10px] sm:text-xs">Dividendos</div>
@@ -1464,7 +1496,10 @@ defmodule GranaWeb.DashboardLive do
           <div class="stat-title text-[10px] sm:text-xs">Lucro em Vendas</div>
           <div class={[
             "stat-value text-sm sm:text-lg",
-            if(Decimal.compare(Decimal.sub(@inv_period_proventos, @inv_period_dividends), 0) == :gt, do: "text-success", else: "opacity-50")
+            if(Decimal.compare(Decimal.sub(@inv_period_proventos, @inv_period_dividends), 0) == :gt,
+              do: "text-success",
+              else: "opacity-50"
+            )
           ]}>
             {format_currency(Decimal.sub(@inv_period_proventos, @inv_period_dividends))}
           </div>
@@ -1686,7 +1721,10 @@ defmodule GranaWeb.DashboardLive do
       </div>
 
       <%!-- Holdings Table (cumulative) --%>
-      <div :if={active_holdings(@inv_summary.holdings) != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div
+        :if={active_holdings(@inv_summary.holdings) != []}
+        class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
+      >
         <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Carteira de Ativos</h3>
         <div class="overflow-x-auto">
           <table class="table">
@@ -1706,16 +1744,23 @@ defmodule GranaWeb.DashboardLive do
                 :for={h <- Enum.take(active_holdings(@inv_summary.holdings), 30)}
                 class="hover cursor-pointer"
                 phx-click="chart-navigate"
-                phx-value-url={inv_transactions_url(assigns, %{search: h.ticker || h.name, skip_dates: true})}
+                phx-value-url={
+                  inv_transactions_url(assigns, %{search: h.ticker || h.name, skip_dates: true})
+                }
               >
                 <td>
                   <div class="flex items-center gap-2">
-                    <div :if={h.institution_logo || h.logo_url} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
-                      <img src={h.institution_logo || h.logo_url} alt=""/>
+                    <div
+                      :if={h.institution_logo || h.logo_url}
+                      class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0"
+                    >
+                      <img src={h.institution_logo || h.logo_url} alt="" />
                     </div>
                     <div class="flex flex-col">
                       <span class="font-medium text-sm">{h.ticker || "—"}</span>
-                      <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">{h.name}</span>
+                      <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">
+                        {h.name}
+                      </span>
                     </div>
                   </div>
                 </td>
@@ -1747,7 +1792,9 @@ defmodule GranaWeb.DashboardLive do
       <div :if={@inv_period_proventos_by_asset != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
         <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
           Ganhos por Ativo
-          <span class="text-xs font-normal opacity-50 ml-2">{period_label(@inv_view_mode, @inv_selected_year, @inv_selected_month)}</span>
+          <span class="text-xs font-normal opacity-50 ml-2">
+            {period_label(@inv_view_mode, @inv_selected_year, @inv_selected_month)}
+          </span>
         </h3>
         <div class="overflow-x-auto">
           <table class="table">
@@ -1767,12 +1814,20 @@ defmodule GranaWeb.DashboardLive do
               >
                 <td>
                   <div class="flex items-center gap-2">
-                    <div :if={r.institution_logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
+                    <div
+                      :if={r.institution_logo}
+                      class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0"
+                    >
                       <img src={r.institution_logo} alt="" />
                     </div>
                     <div class="flex flex-col">
                       <span class="font-medium text-sm">{r.ticker || r.name}</span>
-                      <span :if={r.ticker && r.ticker != r.name} class="text-xs opacity-50 truncate max-w-xs">{r.name}</span>
+                      <span
+                        :if={r.ticker && r.ticker != r.name}
+                        class="text-xs opacity-50 truncate max-w-xs"
+                      >
+                        {r.name}
+                      </span>
                     </div>
                   </div>
                 </td>
@@ -2121,69 +2176,25 @@ defmodule GranaWeb.DashboardLive do
     "#{dd}/#{mm}"
   end
 
-  defp asset_type_label("acao"), do: "Ações"
-  defp asset_type_label("fii"), do: "FII"
-  defp asset_type_label("etf"), do: "ETF"
-  defp asset_type_label("bdr"), do: "BDR"
-  defp asset_type_label("renda_fixa"), do: "Renda Fixa"
-  defp asset_type_label("tesouro"), do: "Tesouro"
-  defp asset_type_label("cripto"), do: "Cripto"
-  defp asset_type_label("fundo"), do: "Fundo"
-  defp asset_type_label("nota_fiscal"), do: "Nota Fiscal"
-  defp asset_type_label("debenture"), do: "Debênture"
-  defp asset_type_label("precatorio"), do: "Precatório"
-  defp asset_type_label("recebiveis"), do: "Receb. Judiciais"
-  defp asset_type_label("cri"), do: "CRI"
-  defp asset_type_label("cra"), do: "CRA"
-  defp asset_type_label("op_estruturada"), do: "Op. Estruturada"
-  defp asset_type_label("outro"), do: "Outro"
-  defp asset_type_label(_), do: "—"
-
-  @asset_colors %{
-    "acao" => "#3B82F6",
-    "fii" => "#8B5CF6",
-    "etf" => "#06B6D4",
-    "bdr" => "#F59E0B",
-    "renda_fixa" => "#10B981",
-    "tesouro" => "#EF4444",
-    "cripto" => "#F97316",
-    "fundo" => "#EC4899",
-    "nota_fiscal" => "#14B8A6",
-    "debenture" => "#6366F1",
-    "precatorio" => "#D946EF",
-    "recebiveis" => "#0EA5E9",
-    "cri" => "#84CC16",
-    "cra" => "#22D3EE",
-    "op_estruturada" => "#A855F7",
-    "outro" => "#9CA3AF"
-  }
+  defp asset_type_label(type), do: Constants.asset_type_label(type)
+  defp asset_type_color(type), do: Constants.asset_type_color(type)
+  defp asset_type_badge(type), do: Constants.asset_type_badge(type)
 
   @individual_colors [
-    "#8B5CF6", "#3B82F6", "#06B6D4", "#10B981", "#F59E0B",
-    "#EF4444", "#EC4899", "#F97316", "#6366F1", "#14B8A6"
+    "#8B5CF6",
+    "#3B82F6",
+    "#06B6D4",
+    "#10B981",
+    "#F59E0B",
+    "#EF4444",
+    "#EC4899",
+    "#F97316",
+    "#6366F1",
+    "#14B8A6"
   ]
-
-  defp asset_type_color(type), do: Map.get(@asset_colors, type, "#9CA3AF")
 
   defp individual_color(index),
     do: Enum.at(@individual_colors, rem(index, length(@individual_colors)))
-
-  defp asset_type_badge("acao"), do: "badge-info"
-  defp asset_type_badge("fii"), do: "badge-secondary"
-  defp asset_type_badge("etf"), do: "badge-accent"
-  defp asset_type_badge("bdr"), do: "badge-warning"
-  defp asset_type_badge("renda_fixa"), do: "badge-success"
-  defp asset_type_badge("tesouro"), do: "badge-error"
-  defp asset_type_badge("cripto"), do: "badge-warning"
-  defp asset_type_badge("fundo"), do: "badge-primary"
-  defp asset_type_badge("nota_fiscal"), do: "badge-accent"
-  defp asset_type_badge("debenture"), do: "badge-info"
-  defp asset_type_badge("precatorio"), do: "badge-secondary"
-  defp asset_type_badge("recebiveis"), do: "badge-primary"
-  defp asset_type_badge("cri"), do: "badge-success"
-  defp asset_type_badge("cra"), do: "badge-success"
-  defp asset_type_badge("op_estruturada"), do: "badge-secondary"
-  defp asset_type_badge(_), do: "badge-ghost"
 
   defp has_proventos?(activity) do
     Enum.any?(activity, fn a -> Decimal.compare(a.proventos, 0) == :gt end)
@@ -2249,7 +2260,7 @@ defmodule GranaWeb.DashboardLive do
         url:
           inv_transactions_url(
             assigns,
-            Map.put(range, :operation, "dividendo,jcp,rendimento,amortizacao")
+            Map.put(range, :operation, Constants.income_ops_csv())
           )
       }
     end)

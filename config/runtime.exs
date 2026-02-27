@@ -43,8 +43,7 @@ if System.get_env("PHX_SERVER") do
   config :grana, GranaWeb.Endpoint, server: true
 end
 
-config :grana, GranaWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+config :grana, GranaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 # In dev, set SMTP_IN_DEV=true in .env to send real emails via SMTP
 # instead of the local mailbox at /dev/mailbox
