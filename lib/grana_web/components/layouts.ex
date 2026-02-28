@@ -173,29 +173,15 @@ defmodule GranaWeb.Layouts do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
-      <.flash
-        id="client-error"
-        kind={:error}
-        title={gettext("Nós perdemos a conexão!")}
-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
-        phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
-        hidden
+      <div
+        id="connection-error"
+        class="hidden alert alert-warning shadow-lg pointer-events-auto text-sm"
+        phx-disconnected={JS.show(to: "#connection-error", transition: {"ease-out duration-300", "opacity-0", "opacity-100"}, time: 3000)}
+        phx-connected={JS.hide(to: "#connection-error", transition: {"ease-in duration-200", "opacity-100", "opacity-0"})}
       >
-        {gettext("Tentando reconectar...")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
-
-      <.flash
-        id="server-error"
-        kind={:error}
-        title={gettext("Algo deu errado!")}
-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
-        phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
-        hidden
-      >
-        {gettext("Tentando reconectar...")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+        <.icon name="hero-arrow-path" class="size-4 motion-safe:animate-spin" />
+        <span>{gettext("Reconectando...")}</span>
+      </div>
     </div>
     """
   end
