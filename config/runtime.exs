@@ -38,6 +38,7 @@ end
 # script that automatically sets the env var above.
 config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
 config :grana, :brapi_token, System.get_env("BRAPI_TOKEN")
+config :grana, :roadmap_url, System.get_env("ROADMAP_URL")
 
 if System.get_env("PHX_SERVER") do
   config :grana, GranaWeb.Endpoint, server: true
