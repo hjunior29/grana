@@ -530,14 +530,10 @@ defmodule GranaWeb.UploadLive do
         _ -> false
       end)
 
-    user_id = socket.assigns.current_scope.user.id
-    {_stmts, total} = Banking.list_statements_paginated(user_id, page: 1, per_page: 1)
-
     socket =
       socket
       |> assign(:processing, false)
       |> assign(:results, successes)
-      |> assign(:total, total)
       |> assign(:progress_current, 0)
       |> assign(:progress_total, 0)
       |> assign(:progress_filename, "")
@@ -588,7 +584,8 @@ defmodule GranaWeb.UploadLive do
         socket
       end
 
-    {:noreply, socket}
+    source = Map.get(socket.assigns, :history_filter, "all")
+    {:noreply, push_patch(socket, to: "/upload?tab=#{socket.assigns.tab}&page=1&source=#{source}")}
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
