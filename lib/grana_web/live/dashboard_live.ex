@@ -1414,7 +1414,7 @@ defmodule GranaWeb.DashboardLive do
     <div :if={@inv_summary.transaction_count > 0}>
       <div :if={!@inv_summary.has_quotes} class="alert alert-warning text-xs mb-4">
         <.icon name="hero-exclamation-triangle" class="size-4" />
-        <span>Cotações indisponíveis — valores mostram custo-base.</span>
+        <span>Cotações indisponíveis, valores mostram custo-base.</span>
       </div>
       <%!-- Stat Cards --%>
       <% active_count = Enum.count(@inv_summary.holdings, & &1.is_active) %>
@@ -1792,9 +1792,6 @@ defmodule GranaWeb.DashboardLive do
       <div :if={@inv_period_proventos_by_asset != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
         <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
           Ganhos por Ativo
-          <span class="text-xs font-normal opacity-50 ml-2">
-            {period_label(@inv_view_mode, @inv_selected_year, @inv_selected_month)}
-          </span>
         </h3>
         <div class="overflow-x-auto">
           <table class="table">

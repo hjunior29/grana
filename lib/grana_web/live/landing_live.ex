@@ -3,7 +3,10 @@ defmodule GranaWeb.LandingLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :page_title, "Controle suas finanças")}
+    {:ok,
+     socket
+     |> assign(:page_title, "Controle suas finanças")
+     |> assign(:roadmap_url, Application.get_env(:grana, :roadmap_url))}
   end
 
   @impl true
@@ -51,8 +54,8 @@ defmodule GranaWeb.LandingLive do
             </span>
           </h1>
           <p class="text-lg md:text-xl opacity-60 max-w-2xl mx-auto mb-10">
-            Faça upload dos seus extratos bancários e tenha uma visão completa dos seus gastos.
-            Categorização automática, gráficos intuitivos e análises com IA.
+            Importe extratos bancários e acompanhe seus investimentos em um só lugar.
+            Categorização automática, gráficos intuitivos, carteira em tempo real e análises com IA.
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
             <.link navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
@@ -93,7 +96,7 @@ defmodule GranaWeb.LandingLive do
                 </div>
                 <h3 class="font-semibold mb-2">Faça Upload</h3>
                 <p class="text-sm opacity-60">
-                  Exporte o CSV do seu banco e faça upload na plataforma. Suporte a upload individual ou em batch.
+                  Importe extratos bancários, faturas de cartão e negociações de investimentos. Suporte a CSV, XLSX e PDF.
                 </p>
               </div>
 
@@ -264,7 +267,7 @@ defmodule GranaWeb.LandingLive do
               Seus bancos, seus dados
             </h2>
             <p class="text-lg opacity-60 max-w-xl mx-auto">
-              Importe extratos dos principais bancos brasileiros em segundos
+              Importe extratos bancários e negociações de investimentos em segundos
             </p>
           </div>
 
@@ -376,6 +379,153 @@ defmodule GranaWeb.LandingLive do
                       </div>
                     </div>
                     <span class="text-sm font-mono font-semibold text-success">+R$ 245,80</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Investment Providers --%>
+          <div class="mt-16 text-center mb-10">
+            <div class="badge badge-success badge-outline mb-4">Investimentos</div>
+            <h3 class="text-2xl md:text-3xl font-bold tracking-tight mb-3">
+              Acompanhe sua carteira
+            </h3>
+            <p class="text-base opacity-60 max-w-xl mx-auto">
+              Importe negociações da B3 e extratos da GCB para ter uma visão completa do seu patrimônio
+            </p>
+          </div>
+
+          <style>
+            .inv-raw, .inv-raw-2 { animation: invRaw 12s ease-in-out infinite; }
+            @keyframes invRaw {
+              0%, 3%   { opacity: 0; }
+              8%       { opacity: 1; }
+              40%      { opacity: 1; }
+              48%, 100%{ opacity: 0; }
+            }
+
+            .inv-lines, .inv-lines-2 { animation: invLines 12s ease-in-out infinite; }
+            @keyframes invLines {
+              0%, 3%   { clip-path: inset(0 0 100% 0); }
+              10%      { clip-path: inset(0 0 80% 0); }
+              15%      { clip-path: inset(0 0 60% 0); }
+              20%      { clip-path: inset(0 0 40% 0); }
+              25%      { clip-path: inset(0 0 20% 0); }
+              30%, 100%{ clip-path: inset(0 0 0% 0); }
+            }
+
+            .inv-structured, .inv-structured-2 {
+              position: absolute; inset: 0;
+              animation: invStruct 12s ease-in-out infinite;
+            }
+            @keyframes invStruct {
+              0%, 42%  { opacity: 0; transform: translateY(8px); }
+              50%      { opacity: 1; transform: translateY(0); }
+              85%      { opacity: 1; transform: translateY(0); }
+              93%, 100%{ opacity: 0; transform: translateY(-4px); }
+            }
+
+            .inv-row, .inv-row-2 { animation: invRow 12s ease-out infinite; }
+            @keyframes invRow {
+              0%, 44%  { opacity: 0; transform: translateX(-12px); }
+              50%      { opacity: 1; transform: translateX(0); }
+              85%      { opacity: 1; }
+              93%, 100%{ opacity: 0; }
+            }
+            .inv-row:nth-child(2), .inv-row-2:nth-child(2) { animation-delay: 0.15s; }
+            .inv-row:nth-child(3), .inv-row-2:nth-child(3) { animation-delay: 0.3s; }
+          </style>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <%!-- B3 --%>
+            <div class="card bg-base-200/50 border border-base-content/5 p-6">
+              <div class="flex items-center gap-3 mb-5">
+                <img src={~p"/images/b3-logo.png"} alt="B3" class="w-8 h-8 rounded" />
+                <div>
+                  <h3 class="font-semibold text-lg">B3</h3>
+                  <p class="text-xs opacity-50">Negociações da bolsa brasileira</p>
+                </div>
+              </div>
+              <div class="import-stage">
+                <div class="mockup-code text-xs inv-raw">
+                  <div class="inv-lines">
+                    <pre data-prefix="1"><code>Data;Tipo;Ativo;Qtd;Preço;Total</code></pre>
+                    <pre data-prefix="2"><code>02/01/2026;Compra;PETR4;100;38,42;3842,00</code></pre>
+                    <pre data-prefix="3"><code>05/01/2026;Compra;MXRF11;250;9,90;2475,00</code></pre>
+                    <pre data-prefix="4" class="text-warning"><code>10/01/2026;Compra;VALE3;50;58,30;2915,00</code></pre>
+                  </div>
+                </div>
+                <div class="inv-structured rounded-xl bg-base-300/80 p-3 space-y-1.5">
+                  <div
+                    :for={
+                      {ticker, type, qty, val} <- [
+                        {"PETR4", "Ação", "100 un.", "R$ 3.842,00"},
+                        {"MXRF11", "FII", "250 un.", "R$ 2.475,00"},
+                        {"VALE3", "Ação", "50 un.", "R$ 2.915,00"}
+                      ]
+                    }
+                    class="inv-row flex items-center justify-between p-2 rounded-lg bg-base-100/60"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div class="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center">
+                        <.icon name="hero-chart-bar" class="size-4 text-success" />
+                      </div>
+                      <div>
+                        <p class="text-sm font-medium font-mono">{ticker}</p>
+                        <p class="text-xs opacity-50">{type}</p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-sm font-mono font-semibold text-info">{val}</span>
+                      <p class="text-xs opacity-50">{qty}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <%!-- GCB --%>
+            <div class="card bg-base-200/50 border border-base-content/5 p-6">
+              <div class="flex items-center gap-3 mb-5">
+                <div class="w-8 h-8 rounded overflow-hidden bg-base-300">
+                  <img src={~p"/images/gcb-logo.png"} alt="GCB" />
+                </div>
+                <div>
+                  <h3 class="font-semibold text-lg">GCB</h3>
+                  <p class="text-xs opacity-50">Notas fiscais, debêntures e precatórios</p>
+                </div>
+              </div>
+              <div class="import-stage">
+                <div class="mockup-code text-xs inv-raw-2">
+                  <div class="inv-lines-2">
+                    <pre data-prefix="1"><code>Tipo;Nome;Emissão;Vencimento;Valor</code></pre>
+                    <pre data-prefix="2"><code>CRI;CSHG 2028;15/03/2024;15/03/2028;15000,00</code></pre>
+                    <pre data-prefix="3"><code>DEB;VALE 2027;01/06/2023;01/06/2027;10250,00</code></pre>
+                    <pre data-prefix="4" class="text-warning"><code>PREC;SP 2026;10/01/2025;10/01/2026;8400,00</code></pre>
+                  </div>
+                </div>
+                <div class="inv-structured-2 rounded-xl bg-base-300/80 p-3 space-y-1.5">
+                  <div
+                    :for={
+                      {name, type, val} <- [
+                        {"CRI CSHG 2028", "Renda Fixa", "R$ 15.000,00"},
+                        {"DEB VALE 2027", "Debênture", "R$ 10.250,00"},
+                        {"PREC SP 2026", "Precatório", "R$ 8.400,00"}
+                      ]
+                    }
+                    class="inv-row-2 flex items-center justify-between p-2 rounded-lg bg-base-100/60"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div class="w-7 h-7 rounded-full bg-info/15 flex items-center justify-center">
+                        <.icon name="hero-document-text" class="size-4 text-info" />
+                      </div>
+                      <div>
+                        <p class="text-sm font-medium">{name}</p>
+                        <p class="text-xs opacity-50">{type}</p>
+                      </div>
+                    </div>
+                    <span class="text-sm font-mono font-semibold text-info">{val}</span>
                   </div>
                 </div>
               </div>
@@ -960,8 +1110,292 @@ defmodule GranaWeb.LandingLive do
         </div>
       </section>
 
-      <%!-- Step 3: AI Analysis --%>
+      <%!-- Investments Portfolio Preview --%>
       <section class="py-24 px-4 bg-base-200/50">
+        <div class="max-w-6xl mx-auto">
+          <div class="text-center mb-16">
+            <p
+              style="font-family: 'Grand Hotel', cursive"
+              class="text-primary text-5xl mb-3"
+            >
+              Patrimônio
+            </p>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              Seus investimentos em tempo real
+            </h2>
+            <p class="text-lg opacity-60 max-w-xl mx-auto">
+              Acompanhe ações, FIIs, renda fixa e mais com cotações ao vivo e análise de rentabilidade
+            </p>
+          </div>
+
+          <div class="rounded-2xl border border-base-content/10 bg-base-200/30 p-4 md:p-8 shadow-xl">
+            <%!-- Filters (mirrors real investments page) --%>
+            <div class="mb-4 sm:mb-6 space-y-2">
+              <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+                <div class="flex gap-1">
+                  <span class="btn btn-xs sm:btn-sm btn-ghost cursor-default">Todos</span>
+                  <span class="btn btn-xs sm:btn-sm btn-ghost cursor-default">2025</span>
+                  <span class="btn btn-xs sm:btn-sm btn-primary cursor-default">2026</span>
+                </div>
+                <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+                <div class="flex flex-wrap gap-1">
+                  <span class="btn btn-xs btn-ghost cursor-default">Ano</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Jan</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Fev</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div class="flex items-center gap-1">
+                  <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Instituição</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                  <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                    <img src={~p"/images/b3-logo.png"} alt="" class="w-4 h-4 rounded-full" />
+                    <span class="hidden sm:inline">B3</span>
+                  </span>
+                  <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                    <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
+                      <img src={~p"/images/gcb-logo.png"} alt="" />
+                    </div>
+                    <span class="hidden sm:inline">GCB</span>
+                  </span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1">
+                  <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
+                  <span class="btn btn-xs btn-primary cursor-default">Todos</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">Ações</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">FIIs</span>
+                  <span class="btn btn-xs btn-ghost cursor-default">RF</span>
+                </div>
+              </div>
+            </div>
+
+            <%!-- Investment Stats (6 cards like real dashboard) --%>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer">
+                <div class="stat-title text-[10px] sm:text-xs">
+                  Patrimônio <span class="ml-1 text-success">●</span>
+                </div>
+                <div class="stat-value text-info text-sm sm:text-lg">R$ 47.832,00</div>
+                <div class="stat-desc text-[10px] sm:text-xs">preço ao vivo</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer">
+                <div class="stat-title text-[10px] sm:text-xs">Investido</div>
+                <div class="stat-value text-sm sm:text-lg opacity-70">R$ 42.500,00</div>
+                <div class="stat-desc text-[10px] sm:text-xs">custo-base</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer">
+                <div class="stat-title text-[10px] sm:text-xs">Ativos</div>
+                <div class="stat-value text-sm sm:text-lg opacity-70">8</div>
+                <div class="stat-desc text-[10px] sm:text-xs">3 Ação, 2 FII, 3 RF</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer">
+                <div class="stat-title text-[10px] sm:text-xs">Dividendos</div>
+                <div class="stat-value text-success text-sm sm:text-lg">R$ 780,40</div>
+                <div class="stat-desc text-[10px] sm:text-xs">renda passiva</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer">
+                <div class="stat-title text-[10px] sm:text-xs">Lucro em Vendas</div>
+                <div class="stat-value text-success text-sm sm:text-lg">R$ 467,20</div>
+                <div class="stat-desc text-[10px] sm:text-xs">ganho realizado</div>
+              </div>
+              <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer">
+                <div class="stat-title text-[10px] sm:text-xs">Rentabilidade</div>
+                <div class="stat-value text-success text-sm sm:text-lg">+ R$ 5.332,00</div>
+                <div class="stat-desc text-[10px] sm:text-xs font-medium text-success">+12,55%</div>
+              </div>
+            </div>
+
+            <%!-- Charts Row 1: Carteira por Ativo (with donut) + Dividendos e Ganhos --%>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Carteira por Ativo</h3>
+                <div
+                  id="landing-inv-asset-hook"
+                  phx-hook="CategoryChart"
+                  data-categories={
+                    Jason.encode!([
+                      %{name: "PETR4", value: 12450.0, color: "#3B82F6"},
+                      %{name: "VALE3", value: 9830.0, color: "#60A5FA"},
+                      %{name: "MXRF11", value: 8250.0, color: "#22C55E"},
+                      %{name: "ITUB4", value: 6120.0, color: "#818CF8"},
+                      %{name: "XPLG11", value: 5890.0, color: "#34D399"},
+                      %{name: "CDB 120%", value: 5292.0, color: "#F59E0B"}
+                    ])
+                  }
+                >
+                  <div class="space-y-2">
+                    <div
+                      :for={
+                        {ticker, type, val, pct, color} <- [
+                          {"PETR4", "Ação", "R$ 12.450", "26.0%", "#3B82F6"},
+                          {"VALE3", "Ação", "R$ 9.830", "20.6%", "#60A5FA"},
+                          {"MXRF11", "FII", "R$ 8.250", "17.2%", "#22C55E"},
+                          {"ITUB4", "Ação", "R$ 6.120", "12.8%", "#818CF8"},
+                          {"XPLG11", "FII", "R$ 5.890", "12.3%", "#34D399"},
+                          {"CDB 120%", "RF", "R$ 5.292", "11.1%", "#F59E0B"}
+                        ]
+                      }
+                      class="flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 hover:bg-base-300 transition-all cursor-pointer"
+                    >
+                      <div class="w-3 h-3 rounded-full shrink-0" style={"background-color: #{color}"} />
+                      <div class="flex-1 min-w-0">
+                        <span class="text-sm font-medium">{ticker}</span>
+                        <span class="text-xs opacity-40 ml-1">{type}</span>
+                      </div>
+                      <span class="text-sm font-medium">{val}</span>
+                      <span class="text-xs opacity-50 w-12 text-right">{pct}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card bg-base-200 p-4 sm:p-6">
+                <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Dividendos e Ganhos</h3>
+                <div
+                  id="landing-inv-proventos-hook"
+                  phx-hook="DailyChart"
+                  data-daily={
+                    Jason.encode!([
+                      %{date: "03/01", value: 39.20},
+                      %{date: "06/01", value: 19.00},
+                      %{date: "10/01", value: 490.04},
+                      %{date: "12/01", value: 22.80},
+                      %{date: "13/01", value: 23.76},
+                      %{date: "19/01", value: 8.97},
+                      %{date: "20/01", value: 43.65}
+                    ])
+                  }
+                  data-bar-fill="fill-success"
+                >
+                  <div class="space-y-1">
+                    <div
+                      :for={
+                        {date, pct, val} <- [
+                          {"06/01", 4, "R$ 19,00"},
+                          {"10/01", 100, "R$ 490,04"},
+                          {"12/01", 5, "R$ 22,80"},
+                          {"13/01", 5, "R$ 23,76"},
+                          {"19/01", 2, "R$ 8,97"},
+                          {"20/01", 9, "R$ 43,65"}
+                        ]
+                      }
+                      class="flex items-center gap-2"
+                    >
+                      <span class="text-xs w-10 opacity-60">{date}</span>
+                      <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                        <div class="bg-success h-full rounded-full" style={"width: #{pct}%"} />
+                      </div>
+                      <span class="text-xs font-medium w-20 text-right text-success">{val}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <%!-- Holdings Table (faithful to real page) --%>
+            <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Carteira de Ativos</h3>
+              <div class="overflow-x-auto">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Ativo</th>
+                      <th>Tipo</th>
+                      <th class="text-right">Qtd</th>
+                      <th class="text-right hidden sm:table-cell">Preço Atual</th>
+                      <th class="text-right">Valor Atual</th>
+                      <th class="text-right hidden sm:table-cell">Investido</th>
+                      <th class="text-right">Rent. %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      :for={
+                        {ticker, name, type, badge_class, qty, price, val, invested, rent, rent_class, logo} <- [
+                          {"PETR4", "Petrobras PN", "Ação", "badge-info", "100", "R$ 124,50", "R$ 12.450", "R$ 10.540", "+18,2%", "text-success", ~p"/images/b3-logo.png"},
+                          {"VALE3", "Vale ON", "Ação", "badge-info", "50", "R$ 196,60", "R$ 9.830", "R$ 9.040", "+8,7%", "text-success", ~p"/images/b3-logo.png"},
+                          {"MXRF11", "Maxi Renda FII", "FII", "badge-success", "250", "R$ 33,00", "R$ 8.250", "R$ 7.835", "+5,3%", "text-success", ~p"/images/b3-logo.png"},
+                          {"ITUB4", "Itaú Unibanco PN", "Ação", "badge-info", "80", "R$ 76,50", "R$ 6.120", "R$ 5.460", "+12,1%", "text-success", ~p"/images/b3-logo.png"},
+                          {"XPLG11", "XP Log FII", "FII", "badge-success", "60", "R$ 98,17", "R$ 5.890", "R$ 6.035", "-2,4%", "text-error", ~p"/images/b3-logo.png"},
+                          {"CDB 120%", "CDB 120% CDI", "RF", "badge-warning", "1", "R$ 5.292", "R$ 5.292", "R$ 4.610", "+14,8%", "text-success", ~p"/images/gcb-logo.png"}
+                        ]
+                      }
+                      class="hover cursor-pointer"
+                    >
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <div :if={logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
+                            <img src={logo} alt="" />
+                          </div>
+                          <div class="flex flex-col">
+                            <span class="font-medium text-sm">{ticker}</span>
+                            <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">{name}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span class={"badge badge-sm whitespace-nowrap #{badge_class}"}>{type}</span></td>
+                      <td class="text-right text-sm">{qty}</td>
+                      <td class="text-right text-sm hidden sm:table-cell">{price}</td>
+                      <td class="text-right text-sm font-medium text-info whitespace-nowrap">{val}</td>
+                      <td class="text-right text-sm opacity-60 hidden sm:table-cell">{invested}</td>
+                      <td class={"text-right text-sm font-medium #{rent_class}"}>{rent}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <%!-- Proventos por Ativo --%>
+            <div class="card bg-base-200 p-4 sm:p-6">
+              <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">
+                Ganhos por Ativo
+              </h3>
+              <div class="overflow-x-auto">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Ativo</th>
+                      <th>Tipo</th>
+                      <th class="text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      :for={
+                        {ticker, name, type, badge_class, total, logo} <- [
+                          {"MXRF11", "Maxi Renda FII", "FII", "badge-success", "R$ 312,50", ~p"/images/b3-logo.png"},
+                          {"XPLG11", "XP Log FII", "FII", "badge-success", "R$ 198,40", ~p"/images/b3-logo.png"},
+                          {"PETR4", "Petrobras PN", "Ação", "badge-info", "R$ 156,30", ~p"/images/b3-logo.png"},
+                          {"ITUB4", "Itaú Unibanco PN", "Ação", "badge-info", "R$ 113,20", ~p"/images/b3-logo.png"},
+                          {"CDB 120%", "CDB 120% CDI", "RF", "badge-warning", "R$ 467,20", ~p"/images/gcb-logo.png"}
+                        ]
+                      }
+                      class="hover cursor-pointer"
+                    >
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <div :if={logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
+                            <img src={logo} alt="" />
+                          </div>
+                          <div class="flex flex-col">
+                            <span class="font-medium text-sm">{ticker}</span>
+                            <span :if={ticker != name} class="text-xs opacity-50 truncate max-w-xs">{name}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span class={"badge badge-sm whitespace-nowrap #{badge_class}"}>{type}</span></td>
+                      <td class="text-right text-sm font-medium text-success whitespace-nowrap">{total}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Step 3: AI Analysis --%>
+      <section class="py-24 px-4">
         <style>
           .ai-demo { display: grid; overflow: hidden; }
           .ai-demo-phase {
@@ -993,8 +1427,8 @@ defmodule GranaWeb.LandingLive do
                 Análise com IA
               </h2>
               <p class="text-lg opacity-60 mb-8">
-                Clique em um botão e receba insights personalizados sobre seus gastos.
-                A IA analisa seus padrões e oferece dicas para economizar.
+                Analise suas despesas e investimentos com inteligência artificial.
+                Receba insights personalizados, alertas e dicas para otimizar suas finanças.
               </p>
               <div class="space-y-4">
                 <div class="flex items-start gap-3">
@@ -1003,7 +1437,7 @@ defmodule GranaWeb.LandingLive do
                   </div>
                   <div>
                     <p class="font-medium text-sm">Insights automáticos</p>
-                    <p class="text-sm opacity-60">Identifica padrões de gasto e tendências mensais</p>
+                    <p class="text-sm opacity-60">Identifica padrões de gasto e tendências de investimento</p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">
@@ -1012,7 +1446,7 @@ defmodule GranaWeb.LandingLive do
                   </div>
                   <div>
                     <p class="font-medium text-sm">Alertas inteligentes</p>
-                    <p class="text-sm opacity-60">Avisa quando seus gastos estão fora do normal</p>
+                    <p class="text-sm opacity-60">Avisa sobre gastos fora do normal e riscos na carteira</p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">
@@ -1020,14 +1454,24 @@ defmodule GranaWeb.LandingLive do
                     <.icon name="hero-check-circle" class="size-4 text-success" />
                   </div>
                   <div>
-                    <p class="font-medium text-sm">Dicas de economia</p>
-                    <p class="text-sm opacity-60">Sugestões práticas para otimizar seu orçamento</p>
+                    <p class="font-medium text-sm">Despesas e investimentos</p>
+                    <p class="text-sm opacity-60">Analisa gastos, proventos, rentabilidade e diversificação</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div id="landing-ai-demo" phx-hook="LandingAIDemo" class="ai-demo">
+            <div>
+              <div role="tablist" class="tabs tabs-border mb-6">
+                <button role="tab" class="tab tab-active cursor-default">
+                  <.icon name="hero-banknotes" class="size-4 mr-1" /> Bancário
+                </button>
+                <button role="tab" class="tab cursor-default">
+                  <.icon name="hero-chart-bar" class="size-4 mr-1" /> Investimentos
+                </button>
+              </div>
+
+              <div id="landing-ai-demo" phx-hook="LandingAIDemo" class="ai-demo">
               <%!-- Phase 1: Input --%>
               <div data-ai-input class="ai-demo-phase">
                 <div class="mb-3 space-y-2">
@@ -1074,7 +1518,7 @@ defmodule GranaWeb.LandingLive do
                     </label>
                     <textarea
                       data-ai-textarea
-                      placeholder="Ex: Onde posso economizar? Qual categoria cresceu mais?"
+                      placeholder="Ex: Onde posso economizar? Como está minha carteira de investimentos?"
                       class="textarea textarea-bordered w-full text-sm"
                       rows="2"
                       readonly
@@ -1153,7 +1597,7 @@ defmodule GranaWeb.LandingLive do
 
                   <p class="text-sm opacity-80 mb-4">
                     Seus gastos com alimentação representam 32% do total — acima da média recomendada de 25%.
-                    Moradia está dentro do esperado. O saldo livre de R$ 2.652 indica margem saudável.
+                    Sua carteira de investimentos rendeu +12,5% no período, com boa diversificação entre ações e FIIs.
                   </p>
 
                   <div class="space-y-2 mb-4">
@@ -1166,13 +1610,13 @@ defmodule GranaWeb.LandingLive do
                     <div class="flex items-start gap-2 text-sm">
                       <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
                       <span class="opacity-80">
-                        Moradia representa 18% do orçamento — dentro do recomendado (até 30%)
+                        Carteira de investimentos com rentabilidade de +12,5% — acima do CDI no período
                       </span>
                     </div>
                     <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
+                      <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
                       <span class="opacity-80">
-                        Gastos com delivery aumentaram 40% em relação ao mês anterior
+                        Proventos de R$ 780,40 recebidos — renda passiva crescente
                       </span>
                     </div>
                     <div class="flex items-start gap-2 text-sm">
@@ -1184,7 +1628,7 @@ defmodule GranaWeb.LandingLive do
                     <div class="flex items-start gap-2 text-sm">
                       <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
                       <span class="opacity-80">
-                        3 assinaturas detectadas — considere revisar se todas estão em uso
+                        XPLG11 com rentabilidade negativa (-2,4%) — considere reavaliar posição
                       </span>
                     </div>
                     <div class="flex items-start gap-2 text-sm">
@@ -1198,7 +1642,7 @@ defmodule GranaWeb.LandingLive do
                   <div class="alert alert-warning text-sm py-2 mb-3">
                     <.icon name="hero-exclamation-triangle" class="size-4" />
                     <span>
-                      Atenção: despesas com lazer estão 20% acima da média dos últimos 3 meses
+                      Atenção: concentração de 46,6% da carteira em ações — diversifique em renda fixa
                     </span>
                   </div>
 
@@ -1208,20 +1652,21 @@ defmodule GranaWeb.LandingLive do
                       <span class="text-xs font-medium text-primary">Resposta</span>
                     </div>
                     <p class="text-sm opacity-80">
-                      Para economizar, foque em reduzir gastos com delivery e alimentação fora de casa.
-                      Planeje refeições semanais e aproveite promoções do supermercado. Revise suas 3 assinaturas
-                      e cancele as que não usa ativamente.
+                      Para economizar, reduza gastos com delivery e alimentação fora de casa.
+                      Seus investimentos estão bem, mas considere rebalancear: XPLG11 está com prejuízo e
+                      sua exposição em ações é alta. Redirecione parte dos aportes para renda fixa.
                     </p>
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
       </section>
 
       <%!-- Features --%>
-      <section id="features" class="py-24 px-4">
+      <section id="features" class="py-24 px-4 bg-base-200/50">
         <div class="max-w-6xl mx-auto">
           <div class="text-center mb-16">
             <p
@@ -1275,7 +1720,7 @@ defmodule GranaWeb.LandingLive do
               </div>
               <h3 class="font-semibold text-lg mb-2">Upload em Batch</h3>
               <p class="opacity-60 text-sm">
-                Envie até 20 extratos de uma vez. Múltiplos meses e bancos processados simultaneamente.
+                Envie até 12 extratos de uma vez. Múltiplos meses e bancos processados simultaneamente.
               </p>
             </div>
 
@@ -1298,12 +1743,42 @@ defmodule GranaWeb.LandingLive do
                 Corrija categorias uma vez e o sistema lembra para sempre. Suas regras são aplicadas automaticamente.
               </p>
             </div>
+
+            <div class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
+              <div class="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center mb-4">
+                <.icon name="hero-chart-bar" class="size-6 text-success" />
+              </div>
+              <h3 class="font-semibold text-lg mb-2">Carteira de Investimentos</h3>
+              <p class="opacity-60 text-sm">
+                Acompanhe ações, FIIs e renda fixa com cotações ao vivo, dividendos e análise de rentabilidade.
+              </p>
+            </div>
+
+            <div class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
+              <div class="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center mb-4">
+                <.icon name="hero-building-library" class="size-6 text-info" />
+              </div>
+              <h3 class="font-semibold text-lg mb-2">Múltiplas Fontes</h3>
+              <p class="opacity-60 text-sm">
+                Nubank, Bradesco, B3, GCB e mais. Importação via CSV, XLSX ou PDF com processamento inteligente.
+              </p>
+            </div>
+
+            <div :if={@roadmap_url} class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
+              <div class="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center mb-4">
+                <.icon name="hero-light-bulb" class="size-6 text-warning" />
+              </div>
+              <h3 class="font-semibold text-lg mb-2">Roadmap Público</h3>
+              <p class="opacity-60 text-sm">
+                Vote e sugira funcionalidades. O futuro do Grana é construído junto com a comunidade.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       <%!-- BYOK + Security --%>
-      <section class="py-24 px-4 bg-base-200/50 overflow-hidden">
+      <section class="py-24 px-4 overflow-hidden">
         <style>
           .shield-container { position: relative; width: 200px; height: 200px; margin: 0 auto; }
 
@@ -1470,6 +1945,63 @@ defmodule GranaWeb.LandingLive do
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <%!-- Roadmap / Community --%>
+      <section :if={@roadmap_url} class="py-24 px-4 bg-base-200/50">
+        <style>
+          .vote-btn {
+            animation: votePulse 3s ease-in-out infinite;
+          }
+          @keyframes votePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+          }
+        </style>
+
+        <div class="max-w-4xl mx-auto text-center">
+          <p
+            style="font-family: 'Grand Hotel', cursive"
+            class="text-primary text-5xl mb-3"
+          >
+            Comunidade
+          </p>
+          <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+            Construído com você
+          </h2>
+          <p class="text-lg opacity-60 max-w-xl mx-auto mb-12">
+            Nosso roadmap é público. Vote nas funcionalidades que importam para você
+            e sugira novos bancos, corretoras e recursos.
+          </p>
+
+          <div class="max-w-lg mx-auto space-y-3 mb-10">
+            <div
+              :for={
+                {votes, title, tag, tag_color} <- [
+                  {"47", "Suporte ao Banco Inter", "Novo banco", "badge-info"},
+                  {"32", "App mobile (iOS / Android)", "Feature", "badge-primary"},
+                  {"28", "Importar notas de corretagem da XP", "Nova corretora", "badge-success"},
+                  {"19", "Orçamento mensal por categoria", "Feature", "badge-primary"}
+                ]
+              }
+              class="flex items-center gap-4 p-3 rounded-xl bg-base-200/50 border border-base-content/5 text-left"
+            >
+              <div class="vote-btn flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                <.icon name="hero-chevron-up" class="size-4 text-primary -mb-1" />
+                <span class="text-sm font-bold text-primary">{votes}</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate">{title}</p>
+                <span class={"badge badge-xs #{tag_color} mt-1"}>{tag}</span>
+              </div>
+            </div>
+          </div>
+
+          <a href={@roadmap_url} target="_blank" class="btn btn-primary btn-lg gap-2">
+            <.icon name="hero-light-bulb" class="size-5" />
+            Acessar Roadmap
+          </a>
         </div>
       </section>
 
