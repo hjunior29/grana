@@ -86,10 +86,10 @@ defmodule GranaWeb.AnalysisLive do
 
     case socket.assigns.tab do
       "banking" ->
-        {:noreply, put_filter(socket, :year, year)}
+        {:noreply, socket |> put_filter(:year, year) |> put_filter(:month, 0)}
 
       "investments" ->
-        {:noreply, put_inv_filter(socket, :year, year)}
+        {:noreply, socket |> put_inv_filter(:year, year) |> put_inv_filter(:month, 0)}
     end
   end
 

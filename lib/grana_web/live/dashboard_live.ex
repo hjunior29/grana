@@ -96,12 +96,9 @@ defmodule GranaWeb.DashboardLive do
 
     case socket.assigns.tab do
       "banking" ->
-        view_mode =
-          if socket.assigns.view_mode == "total", do: "year", else: socket.assigns.view_mode
-
         socket
         |> assign(:selected_year, year)
-        |> assign(:view_mode, view_mode)
+        |> assign(:view_mode, "year")
         |> load_banking_data()
 
       "investments" ->
@@ -297,9 +294,9 @@ defmodule GranaWeb.DashboardLive do
 
     expense_avg =
       case view_mode do
-        "total" -> calculate_monthly_avg(summary, all_monthly_ie)
+        "total" -> calculate_yearly_avg(summary, available_years)
         "year" -> calculate_monthly_avg(summary, all_monthly_ie)
-        _ -> calculate_daily_avg(summary, daily)
+        _ -> calculate_daily_avg(summary, year, month)
       end
 
     top_category = calculate_top_category(summary)
@@ -337,13 +334,16 @@ defmodule GranaWeb.DashboardLive do
   defp txn_type_opts("all"), do: []
   defp txn_type_opts(type), do: [type: type]
 
-  defp calculate_daily_avg(summary, daily) do
-    days_with_spending = length(daily)
-
-    case days_with_spending do
+  defp calculate_yearly_avg(summary, available_years) do
+    case length(available_years) do
       0 -> Decimal.new(0)
       n -> Decimal.div(summary.total_expenses, n) |> Decimal.round(2)
     end
+  end
+
+  defp calculate_daily_avg(summary, year, month) do
+    days_in_month = Date.days_in_month(Date.new!(year, month, 1))
+    Decimal.div(summary.total_expenses, days_in_month) |> Decimal.round(2)
   end
 
   defp calculate_monthly_avg(summary, monthly_ie) do
@@ -898,7 +898,11 @@ defmodule GranaWeb.DashboardLive do
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
           <div class="stat-title text-[10px] sm:text-xs">
-            {if @view_mode in ["year", "total"], do: "Média Mensal", else: "Média Diária"}
+            {case @view_mode do
+              "total" -> "Média Anual"
+              "year" -> "Média Mensal"
+              _ -> "Média Diária"
+            end}
           </div>
           <div class="stat-value text-sm sm:text-lg">
             {format_currency(@expense_avg)}
