@@ -44,8 +44,59 @@ defmodule Grana.Banking.AIAnalyzer do
             m -> "#{Banking.month_name(m)}/#{year}"
           end
 
+        available_years = Banking.available_years(user_id)
+
+        daily =
+          case month do
+            m when m in [nil, 0] -> []
+            m -> Banking.daily_spending(user_id, year, m, opts)
+          end
+
+        monthly_ie =
+          case month do
+            m when m in [nil, 0] ->
+              available_years
+              |> Enum.flat_map(fn y ->
+                Banking.monthly_income_expenses(user_id, y, opts)
+                |> Enum.map(&Map.put(&1, :year, y))
+              end)
+
+            _ ->
+              Banking.monthly_income_expenses(user_id, year, opts)
+          end
+
+        yearly_spending =
+          case month do
+            m when m in [nil, 0] ->
+              monthly_ie
+              |> Enum.group_by(& &1.year)
+              |> Enum.map(fn {yr, items} ->
+                %{year: yr, expenses: Enum.reduce(items, Decimal.new(0), fn i, acc -> Decimal.add(acc, i.expenses) end)}
+              end)
+              |> Enum.sort_by(& &1.year)
+
+            _ ->
+              []
+          end
+
+        installment_opts =
+          case month do
+            m when m in [nil, 0] -> opts
+            m -> opts ++ [year: year, month: m]
+          end
+
+        installments = Banking.installment_projection_summary(user_id, installment_opts)
+
+        extra = %{
+          daily: daily,
+          monthly_ie: monthly_ie,
+          yearly_spending: yearly_spending,
+          installments: installments,
+          available_years: available_years
+        }
+
         filter_desc = build_filter_desc(bank, type, statement_type)
-        prompt = build_prompt(summary, period, filter_desc, custom_prompt)
+        prompt = build_prompt(summary, period, filter_desc, custom_prompt, extra, year, month)
         call_ai(prompt, config)
     end
   end
@@ -65,24 +116,38 @@ defmodule Grana.Banking.AIAnalyzer do
     institution_id = filters[:institution_id] || filters["institution_id"]
     asset_type = filters[:asset_type] || filters["asset_type"]
 
-    opts =
+    view_mode =
+      case month do
+        m when m in [nil, 0] -> "year"
+        _ -> "month"
+      end
+
+    filter_opts =
       []
       |> maybe_add(:institution_id, institution_id)
       |> maybe_add(:asset_type, asset_type)
 
+    # Cumulative opts (same as dashboard load_inv_data)
+    cumulative_opts =
+      ([date_to: Date.new!(year, 12, 31)] ++ filter_opts)
+
+    # Period opts
     period_opts =
       case month do
         m when m in [nil, 0] ->
-          [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)] ++ opts
+          [date_from: Date.new!(year, 1, 1), date_to: Date.new!(year, 12, 31)] ++ filter_opts
 
         m ->
           date_start = Date.new!(year, m, 1)
-          [date_from: date_start, date_to: Date.end_of_month(date_start)] ++ opts
+          [date_from: date_start, date_to: Date.end_of_month(date_start)] ++ filter_opts
       end
 
-    summary = Investments.portfolio_summary(user_id, period_opts)
+    # Same data as the dashboard
+    cumulative_summary = Investments.portfolio_with_market_data(user_id, cumulative_opts)
+    period_summary = Investments.portfolio_summary(user_id, period_opts)
+    activity = Investments.period_activity(user_id, view_mode, year, month, filter_opts)
 
-    case summary.transaction_count do
+    case period_summary.transaction_count do
       0 ->
         {:error, "Nenhuma transação de investimento encontrada com os filtros selecionados"}
 
@@ -93,8 +158,14 @@ defmodule Grana.Banking.AIAnalyzer do
             m -> "#{Banking.month_name(m)}/#{year}"
           end
 
+        extra = %{
+          cumulative: cumulative_summary,
+          period: period_summary,
+          activity: activity
+        }
+
         filter_desc = build_inv_filter_desc(institution_id, asset_type)
-        prompt = build_investment_prompt(summary, period, filter_desc, custom_prompt)
+        prompt = build_investment_prompt(extra, period, filter_desc, custom_prompt)
         call_ai(prompt, config)
     end
   end
@@ -144,8 +215,8 @@ defmodule Grana.Banking.AIAnalyzer do
     end
   end
 
-  defp build_prompt(summary, period, filter_desc, custom_prompt) do
-    base = base_prompt_data(summary)
+  defp build_prompt(summary, period, filter_desc, custom_prompt, extra, year, month) do
+    base = base_prompt_data(summary, extra, year, month)
 
     custom_prompt =
       case custom_prompt do
@@ -165,16 +236,94 @@ defmodule Grana.Banking.AIAnalyzer do
     """
   end
 
-  defp base_prompt_data(summary) do
+  defp base_prompt_data(summary, extra, year, month) do
+    %{
+      daily: daily,
+      monthly_ie: monthly_ie,
+      yearly_spending: yearly_spending,
+      installments: installments,
+      available_years: available_years
+    } = extra
+
+    # ── Cards do resumo ──
+    avg_line =
+      case month do
+        m when m in [nil, 0] ->
+          avg = yearly_avg(summary, available_years)
+          "- Média Anual de Despesas: R$ #{fmt(avg)}"
+
+        m ->
+          daily_avg = daily_avg(summary, year, m)
+          "- Média Diária de Despesas: R$ #{fmt(daily_avg)} || Média Mensal de Despesas: R$ #{fmt(summary.total_expenses)}"
+      end
+
+    # ── Despesas por categoria ──
     categories_text =
       summary.by_category
       |> Enum.map(fn item ->
         name = if item.category, do: item.category.name, else: "Sem Categoria"
-        total = Decimal.to_string(item.total, :normal)
-        "- #{name}: R$ #{total} (#{item.count} transações)"
+        "- #{name}: R$ #{fmt(item.total)} (#{item.count} transações)"
       end)
       |> Enum.join("\n")
 
+    # ── Gastos diários (visão mês) ──
+    daily_section =
+      case daily do
+        [] ->
+          ""
+
+        _ ->
+          text =
+            daily
+            |> Enum.sort_by(& &1.date, Date)
+            |> Enum.map(fn d ->
+              "- #{Calendar.strftime(d.date, "%d/%m")}: R$ #{fmt(d.total)}"
+            end)
+            |> Enum.join("\n")
+
+          "\nGASTOS DIÁRIOS:\n#{text}\n"
+      end
+
+    # ── Gastos por ano (visão total) ──
+    yearly_section =
+      case yearly_spending do
+        [] ->
+          ""
+
+        _ ->
+          text =
+            yearly_spending
+            |> Enum.map(fn item -> "- #{item.year}: R$ #{fmt(item.expenses)}" end)
+            |> Enum.join("\n")
+
+          "\nGASTOS POR ANO:\n#{text}\n"
+      end
+
+    # ── Receitas vs Despesas mensal ──
+    ie_section =
+      case monthly_ie do
+        [] ->
+          ""
+
+        _ ->
+          text =
+            monthly_ie
+            |> Enum.map(fn item ->
+              label =
+                case Map.get(item, :year) do
+                  nil -> Banking.month_name_short(item.month)
+                  y -> "#{Banking.month_name_short(item.month)}/#{y}"
+                end
+
+              inv = Map.get(item, :investments, Decimal.new(0))
+              "- #{label}: Receita R$ #{fmt(item.income)} | Despesa R$ #{fmt(item.expenses)} | Invest. R$ #{fmt(inv)}"
+            end)
+            |> Enum.join("\n")
+
+          "\nRECEITAS VS DESPESAS (mensal):\n#{text}\n"
+      end
+
+    # ── Top despesas ──
     top_expenses =
       summary.transactions
       |> Enum.filter(&(&1.type == "debit"))
@@ -182,23 +331,106 @@ defmodule Grana.Banking.AIAnalyzer do
       |> Enum.take(15)
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
-        "- #{t.description}: R$ #{Decimal.to_string(Decimal.abs(t.amount), :normal)} (#{cat})"
+        "- #{t.description}: R$ #{fmt(Decimal.abs(t.amount))} (#{cat})"
       end)
       |> Enum.join("\n")
 
+    # ── Top receitas ──
+    top_income =
+      summary.transactions
+      |> Enum.filter(&(&1.type == "credit"))
+      |> Enum.sort_by(fn t -> Decimal.to_float(t.amount) end, :desc)
+      |> Enum.take(10)
+      |> Enum.map(fn t ->
+        cat = if t.category, do: t.category.name, else: "Sem Categoria"
+        "- #{t.description}: R$ #{fmt(t.amount)} (#{cat})"
+      end)
+      |> Enum.join("\n")
+
+    income_section =
+      if top_income != "", do: "\nTOPS RECEITAS:\n#{top_income}\n", else: ""
+
+    # ── Parcelas ativas ──
+    installment_section =
+      if installments.active_count > 0 do
+        items =
+          installments.installments
+          |> Enum.map(fn txn ->
+            cat = if txn.category, do: txn.category.name, else: "Sem Categoria"
+            remaining = txn.installment_total - txn.installment_current
+            remaining_value = Decimal.mult(Decimal.abs(txn.amount), remaining)
+
+            "- #{txn.description}: R$ #{fmt(Decimal.abs(txn.amount))}/mês (#{txn.installment_current}/#{txn.installment_total}) - Restante: R$ #{fmt(remaining_value)} (#{cat})"
+          end)
+          |> Enum.join("\n")
+
+        """
+
+        PARCELAS ATIVAS (#{installments.active_count} parcelas):
+        - Valor mensal total: R$ #{fmt(installments.this_month_total)}
+        - Total restante: R$ #{fmt(installments.total_remaining)}
+        #{items}
+        """
+      else
+        ""
+      end
+
     """
     RESUMO:
-    - Receitas: R$ #{Decimal.to_string(summary.total_income, :normal)}
-    - Despesas: R$ #{Decimal.to_string(summary.total_expenses, :normal)}
-    - Saldo: R$ #{Decimal.to_string(summary.balance, :normal)}
+    - Receitas: R$ #{fmt(summary.total_income)}
+    - Despesas: R$ #{fmt(summary.total_expenses)}
+    - Investimentos: R$ #{fmt(summary.total_investments)}
+    - Saldo Livre: R$ #{fmt(summary.balance)}
+    #{avg_line}
     - Total de transações: #{summary.transaction_count}
 
     DESPESAS POR CATEGORIA:
     #{categories_text}
-
-    MAIORES DESPESAS:
+    #{daily_section}#{yearly_section}#{ie_section}
+    TOPS DESPESAS:
     #{top_expenses}
+    #{income_section}#{installment_section}
     """
+  end
+
+  defp fmt(decimal) do
+    str =
+      decimal
+      |> Decimal.round(2)
+      |> Decimal.to_string(:normal)
+
+    {integer, dec} =
+      case String.split(str, ".") do
+        [int] -> {int, "00"}
+        [int, d] -> {int, String.pad_trailing(d, 2, "0")}
+      end
+
+    {neg, integer} =
+      if String.starts_with?(integer, "-"),
+        do: {"-", String.trim_leading(integer, "-")},
+        else: {"", integer}
+
+    int_formatted =
+      integer
+      |> String.reverse()
+      |> String.to_charlist()
+      |> Enum.chunk_every(3)
+      |> Enum.join(".")
+      |> String.reverse()
+
+    "#{neg}#{int_formatted},#{dec}"
+  end
+
+  defp daily_avg(summary, year, month) do
+    days = Date.days_in_month(Date.new!(year, month, 1))
+    Decimal.div(summary.total_expenses, days) |> Decimal.round(2)
+  end
+
+  defp yearly_avg(summary, available_years) do
+    case length(available_years) do
+      0 -> Decimal.new(0)
+      n -> Decimal.div(summary.total_expenses, n) |> Decimal.round(2)
+    end
   end
 
   defp json_format_instruction(has_user_prompt) do
@@ -260,30 +492,137 @@ defmodule Grana.Banking.AIAnalyzer do
     end
   end
 
-  defp build_investment_prompt(summary, period, filter_desc, custom_prompt) do
-    holdings_text =
-      summary.holdings
-      |> Enum.filter(& &1.is_active)
-      |> Enum.take(20)
-      |> Enum.map(fn h ->
-        "- #{h.ticker || h.name} (#{inv_asset_type_label(h.type)}): R$ #{Decimal.to_string(h.net_total, :normal)} investido, #{Decimal.to_string(h.net_qty)} unidades"
-      end)
-      |> Enum.join("\n")
+  defp build_investment_prompt(extra, period, filter_desc, custom_prompt) do
+    %{cumulative: cum, period: per, activity: activity} = extra
 
-    by_type_text =
-      summary.by_asset_type
-      |> Enum.map(fn item ->
-        "- #{inv_asset_type_label(item.asset_type)}: R$ #{Decimal.to_string(item.total, :normal)} (#{item.count} ativos)"
-      end)
-      |> Enum.join("\n")
+    active_count = Enum.count(cum.holdings, & &1.is_active)
+    dividends = per.dividends
+    realized = Decimal.sub(per.proventos, dividends)
 
-    proventos_text =
-      summary.proventos_by_asset
-      |> Enum.take(10)
-      |> Enum.map(fn r ->
-        "- #{r.ticker || r.name}: R$ #{Decimal.to_string(r.total, :normal)}"
-      end)
-      |> Enum.join("\n")
+    # ── Cards do resumo (mesmos do dashboard) ──
+    summary_text = """
+    RESUMO DA CARTEIRA:
+    - Patrimônio: R$ #{fmt(cum.market_value)}#{if cum.has_quotes, do: " (preço ao vivo)", else: " (custo-base)"}
+    - Total Investido: R$ #{fmt(cum.net_position)} (custo-base)
+    - Ativos: #{active_count}#{if cum.by_asset_type != [], do: " (#{Enum.map_join(cum.by_asset_type, ", ", fn t -> "#{t.count} #{inv_asset_type_label(t.asset_type)}" end)})", else: ""}
+    - Dividendos no Período: R$ #{fmt(dividends)}
+    - Lucro em Vendas no Período: R$ #{fmt(realized)}
+    - Rentabilidade: #{fmt(cum.total_gain_loss_pct)}% (R$ #{fmt(cum.total_gain_loss)})
+    - Total de Transações no Período: #{per.transaction_count}
+    """
+
+    # ── Carteira por ativo (top 10) ──
+    individual_section =
+      case cum.by_asset_individual do
+        [] ->
+          ""
+
+        assets ->
+          text =
+            assets
+            |> Enum.take(10)
+            |> Enum.map(fn h ->
+              pct =
+                if Decimal.compare(cum.market_value, 0) == :gt,
+                  do: cum.market_value |> then(&Decimal.div(h.current_value, &1)) |> Decimal.mult(100) |> Decimal.round(1),
+                  else: Decimal.new(0)
+
+              gain = if Decimal.compare(h.gain_loss, 0) != :eq, do: " | Rent: #{fmt(h.gain_loss_pct)}%", else: ""
+              "- #{h.ticker || h.name} (#{inv_asset_type_label(h.type)}): R$ #{fmt(h.current_value)} (#{fmt(pct)}%)#{gain}"
+            end)
+            |> Enum.join("\n")
+
+          "\nCARTEIRA POR ATIVO:\n#{text}\n"
+      end
+
+    # ── Patrimônio por tipo de ativo ──
+    by_type_section =
+      case cum.by_asset_type do
+        [] ->
+          ""
+
+        types ->
+          text =
+            types
+            |> Enum.map(fn item ->
+              pct =
+                if Decimal.compare(cum.market_value, 0) == :gt,
+                  do: cum.market_value |> then(&Decimal.div(item.total, &1)) |> Decimal.mult(100) |> Decimal.round(1),
+                  else: Decimal.new(0)
+
+              "- #{inv_asset_type_label(item.asset_type)}: R$ #{fmt(item.total)} (#{fmt(pct)}%, #{item.count} ativos)"
+            end)
+            |> Enum.join("\n")
+
+          "\nPATRIMÔNIO POR TIPO DE ATIVO:\n#{text}\n"
+      end
+
+    # ── Dividendos e ganhos (gráfico de barras) ──
+    proventos_section =
+      case Enum.filter(activity, fn a -> Decimal.compare(a.proventos, 0) == :gt end) do
+        [] ->
+          ""
+
+        items ->
+          text =
+            items
+            |> Enum.map(fn a -> "- #{a.key}: R$ #{fmt(a.proventos)}" end)
+            |> Enum.join("\n")
+
+          "\nDIVIDENDOS E GANHOS POR PERÍODO:\n#{text}\n"
+      end
+
+    # ── Aportes (gráfico de barras) ──
+    aportes_section =
+      case Enum.filter(activity, fn a -> Decimal.compare(a.aportes, 0) == :gt end) do
+        [] ->
+          ""
+
+        items ->
+          text =
+            items
+            |> Enum.map(fn a -> "- #{a.key}: R$ #{fmt(a.aportes)}" end)
+            |> Enum.join("\n")
+
+          "\nAPORTES POR PERÍODO:\n#{text}\n"
+      end
+
+    # ── Holdings table (top 30 ativos ativos) ──
+    holdings_section =
+      case Enum.filter(cum.holdings, & &1.is_active) do
+        [] ->
+          ""
+
+        holdings ->
+          text =
+            holdings
+            |> Enum.take(30)
+            |> Enum.map(fn h ->
+              price = if h.current_price, do: "Preço: R$ #{fmt(h.current_price)} | ", else: ""
+              "- #{h.ticker || h.name} (#{inv_asset_type_label(h.type)}): #{fmt(h.net_qty)} un | #{price}Valor: R$ #{fmt(h.current_value)} | Investido: R$ #{fmt(h.net_total)} | Rent: #{fmt(h.gain_loss_pct)}%"
+            end)
+            |> Enum.join("\n")
+
+          "\nCARTEIRA DE ATIVOS:\n#{text}\n"
+      end
+
+    # ── Ganhos por ativo ──
+    proventos_by_asset_section =
+      case per.proventos_by_asset do
+        [] ->
+          ""
+
+        items ->
+          text =
+            items
+            |> Enum.take(20)
+            |> Enum.map(fn r ->
+              "- #{r.ticker || r.name} (#{inv_asset_type_label(r.type)}): R$ #{fmt(r.total)}"
+            end)
+            |> Enum.join("\n")
+
+          "\nGANHOS POR ATIVO:\n#{text}\n"
+      end
 
     custom_part =
       case custom_prompt do
@@ -297,22 +636,8 @@ defmodule Grana.Banking.AIAnalyzer do
     """
     Analise os dados de investimentos de #{period} de um investidor brasileiro e forneça insights úteis.
 
-    #{filter_desc}RESUMO DA CARTEIRA:
-    - Total Comprado: R$ #{Decimal.to_string(summary.total_bought, :normal)}
-    - Total Vendido: R$ #{Decimal.to_string(summary.total_sold, :normal)}
-    - Posição Líquida: R$ #{Decimal.to_string(summary.net_position, :normal)}
-    - Proventos Recebidos: R$ #{Decimal.to_string(summary.proventos, :normal)}
-    - Taxas Pagas: R$ #{Decimal.to_string(summary.total_fees, :normal)}
-    - Total de Transações: #{summary.transaction_count}
-
-    CARTEIRA POR TIPO DE ATIVO:
-    #{by_type_text}
-
-    HOLDINGS (posições ativas):
-    #{holdings_text}
-
-    MAIORES PAGADORES DE PROVENTOS:
-    #{proventos_text}
+    #{filter_desc}#{summary_text}
+    #{individual_section}#{by_type_section}#{proventos_section}#{aportes_section}#{holdings_section}#{proventos_by_asset_section}
     #{custom_part}
     #{investment_json_format_instruction(has_prompt)}
     """
@@ -357,6 +682,18 @@ defmodule Grana.Banking.AIAnalyzer do
 
   defp call_ai(prompt, config) do
     ai_config = Map.merge(config, %{temperature: 0.3, max_output_tokens: 2048})
+
+    # require Logger
+
+    # Logger.warning("""
+    # === PROMPT ENVIADO AO GEMINI ===
+    # Modelo: #{ai_config[:model]}
+    # Temperature: #{ai_config[:temperature]}
+    # Max tokens: #{ai_config[:max_output_tokens]}
+
+    # #{prompt}
+    # ================================
+    # """)
 
     case Provider.generate_content(prompt, ai_config) do
       {:ok, response_body} -> parse_response(response_body)
