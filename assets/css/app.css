@@ -102,9 +102,7 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* Prevent layout shift from scrollbar appearing/disappearing */
 html {
   scrollbar-gutter: stable both-edges;
 }
 
-/* This file is for your main application CSS */
