@@ -432,10 +432,18 @@ defmodule Grana.Investments do
       summary.holdings
       |> Enum.filter(& &1.is_active)
 
+    all_tickers = Enum.map(active, & &1.ticker)
+
     tickers =
-      active
-      |> Enum.map(& &1.ticker)
+      all_tickers
       |> Enum.filter(&(&1 && String.match?(&1, ~r/^[A-Z]{4}\d{1,2}$/i)))
+
+    skipped = all_tickers -- tickers
+
+    if skipped != [] do
+      require Logger
+      Logger.info("QuoteProvider: skipped tickers (no match): #{inspect(skipped)}")
+    end
 
     quotes =
       case Grana.Investments.QuoteProvider.get_quotes(tickers) do
