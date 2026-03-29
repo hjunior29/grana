@@ -60,43 +60,58 @@ defmodule Grana.Investments.QuoteProvider do
       Logger.warning("QuoteProvider: BRAPI_TOKEN not configured")
       {:error, :no_token}
     else
-      joined = Enum.join(tickers, ",")
-      url = "#{@base_url}/#{joined}?token=#{token}"
+      Logger.info("QuoteProvider: fetching #{length(tickers)} tickers: #{Enum.join(tickers, ",")}")
 
-      Logger.debug("QuoteProvider: fetching #{length(tickers)} tickers from brapi.dev")
+      results =
+        tickers
+        |> Task.async_stream(
+          fn ticker -> {ticker, fetch_one(ticker, token)} end,
+          max_concurrency: 3,
+          timeout: 20_000
+        )
+        |> Enum.reduce(%{}, fn
+          {:ok, {_ticker, {:ok, symbol, data}}}, acc ->
+            Map.put(acc, symbol, data)
 
-      case Req.get(url, receive_timeout: 15_000) do
-        {:ok, %Req.Response{status: 200, body: %{"results" => results}}} ->
-          now = System.monotonic_time(:millisecond)
+          {:ok, {ticker, {:error, reason}}}, acc ->
+            Logger.warning("QuoteProvider: failed to fetch #{ticker}: #{inspect(reason)}")
+            acc
 
-          map =
-            results
-            |> Enum.reduce(%{}, fn r, acc ->
-              symbol = r["symbol"]
+          {:exit, reason}, acc ->
+            Logger.warning("QuoteProvider: task exited: #{inspect(reason)}")
+            acc
+        end)
 
-              data = %{
-                price: decimal(r["regularMarketPrice"]),
-                change: decimal(r["regularMarketChange"]),
-                change_pct: r["regularMarketChangePercent"],
-                previous_close: decimal(r["regularMarketPreviousClose"]),
-                logo_url: r["logourl"]
-              }
+      Logger.info("QuoteProvider: fetched #{map_size(results)}/#{length(tickers)} quotes")
+      {:ok, results}
+    end
+  end
 
-              :ets.insert(@table, {symbol, data, now})
-              Map.put(acc, symbol, data)
-            end)
+  defp fetch_one(ticker, token) do
+    url = "#{@base_url}/#{ticker}?token=#{token}"
 
-          Logger.debug("QuoteProvider: fetched #{map_size(map)} quotes successfully")
-          {:ok, map}
+    case Req.get(url, receive_timeout: 15_000) do
+      {:ok, %Req.Response{status: 200, body: %{"results" => [r | _]}}} ->
+        now = System.monotonic_time(:millisecond)
+        symbol = r["symbol"]
 
-        {:ok, %Req.Response{status: status, body: body}} ->
-          Logger.warning("QuoteProvider: API returned status #{status}: #{inspect(body)}")
-          {:error, {:api_error, status, body}}
+        data = %{
+          price: decimal(r["regularMarketPrice"]),
+          change: decimal(r["regularMarketChange"]),
+          change_pct: r["regularMarketChangePercent"],
+          previous_close: decimal(r["regularMarketPreviousClose"]),
+          logo_url: r["logourl"]
+        }
 
-        {:error, reason} ->
-          Logger.warning("QuoteProvider: HTTP error: #{inspect(reason)}")
-          {:error, reason}
-      end
+        Logger.info("QuoteProvider: #{symbol} = R$ #{data.price}")
+        :ets.insert(@table, {symbol, data, now})
+        {:ok, symbol, data}
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        {:error, {:api_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
