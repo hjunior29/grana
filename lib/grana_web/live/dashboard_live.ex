@@ -58,6 +58,7 @@ defmodule GranaWeb.DashboardLive do
               do: s,
               else: s |> init_inv_data() |> load_inv_data()
           end)
+          |> apply_inv_url_params(params)
           |> assign(:tab, "investments")
 
         _ ->
@@ -82,13 +83,15 @@ defmodule GranaWeb.DashboardLive do
         socket
         |> assign(:view_mode, "total")
         |> load_banking_data()
+        |> then(&{:noreply, &1})
 
       "investments" ->
         socket
         |> assign(:inv_view_mode, "total")
+        |> assign(:inv_selected_month, nil)
         |> load_inv_data()
+        |> then(&{:noreply, push_inv_patch(&1)})
     end
-    |> then(&{:noreply, &1})
   end
 
   def handle_event("select_year", %{"year" => year_str}, socket) do
@@ -100,6 +103,7 @@ defmodule GranaWeb.DashboardLive do
         |> assign(:selected_year, year)
         |> assign(:view_mode, "year")
         |> load_banking_data()
+        |> then(&{:noreply, &1})
 
       "investments" ->
         socket
@@ -107,8 +111,8 @@ defmodule GranaWeb.DashboardLive do
         |> assign(:inv_selected_month, nil)
         |> assign(:inv_view_mode, "year")
         |> load_inv_data()
+        |> then(&{:noreply, push_inv_patch(&1)})
     end
-    |> then(&{:noreply, &1})
   end
 
   def handle_event("select_month", %{"month" => "all"}, socket) do
@@ -117,14 +121,15 @@ defmodule GranaWeb.DashboardLive do
         socket
         |> assign(:view_mode, "year")
         |> load_banking_data()
+        |> then(&{:noreply, &1})
 
       "investments" ->
         socket
         |> assign(:inv_selected_month, nil)
         |> assign(:inv_view_mode, "year")
         |> load_inv_data()
+        |> then(&{:noreply, push_inv_patch(&1)})
     end
-    |> then(&{:noreply, &1})
   end
 
   def handle_event("select_month", %{"month" => month_str}, socket) do
@@ -136,14 +141,15 @@ defmodule GranaWeb.DashboardLive do
         |> assign(:selected_month, month)
         |> assign(:view_mode, "month")
         |> load_banking_data()
+        |> then(&{:noreply, &1})
 
       "investments" ->
         socket
         |> assign(:inv_selected_month, month)
         |> assign(:inv_view_mode, "month")
         |> load_inv_data()
+        |> then(&{:noreply, push_inv_patch(&1)})
     end
-    |> then(&{:noreply, &1})
   end
 
   def handle_event("chart-navigate", %{"url" => url}, socket) do
@@ -201,7 +207,7 @@ defmodule GranaWeb.DashboardLive do
       |> assign(:inv_selected_institution, inst)
       |> load_inv_data()
 
-    {:noreply, socket}
+    {:noreply, push_inv_patch(socket)}
   end
 
   def handle_event("select_asset_type", %{"type" => type}, socket) do
@@ -210,7 +216,7 @@ defmodule GranaWeb.DashboardLive do
       |> assign(:inv_selected_asset_type, type)
       |> load_inv_data()
 
-    {:noreply, socket}
+    {:noreply, push_inv_patch(socket)}
   end
 
   def handle_event("toggle-asset", %{"id" => id}, socket) do
@@ -783,17 +789,6 @@ defmodule GranaWeb.DashboardLive do
           >
             Receitas
           </button>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="investment"
-            class={[
-              "btn btn-xs gap-1",
-              (@selected_txn_type == "investment" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            <span class="hidden sm:inline">Investimentos</span>
-            <span class="sm:hidden">Invest.</span>
-          </button>
         </div>
       </div>
     </div>
@@ -809,23 +804,23 @@ defmodule GranaWeb.DashboardLive do
 
     <div :if={@summary.transaction_count > 0}>
       <%!-- Stat Cards --%>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
+      <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
         <%= if @summary.income_count == 0 do %>
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
-            <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
+            <div class="stat-title text-xs">Receitas</div>
             <div class="stat-value text-sm sm:text-lg">—</div>
-            <div class="stat-desc text-[10px] sm:text-xs">Sem receitas no período</div>
+            <div class="stat-desc text-xs">Sem receitas no período</div>
           </div>
         <% else %>
           <.link
             navigate={transactions_url(assigns, %{type: "credit"})}
             class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
           >
-            <div class="stat-title text-[10px] sm:text-xs">Receitas</div>
+            <div class="stat-title text-xs">Receitas</div>
             <div class="stat-value text-success text-sm sm:text-lg">
               {format_currency(@summary.total_income)}
             </div>
-            <div class="stat-desc text-[10px] sm:text-xs">
+            <div class="stat-desc text-xs">
               {@summary.income_count} transações
             </div>
           </.link>
@@ -835,11 +830,11 @@ defmodule GranaWeb.DashboardLive do
           navigate={transactions_url(assigns, %{type: "debit"})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Despesas</div>
+          <div class="stat-title text-xs">Despesas</div>
           <div class="stat-value text-error text-sm sm:text-lg">
             {format_currency(@summary.total_expenses)}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">
+          <div class="stat-desc text-xs">
             {@summary.expense_count} transações{if @summary.refund_count > 0,
               do: " (#{@summary.refund_count} est.)",
               else: ""}
@@ -848,20 +843,20 @@ defmodule GranaWeb.DashboardLive do
 
         <%= if @summary.investment_count == 0 do %>
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
-            <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
+            <div class="stat-title text-xs">Investimentos</div>
             <div class="stat-value text-sm sm:text-lg">—</div>
-            <div class="stat-desc text-[10px] sm:text-xs">Sem invest. no período</div>
+            <div class="stat-desc text-xs">Sem invest. no período</div>
           </div>
         <% else %>
           <.link
             navigate={transactions_url(assigns, %{type: "investment"})}
             class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
           >
-            <div class="stat-title text-[10px] sm:text-xs">Investimentos</div>
+            <div class="stat-title text-xs">Investimentos</div>
             <div class="stat-value text-info text-sm sm:text-lg">
               {format_currency(@summary.total_investments)}
             </div>
-            <div class="stat-desc text-[10px] sm:text-xs">
+            <div class="stat-desc text-xs">
               {@summary.investment_count} transações
             </div>
           </.link>
@@ -869,23 +864,23 @@ defmodule GranaWeb.DashboardLive do
 
         <%= if @summary.income_count == 0 do %>
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
-            <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
+            <div class="stat-title text-xs">Saldo Livre</div>
             <div class="stat-value text-sm sm:text-lg">—</div>
-            <div class="stat-desc text-[10px] sm:text-xs">Sem receitas para saldo</div>
+            <div class="stat-desc text-xs">Sem receitas para saldo</div>
           </div>
         <% else %>
           <.link
             navigate={transactions_url(assigns)}
             class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
           >
-            <div class="stat-title text-[10px] sm:text-xs">Saldo Livre</div>
+            <div class="stat-title text-xs">Saldo Livre</div>
             <div class={[
               "stat-value text-sm sm:text-lg",
               (Decimal.compare(@summary.balance, 0) == :lt && "text-error") || "text-success"
             ]}>
               {format_currency(@summary.balance)}
             </div>
-            <div class="stat-desc text-[10px] sm:text-xs">
+            <div class="stat-desc text-xs">
               {if @uncategorized_count > 0,
                 do: "#{@uncategorized_count} sem cat.",
                 else: "Categorizado"}
@@ -897,7 +892,7 @@ defmodule GranaWeb.DashboardLive do
           navigate={transactions_url(assigns, %{type: "debit"})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">
+          <div class="stat-title text-xs">
             {case @view_mode do
               "total" -> "Média Anual"
               "year" -> "Média Mensal"
@@ -907,18 +902,18 @@ defmodule GranaWeb.DashboardLive do
           <div class="stat-value text-sm sm:text-lg">
             {format_currency(@expense_avg)}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">em despesas</div>
+          <div class="stat-desc text-xs">em despesas</div>
         </.link>
 
         <.link
           navigate={transactions_url(assigns)}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Transações</div>
+          <div class="stat-title text-xs">Transações</div>
           <div class="stat-value text-sm sm:text-lg">
             {@summary.transaction_count}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs truncate">{@top_category}</div>
+          <div class="stat-desc text-xs truncate">{@top_category}</div>
         </.link>
       </div>
 
@@ -935,173 +930,231 @@ defmodule GranaWeb.DashboardLive do
 
       <%!-- Charts: Category + Daily/Monthly --%>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
-        <div class="card bg-base-200 p-4 sm:p-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
-          <div
-            id="category-chart"
-            phx-hook="CategoryChart"
-            data-categories={category_chart_data(assigns)}
-          >
-            <div class="space-y-3">
-              <div
-                :for={item <- @summary.by_category}
-                phx-click="toggle-category"
-                phx-value-id={if item.category, do: to_string(item.category.id), else: "nil"}
-                class={[
-                  "flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 transition-all cursor-pointer select-none",
-                  if(category_excluded?(item.category, @excluded_categories),
-                    do: "opacity-30",
-                    else: "hover:bg-base-300"
-                  )
-                ]}
-              >
-                <div
-                  class="w-3 h-3 rounded-full shrink-0"
-                  style={"background-color: #{category_color(item.category)}"}
-                />
-                <span class={[
-                  "flex-1 text-sm truncate",
-                  category_excluded?(item.category, @excluded_categories) && "line-through"
-                ]}>
-                  {if item.category, do: item.category.name, else: "Sem Categoria"}
-                </span>
-                <span class="text-sm font-medium">{format_currency(item.total)}</span>
-                <span class="text-xs opacity-50">
-                  {percentage(item.total, @summary.total_expenses)}%
-                </span>
-              </div>
-              <button
-                :if={MapSet.size(@excluded_categories) > 0}
-                phx-click="reset-categories"
-                class="text-xs text-primary hover:underline mt-1 cursor-pointer"
-              >
-                Mostrar todas
-              </button>
+        <%= if @selected_txn_type == "credit" do %>
+          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
+            <div class="text-center">
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Despesas por Categoria</h3>
+              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
             </div>
           </div>
-        </div>
+        <% else %>
+          <div class="card bg-base-200 p-4 sm:p-6">
+            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
+            <div
+              id="category-chart"
+              phx-hook="CategoryChart"
+              data-categories={category_chart_data(assigns)}
+            >
+              <div class="space-y-3">
+                <div
+                  :for={item <- @summary.by_category}
+                  phx-click="toggle-category"
+                  phx-value-id={if item.category, do: to_string(item.category.id), else: "nil"}
+                  class={[
+                    "flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 transition-all cursor-pointer select-none",
+                    if(category_excluded?(item.category, @excluded_categories),
+                      do: "opacity-30",
+                      else: "hover:bg-base-300"
+                    )
+                  ]}
+                >
+                  <div
+                    class="w-3 h-3 rounded-full shrink-0"
+                    style={"background-color: #{category_color(item.category)}"}
+                  />
+                  <span class={[
+                    "flex-1 text-sm truncate",
+                    category_excluded?(item.category, @excluded_categories) && "line-through"
+                  ]}>
+                    {if item.category, do: item.category.name, else: "Sem Categoria"}
+                  </span>
+                  <span class="text-sm font-medium">{format_currency(item.total)}</span>
+                  <span class="text-xs opacity-50">
+                    {percentage(item.total, @summary.total_expenses)}%
+                  </span>
+                </div>
+                <button
+                  :if={MapSet.size(@excluded_categories) > 0}
+                  phx-click="reset-categories"
+                  class="text-xs text-primary hover:underline mt-1 cursor-pointer"
+                >
+                  Mostrar todas
+                </button>
+              </div>
+            </div>
+          </div>
+        <% end %>
 
         <%!-- Daily Chart (month view) --%>
-        <div :if={@view_mode == "month" and @daily_spending != []} class="card bg-base-200 p-4 sm:p-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
+        <%= if @selected_txn_type == "credit" do %>
           <div
-            id="daily-chart"
-            phx-hook="DailyChart"
-            data-daily={daily_chart_data(assigns)}
+            :if={@view_mode == "month"}
+            class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center"
           >
-            <div class="space-y-1">
-              <div
-                :for={day <- @daily_spending}
-                class="flex items-center gap-2 cursor-pointer"
-                data-day-date={Calendar.strftime(day.date, "%d/%m")}
-                data-day-value={day.total}
-              >
-                <span class="text-xs w-10 opacity-60">
-                  {Calendar.strftime(day.date, "%d/%m")}
-                </span>
-                <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
-                  <div
-                    class="bg-primary h-full rounded-full transition-all"
-                    style={"width: #{bar_width(day.total, @daily_spending)}%"}
-                  />
+            <div class="text-center">
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Gastos Diários</h3>
+              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
+            </div>
+          </div>
+        <% else %>
+          <div :if={@view_mode == "month" and @daily_spending != []} class="card bg-base-200 p-4 sm:p-6">
+            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
+            <div
+              id="daily-chart"
+              phx-hook="DailyChart"
+              data-daily={daily_chart_data(assigns)}
+            >
+              <div class="space-y-1">
+                <div
+                  :for={day <- @daily_spending}
+                  class="flex items-center gap-2 cursor-pointer"
+                  data-day-date={Calendar.strftime(day.date, "%d/%m")}
+                  data-day-value={day.total}
+                >
+                  <span class="text-xs w-10 opacity-60">
+                    {Calendar.strftime(day.date, "%d/%m")}
+                  </span>
+                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                    <div
+                      class="bg-primary h-full rounded-full transition-all"
+                      style={"width: #{bar_width(day.total, @daily_spending)}%"}
+                    />
+                  </div>
+                  <span class="text-xs font-medium w-20 text-right">
+                    {format_currency(day.total)}
+                  </span>
                 </div>
-                <span class="text-xs font-medium w-20 text-right">
-                  {format_currency(day.total)}
-                </span>
               </div>
             </div>
           </div>
-        </div>
+        <% end %>
 
         <%!-- Yearly Spending Chart (total view) --%>
-        <div
-          :if={@view_mode == "total" and @yearly_spending != []}
-          class="card bg-base-200 p-4 sm:p-6"
-        >
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos por Ano</h3>
+        <%= if @selected_txn_type == "credit" do %>
           <div
-            id="yearly-spending-chart"
-            phx-hook="DailyChart"
-            data-daily={yearly_spending_chart_data(assigns)}
+            :if={@view_mode == "total"}
+            class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center"
           >
-            <div class="space-y-1">
-              <div :for={item <- @yearly_spending} class="flex items-center gap-2">
-                <span class="text-xs w-10 opacity-60">
-                  {item.year}
-                </span>
-                <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
-                  <div
-                    class="bg-primary h-full rounded-full transition-all"
-                    style={"width: #{yearly_bar_width(item.expenses, @yearly_spending)}%"}
-                  />
+            <div class="text-center">
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Gastos por Ano</h3>
+              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
+            </div>
+          </div>
+        <% else %>
+          <div
+            :if={@view_mode == "total" and @yearly_spending != []}
+            class="card bg-base-200 p-4 sm:p-6"
+          >
+            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos por Ano</h3>
+            <div
+              id="yearly-spending-chart"
+              phx-hook="DailyChart"
+              data-daily={yearly_spending_chart_data(assigns)}
+            >
+              <div class="space-y-1">
+                <div :for={item <- @yearly_spending} class="flex items-center gap-2">
+                  <span class="text-xs w-10 opacity-60">
+                    {item.year}
+                  </span>
+                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                    <div
+                      class="bg-primary h-full rounded-full transition-all"
+                      style={"width: #{yearly_bar_width(item.expenses, @yearly_spending)}%"}
+                    />
+                  </div>
+                  <span class="text-xs font-medium w-20 text-right">
+                    {format_currency(item.expenses)}
+                  </span>
                 </div>
-                <span class="text-xs font-medium w-20 text-right">
-                  {format_currency(item.expenses)}
-                </span>
               </div>
             </div>
           </div>
-        </div>
+        <% end %>
 
         <%!-- Monthly Spending Chart (year view) --%>
-        <div :if={@view_mode == "year"} class="card bg-base-200 p-4 sm:p-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Mensais</h3>
+        <%= if @selected_txn_type == "credit" do %>
           <div
-            id="monthly-spending-chart"
-            phx-hook="DailyChart"
-            data-daily={monthly_spending_chart_data(assigns)}
+            :if={@view_mode == "year"}
+            class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center"
           >
-            <div class="space-y-1">
-              <div :for={item <- @monthly_ie} class="flex items-center gap-2">
-                <span class="text-xs w-10 opacity-60">
-                  {Banking.month_name_short(item.month)}
-                </span>
-                <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
-                  <div
-                    class="bg-primary h-full rounded-full transition-all"
-                    style={"width: #{monthly_bar_width(item.expenses, @monthly_ie)}%"}
-                  />
+            <div class="text-center">
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Gastos Mensais</h3>
+              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
+            </div>
+          </div>
+        <% else %>
+          <div :if={@view_mode == "year"} class="card bg-base-200 p-4 sm:p-6">
+            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Mensais</h3>
+            <div
+              id="monthly-spending-chart"
+              phx-hook="DailyChart"
+              data-daily={monthly_spending_chart_data(assigns)}
+            >
+              <div class="space-y-1">
+                <div :for={item <- @monthly_ie} class="flex items-center gap-2">
+                  <span class="text-xs w-10 opacity-60">
+                    {Banking.month_name_short(item.month)}
+                  </span>
+                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                    <div
+                      class="bg-primary h-full rounded-full transition-all"
+                      style={"width: #{monthly_bar_width(item.expenses, @monthly_ie)}%"}
+                    />
+                  </div>
+                  <span class="text-xs font-medium w-20 text-right">
+                    {format_currency(item.expenses)}
+                  </span>
                 </div>
-                <span class="text-xs font-medium w-20 text-right">
-                  {format_currency(item.expenses)}
-                </span>
               </div>
             </div>
           </div>
-        </div>
+        <% end %>
       </div>
 
       <%!-- Top Expenses / Top Income --%>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
-        <div class="card bg-base-200 p-4 sm:p-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
-          <div class="space-y-1">
-            <.link
-              :for={txn <- top_expenses(@summary.transactions, 10)}
-              navigate={txn_url(assigns, txn)}
-              class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
-            >
-              <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-              <span class="flex-1 text-sm truncate">{txn.description}</span>
-              <span
-                :if={txn.category}
-                class="badge badge-sm shrink-0"
-                style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-              >
-                {txn.category.name}
-              </span>
-              <span class="text-sm font-medium text-error whitespace-nowrap">
-                {format_currency(Decimal.abs(txn.amount))}
-              </span>
-            </.link>
+        <%= if @selected_txn_type == "credit" or @summary.expense_count == 0 do %>
+          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
+            <div class="text-center">
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Top Despesas</h3>
+              <p class="text-xs opacity-70">
+                {if @selected_txn_type == "credit", do: "Sem dados para o filtro selecionado", else: "Sem despesas no período"}
+              </p>
+            </div>
           </div>
-        </div>
+        <% else %>
+          <div class="card bg-base-200 p-4 sm:p-6">
+            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
+            <div class="space-y-1">
+              <.link
+                :for={txn <- top_expenses(@summary.transactions, 10)}
+                navigate={txn_url(assigns, txn)}
+                class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
+              >
+                <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
+                <span class="flex-1 text-sm truncate">{txn.description}</span>
+                <span
+                  :if={txn.category}
+                  class="badge badge-sm shrink-0"
+                  style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
+                >
+                  {txn.category.name}
+                </span>
+                <span class="text-sm font-medium text-error whitespace-nowrap">
+                  {format_currency(Decimal.abs(txn.amount))}
+                </span>
+              </.link>
+            </div>
+          </div>
+        <% end %>
 
-        <%= if @summary.income_count == 0 do %>
+        <%= if @selected_txn_type == "debit" or @summary.income_count == 0 do %>
           <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
             <div class="text-center">
               <h3 class="font-semibold text-sm sm:text-base mb-2">Top Receitas</h3>
-              <p class="text-xs opacity-70">Sem receitas no período</p>
+              <p class="text-xs opacity-70">
+                {if @selected_txn_type == "debit", do: "Sem dados para o filtro selecionado", else: "Sem receitas no período"}
+              </p>
             </div>
           </div>
         <% else %>
@@ -1132,62 +1185,73 @@ defmodule GranaWeb.DashboardLive do
       </div>
 
       <%!-- Income vs Expenses Chart --%>
-      <%= if @summary.income_count == 0 do %>
+      <%= if @selected_txn_type != "all" do %>
         <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
           <div class="flex items-center justify-center py-8">
             <div class="text-center">
               <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
-              <p class="text-xs opacity-70">Sem receitas no período para comparação</p>
+              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
             </div>
           </div>
         </div>
       <% else %>
-        <div
-          :if={@monthly_ie != []}
-          class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-            <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
-            <div class="flex items-center gap-3 text-sm">
-              <span class={[
-                "font-semibold",
-                if(Decimal.compare(@summary.balance, 0) == :lt,
-                  do: "text-error",
-                  else: "text-success"
-                )
-              ]}>
-                {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(
-                  @summary.balance
-                )}
-              </span>
-              <span
-                :if={Decimal.compare(@summary.total_income, 0) == :gt}
-                class={[
-                  "badge badge-sm",
-                  if(Decimal.compare(@summary.balance, 0) == :lt,
-                    do: "badge-error",
-                    else: "badge-success"
-                  )
-                ]}
-              >
-                {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(
-                  @summary
-                )}
-              </span>
+        <%= if @summary.income_count == 0 do %>
+          <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
+            <div class="flex items-center justify-center py-8">
+              <div class="text-center">
+                <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
+                <p class="text-xs opacity-70">Sem receitas no período</p>
+              </div>
             </div>
           </div>
+        <% else %>
           <div
-            id="income-expenses-chart"
-            phx-hook="IncomeExpensesChart"
-            data-monthly={ie_chart_data(assigns)}
+            :if={@monthly_ie != []}
+            class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
           >
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
+              <div class="flex items-center gap-3 text-sm">
+                <span class={[
+                  "font-semibold",
+                  if(Decimal.compare(@summary.balance, 0) == :lt,
+                    do: "text-error",
+                    else: "text-success"
+                  )
+                ]}>
+                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(
+                    @summary.balance
+                  )}
+                </span>
+                <span
+                  :if={Decimal.compare(@summary.total_income, 0) == :gt}
+                  class={[
+                    "badge badge-sm",
+                    if(Decimal.compare(@summary.balance, 0) == :lt,
+                      do: "badge-error",
+                      else: "badge-success"
+                    )
+                  ]}
+                >
+                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(
+                    @summary
+                  )}
+                </span>
+              </div>
+            </div>
+            <div
+              id="income-expenses-chart"
+              phx-hook="IncomeExpensesChart"
+              data-monthly={ie_chart_data(assigns)}
+            >
+            </div>
           </div>
-        </div>
+        <% end %>
       <% end %>
 
       <%!-- Installments --%>
       <div
-        :if={@installment_summary.active_count > 0 and @selected_type != "extrato"}
+        :if={@installment_summary.active_count > 0 and @selected_type != "extrato" and @selected_txn_type != "credit"}
         class="mb-4 sm:mb-8"
       >
         <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
@@ -1260,27 +1324,27 @@ defmodule GranaWeb.DashboardLive do
 
         <div class="grid grid-cols-3 gap-2 sm:gap-4">
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-            <div class="stat-title text-[10px] sm:text-xs">Parcelas Ativas</div>
+            <div class="stat-title text-xs">Parcelas Ativas</div>
             <div class="stat-value text-warning text-sm sm:text-lg">
               {@installment_summary.active_count}
             </div>
-            <div class="stat-desc text-[10px] sm:text-xs">parceladas</div>
+            <div class="stat-desc text-xs">parceladas</div>
           </div>
 
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-            <div class="stat-title text-[10px] sm:text-xs">Mensal Parcelas</div>
+            <div class="stat-title text-xs">Mensal Parcelas</div>
             <div class="stat-value text-warning text-sm sm:text-lg">
               {format_currency(@installment_summary.this_month_total)}
             </div>
-            <div class="stat-desc text-[10px] sm:text-xs">por mês</div>
+            <div class="stat-desc text-xs">por mês</div>
           </div>
 
           <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-            <div class="stat-title text-[10px] sm:text-xs">Total Restante</div>
+            <div class="stat-title text-xs">Total Restante</div>
             <div class="stat-value text-warning text-sm sm:text-lg">
               {format_currency(@installment_summary.total_remaining)}
             </div>
-            <div class="stat-desc text-[10px] sm:text-xs">futuras</div>
+            <div class="stat-desc text-xs">futuras</div>
           </div>
         </div>
       </div>
@@ -1422,19 +1486,19 @@ defmodule GranaWeb.DashboardLive do
       </div>
       <%!-- Stat Cards --%>
       <% active_count = Enum.count(@inv_summary.holdings, & &1.is_active) %>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
+      <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
         <%!-- 1. Patrimônio (cumulative) --%>
         <.link
           navigate={inv_transactions_url(assigns, %{skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">
+          <div class="stat-title text-xs">
             Patrimônio <span :if={@inv_summary.has_quotes} class="ml-1 text-success">●</span>
           </div>
           <div class="stat-value text-info text-sm sm:text-lg">
             {format_currency(@inv_summary.market_value)}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">
+          <div class="stat-desc text-xs">
             {if @inv_summary.has_quotes, do: "preço ao vivo", else: "custo-base"}
           </div>
         </.link>
@@ -1444,11 +1508,11 @@ defmodule GranaWeb.DashboardLive do
           navigate={inv_transactions_url(assigns, %{operation: "compra", skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Investido</div>
+          <div class="stat-title text-xs">Investido</div>
           <div class="stat-value text-sm sm:text-lg opacity-70">
             {format_currency(@inv_summary.net_position)}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">custo-base</div>
+          <div class="stat-desc text-xs">custo-base</div>
         </.link>
 
         <%!-- 3. Ativos (cumulative) --%>
@@ -1456,12 +1520,12 @@ defmodule GranaWeb.DashboardLive do
           navigate={inv_transactions_url(assigns, %{skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Ativos</div>
+          <div class="stat-title text-xs">Ativos</div>
           <div class="stat-value text-sm sm:text-lg opacity-70">
             {active_count}
           </div>
           <div
-            class="stat-desc text-[10px] sm:text-xs truncate"
+            class="stat-desc text-xs truncate"
             title={
               if length(@inv_summary.by_asset_type) > 0,
                 do:
@@ -1485,11 +1549,11 @@ defmodule GranaWeb.DashboardLive do
           navigate={inv_transactions_url(assigns, %{operation: Constants.income_ops_csv()})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Dividendos</div>
+          <div class="stat-title text-xs">Dividendos</div>
           <div class="stat-value text-success text-sm sm:text-lg">
             {format_currency(@inv_period_dividends)}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">renda passiva</div>
+          <div class="stat-desc text-xs">renda passiva</div>
         </.link>
 
         <%!-- 5. Lucro em Vendas (period) --%>
@@ -1497,7 +1561,7 @@ defmodule GranaWeb.DashboardLive do
           navigate={inv_transactions_url(assigns, %{operation: "venda"})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Lucro em Vendas</div>
+          <div class="stat-title text-xs">Lucro em Vendas</div>
           <div class={[
             "stat-value text-sm sm:text-lg",
             if(Decimal.compare(Decimal.sub(@inv_period_proventos, @inv_period_dividends), 0) == :gt,
@@ -1507,7 +1571,7 @@ defmodule GranaWeb.DashboardLive do
           ]}>
             {format_currency(Decimal.sub(@inv_period_proventos, @inv_period_dividends))}
           </div>
-          <div class="stat-desc text-[10px] sm:text-xs">ganho realizado</div>
+          <div class="stat-desc text-xs">ganho realizado</div>
         </.link>
 
         <%!-- 6. Rentabilidade (cumulative) --%>
@@ -1515,7 +1579,7 @@ defmodule GranaWeb.DashboardLive do
           navigate={inv_transactions_url(assigns, %{skip_dates: true})}
           class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-[10px] sm:text-xs">Rentabilidade</div>
+          <div class="stat-title text-xs">Rentabilidade</div>
           <div class={[
             "stat-value text-sm sm:text-lg",
             gain_loss_class(@inv_summary.total_gain_loss)
@@ -1523,7 +1587,7 @@ defmodule GranaWeb.DashboardLive do
             {format_currency_signed(@inv_summary.total_gain_loss)}
           </div>
           <div class={[
-            "stat-desc text-[10px] sm:text-xs font-medium",
+            "stat-desc text-xs font-medium",
             gain_loss_class(@inv_summary.total_gain_loss)
           ]}>
             {format_pct(@inv_summary.total_gain_loss_pct)}
@@ -1851,6 +1915,74 @@ defmodule GranaWeb.DashboardLive do
 
   # ── Shared Helpers ──
 
+  defp push_inv_patch(socket) do
+    %{
+      inv_selected_year: year,
+      inv_selected_month: month,
+      inv_view_mode: view_mode,
+      inv_selected_institution: inst,
+      inv_selected_asset_type: asset_type
+    } = socket.assigns
+
+    params =
+      %{tab: "investments"}
+      |> then(fn p -> if view_mode != "month", do: Map.put(p, :inv_view, view_mode), else: p end)
+      |> then(fn p -> if year, do: Map.put(p, :inv_year, year), else: p end)
+      |> then(fn p -> if month, do: Map.put(p, :inv_month, month), else: p end)
+      |> then(fn p -> if inst != "all", do: Map.put(p, :inv_inst, inst), else: p end)
+      |> then(fn p -> if asset_type != "all", do: Map.put(p, :inv_type, asset_type), else: p end)
+
+    qs =
+      params
+      |> Enum.map(fn {k, v} -> "#{k}=#{URI.encode_www_form(to_string(v))}" end)
+      |> Enum.join("&")
+
+    push_patch(socket, to: "/dashboard?#{qs}", replace: true)
+  end
+
+  defp apply_inv_url_params(socket, params) do
+    socket
+    |> then(fn s ->
+      case params["inv_year"] do
+        nil -> s
+        y -> assign(s, :inv_selected_year, String.to_integer(y))
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_month"] do
+        nil -> s
+        m -> assign(s, :inv_selected_month, String.to_integer(m))
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_view"] do
+        nil -> s
+        v when v in ["total", "year", "month"] -> assign(s, :inv_view_mode, v)
+        _ -> s
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_inst"] do
+        nil -> s
+        i -> assign(s, :inv_selected_institution, i)
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_type"] do
+        nil -> s
+        t -> assign(s, :inv_selected_asset_type, t)
+      end
+    end)
+    |> then(fn s ->
+      if params["inv_year"] || params["inv_month"] || params["inv_view"] ||
+           params["inv_inst"] || params["inv_type"] do
+        load_inv_data(s)
+      else
+        s
+      end
+    end)
+  end
+
   defp toggle_set(set, val) do
     if MapSet.member?(set, val), do: MapSet.delete(set, val), else: MapSet.put(set, val)
   end
@@ -2142,6 +2274,8 @@ defmodule GranaWeb.DashboardLive do
       do: "#{trunc(float)}",
       else: Decimal.to_string(Decimal.round(qty, 4))
   end
+
+  defp format_pct(nil), do: "—"
 
   defp format_pct(pct) do
     val = Decimal.round(pct, 2) |> Decimal.to_string()

@@ -411,11 +411,11 @@ defmodule Grana.Investments do
           Decimal.add(acc, Decimal.abs(t.total_amount))
         end)
 
-      # Lucro realizado = vendas - compras (mínimo 0)
-      realized_profit = Decimal.max(Decimal.sub(resgates, aportes), Decimal.new(0))
-      proventos = Decimal.add(dividends, realized_profit)
+      # Lucro realizado = vendas - compras (pode ser negativo = prejuízo)
+      realized_profit = Decimal.sub(resgates, aportes)
+      proventos = Decimal.add(dividends, Decimal.max(realized_profit, Decimal.new(0)))
 
-      %{key: key, aportes: aportes, resgates: resgates, proventos: proventos}
+      %{key: key, aportes: aportes, resgates: resgates, proventos: proventos, realized_profit: realized_profit}
     end)
     |> Enum.sort_by(& &1.key)
   end
@@ -453,9 +453,9 @@ defmodule Grana.Investments do
           gain_loss = Decimal.sub(current_value, h.net_total)
 
           gain_loss_pct =
-            if Decimal.compare(h.net_total, 0) == :gt,
-              do: h.net_total |> then(&Decimal.div(gain_loss, &1)) |> Decimal.mult(100),
-              else: Decimal.new(0)
+            if Decimal.compare(h.net_total, 0) != :eq,
+              do: h.net_total |> then(&Decimal.div(gain_loss, &1)) |> Decimal.mult(100) |> Decimal.round(2),
+              else: nil
 
           Map.merge(h, %{
             current_price: quote.price,
@@ -472,7 +472,7 @@ defmodule Grana.Investments do
             current_price: nil,
             current_value: current_value,
             gain_loss: Decimal.new(0),
-            gain_loss_pct: Decimal.new(0),
+            gain_loss_pct: nil,
             change_pct: nil,
             logo_url: nil
           })
@@ -487,9 +487,9 @@ defmodule Grana.Investments do
     total_gain_loss = Decimal.sub(market_value, summary.net_position)
 
     total_gain_loss_pct =
-      if Decimal.compare(summary.net_position, 0) == :gt,
-        do: summary.net_position |> then(&Decimal.div(total_gain_loss, &1)) |> Decimal.mult(100),
-        else: Decimal.new(0)
+      if Decimal.compare(summary.net_position, 0) != :eq,
+        do: summary.net_position |> then(&Decimal.div(total_gain_loss, &1)) |> Decimal.mult(100) |> Decimal.round(2),
+        else: nil
 
     has_quotes = map_size(quotes) > 0
 
@@ -641,7 +641,7 @@ defmodule Grana.Investments do
         inst_logo = if inst, do: Institution.logo_url(inst)
 
         is_active =
-          (Decimal.compare(net_qty, 0) == :gt and Decimal.compare(net_total, 0) == :gt) or
+          Decimal.compare(net_qty, 0) == :gt or
             (Decimal.compare(h.bought_qty, 0) == :eq and
                Decimal.compare(h.sold_qty, 0) == :eq and
                Decimal.compare(net_total, 0) == :gt)
@@ -787,8 +787,8 @@ defmodule Grana.Investments do
     proventos_by_asset =
       proventos_by_asset_raw
       |> Enum.map(fn p ->
-        realized_profit = Decimal.max(Decimal.sub(p.sold, p.bought), Decimal.new(0))
-        total = Decimal.add(realized_profit, p.divs)
+        realized_profit = Decimal.sub(p.sold, p.bought)
+        total = Decimal.add(Decimal.max(realized_profit, Decimal.new(0)), p.divs)
         inst = Map.get(institutions_map, p.institution_id)
         inst_logo = if inst, do: Institution.logo_url(inst)
 
@@ -798,6 +798,8 @@ defmodule Grana.Investments do
           type: p.type,
           institution_logo: inst_logo,
           total: total,
+          realized_profit: realized_profit,
+          dividends: p.divs,
           count: p.count
         }
       end)
