@@ -43,3 +43,7 @@ priv/examples/*
 
 # ElixirLS (language server)
 /.elixir_ls/
+
+/.claude/*
+
+*.DS_Store

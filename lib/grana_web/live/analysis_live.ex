@@ -62,7 +62,9 @@ defmodule GranaWeb.AnalysisLive do
   # ── Tab Switch ──
 
   @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
+  def handle_params(params, _uri, socket) do
+    tab = params["tab"] || socket.assigns.tab
+
     socket =
       case tab do
         "investments" ->
@@ -70,6 +72,7 @@ defmodule GranaWeb.AnalysisLive do
           |> then(fn s ->
             if s.assigns.inv_loaded, do: s, else: init_inv_data(s)
           end)
+          |> apply_inv_url_params(params)
           |> assign(:tab, "investments")
 
         _ ->
@@ -77,6 +80,11 @@ defmodule GranaWeb.AnalysisLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("switch_tab", %{"tab" => tab}, socket) do
+    {:noreply, push_patch(socket, to: ~p"/analysis?tab=#{tab}")}
   end
 
   # ── Banking Events ──
@@ -89,7 +97,8 @@ defmodule GranaWeb.AnalysisLive do
         {:noreply, socket |> put_filter(:year, year) |> put_filter(:month, 0)}
 
       "investments" ->
-        {:noreply, socket |> put_inv_filter(:year, year) |> put_inv_filter(:month, 0)}
+        socket = socket |> put_inv_filter(:year, year) |> put_inv_filter(:month, 0)
+        {:noreply, push_inv_patch(socket)}
     end
   end
 
@@ -99,7 +108,8 @@ defmodule GranaWeb.AnalysisLive do
         {:noreply, put_filter(socket, :month, 0)}
 
       "investments" ->
-        {:noreply, put_inv_filter(socket, :month, 0)}
+        socket = put_inv_filter(socket, :month, 0)
+        {:noreply, push_inv_patch(socket)}
     end
   end
 
@@ -111,7 +121,8 @@ defmodule GranaWeb.AnalysisLive do
         {:noreply, put_filter(socket, :month, month)}
 
       "investments" ->
-        {:noreply, put_inv_filter(socket, :month, month)}
+        socket = put_inv_filter(socket, :month, month)
+        {:noreply, push_inv_patch(socket)}
     end
   end
 
@@ -130,11 +141,13 @@ defmodule GranaWeb.AnalysisLive do
   # ── Investment Filter Events ──
 
   def handle_event("select_institution", %{"institution" => inst}, socket) do
-    {:noreply, put_inv_filter(socket, :institution_id, inst)}
+    socket = put_inv_filter(socket, :institution_id, inst)
+    {:noreply, push_inv_patch(socket)}
   end
 
   def handle_event("select_asset_type", %{"type" => type}, socket) do
-    {:noreply, put_inv_filter(socket, :asset_type, type)}
+    socket = put_inv_filter(socket, :asset_type, type)
+    {:noreply, push_inv_patch(socket)}
   end
 
   # ── Shared Events ──
@@ -326,6 +339,52 @@ defmodule GranaWeb.AnalysisLive do
   defp put_inv_filter(socket, key, value) do
     filters = Map.put(socket.assigns.inv_filters, key, value)
     assign(socket, :inv_filters, filters)
+  end
+
+  defp push_inv_patch(socket) do
+    filters = socket.assigns.inv_filters
+
+    params =
+      %{tab: "investments"}
+      |> then(fn p -> if filters.year, do: Map.put(p, :inv_year, filters.year), else: p end)
+      |> then(fn p -> if filters.month && filters.month != 0, do: Map.put(p, :inv_month, filters.month), else: p end)
+      |> then(fn p -> if filters[:institution_id] not in [nil, "all"], do: Map.put(p, :inv_inst, filters.institution_id), else: p end)
+      |> then(fn p -> if filters[:asset_type] not in [nil, "all"], do: Map.put(p, :inv_type, filters.asset_type), else: p end)
+
+    qs =
+      params
+      |> Enum.map(fn {k, v} -> "#{k}=#{URI.encode_www_form(to_string(v))}" end)
+      |> Enum.join("&")
+
+    push_patch(socket, to: "/analysis?#{qs}", replace: true)
+  end
+
+  defp apply_inv_url_params(socket, params) do
+    socket
+    |> then(fn s ->
+      case params["inv_year"] do
+        nil -> s
+        y -> put_inv_filter(s, :year, String.to_integer(y))
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_month"] do
+        nil -> s
+        m -> put_inv_filter(s, :month, String.to_integer(m))
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_inst"] do
+        nil -> s
+        i -> put_inv_filter(s, :institution_id, i)
+      end
+    end)
+    |> then(fn s ->
+      case params["inv_type"] do
+        nil -> s
+        t -> put_inv_filter(s, :asset_type, t)
+      end
+    end)
   end
 
   defp months_for_year(available_months, year) do

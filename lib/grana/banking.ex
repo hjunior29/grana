@@ -208,10 +208,12 @@ defmodule Grana.Banking do
   defp filter_by_category(query, id), do: where(query, [t], t.category_id == ^id)
 
   defp filter_by_uncategorized(query, true, user_id) do
-    case get_uncategorized_category(user_id) do
-      nil -> where(query, [t], is_nil(t.category_id))
-      %{id: id} -> where(query, [t], is_nil(t.category_id) or t.category_id == ^id)
-    end
+    uncat_ids =
+      Category
+      |> where([c], c.name == "Sem Categoria" and c.user_id == ^user_id)
+      |> select([c], c.id)
+
+    where(query, [t], is_nil(t.category_id) or t.category_id in subquery(uncat_ids))
   end
 
   defp filter_by_uncategorized(query, _, _user_id), do: query
@@ -227,7 +229,17 @@ defmodule Grana.Banking do
 
   defp filter_by_search(query, nil), do: query
   defp filter_by_search(query, ""), do: query
-  defp filter_by_search(query, term), do: where(query, [t], ilike(t.description, ^"%#{term}%"))
+
+  defp filter_by_search(query, term) do
+    pattern = "%#{term}%"
+
+    cat_ids =
+      Category
+      |> where([c], ilike(c.name, ^pattern))
+      |> select([c], c.id)
+
+    where(query, [t], ilike(t.description, ^pattern) or t.category_id in subquery(cat_ids))
+  end
 
   defp filter_by_bank(query, nil, _user_id), do: query
   defp filter_by_bank(query, "all", _user_id), do: query
@@ -695,7 +707,7 @@ defmodule Grana.Banking do
     income_txns = Enum.filter(rest, &(&1.type == "credit"))
 
     total_income =
-      Enum.reduce(income_txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+      Enum.reduce(income_txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
 
     # 4) All debits
     debits = Enum.filter(rest, &(&1.type == "debit"))
@@ -719,7 +731,7 @@ defmodule Grana.Banking do
 
     # 7) Refund total to subtract from expenses
     refund_total =
-      Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+      Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
 
     total_expenses = Decimal.sub(gross_expenses, refund_total)
 
@@ -753,16 +765,25 @@ defmodule Grana.Banking do
   end
 
   defp bill_payment?(t) do
+    desc = String.downcase(t.description)
+
     t.type == "credit" and
-      String.contains?(String.downcase(t.description), "pagamento recebido") and
-      t.date.day <= 10
+      (String.contains?(desc, "pagamento recebido") or
+         String.contains?(desc, "pagamento de fatura") or
+         String.contains?(desc, "pagto fatura") or
+         String.contains?(desc, "pag fatura")) and
+      not String.contains?(desc, "estorno")
   end
 
   defp refund?(t) do
+    desc = String.downcase(t.description)
+
     t.type == "credit" and
-      (String.contains?(String.downcase(t.description), "estorno") or
-         (String.contains?(String.downcase(t.description), "pagamento recebido") and
-            t.date.day > 10))
+      (String.contains?(desc, "estorno") or
+         String.contains?(desc, "devolução") or
+         String.contains?(desc, "devoluç") or
+         String.contains?(desc, "reembolso") or
+         String.contains?(desc, "chargeback"))
   end
 
   def available_months(user_id) do
@@ -882,7 +903,7 @@ defmodule Grana.Banking do
       income =
         rest
         |> Enum.filter(&(&1.type == "credit"))
-        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
 
       debits = Enum.filter(rest, &(&1.type == "debit"))
 
@@ -900,7 +921,7 @@ defmodule Grana.Banking do
         end)
 
       refund_total =
-        Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, t.amount) end)
+        Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
 
       %{
         month: month,
@@ -921,7 +942,7 @@ defmodule Grana.Banking do
     |> select([t, c], %{
       total_income:
         coalesce(
-          sum(fragment("CASE WHEN ? = 'credit' THEN ? ELSE 0 END", t.type, t.amount)),
+          sum(fragment("CASE WHEN ? = 'credit' THEN ABS(?) ELSE 0 END", t.type, t.amount)),
           0
         ),
       total_expenses:
@@ -954,19 +975,14 @@ defmodule Grana.Banking do
   end
 
   def uncategorized_count(user_id) do
-    uncat = get_uncategorized_category(user_id)
+    uncat_ids =
+      Category
+      |> where([c], c.name == "Sem Categoria" and c.user_id == ^user_id)
+      |> select([c], c.id)
 
-    query =
-      case uncat do
-        nil ->
-          Transaction |> where([t], t.user_id == ^user_id and is_nil(t.category_id))
-
-        %{id: id} ->
-          Transaction
-          |> where([t], t.user_id == ^user_id and (is_nil(t.category_id) or t.category_id == ^id))
-      end
-
-    Repo.aggregate(query, :count)
+    Transaction
+    |> where([t], t.user_id == ^user_id and (is_nil(t.category_id) or t.category_id in subquery(uncat_ids)))
+    |> Repo.aggregate(:count)
   end
 
   # Installments
