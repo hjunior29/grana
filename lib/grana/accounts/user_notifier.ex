@@ -44,6 +44,42 @@ defmodule Grana.Accounts.UserNotifier do
     )
   end
 
+  @doc """
+  Deliver a friendly reminder to inactive users to come back and update their finances.
+  """
+  def deliver_inactivity_reminder(user) do
+    app_url = GranaWeb.Endpoint.url()
+
+    deliver(
+      user.email,
+      "Faz tempo que não te vemos por aqui! \u{1F44B} — Grana",
+      email_html(
+        "Sentimos sua falta!",
+        """
+        <p>Olá!</p>
+        <p>Percebemos que faz mais de <strong>30 dias</strong> que você não atualiza seus dados financeiros no <strong>Grana</strong>.</p>
+        <p>Manter seus extratos e investimentos em dia é essencial para ter uma visão clara das suas finanças — e leva apenas alguns minutinhos! \u{23F1}\u{FE0F}</p>
+        <p>Que tal dar uma passadinha e enviar seus últimos extratos? Assim você continua no controle do seu dinheiro. \u{1F4B0}</p>
+        """,
+        app_url,
+        "Atualizar meus dados",
+        "Você recebeu este email porque tem uma conta no Grana. Se não deseja mais receber lembretes, basta ignorar esta mensagem."
+      ),
+      email_text(
+        "Sentimos sua falta!",
+        """
+        Percebemos que faz mais de 30 dias que você não atualiza seus dados financeiros no Grana.
+
+        Manter seus extratos e investimentos em dia é essencial para ter uma visão clara das suas finanças — e leva apenas alguns minutinhos!
+
+        Que tal dar uma passadinha e enviar seus últimos extratos?
+        """,
+        app_url,
+        "Você recebeu este email porque tem uma conta no Grana. Se não deseja mais receber lembretes, basta ignorar esta mensagem."
+      )
+    )
+  end
+
   # --- Private emails ---
 
   defp deliver_magic_link_instructions(user, url) do

@@ -78,6 +78,19 @@ config :error_tracker,
   repo: Grana.Repo,
   otp_app: :grana
 
+# Configure Oban
+config :grana, Oban,
+  repo: Grana.Repo,
+  queues: [uploads: 2, ai_analysis: 1, quotes: 1, notifications: 1],
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    Oban.Plugins.Lifeline,
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications}
+     ]}
+  ]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -499,7 +499,7 @@ defmodule GranaWeb.DashboardLive do
                 current_price: nil,
                 current_value: h.net_total,
                 gain_loss: Decimal.new(0),
-                gain_loss_pct: Decimal.new(0),
+                gain_loss_pct: nil,
                 change_pct: nil,
                 logo_url: nil
               })
@@ -997,7 +997,10 @@ defmodule GranaWeb.DashboardLive do
             </div>
           </div>
         <% else %>
-          <div :if={@view_mode == "month" and @daily_spending != []} class="card bg-base-200 p-4 sm:p-6">
+          <div
+            :if={@view_mode == "month" and @daily_spending != []}
+            class="card bg-base-200 p-4 sm:p-6"
+          >
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
             <div
               id="daily-chart"
@@ -1118,7 +1121,9 @@ defmodule GranaWeb.DashboardLive do
             <div class="text-center">
               <h3 class="font-semibold text-sm sm:text-base mb-2">Top Despesas</h3>
               <p class="text-xs opacity-70">
-                {if @selected_txn_type == "credit", do: "Sem dados para o filtro selecionado", else: "Sem despesas no período"}
+                {if @selected_txn_type == "credit",
+                  do: "Sem dados para o filtro selecionado",
+                  else: "Sem despesas no período"}
               </p>
             </div>
           </div>
@@ -1153,7 +1158,9 @@ defmodule GranaWeb.DashboardLive do
             <div class="text-center">
               <h3 class="font-semibold text-sm sm:text-base mb-2">Top Receitas</h3>
               <p class="text-xs opacity-70">
-                {if @selected_txn_type == "debit", do: "Sem dados para o filtro selecionado", else: "Sem receitas no período"}
+                {if @selected_txn_type == "debit",
+                  do: "Sem dados para o filtro selecionado",
+                  else: "Sem receitas no período"}
               </p>
             </div>
           </div>
@@ -1251,7 +1258,10 @@ defmodule GranaWeb.DashboardLive do
 
       <%!-- Installments --%>
       <div
-        :if={@installment_summary.active_count > 0 and @selected_type != "extrato" and @selected_txn_type != "credit"}
+        :if={
+          @installment_summary.active_count > 0 and @selected_type != "extrato" and
+            @selected_txn_type != "credit"
+        }
         class="mb-4 sm:mb-8"
       >
         <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
@@ -2295,12 +2305,12 @@ defmodule GranaWeb.DashboardLive do
     end
   end
 
-  defp period_label("total", _year, _month), do: "acumulado"
-  defp period_label("year", year, _month), do: "em #{year}"
+  # defp period_label("total", _year, _month), do: "acumulado"
+  # defp period_label("year", year, _month), do: "em #{year}"
 
-  defp period_label("month", year, month) do
-    "em #{Banking.month_name_short(month)}/#{year}"
-  end
+  # defp period_label("month", year, month) do
+  #   "em #{Banking.month_name_short(month)}/#{year}"
+  # end
 
   defp format_activity_label(key, "total", _month), do: to_string(key)
   defp format_activity_label(key, "year", _month), do: Banking.month_name_short(key)

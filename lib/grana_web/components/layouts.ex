@@ -64,6 +64,11 @@ defmodule GranaWeb.Layouts do
                   <li class="px-3 py-2 text-xs opacity-50">{@current_scope.user.email}</li>
                   <%= if admin_user?(@current_scope) do %>
                     <li>
+                      <.link href="/admin/oban" target="_blank">
+                        <.icon name="hero-queue-list" class="size-4" /> Oban Jobs
+                      </.link>
+                    </li>
+                    <li>
                       <.link href="/admin/errors" target="_blank">
                         <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
                       </.link>
@@ -135,6 +140,11 @@ defmodule GranaWeb.Layouts do
               </li>
               <%= if admin_user?(@current_scope) do %>
                 <li>
+                  <.link href="/admin/oban" target="_blank">
+                    <.icon name="hero-queue-list" class="size-4" /> Oban Jobs
+                  </.link>
+                </li>
+                <li>
                   <.link href="/admin/errors" target="_blank">
                     <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
                   </.link>
@@ -176,8 +186,19 @@ defmodule GranaWeb.Layouts do
       <div
         id="connection-error"
         class="hidden alert alert-warning shadow-lg pointer-events-auto text-sm"
-        phx-disconnected={JS.show(to: "#connection-error", transition: {"ease-out duration-300", "opacity-0", "opacity-100"}, time: 3000)}
-        phx-connected={JS.hide(to: "#connection-error", transition: {"ease-in duration-200", "opacity-100", "opacity-0"})}
+        phx-disconnected={
+          JS.show(
+            to: "#connection-error",
+            transition: {"ease-out duration-300", "opacity-0", "opacity-100"},
+            time: 3000
+          )
+        }
+        phx-connected={
+          JS.hide(
+            to: "#connection-error",
+            transition: {"ease-in duration-200", "opacity-100", "opacity-0"}
+          )
+        }
       >
         <.icon name="hero-arrow-path" class="size-4 motion-safe:animate-spin" />
         <span>{gettext("Reconectando...")}</span>

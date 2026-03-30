@@ -1311,32 +1311,49 @@ defmodule GranaWeb.LandingLive do
                   <tbody>
                     <tr
                       :for={
-                        {ticker, name, type, badge_class, qty, price, val, invested, rent, rent_class, logo} <- [
-                          {"PETR4", "Petrobras PN", "Ação", "badge-info", "100", "R$ 124,50", "R$ 12.450", "R$ 10.540", "+18,2%", "text-success", ~p"/images/b3-logo.png"},
-                          {"VALE3", "Vale ON", "Ação", "badge-info", "50", "R$ 196,60", "R$ 9.830", "R$ 9.040", "+8,7%", "text-success", ~p"/images/b3-logo.png"},
-                          {"MXRF11", "Maxi Renda FII", "FII", "badge-success", "250", "R$ 33,00", "R$ 8.250", "R$ 7.835", "+5,3%", "text-success", ~p"/images/b3-logo.png"},
-                          {"ITUB4", "Itaú Unibanco PN", "Ação", "badge-info", "80", "R$ 76,50", "R$ 6.120", "R$ 5.460", "+12,1%", "text-success", ~p"/images/b3-logo.png"},
-                          {"XPLG11", "XP Log FII", "FII", "badge-success", "60", "R$ 98,17", "R$ 5.890", "R$ 6.035", "-2,4%", "text-error", ~p"/images/b3-logo.png"},
-                          {"CDB 120%", "CDB 120% CDI", "RF", "badge-warning", "1", "R$ 5.292", "R$ 5.292", "R$ 4.610", "+14,8%", "text-success", ~p"/images/gcb-logo.png"}
+                        {ticker, name, type, badge_class, qty, price, val, invested, rent, rent_class,
+                         logo} <- [
+                          {"PETR4", "Petrobras PN", "Ação", "badge-info", "100", "R$ 124,50",
+                           "R$ 12.450", "R$ 10.540", "+18,2%", "text-success",
+                           ~p"/images/b3-logo.png"},
+                          {"VALE3", "Vale ON", "Ação", "badge-info", "50", "R$ 196,60", "R$ 9.830",
+                           "R$ 9.040", "+8,7%", "text-success", ~p"/images/b3-logo.png"},
+                          {"MXRF11", "Maxi Renda FII", "FII", "badge-success", "250", "R$ 33,00",
+                           "R$ 8.250", "R$ 7.835", "+5,3%", "text-success", ~p"/images/b3-logo.png"},
+                          {"ITUB4", "Itaú Unibanco PN", "Ação", "badge-info", "80", "R$ 76,50",
+                           "R$ 6.120", "R$ 5.460", "+12,1%", "text-success", ~p"/images/b3-logo.png"},
+                          {"XPLG11", "XP Log FII", "FII", "badge-success", "60", "R$ 98,17",
+                           "R$ 5.890", "R$ 6.035", "-2,4%", "text-error", ~p"/images/b3-logo.png"},
+                          {"CDB 120%", "CDB 120% CDI", "RF", "badge-warning", "1", "R$ 5.292",
+                           "R$ 5.292", "R$ 4.610", "+14,8%", "text-success", ~p"/images/gcb-logo.png"}
                         ]
                       }
                       class="hover cursor-pointer"
                     >
                       <td>
                         <div class="flex items-center gap-2">
-                          <div :if={logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
+                          <div
+                            :if={logo}
+                            class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0"
+                          >
                             <img src={logo} alt="" />
                           </div>
                           <div class="flex flex-col">
                             <span class="font-medium text-sm">{ticker}</span>
-                            <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">{name}</span>
+                            <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">
+                              {name}
+                            </span>
                           </div>
                         </div>
                       </td>
-                      <td><span class={"badge badge-sm whitespace-nowrap #{badge_class}"}>{type}</span></td>
+                      <td>
+                        <span class={"badge badge-sm whitespace-nowrap #{badge_class}"}>{type}</span>
+                      </td>
                       <td class="text-right text-sm">{qty}</td>
                       <td class="text-right text-sm hidden sm:table-cell">{price}</td>
-                      <td class="text-right text-sm font-medium text-info whitespace-nowrap">{val}</td>
+                      <td class="text-right text-sm font-medium text-info whitespace-nowrap">
+                        {val}
+                      </td>
                       <td class="text-right text-sm opacity-60 hidden sm:table-cell">{invested}</td>
                       <td class={"text-right text-sm font-medium #{rent_class}"}>{rent}</td>
                     </tr>
@@ -1363,28 +1380,42 @@ defmodule GranaWeb.LandingLive do
                     <tr
                       :for={
                         {ticker, name, type, badge_class, total, logo} <- [
-                          {"MXRF11", "Maxi Renda FII", "FII", "badge-success", "R$ 312,50", ~p"/images/b3-logo.png"},
-                          {"XPLG11", "XP Log FII", "FII", "badge-success", "R$ 198,40", ~p"/images/b3-logo.png"},
-                          {"PETR4", "Petrobras PN", "Ação", "badge-info", "R$ 156,30", ~p"/images/b3-logo.png"},
-                          {"ITUB4", "Itaú Unibanco PN", "Ação", "badge-info", "R$ 113,20", ~p"/images/b3-logo.png"},
-                          {"CDB 120%", "CDB 120% CDI", "RF", "badge-warning", "R$ 467,20", ~p"/images/gcb-logo.png"}
+                          {"MXRF11", "Maxi Renda FII", "FII", "badge-success", "R$ 312,50",
+                           ~p"/images/b3-logo.png"},
+                          {"XPLG11", "XP Log FII", "FII", "badge-success", "R$ 198,40",
+                           ~p"/images/b3-logo.png"},
+                          {"PETR4", "Petrobras PN", "Ação", "badge-info", "R$ 156,30",
+                           ~p"/images/b3-logo.png"},
+                          {"ITUB4", "Itaú Unibanco PN", "Ação", "badge-info", "R$ 113,20",
+                           ~p"/images/b3-logo.png"},
+                          {"CDB 120%", "CDB 120% CDI", "RF", "badge-warning", "R$ 467,20",
+                           ~p"/images/gcb-logo.png"}
                         ]
                       }
                       class="hover cursor-pointer"
                     >
                       <td>
                         <div class="flex items-center gap-2">
-                          <div :if={logo} class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0">
+                          <div
+                            :if={logo}
+                            class="w-6 h-6 rounded-full overflow-hidden bg-base-300 shrink-0"
+                          >
                             <img src={logo} alt="" />
                           </div>
                           <div class="flex flex-col">
                             <span class="font-medium text-sm">{ticker}</span>
-                            <span :if={ticker != name} class="text-xs opacity-50 truncate max-w-xs">{name}</span>
+                            <span :if={ticker != name} class="text-xs opacity-50 truncate max-w-xs">
+                              {name}
+                            </span>
                           </div>
                         </div>
                       </td>
-                      <td><span class={"badge badge-sm whitespace-nowrap #{badge_class}"}>{type}</span></td>
-                      <td class="text-right text-sm font-medium text-success whitespace-nowrap">{total}</td>
+                      <td>
+                        <span class={"badge badge-sm whitespace-nowrap #{badge_class}"}>{type}</span>
+                      </td>
+                      <td class="text-right text-sm font-medium text-success whitespace-nowrap">
+                        {total}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -1437,7 +1468,9 @@ defmodule GranaWeb.LandingLive do
                   </div>
                   <div>
                     <p class="font-medium text-sm">Insights automáticos</p>
-                    <p class="text-sm opacity-60">Identifica padrões de gasto e tendências de investimento</p>
+                    <p class="text-sm opacity-60">
+                      Identifica padrões de gasto e tendências de investimento
+                    </p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">
@@ -1446,7 +1479,9 @@ defmodule GranaWeb.LandingLive do
                   </div>
                   <div>
                     <p class="font-medium text-sm">Alertas inteligentes</p>
-                    <p class="text-sm opacity-60">Avisa sobre gastos fora do normal e riscos na carteira</p>
+                    <p class="text-sm opacity-60">
+                      Avisa sobre gastos fora do normal e riscos na carteira
+                    </p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">
@@ -1455,7 +1490,9 @@ defmodule GranaWeb.LandingLive do
                   </div>
                   <div>
                     <p class="font-medium text-sm">Despesas e investimentos</p>
-                    <p class="text-sm opacity-60">Analisa gastos, proventos, rentabilidade e diversificação</p>
+                    <p class="text-sm opacity-60">
+                      Analisa gastos, proventos, rentabilidade e diversificação
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1472,194 +1509,198 @@ defmodule GranaWeb.LandingLive do
               </div>
 
               <div id="landing-ai-demo" phx-hook="LandingAIDemo" class="ai-demo">
-              <%!-- Phase 1: Input --%>
-              <div data-ai-input class="ai-demo-phase">
-                <div class="mb-3 space-y-2">
-                  <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-                    <div class="flex gap-1">
-                      <span class="btn btn-xs sm:btn-sm btn-primary cursor-default">2026</span>
+                <%!-- Phase 1: Input --%>
+                <div data-ai-input class="ai-demo-phase">
+                  <div class="mb-3 space-y-2">
+                    <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+                      <div class="flex gap-1">
+                        <span class="btn btn-xs sm:btn-sm btn-primary cursor-default">2026</span>
+                      </div>
+                      <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+                      <div class="flex flex-wrap gap-1">
+                        <span class="btn btn-xs btn-ghost cursor-default">Ano</span>
+                        <span class="btn btn-xs btn-primary cursor-default">Jan</span>
+                        <span class="btn btn-xs btn-ghost cursor-default">Fev</span>
+                      </div>
                     </div>
-                    <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
-                    <div class="flex flex-wrap gap-1">
-                      <span class="btn btn-xs btn-ghost cursor-default">Ano</span>
-                      <span class="btn btn-xs btn-primary cursor-default">Jan</span>
-                      <span class="btn btn-xs btn-ghost cursor-default">Fev</span>
-                    </div>
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <div class="flex items-center gap-1">
-                      <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
-                      <span class="btn btn-xs btn-ghost cursor-default">Todos</span>
-                      <span class="btn btn-xs btn-primary gap-1 cursor-default">
-                        <img src={~p"/images/nubank-logo.png"} alt="" class="w-4 h-4 rounded-full" />
-                        <span class="hidden sm:inline">Nubank</span>
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
-                      <span class="btn btn-xs btn-primary cursor-default">Todas</span>
-                      <span class="btn btn-xs btn-ghost gap-1 cursor-default">
-                        <.icon name="hero-banknotes" class="size-3" />
-                        <span class="hidden sm:inline">Extrato</span>
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
-                      <span class="btn btn-xs btn-primary cursor-default">Todas</span>
-                      <span class="btn btn-xs btn-ghost cursor-default">Despesas</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card bg-base-200 p-4 sm:p-6">
-                  <div class="mb-3 sm:mb-4">
-                    <label class="block text-sm font-semibold leading-6 mb-1">
-                      Pergunte algo sobre suas finanças (opcional)
-                    </label>
-                    <textarea
-                      data-ai-textarea
-                      placeholder="Ex: Onde posso economizar? Como está minha carteira de investimentos?"
-                      class="textarea textarea-bordered w-full text-sm"
-                      rows="2"
-                      readonly
-                      tabindex="-1"
-                    ></textarea>
-                  </div>
-                  <button
-                    data-ai-button
-                    class="btn btn-primary btn-sm sm:btn-md gap-2 transition-transform cursor-default"
-                    tabindex="-1"
-                  >
-                    <.icon name="hero-sparkles" class="size-4" /> Analisar com IA
-                  </button>
-                </div>
-              </div>
-
-              <%!-- Phase 2: Loading --%>
-              <div
-                data-ai-loading
-                class="ai-demo-phase"
-                style="opacity: 0; transform: translateY(6px)"
-              >
-                <div class="card bg-base-200 p-4 sm:p-6 mb-4">
-                  <div class="flex items-center gap-3">
-                    <span class="loading loading-spinner loading-sm text-primary"></span>
-                    <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
-                  </div>
-                </div>
-
-                <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
-                  <div class="flex items-center gap-3 mb-5">
-                    <div class="ai-skeleton w-10 h-10 rounded-lg shrink-0"></div>
-                    <div class="flex-1 space-y-2">
-                      <div class="ai-skeleton h-4 w-3/5"></div>
-                      <div class="ai-skeleton h-3 w-2/5"></div>
-                    </div>
-                  </div>
-
-                  <div class="space-y-3">
-                    <div class="ai-skeleton h-4 w-full"></div>
-                    <div class="ai-skeleton h-4 w-4/5"></div>
-                    <div class="ai-skeleton h-3 w-3/5 mt-4"></div>
-                    <div class="ai-skeleton h-3 w-4/5"></div>
-                    <div class="ai-skeleton h-3 w-3/4"></div>
-                    <div class="ai-skeleton h-3 w-2/3"></div>
-                    <div class="ai-skeleton h-3 w-4/5"></div>
-                    <div class="ai-skeleton h-10 w-full mt-4"></div>
-                    <div class="ai-skeleton h-16 w-full mt-4 rounded-lg"></div>
-                  </div>
-                </div>
-              </div>
-
-              <%!-- Phase 3: Result --%>
-              <div data-ai-result class="ai-demo-phase" style="opacity: 0; transform: translateY(6px)">
-                <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
-                  <div class="flex items-start justify-between gap-3 mb-3">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-3 mb-1">
-                        <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold border shrink-0 text-success bg-success/15 border-success/30">
-                          7.8
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div class="flex items-center gap-1">
+                        <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
+                        <span class="btn btn-xs btn-ghost cursor-default">Todos</span>
+                        <span class="btn btn-xs btn-primary gap-1 cursor-default">
+                          <img src={~p"/images/nubank-logo.png"} alt="" class="w-4 h-4 rounded-full" />
+                          <span class="hidden sm:inline">Nubank</span>
                         </span>
-                        <div class="min-w-0">
-                          <h4 class="font-semibold text-sm">Saúde financeira de Janeiro</h4>
-                          <div class="flex flex-wrap items-center gap-1 mt-0.5">
-                            <span class="text-xs opacity-40">19/02/2026 às 14:32</span>
-                            <span class="badge badge-xs badge-ghost">Janeiro</span>
-                            <span class="badge badge-xs badge-ghost">Nubank</span>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
+                        <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                        <span class="btn btn-xs btn-ghost gap-1 cursor-default">
+                          <.icon name="hero-banknotes" class="size-3" />
+                          <span class="hidden sm:inline">Extrato</span>
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
+                        <span class="btn btn-xs btn-primary cursor-default">Todas</span>
+                        <span class="btn btn-xs btn-ghost cursor-default">Despesas</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card bg-base-200 p-4 sm:p-6">
+                    <div class="mb-3 sm:mb-4">
+                      <label class="block text-sm font-semibold leading-6 mb-1">
+                        Pergunte algo sobre suas finanças (opcional)
+                      </label>
+                      <textarea
+                        data-ai-textarea
+                        placeholder="Ex: Onde posso economizar? Como está minha carteira de investimentos?"
+                        class="textarea textarea-bordered w-full text-sm"
+                        rows="2"
+                        readonly
+                        tabindex="-1"
+                      ></textarea>
+                    </div>
+                    <button
+                      data-ai-button
+                      class="btn btn-primary btn-sm sm:btn-md gap-2 transition-transform cursor-default"
+                      tabindex="-1"
+                    >
+                      <.icon name="hero-sparkles" class="size-4" /> Analisar com IA
+                    </button>
+                  </div>
+                </div>
+
+                <%!-- Phase 2: Loading --%>
+                <div
+                  data-ai-loading
+                  class="ai-demo-phase"
+                  style="opacity: 0; transform: translateY(6px)"
+                >
+                  <div class="card bg-base-200 p-4 sm:p-6 mb-4">
+                    <div class="flex items-center gap-3">
+                      <span class="loading loading-spinner loading-sm text-primary"></span>
+                      <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
+                    </div>
+                  </div>
+
+                  <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center gap-3 mb-5">
+                      <div class="ai-skeleton w-10 h-10 rounded-lg shrink-0"></div>
+                      <div class="flex-1 space-y-2">
+                        <div class="ai-skeleton h-4 w-3/5"></div>
+                        <div class="ai-skeleton h-3 w-2/5"></div>
+                      </div>
+                    </div>
+
+                    <div class="space-y-3">
+                      <div class="ai-skeleton h-4 w-full"></div>
+                      <div class="ai-skeleton h-4 w-4/5"></div>
+                      <div class="ai-skeleton h-3 w-3/5 mt-4"></div>
+                      <div class="ai-skeleton h-3 w-4/5"></div>
+                      <div class="ai-skeleton h-3 w-3/4"></div>
+                      <div class="ai-skeleton h-3 w-2/3"></div>
+                      <div class="ai-skeleton h-3 w-4/5"></div>
+                      <div class="ai-skeleton h-10 w-full mt-4"></div>
+                      <div class="ai-skeleton h-16 w-full mt-4 rounded-lg"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <%!-- Phase 3: Result --%>
+                <div
+                  data-ai-result
+                  class="ai-demo-phase"
+                  style="opacity: 0; transform: translateY(6px)"
+                >
+                  <div class="card bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-start justify-between gap-3 mb-3">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-1">
+                          <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold border shrink-0 text-success bg-success/15 border-success/30">
+                            7.8
+                          </span>
+                          <div class="min-w-0">
+                            <h4 class="font-semibold text-sm">Saúde financeira de Janeiro</h4>
+                            <div class="flex flex-wrap items-center gap-1 mt-0.5">
+                              <span class="text-xs opacity-40">19/02/2026 às 14:32</span>
+                              <span class="badge badge-xs badge-ghost">Janeiro</span>
+                              <span class="badge badge-xs badge-ghost">Nubank</span>
+                            </div>
                           </div>
                         </div>
+                        <p class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13">
+                          "Onde posso economizar nesse mês?"
+                        </p>
                       </div>
-                      <p class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13">
-                        "Onde posso economizar nesse mês?"
+                    </div>
+
+                    <p class="text-sm opacity-80 mb-4">
+                      Seus gastos com alimentação representam 32% do total — acima da média recomendada de 25%.
+                      Sua carteira de investimentos rendeu +12,5% no período, com boa diversificação entre ações e FIIs.
+                    </p>
+
+                    <div class="space-y-2 mb-4">
+                      <div class="flex items-start gap-2 text-sm">
+                        <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                        <span class="opacity-80">
+                          Receita mensal consistente com média de R$ 8.450 — bom controle de renda
+                        </span>
+                      </div>
+                      <div class="flex items-start gap-2 text-sm">
+                        <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                        <span class="opacity-80">
+                          Carteira de investimentos com rentabilidade de +12,5% — acima do CDI no período
+                        </span>
+                      </div>
+                      <div class="flex items-start gap-2 text-sm">
+                        <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
+                        <span class="opacity-80">
+                          Proventos de R$ 780,40 recebidos — renda passiva crescente
+                        </span>
+                      </div>
+                      <div class="flex items-start gap-2 text-sm">
+                        <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
+                        <span class="opacity-80">
+                          Alimentação a 32% do total — acima do recomendado de 25%
+                        </span>
+                      </div>
+                      <div class="flex items-start gap-2 text-sm">
+                        <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
+                        <span class="opacity-80">
+                          XPLG11 com rentabilidade negativa (-2,4%) — considere reavaliar posição
+                        </span>
+                      </div>
+                      <div class="flex items-start gap-2 text-sm">
+                        <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
+                        <span class="opacity-80">
+                          Cozinhar em casa 3x por semana pode economizar até R$ 400/mês
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="alert alert-warning text-sm py-2 mb-3">
+                      <.icon name="hero-exclamation-triangle" class="size-4" />
+                      <span>
+                        Atenção: concentração de 46,6% da carteira em ações — diversifique em renda fixa
+                      </span>
+                    </div>
+
+                    <div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+                      <div class="flex items-center gap-1.5 mb-1">
+                        <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
+                        <span class="text-xs font-medium text-primary">Resposta</span>
+                      </div>
+                      <p class="text-sm opacity-80">
+                        Para economizar, reduza gastos com delivery e alimentação fora de casa.
+                        Seus investimentos estão bem, mas considere rebalancear: XPLG11 está com prejuízo e
+                        sua exposição em ações é alta. Redirecione parte dos aportes para renda fixa.
                       </p>
                     </div>
                   </div>
-
-                  <p class="text-sm opacity-80 mb-4">
-                    Seus gastos com alimentação representam 32% do total — acima da média recomendada de 25%.
-                    Sua carteira de investimentos rendeu +12,5% no período, com boa diversificação entre ações e FIIs.
-                  </p>
-
-                  <div class="space-y-2 mb-4">
-                    <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
-                      <span class="opacity-80">
-                        Receita mensal consistente com média de R$ 8.450 — bom controle de renda
-                      </span>
-                    </div>
-                    <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
-                      <span class="opacity-80">
-                        Carteira de investimentos com rentabilidade de +12,5% — acima do CDI no período
-                      </span>
-                    </div>
-                    <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-check-circle" class="size-4 text-success shrink-0 mt-0.5" />
-                      <span class="opacity-80">
-                        Proventos de R$ 780,40 recebidos — renda passiva crescente
-                      </span>
-                    </div>
-                    <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-x-circle" class="size-4 text-error shrink-0 mt-0.5" />
-                      <span class="opacity-80">
-                        Alimentação a 32% do total — acima do recomendado de 25%
-                      </span>
-                    </div>
-                    <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
-                      <span class="opacity-80">
-                        XPLG11 com rentabilidade negativa (-2,4%) — considere reavaliar posição
-                      </span>
-                    </div>
-                    <div class="flex items-start gap-2 text-sm">
-                      <.icon name="hero-light-bulb" class="size-4 text-warning shrink-0 mt-0.5" />
-                      <span class="opacity-80">
-                        Cozinhar em casa 3x por semana pode economizar até R$ 400/mês
-                      </span>
-                    </div>
-                  </div>
-
-                  <div class="alert alert-warning text-sm py-2 mb-3">
-                    <.icon name="hero-exclamation-triangle" class="size-4" />
-                    <span>
-                      Atenção: concentração de 46,6% da carteira em ações — diversifique em renda fixa
-                    </span>
-                  </div>
-
-                  <div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
-                    <div class="flex items-center gap-1.5 mb-1">
-                      <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
-                      <span class="text-xs font-medium text-primary">Resposta</span>
-                    </div>
-                    <p class="text-sm opacity-80">
-                      Para economizar, reduza gastos com delivery e alimentação fora de casa.
-                      Seus investimentos estão bem, mas considere rebalancear: XPLG11 está com prejuízo e
-                      sua exposição em ações é alta. Redirecione parte dos aportes para renda fixa.
-                    </p>
-                  </div>
                 </div>
               </div>
-            </div>
             </div>
           </div>
         </div>
@@ -1999,8 +2040,7 @@ defmodule GranaWeb.LandingLive do
           </div>
 
           <a href={@roadmap_url} target="_blank" class="btn btn-primary btn-lg gap-2">
-            <.icon name="hero-light-bulb" class="size-5" />
-            Acessar Roadmap
+            <.icon name="hero-light-bulb" class="size-5" /> Acessar Roadmap
           </a>
         </div>
       </section>

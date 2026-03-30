@@ -71,7 +71,13 @@ defmodule Grana.Banking.AIAnalyzer do
               monthly_ie
               |> Enum.group_by(& &1.year)
               |> Enum.map(fn {yr, items} ->
-                %{year: yr, expenses: Enum.reduce(items, Decimal.new(0), fn i, acc -> Decimal.add(acc, i.expenses) end)}
+                %{
+                  year: yr,
+                  expenses:
+                    Enum.reduce(items, Decimal.new(0), fn i, acc ->
+                      Decimal.add(acc, i.expenses)
+                    end)
+                }
               end)
               |> Enum.sort_by(& &1.year)
 
@@ -129,7 +135,7 @@ defmodule Grana.Banking.AIAnalyzer do
 
     # Cumulative opts (same as dashboard load_inv_data)
     cumulative_opts =
-      ([date_to: Date.new!(year, 12, 31)] ++ filter_opts)
+      [date_to: Date.new!(year, 12, 31)] ++ filter_opts
 
     # Period opts
     period_opts =
@@ -254,6 +260,7 @@ defmodule Grana.Banking.AIAnalyzer do
 
         m ->
           daily_avg = daily_avg(summary, year, m)
+
           "- Média Diária de Despesas: R$ #{fmt(daily_avg)} || Média Mensal de Despesas: R$ #{fmt(summary.total_expenses)}"
       end
 
@@ -316,6 +323,7 @@ defmodule Grana.Banking.AIAnalyzer do
                 end
 
               inv = Map.get(item, :investments, Decimal.new(0))
+
               "- #{label}: Receita R$ #{fmt(item.income)} | Despesa R$ #{fmt(item.expenses)} | Invest. R$ #{fmt(inv)}"
             end)
             |> Enum.join("\n")
@@ -524,10 +532,18 @@ defmodule Grana.Banking.AIAnalyzer do
             |> Enum.map(fn h ->
               pct =
                 if Decimal.compare(cum.market_value, 0) == :gt,
-                  do: cum.market_value |> then(&Decimal.div(h.current_value, &1)) |> Decimal.mult(100) |> Decimal.round(1),
+                  do:
+                    cum.market_value
+                    |> then(&Decimal.div(h.current_value, &1))
+                    |> Decimal.mult(100)
+                    |> Decimal.round(1),
                   else: Decimal.new(0)
 
-              gain = if Decimal.compare(h.gain_loss, 0) != :eq, do: " | Rent: #{fmt(h.gain_loss_pct)}%", else: ""
+              gain =
+                if Decimal.compare(h.gain_loss, 0) != :eq,
+                  do: " | Rent: #{fmt(h.gain_loss_pct)}%",
+                  else: ""
+
               "- #{h.ticker || h.name} (#{inv_asset_type_label(h.type)}): R$ #{fmt(h.current_value)} (#{fmt(pct)}%)#{gain}"
             end)
             |> Enum.join("\n")
@@ -547,7 +563,11 @@ defmodule Grana.Banking.AIAnalyzer do
             |> Enum.map(fn item ->
               pct =
                 if Decimal.compare(cum.market_value, 0) == :gt,
-                  do: cum.market_value |> then(&Decimal.div(item.total, &1)) |> Decimal.mult(100) |> Decimal.round(1),
+                  do:
+                    cum.market_value
+                    |> then(&Decimal.div(item.total, &1))
+                    |> Decimal.mult(100)
+                    |> Decimal.round(1),
                   else: Decimal.new(0)
 
               "- #{inv_asset_type_label(item.asset_type)}: R$ #{fmt(item.total)} (#{fmt(pct)}%, #{item.count} ativos)"
@@ -599,6 +619,7 @@ defmodule Grana.Banking.AIAnalyzer do
             |> Enum.take(30)
             |> Enum.map(fn h ->
               price = if h.current_price, do: "Preço: R$ #{fmt(h.current_price)} | ", else: ""
+
               "- #{h.ticker || h.name} (#{inv_asset_type_label(h.type)}): #{fmt(h.net_qty)} un | #{price}Valor: R$ #{fmt(h.current_value)} | Investido: R$ #{fmt(h.net_total)} | Rent: #{fmt(h.gain_loss_pct)}%"
             end)
             |> Enum.join("\n")

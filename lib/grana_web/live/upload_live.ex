@@ -2,7 +2,7 @@ defmodule GranaWeb.UploadLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
-  alias Grana.Banking.StatementProcessor
+
   alias Grana.Investments
 
   @per_page 20
@@ -440,24 +440,23 @@ defmodule GranaWeb.UploadLive do
       end)
 
     total = length(file_data)
-    parent = self()
+    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
+    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
 
-    Task.async(fn ->
-      file_data
-      |> Enum.with_index(1)
-      |> Enum.map(fn {{filename, content}, index} ->
-        send(parent, {:processing_file, index, total, filename})
-
-        result =
-          case StatementProcessor.process(content, bank, statement_type, user_id, filename) do
-            {:ok, r} -> {:ok, filename, r.transaction_count}
-            {:error, reason} -> {:error, filename, reason}
-          end
-
-        send(parent, {:file_done, index, total})
-        result
+    files =
+      Enum.map(file_data, fn {filename, content} ->
+        %{"filename" => filename, "content_b64" => Base.encode64(content)}
       end)
-    end)
+
+    %{
+      files: files,
+      bank: bank,
+      statement_type: statement_type,
+      user_id: user_id,
+      topic: topic
+    }
+    |> Grana.Workers.StatementUploadWorker.new()
+    |> Oban.insert()
 
     {:noreply,
      assign(socket,
@@ -475,29 +474,22 @@ defmodule GranaWeb.UploadLive do
       end)
 
     total = length(file_data)
-    parent = self()
+    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
+    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
 
-    Task.async(fn ->
-      file_data
-      |> Enum.with_index(1)
-      |> Enum.map(fn {{filename, content}, index} ->
-        send(parent, {:processing_file, index, total, filename})
-
-        result =
-          case Investments.StatementProcessor.process(
-                 content,
-                 institution_slug,
-                 user_id,
-                 filename
-               ) do
-            {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
-            {:error, reason} -> {:error, filename, reason}
-          end
-
-        send(parent, {:file_done, index, total})
-        result
+    files =
+      Enum.map(file_data, fn {filename, content} ->
+        %{"filename" => filename, "content_b64" => Base.encode64(content)}
       end)
-    end)
+
+    %{
+      files: files,
+      institution_slug: institution_slug,
+      user_id: user_id,
+      topic: topic
+    }
+    |> Grana.Workers.InvestmentUploadWorker.new()
+    |> Oban.insert()
 
     {:noreply,
      assign(socket,
@@ -519,8 +511,7 @@ defmodule GranaWeb.UploadLive do
     {:noreply, assign(socket, progress_current: index, progress_total: total)}
   end
 
-  def handle_info({ref, results}, socket) when is_reference(ref) do
-    Process.demonitor(ref, [:flush])
+  def handle_info({:upload_complete, results}, socket) do
     bank = socket.assigns[:upload_bank] || ""
 
     {successes, errors} =
@@ -585,16 +576,9 @@ defmodule GranaWeb.UploadLive do
       end
 
     source = Map.get(socket.assigns, :history_filter, "all")
-    {:noreply, push_patch(socket, to: "/upload?tab=#{socket.assigns.tab}&page=1&source=#{source}")}
-  end
 
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
-    socket =
-      socket
-      |> assign(:processing, false)
-      |> put_flash(:error, "Erro inesperado no processamento")
-
-    {:noreply, socket}
+    {:noreply,
+     push_patch(socket, to: "/upload?tab=#{socket.assigns.tab}&page=1&source=#{source}")}
   end
 
   defp format_error("No transactions found in file", "outro") do
