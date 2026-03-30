@@ -415,7 +415,13 @@ defmodule Grana.Investments do
       realized_profit = Decimal.sub(resgates, aportes)
       proventos = Decimal.add(dividends, Decimal.max(realized_profit, Decimal.new(0)))
 
-      %{key: key, aportes: aportes, resgates: resgates, proventos: proventos, realized_profit: realized_profit}
+      %{
+        key: key,
+        aportes: aportes,
+        resgates: resgates,
+        proventos: proventos,
+        realized_profit: realized_profit
+      }
     end)
     |> Enum.sort_by(& &1.key)
   end
@@ -462,7 +468,11 @@ defmodule Grana.Investments do
 
           gain_loss_pct =
             if Decimal.compare(h.net_total, 0) != :eq,
-              do: h.net_total |> then(&Decimal.div(gain_loss, &1)) |> Decimal.mult(100) |> Decimal.round(2),
+              do:
+                h.net_total
+                |> then(&Decimal.div(gain_loss, &1))
+                |> Decimal.mult(100)
+                |> Decimal.round(2),
               else: nil
 
           Map.merge(h, %{
@@ -496,7 +506,11 @@ defmodule Grana.Investments do
 
     total_gain_loss_pct =
       if Decimal.compare(summary.net_position, 0) != :eq,
-        do: summary.net_position |> then(&Decimal.div(total_gain_loss, &1)) |> Decimal.mult(100) |> Decimal.round(2),
+        do:
+          summary.net_position
+          |> then(&Decimal.div(total_gain_loss, &1))
+          |> Decimal.mult(100)
+          |> Decimal.round(2),
         else: nil
 
     has_quotes = map_size(quotes) > 0
@@ -840,5 +854,28 @@ defmodule Grana.Investments do
       dividend_only_assets: dividend_only_assets,
       transaction_count: totals.transaction_count
     }
+  end
+
+  @doc """
+  Returns all distinct active tickers (with net quantity > 0) across all users.
+  Filters to valid B3 ticker format (e.g. PETR4, HGLG11).
+  """
+  def all_active_tickers do
+    Transaction
+    |> where([t], t.operation in ["compra", "venda"])
+    |> group_by([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
+    |> having(
+      [t],
+      fragment(
+        "COALESCE(SUM(CASE WHEN ? = 'compra' THEN ? ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN ? = 'venda' THEN ? ELSE 0 END), 0) > 0",
+        t.operation,
+        t.quantity,
+        t.operation,
+        t.quantity
+      )
+    )
+    |> select([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
+    |> Repo.all()
+    |> Enum.filter(&(&1 && String.match?(&1, ~r/^[A-Z]{4}\d{1,2}$/i)))
   end
 end

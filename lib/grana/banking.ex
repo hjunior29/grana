@@ -707,7 +707,9 @@ defmodule Grana.Banking do
     income_txns = Enum.filter(rest, &(&1.type == "credit"))
 
     total_income =
-      Enum.reduce(income_txns, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
+      Enum.reduce(income_txns, Decimal.new(0), fn t, acc ->
+        Decimal.add(acc, Decimal.abs(t.amount))
+      end)
 
     # 4) All debits
     debits = Enum.filter(rest, &(&1.type == "debit"))
@@ -731,7 +733,9 @@ defmodule Grana.Banking do
 
     # 7) Refund total to subtract from expenses
     refund_total =
-      Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
+      Enum.reduce(refunds, Decimal.new(0), fn t, acc ->
+        Decimal.add(acc, Decimal.abs(t.amount))
+      end)
 
     total_expenses = Decimal.sub(gross_expenses, refund_total)
 
@@ -921,7 +925,9 @@ defmodule Grana.Banking do
         end)
 
       refund_total =
-        Enum.reduce(refunds, Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
+        Enum.reduce(refunds, Decimal.new(0), fn t, acc ->
+          Decimal.add(acc, Decimal.abs(t.amount))
+        end)
 
       %{
         month: month,
@@ -981,7 +987,10 @@ defmodule Grana.Banking do
       |> select([c], c.id)
 
     Transaction
-    |> where([t], t.user_id == ^user_id and (is_nil(t.category_id) or t.category_id in subquery(uncat_ids)))
+    |> where(
+      [t],
+      t.user_id == ^user_id and (is_nil(t.category_id) or t.category_id in subquery(uncat_ids))
+    )
     |> Repo.aggregate(:count)
   end
 

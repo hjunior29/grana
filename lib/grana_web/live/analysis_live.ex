@@ -2,7 +2,6 @@ defmodule GranaWeb.AnalysisLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
-  alias Grana.Banking.AIAnalyzer
   alias Grana.Investments
   alias Grana.Investments.{Constants, Institution}
 
@@ -167,36 +166,28 @@ defmodule GranaWeb.AnalysisLive do
         {:noreply, assign(socket, :show_api_key_alert, true)}
 
       {:ok, _config} ->
-        socket = assign(socket, :loading, true)
+        topic = "analysis:#{scope.user.id}:#{System.unique_integer([:positive])}"
+        Phoenix.PubSub.subscribe(Grana.PubSub, topic)
 
-        custom_prompt =
-          case prompt do
-            "" -> nil
-            p -> p
+        custom_prompt = if prompt == "", do: nil, else: prompt
+
+        {context, filters} =
+          case tab do
+            "banking" -> {"banking", socket.assigns.filters}
+            "investments" -> {"investments", socket.assigns.inv_filters}
           end
 
-        case tab do
-          "banking" ->
-            filters = socket.assigns.filters
+        %{
+          user_id: scope.user.id,
+          context: context,
+          filters: stringify_keys(filters),
+          custom_prompt: custom_prompt,
+          topic: topic
+        }
+        |> Grana.Workers.AIAnalysisWorker.new()
+        |> Oban.insert()
 
-            Task.async(fn ->
-              {"banking", AIAnalyzer.analyze_with_filters(scope.user.id, filters, custom_prompt)}
-            end)
-
-          "investments" ->
-            filters = socket.assigns.inv_filters
-
-            Task.async(fn ->
-              {"investments",
-               AIAnalyzer.analyze_investments_with_filters(
-                 scope.user.id,
-                 filters,
-                 custom_prompt
-               )}
-            end)
-        end
-
-        {:noreply, socket}
+        {:noreply, assign(socket, :loading, true)}
     end
   end
 
@@ -245,48 +236,25 @@ defmodule GranaWeb.AnalysisLive do
   end
 
   @impl true
-  def handle_info({ref, {context, result}}, socket) when is_reference(ref) do
-    Process.demonitor(ref, [:flush])
+  def handle_info({:analysis_complete, :ok}, socket) do
+    analyses = Banking.list_ai_analyses(socket.assigns.current_scope.user.id)
 
     socket =
-      case result do
-        {:ok, analysis_result} ->
-          user_id = socket.assigns.current_scope.user.id
-
-          filters_json =
-            case context do
-              "banking" ->
-                Map.put(socket.assigns.filters, :context, "banking")
-
-              "investments" ->
-                Map.put(socket.assigns.inv_filters, :context, "investments")
-            end
-
-          Banking.create_ai_analysis(%{
-            user_id: user_id,
-            prompt: socket.assigns.custom_prompt,
-            filters_json: filters_json,
-            result_json: analysis_result
-          })
-
-          analyses = Banking.list_ai_analyses(user_id)
-
-          socket
-          |> assign(:analyses, analyses)
-          |> assign(:loading, false)
-          |> put_flash(:info, "Análise concluída!")
-
-        {:error, msg} ->
-          socket
-          |> assign(:loading, false)
-          |> put_flash(:error, "Erro na análise: #{msg}")
-      end
+      socket
+      |> assign(:analyses, analyses)
+      |> assign(:loading, false)
+      |> put_flash(:info, "Análise concluída!")
 
     {:noreply, socket}
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
-    {:noreply, assign(socket, :loading, false)}
+  def handle_info({:analysis_complete, {:error, msg}}, socket) do
+    socket =
+      socket
+      |> assign(:loading, false)
+      |> put_flash(:error, "Erro na análise: #{msg}")
+
+    {:noreply, socket}
   end
 
   # ── Data Init ──
@@ -347,9 +315,19 @@ defmodule GranaWeb.AnalysisLive do
     params =
       %{tab: "investments"}
       |> then(fn p -> if filters.year, do: Map.put(p, :inv_year, filters.year), else: p end)
-      |> then(fn p -> if filters.month && filters.month != 0, do: Map.put(p, :inv_month, filters.month), else: p end)
-      |> then(fn p -> if filters[:institution_id] not in [nil, "all"], do: Map.put(p, :inv_inst, filters.institution_id), else: p end)
-      |> then(fn p -> if filters[:asset_type] not in [nil, "all"], do: Map.put(p, :inv_type, filters.asset_type), else: p end)
+      |> then(fn p ->
+        if filters.month && filters.month != 0, do: Map.put(p, :inv_month, filters.month), else: p
+      end)
+      |> then(fn p ->
+        if filters[:institution_id] not in [nil, "all"],
+          do: Map.put(p, :inv_inst, filters.institution_id),
+          else: p
+      end)
+      |> then(fn p ->
+        if filters[:asset_type] not in [nil, "all"],
+          do: Map.put(p, :inv_type, filters.asset_type),
+          else: p
+      end)
 
     qs =
       params
@@ -385,6 +363,10 @@ defmodule GranaWeb.AnalysisLive do
         t -> put_inv_filter(s, :asset_type, t)
       end
     end)
+  end
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 
   defp months_for_year(available_months, year) do

@@ -70,7 +70,9 @@ defmodule Grana.MixProject do
       {:bandit, "~> 1.5"},
       {:live_debugger, "~> 0.6.0", only: :dev},
       {:error_tracker, "~> 0.7"},
-      {:xlsxir, "~> 1.6"}
+      {:xlsxir, "~> 1.6"},
+      {:oban, "~> 2.18"},
+      {:oban_web, "~> 2.10"}
     ]
   end
 

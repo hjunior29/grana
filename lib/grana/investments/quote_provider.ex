@@ -60,7 +60,9 @@ defmodule Grana.Investments.QuoteProvider do
       Logger.warning("QuoteProvider: BRAPI_TOKEN not configured")
       {:error, :no_token}
     else
-      Logger.info("QuoteProvider: fetching #{length(tickers)} tickers: #{Enum.join(tickers, ",")}")
+      Logger.info(
+        "QuoteProvider: fetching #{length(tickers)} tickers: #{Enum.join(tickers, ",")}"
+      )
 
       results =
         tickers

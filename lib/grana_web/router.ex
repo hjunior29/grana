@@ -28,11 +28,13 @@ defmodule GranaWeb.Router do
 
   # Error tracker (available in all environments, admin-only)
   use ErrorTracker.Web, :router
+  import Oban.Web.Router
 
   scope "/admin" do
     pipe_through [:browser, :require_authenticated_user, :require_admin_user]
 
     error_tracker_dashboard("/errors")
+    oban_dashboard("/oban")
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

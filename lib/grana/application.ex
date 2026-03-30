@@ -12,9 +12,7 @@ defmodule Grana.Application do
       Grana.Repo,
       {DNSCluster, query: Application.get_env(:grana, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Grana.PubSub},
-      # Start a worker by calling: Grana.Worker.start_link(arg)
-      # {Grana.Worker, arg},
-      # Start to serve requests, typically the last entry
+      {Oban, Application.fetch_env!(:grana, Oban)},
       GranaWeb.Endpoint
     ]
 
