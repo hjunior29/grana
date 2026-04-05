@@ -61,6 +61,7 @@ defmodule GranaWeb.Router do
       live "/transactions", TransactionsLive, :index
       live "/analysis", AnalysisLive, :index
       live "/categories", CategoriesLive, :index
+      live "/goals", GoalsLive, :index
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end

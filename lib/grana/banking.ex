@@ -1,7 +1,7 @@
 defmodule Grana.Banking do
   import Ecto.Query
   alias Grana.Repo
-  alias Grana.Banking.{BankStatement, Transaction, Category, CategoryRule, AIAnalysis}
+  alias Grana.Banking.{BankStatement, Transaction, Category, CategoryRule, AIAnalysis, FinancialGoal}
 
   # Categories
 
@@ -1140,4 +1140,160 @@ defmodule Grana.Banking do
   def month_name_short(10), do: "Out"
   def month_name_short(11), do: "Nov"
   def month_name_short(12), do: "Dez"
+
+  # Financial Goals
+
+  def list_financial_goals(user_id) do
+    FinancialGoal
+    |> where([g], g.user_id == ^user_id and g.active == true)
+    |> preload(:category)
+    |> order_by([g], asc: g.type)
+    |> Repo.all()
+  end
+
+  def get_financial_goal!(id, user_id) do
+    FinancialGoal
+    |> where([g], g.id == ^id and g.user_id == ^user_id)
+    |> preload(:category)
+    |> Repo.one!()
+  end
+
+  def create_financial_goal(attrs) do
+    %FinancialGoal{}
+    |> FinancialGoal.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_financial_goal(%FinancialGoal{} = goal, attrs) do
+    goal
+    |> FinancialGoal.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_financial_goal(%FinancialGoal{} = goal) do
+    Repo.delete(goal)
+  end
+
+  def goals_progress(user_id, year, month) do
+    goals = list_financial_goals(user_id)
+
+    case goals do
+      [] ->
+        []
+
+      _ ->
+        summary = monthly_summary(user_id, year, month)
+
+        Enum.map(goals, fn goal ->
+          current =
+            case goal.type do
+              "expense_limit" -> summary.total_expenses
+              "income_goal" -> summary.total_income
+              "investment_goal" -> summary.total_investments
+              "category_limit" -> category_total(summary, goal.category_id)
+            end
+
+          target = goal.target_value
+          pct = calc_pct(current, target)
+          status = goal_status(goal.type, pct)
+
+          %{goal: goal, current: current, target: target, pct: pct, status: status}
+        end)
+    end
+  end
+
+  defp category_total(summary, category_id) do
+    case Enum.find(summary.by_category, fn %{category: c} -> c && c.id == category_id end) do
+      %{total: total} -> total
+      nil -> Decimal.new(0)
+    end
+  end
+
+  defp calc_pct(_current, target) when target == nil, do: 0.0
+
+  defp calc_pct(current, target) do
+    if Decimal.compare(target, 0) == :gt do
+      current
+      |> Decimal.div(target)
+      |> Decimal.mult(100)
+      |> Decimal.round(1)
+      |> Decimal.to_float()
+    else
+      0.0
+    end
+  end
+
+  defp goal_status(type, pct) when type in ["expense_limit", "category_limit"] do
+    cond do
+      pct >= 100 -> :exceeded
+      pct >= 80 -> :warning
+      true -> :on_track
+    end
+  end
+
+  defp goal_status(_type, pct) do
+    cond do
+      pct >= 100 -> :achieved
+      pct >= 70 -> :on_track
+      true -> :behind
+    end
+  end
+
+  def suggest_goals(user_id) do
+    # Use the last 3 months that actually have data
+    months =
+      available_months(user_id)
+      |> Enum.take(3)
+
+    summaries =
+      Enum.map(months, fn {y, m} -> monthly_summary(user_id, y, m) end)
+      |> Enum.filter(fn s -> s.transaction_count > 0 end)
+
+    case summaries do
+      [] ->
+        []
+
+      summaries ->
+        count = length(summaries)
+
+        avg_expenses =
+          summaries
+          |> Enum.reduce(Decimal.new(0), fn s, acc -> Decimal.add(acc, s.total_expenses) end)
+          |> Decimal.div(count)
+          |> Decimal.round(0)
+
+        avg_income =
+          summaries
+          |> Enum.reduce(Decimal.new(0), fn s, acc -> Decimal.add(acc, s.total_income) end)
+          |> Decimal.div(count)
+          |> Decimal.round(0)
+
+        avg_investments =
+          summaries
+          |> Enum.reduce(Decimal.new(0), fn s, acc -> Decimal.add(acc, s.total_investments) end)
+          |> Decimal.div(count)
+          |> Decimal.round(0)
+
+        existing = list_financial_goals(user_id) |> Enum.map(& &1.type)
+
+        suggestions = []
+
+        suggestions =
+          if "expense_limit" not in existing and Decimal.compare(avg_expenses, 0) == :gt,
+            do: [%{type: "expense_limit", avg: avg_expenses} | suggestions],
+            else: suggestions
+
+        suggestions =
+          if "income_goal" not in existing and Decimal.compare(avg_income, 0) == :gt,
+            do: [%{type: "income_goal", avg: avg_income} | suggestions],
+            else: suggestions
+
+        suggestions =
+          if "investment_goal" not in existing and Decimal.compare(avg_investments, 0) == :gt,
+            do: [%{type: "investment_goal", avg: avg_investments} | suggestions],
+            else: suggestions
+
+        suggestions
+    end
+  end
 end

@@ -581,6 +581,47 @@ const LandingAIDemo = {
   }
 }
 
+const CurrencyInput = {
+  mounted() {
+    this.hiddenInput = this.el.querySelector("input[type=hidden]")
+    this.display = this.el.querySelector("input[data-currency-display]")
+
+    // Initialize from existing value
+    if (this.hiddenInput.value) {
+      const cents = Math.round(parseFloat(this.hiddenInput.value) * 100)
+      if (cents > 0) this.display.value = this.formatCents(cents)
+    }
+
+    this.display.addEventListener("input", (e) => {
+      const digits = e.target.value.replace(/\D/g, "")
+      const cents = parseInt(digits || "0", 10)
+      if (cents === 0) {
+        this.display.value = ""
+        this.hiddenInput.value = ""
+      } else {
+        this.display.value = this.formatCents(cents)
+        this.hiddenInput.value = (cents / 100).toFixed(2)
+      }
+    })
+
+    this.display.addEventListener("keydown", (e) => {
+      // Allow: backspace, delete, tab, escape, enter, arrows
+      if ([8, 9, 13, 27, 46, 37, 39].includes(e.keyCode)) return
+      // Block non-digit keys (allow numpad too)
+      if ((e.keyCode < 48 || e.keyCode > 57) && (e.keyCode < 96 || e.keyCode > 105)) {
+        e.preventDefault()
+      }
+    })
+  },
+
+  formatCents(cents) {
+    const reais = Math.floor(cents / 100)
+    const centavos = (cents % 100).toString().padStart(2, "0")
+    const formatted = reais.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+    return formatted + "," + centavos
+  }
+}
+
 const Hooks = {
   ...colocatedHooks,
   CategoryChart,
@@ -593,6 +634,7 @@ const Hooks = {
   ProgressBar,
   ActiveNav,
   LandingAIDemo,
+  CurrencyInput,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
