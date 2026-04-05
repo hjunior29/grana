@@ -53,6 +53,9 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/categories"} class="text-sm">Categorias</.link>
             </li>
             <li>
+              <.link navigate={~p"/goals"} class="text-sm">Metas</.link>
+            </li>
+            <li>
               <.link navigate={~p"/upload"} class="text-sm">Uploads</.link>
             </li>
             <li>
@@ -119,6 +122,11 @@ defmodule GranaWeb.Layouts do
               <li>
                 <.link navigate={~p"/categories"}>
                   <.icon name="hero-tag" class="size-4" /> Categorias
+                </.link>
+              </li>
+              <li>
+                <.link navigate={~p"/goals"}>
+                  <.icon name="hero-flag" class="size-4" /> Metas
                 </.link>
               </li>
               <li>

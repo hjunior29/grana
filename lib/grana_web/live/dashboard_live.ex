@@ -2,6 +2,7 @@ defmodule GranaWeb.DashboardLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
+  alias Grana.Banking.FinancialGoal
   alias Grana.Investments
   alias Grana.Investments.{Constants, Institution}
 
@@ -329,6 +330,12 @@ defmodule GranaWeb.DashboardLive do
     |> assign(:top_category, top_category)
     |> assign(:installment_summary, installment_summary)
     |> assign(:installment_projections, installment_projections)
+    |> assign(:goals_progress,
+      case view_mode do
+        "month" -> Banking.goals_progress(user_id, year, month)
+        _ -> []
+      end
+    )
   end
 
   defp bank_opts("all"), do: []
@@ -926,6 +933,40 @@ defmodule GranaWeb.DashboardLive do
         <.link navigate={~p"/transactions?filter=uncategorized"} class="btn btn-sm btn-ghost">
           Categorizar
         </.link>
+      </div>
+
+      <%!-- Goals Progress --%>
+      <div
+        :if={@goals_progress != [] and @view_mode == "month"}
+        class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-sm sm:text-base">Metas do Mês</h3>
+          <.link navigate={~p"/goals"} class="text-xs text-primary hover:underline">
+            Ver todas
+          </.link>
+        </div>
+        <div class="space-y-3">
+          <div :for={gp <- @goals_progress} class="flex items-center gap-3">
+            <span class="text-xs w-20 sm:w-24 truncate opacity-70">
+              {goal_short_label(gp.goal)}
+            </span>
+            <div class="flex-1">
+              <div class="w-full bg-base-300 rounded-full h-2.5">
+                <div
+                  class={"h-2.5 rounded-full transition-all #{goal_bar_color(gp.status)}"}
+                  style={"width: #{min(gp.pct, 100)}%"}
+                />
+              </div>
+            </div>
+            <span class="text-xs font-medium whitespace-nowrap">
+              {format_currency(gp.current)} / {format_currency(gp.target)}
+            </span>
+            <span class={"text-xs font-bold w-10 text-right #{goal_text_color(gp.status)}"}>
+              {gp.pct}%
+            </span>
+          </div>
+        </div>
       </div>
 
       <%!-- Charts: Category + Daily/Monthly --%>
@@ -2462,4 +2503,23 @@ defmodule GranaWeb.DashboardLive do
     |> then(fn data -> if total > 0, do: data, else: [] end)
     |> Jason.encode!()
   end
+
+  # ── Goal Helpers ──
+
+  defp goal_short_label(%{type: "category_limit", category: %{name: name}}), do: name
+  defp goal_short_label(%{type: type}), do: FinancialGoal.type_label(type)
+
+  defp goal_bar_color(:on_track), do: "bg-success"
+  defp goal_bar_color(:achieved), do: "bg-success"
+  defp goal_bar_color(:warning), do: "bg-warning"
+  defp goal_bar_color(:exceeded), do: "bg-error"
+  defp goal_bar_color(:behind), do: "bg-error"
+  defp goal_bar_color(_), do: "bg-primary"
+
+  defp goal_text_color(:on_track), do: "text-success"
+  defp goal_text_color(:achieved), do: "text-success"
+  defp goal_text_color(:warning), do: "text-warning"
+  defp goal_text_color(:exceeded), do: "text-error"
+  defp goal_text_color(:behind), do: "text-error"
+  defp goal_text_color(_), do: ""
 end
