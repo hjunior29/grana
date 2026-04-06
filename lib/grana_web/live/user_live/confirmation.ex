@@ -20,6 +20,7 @@ defmodule GranaWeb.UserLive.Confirmation do
           phx-submit="submit"
           action={~p"/users/log-in?_action=confirmed"}
           phx-trigger-action={@trigger_submit}
+          novalidate
         >
           <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
           <label class="flex items-center gap-2 cursor-pointer mb-4">
@@ -45,6 +46,7 @@ defmodule GranaWeb.UserLive.Confirmation do
           phx-mounted={JS.focus_first()}
           action={~p"/users/log-in"}
           phx-trigger-action={@trigger_submit}
+          novalidate
         >
           <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
           <%= if @current_scope do %>

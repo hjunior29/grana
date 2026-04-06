@@ -299,8 +299,7 @@ defmodule GranaWeb.CoreComponents do
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
-      <.icon name="hero-exclamation-circle" class="size-5" />
+    <p class="mt-1.5 text-sm text-error">
       {render_slot(@inner_block)}
     </p>
     """

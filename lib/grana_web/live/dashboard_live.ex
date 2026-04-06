@@ -920,7 +920,7 @@ defmodule GranaWeb.DashboardLive do
           <div class="stat-value text-sm sm:text-lg">
             {@summary.transaction_count}
           </div>
-          <div class="stat-desc text-xs truncate">{@top_category}</div>
+          <div class="stat-desc text-xs truncate" title={@top_category}>{@top_category}</div>
         </.link>
       </div>
 
@@ -948,7 +948,7 @@ defmodule GranaWeb.DashboardLive do
         </div>
         <div class="space-y-3">
           <div :for={gp <- @goals_progress} class="flex items-center gap-3">
-            <span class="text-xs w-20 sm:w-24 truncate opacity-70">
+            <span class="text-xs w-20 sm:w-24 truncate opacity-70" title={goal_short_label(gp.goal)}>
               {goal_short_label(gp.goal)}
             </span>
             <div class="flex-1">
@@ -1003,10 +1003,13 @@ defmodule GranaWeb.DashboardLive do
                     class="w-3 h-3 rounded-full shrink-0"
                     style={"background-color: #{category_color(item.category)}"}
                   />
-                  <span class={[
-                    "flex-1 text-sm truncate",
-                    category_excluded?(item.category, @excluded_categories) && "line-through"
-                  ]}>
+                  <span
+                    class={[
+                      "flex-1 text-sm truncate",
+                      category_excluded?(item.category, @excluded_categories) && "line-through"
+                    ]}
+                    title={if item.category, do: item.category.name, else: "Sem Categoria"}
+                  >
                     {if item.category, do: item.category.name, else: "Sem Categoria"}
                   </span>
                   <span class="text-sm font-medium">{format_currency(item.total)}</span>
@@ -1178,7 +1181,7 @@ defmodule GranaWeb.DashboardLive do
                 class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
               >
                 <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="flex-1 text-sm truncate">{txn.description}</span>
+                <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
                 <span
                   :if={txn.category}
                   class="badge badge-sm shrink-0"
@@ -1215,7 +1218,7 @@ defmodule GranaWeb.DashboardLive do
                 class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
               >
                 <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="flex-1 text-sm truncate">{txn.description}</span>
+                <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
                 <span
                   :if={txn.category}
                   class="badge badge-sm shrink-0"
@@ -1320,7 +1323,7 @@ defmodule GranaWeb.DashboardLive do
               </thead>
               <tbody>
                 <tr :for={txn <- @installment_summary.installments} class="hover">
-                  <td class="text-sm max-w-xs truncate">
+                  <td class="text-sm max-w-xs truncate" title={txn.description}>
                     <.link navigate={txn_url(assigns, txn)} class="hover:underline">
                       {txn.description}
                     </.link>
@@ -1775,7 +1778,7 @@ defmodule GranaWeb.DashboardLive do
                     class="w-3 h-3 rounded-full shrink-0"
                     style={"background-color: #{asset_type_color(item.asset_type)}"}
                   />
-                  <span class="flex-1 text-sm truncate">
+                  <span class="flex-1 text-sm truncate" title={asset_type_label(item.asset_type)}>
                     {asset_type_label(item.asset_type)}
                   </span>
                   <span class="text-sm font-medium">{format_currency(item.total)}</span>
@@ -1877,7 +1880,7 @@ defmodule GranaWeb.DashboardLive do
                     </div>
                     <div class="flex flex-col">
                       <span class="font-medium text-sm">{h.ticker || "—"}</span>
-                      <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs">
+                      <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs" title={h.name}>
                         {h.name}
                       </span>
                     </div>
@@ -1941,6 +1944,7 @@ defmodule GranaWeb.DashboardLive do
                       <span
                         :if={r.ticker && r.ticker != r.name}
                         class="text-xs opacity-50 truncate max-w-xs"
+                        title={r.name}
                       >
                         {r.name}
                       </span>

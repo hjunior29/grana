@@ -41,6 +41,7 @@ defmodule GranaWeb.UserLive.Login do
           id="login_form_magic"
           action={~p"/users/log-in"}
           phx-submit="submit_magic"
+          novalidate
         >
           <.input
             readonly={!!@current_scope}
@@ -65,6 +66,7 @@ defmodule GranaWeb.UserLive.Login do
           action={~p"/users/log-in"}
           phx-submit="submit_password"
           phx-trigger-action={@trigger_submit}
+          novalidate
         >
           <.input
             readonly={!!@current_scope}

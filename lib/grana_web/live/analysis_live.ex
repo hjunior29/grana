@@ -51,6 +51,7 @@ defmodule GranaWeb.AnalysisLive do
       })
       |> assign(:custom_prompt, "")
       |> assign(:prompt_form, to_form(%{"prompt" => ""}))
+      |> assign(:expanded_analyses, expanded_default(analyses))
       |> assign(:delete_target, nil)
       # Investment state (lazy loaded)
       |> assign(:inv_loaded, false)
@@ -161,34 +162,59 @@ defmodule GranaWeb.AnalysisLive do
   def handle_event("analyze", _params, socket) do
     %{current_scope: scope, custom_prompt: prompt, tab: tab} = socket.assigns
 
-    case Grana.Accounts.get_user_ai_config(scope.user.id) do
-      {:error, :no_api_key} ->
-        {:noreply, assign(socket, :show_api_key_alert, true)}
+    {context, filters} =
+      case tab do
+        "banking" -> {"banking", socket.assigns.filters}
+        "investments" -> {"investments", socket.assigns.inv_filters}
+      end
 
-      {:ok, _config} ->
-        topic = "analysis:#{scope.user.id}:#{System.unique_integer([:positive])}"
-        Phoenix.PubSub.subscribe(Grana.PubSub, topic)
+    custom_prompt = if prompt == "", do: nil, else: prompt
 
-        custom_prompt = if prompt == "", do: nil, else: prompt
+    # Check for duplicate analysis in the last 2 minutes
+    if has_recent_duplicate?(socket.assigns.analyses, context, filters, custom_prompt) do
+      {:noreply,
+       put_flash(socket, :warning, "Já existe uma análise recente com os mesmos filtros. Aguarde 2 minutos ou altere os filtros.")}
+    else
+      case Grana.Accounts.get_user_ai_config(scope.user.id) do
+        {:error, :no_api_key} ->
+          {:noreply, assign(socket, :show_api_key_alert, true)}
 
-        {context, filters} =
-          case tab do
-            "banking" -> {"banking", socket.assigns.filters}
-            "investments" -> {"investments", socket.assigns.inv_filters}
-          end
+        {:ok, _config} ->
+          topic = "analysis:#{scope.user.id}:#{System.unique_integer([:positive])}"
+          Phoenix.PubSub.subscribe(Grana.PubSub, topic)
 
-        %{
-          user_id: scope.user.id,
-          context: context,
-          filters: stringify_keys(filters),
-          custom_prompt: custom_prompt,
-          topic: topic
-        }
-        |> Grana.Workers.AIAnalysisWorker.new()
-        |> Oban.insert()
+          %{
+            user_id: scope.user.id,
+            context: context,
+            filters: stringify_keys(filters),
+            custom_prompt: custom_prompt,
+            topic: topic
+          }
+          |> Grana.Workers.AIAnalysisWorker.new()
+          |> Oban.insert()
 
-        {:noreply, assign(socket, :loading, true)}
+          {:noreply, assign(socket, :loading, true)}
+      end
     end
+  end
+
+  def handle_event("set_chip", %{"text" => text}, socket) do
+    {:noreply,
+     socket
+     |> assign(:custom_prompt, text)
+     |> assign(:prompt_form, to_form(%{"prompt" => text}))}
+  end
+
+  def handle_event("toggle_analysis", %{"id" => id_str}, socket) do
+    id = String.to_integer(id_str)
+    expanded = socket.assigns.expanded_analyses
+
+    expanded =
+      if MapSet.member?(expanded, id),
+        do: MapSet.delete(expanded, id),
+        else: MapSet.put(expanded, id)
+
+    {:noreply, assign(socket, :expanded_analyses, expanded)}
   end
 
   def handle_event("dismiss_api_alert", _params, socket) do
@@ -239,9 +265,17 @@ defmodule GranaWeb.AnalysisLive do
   def handle_info({:analysis_complete, :ok}, socket) do
     analyses = Banking.list_ai_analyses(socket.assigns.current_scope.user.id)
 
+    # Auto-expand the most recent analysis
+    expanded =
+      case analyses do
+        [newest | _] -> MapSet.put(socket.assigns.expanded_analyses, newest.id)
+        _ -> socket.assigns.expanded_analyses
+      end
+
     socket =
       socket
       |> assign(:analyses, analyses)
+      |> assign(:expanded_analyses, expanded)
       |> assign(:loading, false)
       |> put_flash(:info, "Análise concluída!")
 
@@ -362,6 +396,28 @@ defmodule GranaWeb.AnalysisLive do
         nil -> s
         t -> put_inv_filter(s, :asset_type, t)
       end
+    end)
+  end
+
+  defp expanded_default(analyses) do
+    case analyses do
+      [newest | _] -> MapSet.new([newest.id])
+      _ -> MapSet.new()
+    end
+  end
+
+  defp has_recent_duplicate?(analyses, context, filters, custom_prompt) do
+    two_minutes_ago = DateTime.utc_now() |> DateTime.add(-120, :second)
+    str_filters = stringify_keys(filters)
+
+    Enum.any?(analyses, fn a ->
+      recent? = DateTime.compare(a.inserted_at, two_minutes_ago) == :gt
+      same_context? = a.filters_json["context"] == context
+      same_year? = to_string(a.filters_json["year"]) == to_string(str_filters["year"])
+      same_month? = to_string(a.filters_json["month"]) == to_string(str_filters["month"])
+      same_prompt? = (a.prompt || nil) == (custom_prompt || nil)
+
+      recent? and same_context? and same_year? and same_month? and same_prompt?
     end)
   end
 
@@ -791,7 +847,7 @@ defmodule GranaWeb.AnalysisLive do
     ~H"""
     <%!-- Prompt + Analyze --%>
     <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-8">
-      <.form for={@prompt_form} phx-submit="analyze" phx-change="update_prompt">
+      <.form for={@prompt_form} phx-submit="analyze" phx-change="update_prompt" novalidate>
         <div class="mb-3 sm:mb-4">
           <.input
             type="textarea"
@@ -800,6 +856,23 @@ defmodule GranaWeb.AnalysisLive do
             placeholder="Ex: Onde posso economizar? Qual categoria cresceu mais?"
             rows={2}
           />
+        </div>
+
+        <div class="flex flex-wrap gap-1.5 mb-3">
+          <button
+            :for={chip <- [
+              "Onde posso economizar?",
+              "Qual categoria cresceu mais?",
+              "Como estão meus gastos fixos?",
+              "Resumo do mês"
+            ]}
+            type="button"
+            phx-click="set_chip"
+            phx-value-text={chip}
+            class="btn btn-xs btn-outline btn-primary rounded-full font-normal"
+          >
+            {chip}
+          </button>
         </div>
 
         <button
@@ -859,9 +932,21 @@ defmodule GranaWeb.AnalysisLive do
               <div :for={analysis <- year_analyses} class="card bg-base-200 overflow-hidden">
                 <%!-- New format --%>
                 <div :if={is_new_format?(analysis)} class="p-3 sm:p-5">
-                  <div class="flex items-start justify-between gap-2 sm:gap-3 mb-3">
+                  <%!-- Header (always visible, clickable to toggle) --%>
+                  <div
+                    class="flex items-start justify-between gap-2 sm:gap-3 cursor-pointer"
+                    phx-click="toggle_analysis"
+                    phx-value-id={analysis.id}
+                  >
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 sm:gap-3 mb-1">
+                        <.icon
+                          name="hero-chevron-down"
+                          class={[
+                            "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
+                            !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
+                          ]}
+                        />
                         <span class={[
                           "inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg text-xs sm:text-sm font-bold border shrink-0",
                           score_color(analysis.result_json["nota"])
@@ -869,7 +954,7 @@ defmodule GranaWeb.AnalysisLive do
                           {format_score(analysis.result_json["nota"])}
                         </span>
                         <div class="min-w-0">
-                          <h4 class="font-semibold text-xs sm:text-sm truncate">
+                          <h4 class="font-semibold text-xs sm:text-sm truncate" title={analysis.result_json["titulo"]}>
                             {analysis.result_json["titulo"]}
                           </h4>
                           <div class="flex flex-wrap items-center gap-1 mt-0.5">
@@ -933,6 +1018,7 @@ defmodule GranaWeb.AnalysisLive do
                       <p
                         :if={analysis.prompt && analysis.prompt != ""}
                         class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13"
+                        title={analysis.prompt}
                       >
                         "{analysis.prompt}"
                       </p>
@@ -946,56 +1032,81 @@ defmodule GranaWeb.AnalysisLive do
                     </button>
                   </div>
 
-                  <p class="text-xs sm:text-sm opacity-80 mb-3 sm:mb-4">
-                    {analysis.result_json["resumo"]}
-                  </p>
+                  <%!-- Collapsible body --%>
+                  <div class={[
+                    "grid transition-[grid-template-rows] duration-250 ease-out",
+                    if(MapSet.member?(@expanded_analyses, analysis.id),
+                      do: "grid-rows-[1fr]",
+                      else: "grid-rows-[0fr]"
+                    )
+                  ]}>
+                    <div class="overflow-hidden">
+                      <div class="mt-3">
+                        <p class="text-xs sm:text-sm opacity-80 mb-3 sm:mb-4">
+                          {analysis.result_json["resumo"]}
+                        </p>
 
-                  <div class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
-                    <div
-                      :for={ponto <- analysis.result_json["pontos"] || []}
-                      class="flex items-start gap-2 text-xs sm:text-sm"
-                    >
-                      <.icon
-                        name={elem(ponto_icon(ponto["tipo"]), 0)}
-                        class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
-                      />
-                      <span class="opacity-80">{ponto["texto"]}</span>
+                        <div class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
+                          <div
+                            :for={ponto <- analysis.result_json["pontos"] || []}
+                            class="flex items-start gap-2 text-xs sm:text-sm"
+                          >
+                            <.icon
+                              name={elem(ponto_icon(ponto["tipo"]), 0)}
+                              class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
+                            />
+                            <span class="opacity-80">{ponto["texto"]}</span>
+                          </div>
+                        </div>
+
+                        <div
+                          :if={analysis.result_json["alerta"]}
+                          class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
+                        >
+                          <.icon name="hero-exclamation-triangle" class="size-4" />
+                          <span>{analysis.result_json["alerta"]}</span>
+                        </div>
+
+                        <div
+                          :if={analysis.result_json["resposta"]}
+                          class="bg-primary/5 border border-primary/10 rounded-lg p-2.5 sm:p-3"
+                        >
+                          <div class="flex items-center gap-1.5 mb-1">
+                            <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
+                            <span class="text-xs font-medium text-primary">Resposta</span>
+                          </div>
+                          <p class="text-xs sm:text-sm opacity-80">
+                            {analysis.result_json["resposta"]}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div
-                    :if={analysis.result_json["alerta"]}
-                    class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
-                  >
-                    <.icon name="hero-exclamation-triangle" class="size-4" />
-                    <span>{analysis.result_json["alerta"]}</span>
-                  </div>
-
-                  <div
-                    :if={analysis.result_json["resposta"]}
-                    class="bg-primary/5 border border-primary/10 rounded-lg p-2.5 sm:p-3"
-                  >
-                    <div class="flex items-center gap-1.5 mb-1">
-                      <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
-                      <span class="text-xs font-medium text-primary">Resposta</span>
-                    </div>
-                    <p class="text-xs sm:text-sm opacity-80">
-                      {analysis.result_json["resposta"]}
-                    </p>
                   </div>
                 </div>
 
                 <%!-- Legacy format (old analyses) --%>
                 <div :if={!is_new_format?(analysis)} class="p-3 sm:p-5">
-                  <div class="flex items-start justify-between mb-3">
+                  <%!-- Header (always visible, clickable to toggle) --%>
+                  <div
+                    class="flex items-start justify-between cursor-pointer"
+                    phx-click="toggle_analysis"
+                    phx-value-id={analysis.id}
+                  >
                     <div>
                       <div class="flex items-center gap-2 mb-1">
+                        <.icon
+                          name="hero-chevron-down"
+                          class={[
+                            "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
+                            !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
+                          ]}
+                        />
                         <.icon name="hero-sparkles" class="size-4 text-primary" />
                         <span class="font-semibold text-xs sm:text-sm">
                           {format_datetime_br(analysis.inserted_at)}
                         </span>
                       </div>
-                      <div class="flex flex-wrap gap-1">
+                      <div class="flex flex-wrap gap-1 ml-5">
                         <span
                           :if={analysis.filters_json["year"]}
                           class="badge badge-xs badge-ghost"
@@ -1028,40 +1139,53 @@ defmodule GranaWeb.AnalysisLive do
                     </button>
                   </div>
 
-                  <p class="text-xs sm:text-sm mb-3 opacity-80">
-                    {analysis.result_json["resumo"]}
-                  </p>
+                  <%!-- Collapsible body --%>
+                  <div class={[
+                    "grid transition-[grid-template-rows] duration-250 ease-out",
+                    if(MapSet.member?(@expanded_analyses, analysis.id),
+                      do: "grid-rows-[1fr]",
+                      else: "grid-rows-[0fr]"
+                    )
+                  ]}>
+                    <div class="overflow-hidden">
+                      <div class="mt-3">
+                        <p class="text-xs sm:text-sm mb-3 opacity-80">
+                          {analysis.result_json["resumo"]}
+                        </p>
 
-                  <div class="space-y-2 mb-3">
-                    <div
-                      :for={insight <- analysis.result_json["insights"] || []}
-                      class="flex items-start gap-2 text-xs sm:text-sm"
-                    >
-                      <.icon
-                        name="hero-light-bulb"
-                        class="size-4 text-warning shrink-0 mt-0.5"
-                      />
-                      <span class="opacity-80">{insight}</span>
+                        <div class="space-y-2 mb-3">
+                          <div
+                            :for={insight <- analysis.result_json["insights"] || []}
+                            class="flex items-start gap-2 text-xs sm:text-sm"
+                          >
+                            <.icon
+                              name="hero-light-bulb"
+                              class="size-4 text-warning shrink-0 mt-0.5"
+                            />
+                            <span class="opacity-80">{insight}</span>
+                          </div>
+                        </div>
+
+                        <div
+                          :if={analysis.result_json["alerta"]}
+                          class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
+                        >
+                          <.icon name="hero-exclamation-triangle" class="size-4" />
+                          <span>{analysis.result_json["alerta"]}</span>
+                        </div>
+
+                        <div
+                          :if={analysis.result_json["dica"]}
+                          class="flex items-start gap-2 text-xs sm:text-sm bg-success/10 rounded-lg p-3"
+                        >
+                          <.icon
+                            name="hero-check-circle"
+                            class="size-4 text-success shrink-0 mt-0.5"
+                          />
+                          <span class="opacity-80">{analysis.result_json["dica"]}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div
-                    :if={analysis.result_json["alerta"]}
-                    class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
-                  >
-                    <.icon name="hero-exclamation-triangle" class="size-4" />
-                    <span>{analysis.result_json["alerta"]}</span>
-                  </div>
-
-                  <div
-                    :if={analysis.result_json["dica"]}
-                    class="flex items-start gap-2 text-xs sm:text-sm bg-success/10 rounded-lg p-3"
-                  >
-                    <.icon
-                      name="hero-check-circle"
-                      class="size-4 text-success shrink-0 mt-0.5"
-                    />
-                    <span class="opacity-80">{analysis.result_json["dica"]}</span>
                   </div>
                 </div>
               </div>
