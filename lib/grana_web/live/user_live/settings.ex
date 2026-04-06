@@ -30,6 +30,7 @@ defmodule GranaWeb.UserLive.Settings do
                 id="email_form"
                 phx-submit="update_email"
                 phx-change="validate_email"
+                novalidate
               >
                 <.input
                   field={@email_form[:email]}
@@ -53,6 +54,7 @@ defmodule GranaWeb.UserLive.Settings do
                 phx-change="validate_password"
                 phx-submit="update_password"
                 phx-trigger-action={@trigger_submit}
+                novalidate
               >
                 <input
                   name={@password_form[:email].name}
@@ -97,6 +99,7 @@ defmodule GranaWeb.UserLive.Settings do
             phx-change="validate_ai_settings"
             autocomplete="off"
             data-form-type="other"
+            novalidate
           >
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>

@@ -307,7 +307,7 @@ defmodule GranaWeb.GoalsLive do
             <h3 class="text-lg font-bold mb-4">
               {if @editing_goal, do: "Editar Meta", else: "Nova Meta"}
             </h3>
-            <.form for={@form} phx-submit="save_goal" class="space-y-4">
+            <.form for={@form} phx-submit="save_goal" class="space-y-4" novalidate>
               <div :if={!@editing_goal}>
                 <label class="label text-sm font-medium">Tipo</label>
                 <select

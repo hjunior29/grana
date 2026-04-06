@@ -70,6 +70,9 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
+# Configure Gettext default locale
+config :grana, GranaWeb.Gettext, default_locale: "pt_BR"
+
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

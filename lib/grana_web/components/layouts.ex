@@ -65,6 +65,11 @@ defmodule GranaWeb.Layouts do
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
                   <li class="px-3 py-2 text-xs opacity-50">{@current_scope.user.email}</li>
+                  <li>
+                    <.link navigate={~p"/users/settings"}>
+                      <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
+                    </.link>
+                  </li>
                   <%= if admin_user?(@current_scope) do %>
                     <li>
                       <.link href="/admin/oban" target="_blank">
@@ -77,11 +82,6 @@ defmodule GranaWeb.Layouts do
                       </.link>
                     </li>
                   <% end %>
-                  <li>
-                    <.link navigate={~p"/users/settings"}>
-                      <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
-                    </.link>
-                  </li>
                   <li :if={roadmap_url()}>
                     <.link href={roadmap_url()} target="_blank">
                       <.icon name="hero-light-bulb" class="size-4" /> Roadmap

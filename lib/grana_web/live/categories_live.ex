@@ -2,6 +2,7 @@ defmodule GranaWeb.CategoriesLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
+  alias Grana.Banking.Category
   alias GranaWeb.Layouts
 
   @available_icons [
@@ -67,7 +68,10 @@ defmodule GranaWeb.CategoriesLive do
       |> assign(:categories, categories)
       |> assign(:stats, stats)
       |> assign(:form_mode, nil)
-      |> assign(:form, new_form())
+      |> assign(:form, to_form(Category.changeset(%Category{}, %{}), as: "category"))
+      |> assign(:form_icon, "hero-tag")
+      |> assign(:form_color, "#6366F1")
+      |> assign(:form_kind, "expense")
       |> assign(:delete_target, nil)
 
     {:ok, socket}
@@ -102,7 +106,7 @@ defmodule GranaWeb.CategoriesLive do
                 </span>
               </div>
               <div class="flex-1 min-w-0">
-                <h3 class="font-semibold truncate">{cat.name}</h3>
+                <h3 class="font-semibold truncate" title={cat.name}>{cat.name}</h3>
                 <div class="flex gap-3 text-xs opacity-60">
                   <span>{get_stat(cat.id, @stats, :transaction_count)} transações</span>
                   <span>{get_stat(cat.id, @stats, :rule_count)} regras</span>
@@ -154,20 +158,26 @@ defmodule GranaWeb.CategoriesLive do
           <h3 class="text-lg font-bold mb-4">
             {if @form_mode == :new, do: "Nova Categoria", else: "Editar Categoria"}
           </h3>
-          <form phx-submit="save_category" phx-change="update_form">
+          <.form for={@form} phx-submit="save_category" novalidate>
             <div class="form-control mb-4">
               <label class="label"><span class="label-text">Nome</span></label>
               <input
                 type="text"
-                name="name"
-                value={@form["name"]}
-                class="input input-bordered w-full"
-                required
+                name="category[name]"
+                value={@form[:name].value}
+                class={"input input-bordered w-full #{if @form.errors[:name], do: "input-error"}"}
                 placeholder="Nome da categoria"
                 autofocus
                 phx-debounce="100"
               />
+              <p :if={@form.errors[:name]} class="text-error text-xs mt-1">
+                {translate_error(@form.errors[:name])}
+              </p>
             </div>
+
+            <input type="hidden" name="category[icon]" value={@form_icon} />
+            <input type="hidden" name="category[color]" value={@form_color} />
+            <input type="hidden" name="category[kind]" value={@form_kind} />
 
             <div class="form-control mb-4">
               <label class="label"><span class="label-text">Ícone</span></label>
@@ -179,7 +189,7 @@ defmodule GranaWeb.CategoriesLive do
                   phx-value-icon={icon}
                   class={[
                     "btn btn-sm btn-square",
-                    if(@form["icon"] == icon, do: "btn-primary", else: "btn-ghost")
+                    if(@form_icon == icon, do: "btn-primary", else: "btn-ghost")
                   ]}
                 >
                   <.icon name={icon} class="size-4" />
@@ -197,7 +207,7 @@ defmodule GranaWeb.CategoriesLive do
                   phx-value-color={color}
                   class={[
                     "w-8 h-8 rounded-full cursor-pointer border-2 transition-all",
-                    if(@form["color"] == color,
+                    if(@form_color == color,
                       do: "border-base-content scale-110",
                       else: "border-transparent"
                     )
@@ -225,9 +235,9 @@ defmodule GranaWeb.CategoriesLive do
                   class={[
                     "btn btn-sm flex-1",
                     cond do
-                      @form["kind"] == value && value == "expense" -> "btn-error"
-                      @form["kind"] == value && value == "investment" -> "btn-info"
-                      @form["kind"] == value && value == "income" -> "btn-success"
+                      @form_kind == value && value == "expense" -> "btn-error"
+                      @form_kind == value && value == "investment" -> "btn-info"
+                      @form_kind == value && value == "income" -> "btn-success"
                       true -> "btn-ghost"
                     end
                   ]}
@@ -237,7 +247,7 @@ defmodule GranaWeb.CategoriesLive do
               </div>
               <label class="label">
                 <span class="label-text-alt opacity-50">
-                  {case @form["kind"] do
+                  {case @form_kind do
                     "investment" -> "Excluída dos gastos no dashboard"
                     "income" -> "Contabilizada como receita"
                     _ -> "Contabilizada como gasto"
@@ -249,14 +259,14 @@ defmodule GranaWeb.CategoriesLive do
             <div class="flex items-center gap-3 p-3 bg-base-300 rounded-lg mb-4">
               <div
                 class="w-10 h-10 rounded-full flex items-center justify-center"
-                style={"background-color: #{@form["color"]}20"}
+                style={"background-color: #{@form_color}20"}
               >
-                <span style={"color: #{@form["color"]}"}>
-                  <.icon name={@form["icon"]} class="size-5" />
+                <span style={"color: #{@form_color}"}>
+                  <.icon name={@form_icon} class="size-5" />
                 </span>
               </div>
               <span class="font-medium">
-                {if @form["name"] == "", do: "Pré-visualização", else: @form["name"]}
+                {if @form[:name].value in [nil, ""], do: "Pré-visualização", else: @form[:name].value}
               </span>
             </div>
 
@@ -266,7 +276,7 @@ defmodule GranaWeb.CategoriesLive do
               </button>
               <button type="submit" class="btn btn-primary">Salvar</button>
             </div>
-          </form>
+          </.form>
         </div>
         <form method="dialog" class="modal-backdrop">
           <button type="button" phx-click="cancel_form">close</button>
@@ -313,62 +323,52 @@ defmodule GranaWeb.CategoriesLive do
 
   @impl true
   def handle_event("new_category", _params, socket) do
-    socket =
-      socket
-      |> assign(:form_mode, :new)
-      |> assign(:form, new_form())
+    changeset = Category.changeset(%Category{}, %{})
 
-    {:noreply, socket}
+    {:noreply,
+     assign(socket,
+       form_mode: :new,
+       form: to_form(changeset, as: "category"),
+       form_icon: "hero-tag",
+       form_color: "#6366F1",
+       form_kind: "expense"
+     )}
   end
 
   def handle_event("edit_category", %{"id" => id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     category = Banking.get_category!(String.to_integer(id), user_id)
+    changeset = Category.changeset(category, %{})
 
-    socket =
-      socket
-      |> assign(:form_mode, {:edit, category})
-      |> assign(:form, %{
-        "name" => category.name,
-        "icon" => category.icon || "hero-tag",
-        "color" => category.color || "#6366F1",
-        "kind" => category.kind || "expense"
-      })
-
-    {:noreply, socket}
+    {:noreply,
+     assign(socket,
+       form_mode: {:edit, category},
+       form: to_form(changeset, as: "category"),
+       form_icon: category.icon || "hero-tag",
+       form_color: category.color || "#6366F1",
+       form_kind: category.kind || "expense"
+     )}
   end
 
   def handle_event("cancel_form", _params, socket) do
     {:noreply, assign(socket, :form_mode, nil)}
   end
 
-  def handle_event("update_form", %{"name" => name}, socket) do
-    {:noreply, assign(socket, :form, Map.put(socket.assigns.form, "name", name))}
-  end
-
   def handle_event("select_icon", %{"icon" => icon}, socket) do
-    {:noreply, assign(socket, :form, Map.put(socket.assigns.form, "icon", icon))}
+    {:noreply, assign(socket, :form_icon, icon)}
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
-    {:noreply, assign(socket, :form, Map.put(socket.assigns.form, "color", color))}
+    {:noreply, assign(socket, :form_color, color)}
   end
 
   def handle_event("select_kind", %{"kind" => kind}, socket) do
-    {:noreply, assign(socket, :form, Map.put(socket.assigns.form, "kind", kind))}
+    {:noreply, assign(socket, :form_kind, kind)}
   end
 
-  def handle_event("save_category", %{"name" => name}, socket) do
+  def handle_event("save_category", %{"category" => params}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    form = socket.assigns.form
-
-    attrs = %{
-      name: String.trim(name),
-      icon: form["icon"],
-      color: form["color"],
-      kind: form["kind"],
-      user_id: user_id
-    }
+    attrs = Map.put(params, "user_id", user_id)
 
     result =
       case socket.assigns.form_mode do
@@ -396,11 +396,7 @@ defmodule GranaWeb.CategoriesLive do
         {:noreply, socket}
 
       {:error, changeset} ->
-        msg =
-          Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
-          |> Enum.map_join("; ", fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
-
-        {:noreply, put_flash(socket, :error, msg)}
+        {:noreply, assign(socket, :form, to_form(changeset, as: "category"))}
     end
   end
 
@@ -439,10 +435,6 @@ defmodule GranaWeb.CategoriesLive do
 
         {:noreply, socket}
     end
-  end
-
-  defp new_form do
-    %{"name" => "", "icon" => "hero-tag", "color" => "#6366F1", "kind" => "expense"}
   end
 
   defp available_icons, do: @available_icons
