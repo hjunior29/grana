@@ -15,13 +15,13 @@ defmodule Grana.Repo.Migrations.CreateFinancialGoals do
     create index(:financial_goals, [:user_id])
 
     create unique_index(:financial_goals, [:user_id, :type],
-      where: "category_id IS NULL AND active = true",
-      name: :financial_goals_user_type_active_idx
-    )
+             where: "category_id IS NULL AND active = true",
+             name: :financial_goals_user_type_active_idx
+           )
 
     create unique_index(:financial_goals, [:user_id, :type, :category_id],
-      where: "category_id IS NOT NULL AND active = true",
-      name: :financial_goals_user_type_category_active_idx
-    )
+             where: "category_id IS NOT NULL AND active = true",
+             name: :financial_goals_user_type_category_active_idx
+           )
   end
 end

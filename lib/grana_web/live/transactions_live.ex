@@ -440,14 +440,24 @@ defmodule GranaWeb.TransactionsLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Transações</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">
-            Visualize e gerencie todas as suas transações
-          </p>
+        <div class="surface-panel mb-6 p-5 sm:p-6">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="page-kicker mb-3">
+                <.icon name="hero-list-bullet" class="size-4" /> Controle granular
+              </p>
+              <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Transações</h1>
+              <p class="mt-2 text-sm text-base-content/60">
+                Visualize e gerencie todas as suas transações
+              </p>
+            </div>
+            <.link navigate={~p"/upload"} class="btn btn-primary btn-sm sm:btn-md">
+              <.icon name="hero-cloud-arrow-up" class="size-5" /> Novo upload
+            </.link>
+          </div>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-6 -ml-4">
+        <div role="tablist" class="tabs tabs-border mb-6">
           <button
             role="tab"
             phx-click="switch_tab"

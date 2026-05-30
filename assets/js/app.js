@@ -4,8 +4,23 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 
+// --- Theme ---
+const setTheme = (theme) => {
+  if (theme === "system") {
+    localStorage.removeItem("phx:theme")
+    document.documentElement.removeAttribute("data-theme")
+  } else {
+    localStorage.setItem("phx:theme", theme)
+    document.documentElement.setAttribute("data-theme", theme)
+  }
+}
+
+setTheme(localStorage.getItem("phx:theme") || "system")
+window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"))
+window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme))
+
 // --- Tooltip Utility ---
-const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:oklch(var(--b3) / 0.85);backdrop-filter:blur(8px);color:oklch(var(--bc));box-shadow:0 4px 12px rgba(0,0,0,0.2);font-size:13px;pointer-events:none;white-space:nowrap;display:none"
+const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:color-mix(in oklch, var(--color-base-300) 88%, transparent);backdrop-filter:blur(12px);color:var(--color-base-content);box-shadow:0 14px 36px color-mix(in oklch, var(--color-base-content) 20%, transparent);font-size:13px;pointer-events:none;white-space:nowrap;display:none;border:1px solid var(--grana-border)"
 
 function showTooltip(container, event, html) {
   let tip = container.querySelector(".chart-tooltip")
@@ -644,7 +659,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: Hooks,
 })
 
-topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
+topbar.config({barColors: {0: "oklch(68% 0.16 166)"}, shadowColor: "rgba(0, 0, 0, .18)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 

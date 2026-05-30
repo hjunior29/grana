@@ -24,47 +24,69 @@ defmodule GranaWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <div class="min-h-screen flex flex-col">
-      <header class="navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-3 sm:px-6 lg:px-8 min-h-12">
-        <div class="flex-1">
+    <div class="app-shell min-h-screen flex flex-col">
+      <div class="app-background" aria-hidden="true"></div>
+      <header class="app-header">
+        <div class="mx-auto flex h-16 max-w-7xl items-center gap-3 px-3 sm:px-6 lg:px-8">
           <.link
             navigate={if @current_scope, do: ~p"/dashboard", else: ~p"/"}
-            class="flex items-center gap-2 text-xl font-bold tracking-tight"
+            class="app-brand"
+            aria-label="Grana"
           >
-            <img src={~p"/images/logo-32.png"} alt="" class="w-6 h-6 sm:w-7 sm:h-7" />
-            <span style="font-family: 'Grand Hotel', cursive" class="text-xl sm:text-2xl">
-              Grana
-            </span>
+            <img src={~p"/images/logo-32.png"} alt="" class="brand-mark" />
+            <span class="brand-wordmark text-2xl leading-none">Grana</span>
           </.link>
-        </div>
-        <%!-- Desktop nav --%>
-        <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">
-          <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
-            <li>
-              <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
-            </li>
-            <li>
-              <.link navigate={~p"/analysis"} class="text-sm">Análise</.link>
-            </li>
-            <li>
-              <.link navigate={~p"/transactions"} class="text-sm">Transações</.link>
-            </li>
-            <li>
-              <.link navigate={~p"/categories"} class="text-sm">Categorias</.link>
-            </li>
-            <li>
-              <.link navigate={~p"/goals"} class="text-sm">Metas</.link>
-            </li>
-            <li>
-              <.link navigate={~p"/upload"} class="text-sm">Uploads</.link>
-            </li>
-            <li>
+
+          <%!-- Desktop nav --%>
+          <nav
+            :if={@current_scope && !@hide_nav}
+            id="main-nav"
+            phx-hook="ActiveNav"
+            class="ml-2 hidden flex-1 items-center justify-center gap-1 lg:flex"
+            aria-label="Navegação principal"
+          >
+            <.link navigate={~p"/dashboard"} class="nav-pill">
+              <.icon name="hero-squares-2x2" class="size-4" /> Dashboard
+            </.link>
+            <.link navigate={~p"/analysis"} class="nav-pill">
+              <.icon name="hero-sparkles" class="size-4" /> Análise
+            </.link>
+            <.link navigate={~p"/transactions"} class="nav-pill">
+              <.icon name="hero-list-bullet" class="size-4" /> Transações
+            </.link>
+            <.link navigate={~p"/categories"} class="nav-pill">
+              <.icon name="hero-tag" class="size-4" /> Categorias
+            </.link>
+            <.link navigate={~p"/goals"} class="nav-pill">
+              <.icon name="hero-flag" class="size-4" /> Metas
+            </.link>
+            <.link navigate={~p"/upload"} class="nav-pill">
+              <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
+            </.link>
+          </nav>
+
+          <div class="ml-auto flex items-center gap-2">
+            <div :if={!@current_scope && !@hide_nav} class="hidden items-center gap-2 sm:flex">
+              <Layouts.theme_toggle />
+              <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
+                Entrar
+              </.link>
+              <.link navigate={~p"/users/register"} class="btn btn-primary btn-sm">
+                Criar Conta
+              </.link>
+            </div>
+
+            <div :if={@current_scope && !@hide_nav} class="hidden items-center gap-2 lg:flex">
+              <Layouts.theme_toggle />
               <details class="dropdown dropdown-end">
-                <summary class="btn-md btn-ghost">
+                <summary class="btn btn-ghost btn-sm gap-2 rounded-full px-2">
                   <.icon name="hero-user-circle" class="size-5" />
+                  <span class="max-w-28 truncate text-xs font-semibold">
+                    {@current_scope.user.email}
+                  </span>
                 </summary>
-                <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
-                  <li class="px-3 py-2 text-xs opacity-50">{@current_scope.user.email}</li>
+                <ul class="dropdown-content menu account-menu-surface w-64 p-2 z-50 mt-3">
+                  <li class="px-3 py-2 text-xs opacity-60 truncate">{@current_scope.user.email}</li>
                   <li>
                     <.link navigate={~p"/users/settings"}>
                       <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
@@ -94,81 +116,108 @@ defmodule GranaWeb.Layouts do
                   </li>
                 </ul>
               </details>
-            </li>
-          </ul>
-        </div>
-        <%!-- Mobile hamburger menu --%>
-        <div :if={@current_scope && !@hide_nav} class="flex md:hidden flex-none">
-          <details class="dropdown dropdown-end">
-            <summary class="btn btn-ghost btn-sm px-2">
-              <.icon name="hero-bars-3" class="size-5" />
-            </summary>
-            <ul class="dropdown-content menu bg-base-200 rounded-box w-52 p-2 shadow-xl z-50 mt-2">
-              <li>
-                <.link navigate={~p"/dashboard"}>
-                  <.icon name="hero-chart-bar" class="size-4" /> Dashboard
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/analysis"}>
-                  <.icon name="hero-sparkles" class="size-4" /> Análise
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/transactions"}>
-                  <.icon name="hero-list-bullet" class="size-4" /> Transações
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/categories"}>
-                  <.icon name="hero-tag" class="size-4" /> Categorias
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/goals"}>
-                  <.icon name="hero-flag" class="size-4" /> Metas
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/upload"}>
-                  <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
-                </.link>
-              </li>
-              <hr class="my-1 opacity-30" />
-              <li class="py-1 text-xs opacity-50">{@current_scope.user.email}</li>
-              <li>
-                <.link navigate={~p"/users/settings"}>
-                  <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
-                </.link>
-              </li>
-              <li :if={roadmap_url()}>
-                <.link href={roadmap_url()} target="_blank">
-                  <.icon name="hero-light-bulb" class="size-4" /> Roadmap
-                </.link>
-              </li>
-              <%= if admin_user?(@current_scope) do %>
-                <li>
-                  <.link href="/admin/oban" target="_blank">
-                    <.icon name="hero-queue-list" class="size-4" /> Oban Jobs
-                  </.link>
+            </div>
+
+            <%!-- Mobile menu --%>
+            <details
+              :if={!@hide_nav}
+              class={[
+                "dropdown dropdown-end",
+                @current_scope && "lg:hidden",
+                !@current_scope && "sm:hidden"
+              ]}
+            >
+              <summary class="btn btn-ghost btn-sm px-2">
+                <.icon name="hero-bars-3" class="size-5" />
+              </summary>
+              <ul class="dropdown-content menu mobile-menu-surface w-64 p-2 z-50 mt-3">
+                <%= if @current_scope do %>
+                  <li class="px-3 py-2 text-xs opacity-60 truncate">{@current_scope.user.email}</li>
+                  <li>
+                    <.link navigate={~p"/dashboard"}>
+                      <.icon name="hero-squares-2x2" class="size-4" /> Dashboard
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/analysis"}>
+                      <.icon name="hero-sparkles" class="size-4" /> Análise
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/transactions"}>
+                      <.icon name="hero-list-bullet" class="size-4" /> Transações
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/categories"}>
+                      <.icon name="hero-tag" class="size-4" /> Categorias
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/goals"}>
+                      <.icon name="hero-flag" class="size-4" /> Metas
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/upload"}>
+                      <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
+                    </.link>
+                  </li>
+                  <hr class="my-1 opacity-30" />
+                  <li>
+                    <.link navigate={~p"/users/settings"}>
+                      <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
+                    </.link>
+                  </li>
+                  <li :if={roadmap_url()}>
+                    <.link href={roadmap_url()} target="_blank">
+                      <.icon name="hero-light-bulb" class="size-4" /> Roadmap
+                    </.link>
+                  </li>
+                  <%= if admin_user?(@current_scope) do %>
+                    <li>
+                      <.link href="/admin/oban" target="_blank">
+                        <.icon name="hero-queue-list" class="size-4" /> Oban Jobs
+                      </.link>
+                    </li>
+                    <li>
+                      <.link href="/admin/errors" target="_blank">
+                        <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
+                      </.link>
+                    </li>
+                  <% end %>
+                  <li>
+                    <.link href={~p"/users/log-out"} method="delete">
+                      <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> Sair
+                    </.link>
+                  </li>
+                <% else %>
+                  <li>
+                    <.link navigate={~p"/users/log-in"}>
+                      <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> Entrar
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/users/register"}>
+                      <.icon name="hero-user-plus" class="size-4" /> Criar Conta
+                    </.link>
+                  </li>
+                  <li>
+                    <.link navigate={~p"/terms"}>
+                      <.icon name="hero-shield-check" class="size-4" /> Termos
+                    </.link>
+                  </li>
+                <% end %>
+                <li class="px-3 py-2">
+                  <Layouts.theme_toggle />
                 </li>
-                <li>
-                  <.link href="/admin/errors" target="_blank">
-                    <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
-                  </.link>
-                </li>
-              <% end %>
-              <li>
-                <.link href={~p"/users/log-out"} method="delete">
-                  <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> Sair
-                </.link>
-              </li>
-            </ul>
-          </details>
+              </ul>
+            </details>
+          </div>
         </div>
       </header>
 
-      <main class="flex-1 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <main class={["app-main", @hide_nav && "auth-main"]}>
         {render_slot(@inner_block)}
       </main>
     </div>
@@ -217,31 +266,37 @@ defmodule GranaWeb.Layouts do
 
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
+    <div class="theme-toggle relative">
+      <div class="theme-toggle-indicator" />
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        type="button"
+        class="theme-toggle-button"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="system"
+        aria-label="Usar tema do sistema"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-computer-desktop-micro" class="size-4" />
       </button>
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        type="button"
+        class="theme-toggle-button"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
+        aria-label="Usar tema claro"
       >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-sun-micro" class="size-4" />
       </button>
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        type="button"
+        class="theme-toggle-button"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"
+        aria-label="Usar tema escuro"
       >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-moon-micro" class="size-4" />
       </button>
     </div>
     """
