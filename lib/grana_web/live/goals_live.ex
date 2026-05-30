@@ -66,7 +66,7 @@ defmodule GranaWeb.GoalsLive do
 
   def handle_event("edit_goal", %{"id" => id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    goal = Banking.get_financial_goal!(String.to_integer(id), user_id)
+    goal = Banking.get_financial_goal!(GranaWeb.Params.to_int(id, -1), user_id)
     changeset = FinancialGoal.changeset(goal, %{})
 
     {:noreply,
@@ -140,7 +140,7 @@ defmodule GranaWeb.GoalsLive do
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :delete_target, String.to_integer(id))}
+    {:noreply, assign(socket, :delete_target, GranaWeb.Params.to_int(id, -1))}
   end
 
   def handle_event("cancel_delete", _params, socket) do
