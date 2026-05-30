@@ -5,7 +5,18 @@
 
 Correções da auditoria de 29/05/2026, aplicadas do mais crítico ao menos crítico.
 Cada etapa foi compilada com `--warnings-as-errors` e validada com a suíte de testes.
-Estado final: **220 testes, 0 falhas**, `mix format --check-formatted` ok, `mix deps.audit` sem vulnerabilidades (exceto Decimal, ver abaixo).
+Estado final: **221 testes, 0 falhas**, `mix format --check-formatted` ok, `mix deps.audit` sem vulnerabilidades (exceto Decimal, ver abaixo).
+
+> **Atualização 30/05 — rodada P1+P2:** dos 61 deferidos, priorizados e resolvidos:
+> P1 (correção de dados/segurança) #50, #44, #80, #81, #110, #114; P2 #76/#77 (.env só dev/test),
+> #111 (CSP nas rotas do app), #103 (parsing seguro de ids em todas as LiveViews), #45
+> (parcelas), #49 (alinhamento da categorização IA), #36 (matching de transferências O(n)),
+> #22 (lucro realizado por preço médio, com teste). Score estimado **3.5 → 8.5**; 67 corrigidos / 12 parciais / 48 deferidos.
+> **Ação manual pendente (#73):** rotacionar os segredos do `.env` que já estiveram expostos.
+> **Ainda deferidos (exigem trabalho dedicado):** #13/#37 (agregação SQL do `build_summary` —
+> precisa de teste golden-master antes de migrar a classificação por heurística de texto p/ SQL,
+> senão arrisca a matemática); #61 (`File.read!` de até 60MB — fix correto exige object storage/S3,
+> e o design atual base64-via-DB é proposital para multi-máquina no Fly).
 
 ## Como o trabalho está organizado (commits)
 
