@@ -440,5 +440,117 @@ defmodule Grana.BankingTest do
       assert Decimal.compare(summary.total_expenses, Decimal.new("200.00")) == :eq
       assert summary.transaction_count == 2
     end
+
+    test "subtracts refunds, separates investments, excludes internal transfers", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      cats = Banking.list_categories(user.id)
+      food = Enum.find(cats, &(&1.name == "Alimentação"))
+      invest = Enum.find(cats, &(&1.kind == "investment"))
+
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      base = %{bank_statement_id: stmt.id, user_id: user.id, date: ~D[2026-02-10]}
+
+      Banking.bulk_insert_transactions([
+        Map.merge(base, %{
+          description: "Salário",
+          amount: Decimal.new("5000.00"),
+          type: "credit",
+          category_id: food.id
+        }),
+        Map.merge(base, %{
+          description: "Mercado",
+          amount: Decimal.new("-200.00"),
+          type: "debit",
+          category_id: food.id
+        }),
+        Map.merge(base, %{
+          description: "Estorno compra",
+          amount: Decimal.new("50.00"),
+          type: "credit",
+          category_id: food.id
+        }),
+        Map.merge(base, %{
+          description: "Aporte CDB",
+          amount: Decimal.new("-300.00"),
+          type: "debit",
+          category_id: invest.id
+        }),
+        Map.merge(base, %{
+          description: "Transferência interna",
+          amount: Decimal.new("-1000.00"),
+          type: "debit",
+          category_id: food.id,
+          is_internal_transfer: true
+        })
+      ])
+
+      summary = Banking.monthly_summary(user.id, 2026, 2)
+
+      # income exclui o estorno (que é tratado como refund)
+      assert Decimal.equal?(summary.total_income, Decimal.new("5000.00"))
+      # despesa bruta 200 menos estorno 50
+      assert Decimal.equal?(summary.total_expenses, Decimal.new("150.00"))
+      assert Decimal.equal?(summary.total_investments, Decimal.new("300.00"))
+      assert summary.internal_count == 1
+      assert summary.refund_count == 1
+      assert Decimal.equal?(summary.balance, Decimal.new("4550.00"))
+
+      # não retém a lista completa em memória; expõe só os tops
+      refute Map.has_key?(summary, :transactions)
+      assert Map.has_key?(summary, :top_expenses)
+    end
+  end
+
+  describe "get_ai_analysis!/2 authorization (IDOR)" do
+    test "raises when the analysis belongs to another user", %{user: user} do
+      other = user_fixture()
+
+      {:ok, analysis} =
+        Banking.create_ai_analysis(%{
+          user_id: other.id,
+          prompt: nil,
+          filters_json: %{},
+          result_json: %{"titulo" => "x"}
+        })
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Banking.get_ai_analysis!(analysis.id, user.id)
+      end
+
+      assert Banking.get_ai_analysis!(analysis.id, other.id).id == analysis.id
+    end
+  end
+
+  describe "create_financial_goal/1 category ownership" do
+    test "rejects a category owned by another user", %{user: user} do
+      other = user_fixture()
+      Banking.ensure_default_categories(other.id)
+      other_cat = hd(Banking.list_categories(other.id))
+
+      assert {:error, changeset} =
+               Banking.create_financial_goal(%{
+                 "type" => "category_limit",
+                 "target_value" => "100",
+                 "user_id" => user.id,
+                 "category_id" => other_cat.id
+               })
+
+      assert changeset.errors[:category_id]
+    end
+
+    test "accepts a category owned by the user", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      cat = hd(Banking.list_categories(user.id))
+
+      assert {:ok, _goal} =
+               Banking.create_financial_goal(%{
+                 "type" => "category_limit",
+                 "target_value" => "100",
+                 "user_id" => user.id,
+                 "category_id" => cat.id
+               })
+    end
   end
 end

@@ -7,10 +7,53 @@ on:
     branches:
       - main
 jobs:
+  test:
+    name: Test & lint
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "28.0.4"
+
+      - name: Cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - run: mix deps.get
+      - run: mix deps.unlock --check-unused
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+
   deploy:
     name: Deploy app
+    needs: test
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-group # optional: ensure only one action runs at a time
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
