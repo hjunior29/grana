@@ -7,8 +7,13 @@ defmodule GranaWeb.UserLive.Login do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm space-y-4">
+      <div class="auth-card space-y-5">
         <div class="text-center">
+          <img
+            src={~p"/images/logo-animated.gif"}
+            alt="Grana"
+            class="mx-auto mb-4 size-20 rounded-2xl"
+          />
           <.header>
             <p>Entrar</p>
             <:subtitle>
@@ -17,7 +22,7 @@ defmodule GranaWeb.UserLive.Login do
               <% else %>
                 Não tem uma conta? <.link
                   navigate={~p"/users/register"}
-                  class="font-semibold text-brand hover:underline"
+                  class="font-semibold text-primary hover:underline"
                   phx-no-format
                 >Cadastre-se</.link> agora.
               <% end %>
@@ -36,7 +41,6 @@ defmodule GranaWeb.UserLive.Login do
         </div>
 
         <.form
-          :let={f}
           for={@form}
           id="login_form_magic"
           action={~p"/users/log-in"}
@@ -45,7 +49,8 @@ defmodule GranaWeb.UserLive.Login do
         >
           <.input
             readonly={!!@current_scope}
-            field={f[:email]}
+            id="login_form_magic_email"
+            field={@form[:email]}
             type="email"
             label="Email"
             autocomplete="email"
@@ -60,7 +65,6 @@ defmodule GranaWeb.UserLive.Login do
         <div class="divider">ou</div>
 
         <.form
-          :let={f}
           for={@form}
           id="login_form_password"
           action={~p"/users/log-in"}
@@ -70,7 +74,8 @@ defmodule GranaWeb.UserLive.Login do
         >
           <.input
             readonly={!!@current_scope}
-            field={f[:email]}
+            id="login_form_password_email"
+            field={@form[:email]}
             type="email"
             label="Email"
             autocomplete="email"

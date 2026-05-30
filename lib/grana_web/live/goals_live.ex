@@ -130,7 +130,12 @@ defmodule GranaWeb.GoalsLive do
          |> put_flash(:info, "Meta criada!")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Erro ao criar meta. Verifique se já não existe uma meta desse tipo.")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Erro ao criar meta. Verifique se já não existe uma meta desse tipo."
+         )}
     end
   end
 
@@ -163,14 +168,19 @@ defmodule GranaWeb.GoalsLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="flex items-center justify-between mb-4 sm:mb-8">
-          <div>
-            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Metas</h1>
-            <p class="text-xs sm:text-sm opacity-60 mt-1">Acompanhe seus objetivos financeiros</p>
+        <div class="surface-panel mb-6 p-5 sm:p-6">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="page-kicker mb-3">
+                <.icon name="hero-flag" class="size-4" /> Planejamento
+              </p>
+              <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Metas</h1>
+              <p class="mt-2 text-sm text-base-content/60">Acompanhe seus objetivos financeiros</p>
+            </div>
+            <button phx-click="show_form" class="btn btn-primary btn-sm sm:btn-md">
+              <.icon name="hero-plus" class="size-4" /> Nova Meta
+            </button>
           </div>
-          <button phx-click="show_form" class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="size-4" /> Nova Meta
-          </button>
         </div>
 
         <div :if={@goals_progress != []} class="flex items-center justify-center mb-6">
@@ -302,7 +312,12 @@ defmodule GranaWeb.GoalsLive do
         </div>
 
         <%!-- New/Edit Modal --%>
-        <dialog :if={@show_form} class="modal modal-open" phx-window-keydown="hide_form" phx-key="Escape">
+        <dialog
+          :if={@show_form}
+          class="modal modal-open"
+          phx-window-keydown="hide_form"
+          phx-key="Escape"
+        >
           <div class="modal-box">
             <h3 class="text-lg font-bold mb-4">
               {if @editing_goal, do: "Editar Meta", else: "Nova Meta"}
@@ -334,7 +349,11 @@ defmodule GranaWeb.GoalsLive do
 
               <div>
                 <label class="label text-sm font-medium">Valor alvo (R$)</label>
-                <div id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"} phx-hook="CurrencyInput" phx-update="ignore">
+                <div
+                  id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"}
+                  phx-hook="CurrencyInput"
+                  phx-update="ignore"
+                >
                   <input
                     type="hidden"
                     name="goal[target_value]"

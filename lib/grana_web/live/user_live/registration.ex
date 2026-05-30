@@ -8,13 +8,18 @@ defmodule GranaWeb.UserLive.Registration do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm">
+      <div class="auth-card">
         <div class="text-center">
+          <img
+            src={~p"/images/logo-animated.gif"}
+            alt="Grana"
+            class="mx-auto mb-4 size-20 rounded-2xl"
+          />
           <.header>
             Registre uma nova conta
             <:subtitle>
               Já tem uma conta?
-              <.link navigate={~p"/users/log-in"} class="font-semibold text-brand hover:underline">
+              <.link navigate={~p"/users/log-in"} class="font-semibold text-primary hover:underline">
                 Entrar
               </.link>
               para acessar sua conta.

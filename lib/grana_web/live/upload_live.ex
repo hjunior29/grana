@@ -604,12 +604,26 @@ defmodule GranaWeb.UploadLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto scrollbar-gutter">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Upload</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
+        <div class="surface-panel mb-6 p-5 sm:p-6">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="page-kicker mb-3">
+                <.icon name="hero-cloud-arrow-up" class="size-4" /> Entrada de dados
+              </p>
+              <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Upload</h1>
+              <p class="mt-2 text-sm text-base-content/60">
+                Importe e gerencie seus extratos e faturas
+              </p>
+            </div>
+            <div class="hidden items-center gap-2 sm:flex">
+              <img src={~p"/images/nubank-logo.png"} alt="Nubank" class="size-8 rounded-full" />
+              <img src={~p"/images/bradesco-logo.png"} alt="Bradesco" class="size-8 rounded-full" />
+              <img src={~p"/images/b3-logo.png"} alt="B3" class="size-8 rounded-full object-cover" />
+            </div>
+          </div>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-8 -ml-2">
+        <div role="tablist" class="tabs tabs-border mb-8">
           <button
             role="tab"
             phx-click="switch_tab"

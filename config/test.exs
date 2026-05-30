@@ -35,6 +35,9 @@ config :grana, Oban, testing: :manual
 # Print only warnings and errors during test
 config :logger, level: :warning
 
+# Keep generated Ecto validation messages aligned with the existing test suite.
+config :grana, GranaWeb.Gettext, default_locale: "en"
+
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
 

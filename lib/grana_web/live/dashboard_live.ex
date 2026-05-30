@@ -330,7 +330,8 @@ defmodule GranaWeb.DashboardLive do
     |> assign(:top_category, top_category)
     |> assign(:installment_summary, installment_summary)
     |> assign(:installment_projections, installment_projections)
-    |> assign(:goals_progress,
+    |> assign(
+      :goals_progress,
       case view_mode do
         "month" -> Banking.goals_progress(user_id, year, month)
         _ -> []
@@ -630,12 +631,22 @@ defmodule GranaWeb.DashboardLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">Visão geral das suas finanças</p>
+        <div class="surface-panel mb-6 p-5 sm:p-6">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="page-kicker mb-3">
+                <.icon name="hero-squares-2x2" class="size-4" /> Centro financeiro
+              </p>
+              <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Dashboard</h1>
+              <p class="mt-2 text-sm text-base-content/60">Visão geral das suas finanças</p>
+            </div>
+            <.link navigate={~p"/upload"} class="btn btn-primary btn-sm sm:btn-md">
+              <.icon name="hero-cloud-arrow-up" class="size-5" /> Importar dados
+            </.link>
+          </div>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-6 -ml-4">
+        <div role="tablist" class="tabs tabs-border mb-6">
           <button
             role="tab"
             phx-click="switch_tab"
@@ -1880,7 +1891,10 @@ defmodule GranaWeb.DashboardLive do
                     </div>
                     <div class="flex flex-col">
                       <span class="font-medium text-sm">{h.ticker || "—"}</span>
-                      <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs" title={h.name}>
+                      <span
+                        class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs"
+                        title={h.name}
+                      >
                         {h.name}
                       </span>
                     </div>

@@ -173,7 +173,11 @@ defmodule GranaWeb.AnalysisLive do
     # Check for duplicate analysis in the last 2 minutes
     if has_recent_duplicate?(socket.assigns.analyses, context, filters, custom_prompt) do
       {:noreply,
-       put_flash(socket, :warning, "Já existe uma análise recente com os mesmos filtros. Aguarde 2 minutos ou altere os filtros.")}
+       put_flash(
+         socket,
+         :warning,
+         "Já existe uma análise recente com os mesmos filtros. Aguarde 2 minutos ou altere os filtros."
+       )}
     else
       case Grana.Accounts.get_user_ai_config(scope.user.id) do
         {:error, :no_api_key} ->
@@ -506,12 +510,24 @@ defmodule GranaWeb.AnalysisLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Análise</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">Insights inteligentes sobre suas finanças</p>
+        <div class="surface-panel mb-6 p-5 sm:p-6">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="page-kicker mb-3">
+                <.icon name="hero-sparkles" class="size-4" /> Inteligência financeira
+              </p>
+              <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Análise</h1>
+              <p class="mt-2 text-sm text-base-content/60">
+                Insights inteligentes sobre suas finanças
+              </p>
+            </div>
+            <.link navigate={~p"/users/settings"} class="btn btn-ghost btn-sm sm:btn-md">
+              <.icon name="hero-cog-6-tooth" class="size-5" /> Configurar IA
+            </.link>
+          </div>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-6 -ml-4">
+        <div role="tablist" class="tabs tabs-border mb-6">
           <button
             role="tab"
             phx-click="switch_tab"
@@ -860,12 +876,14 @@ defmodule GranaWeb.AnalysisLive do
 
         <div class="flex flex-wrap gap-1.5 mb-3">
           <button
-            :for={chip <- [
-              "Onde posso economizar?",
-              "Qual categoria cresceu mais?",
-              "Como estão meus gastos fixos?",
-              "Resumo do mês"
-            ]}
+            :for={
+              chip <- [
+                "Onde posso economizar?",
+                "Qual categoria cresceu mais?",
+                "Como estão meus gastos fixos?",
+                "Resumo do mês"
+              ]
+            }
             type="button"
             phx-click="set_chip"
             phx-value-text={chip}
@@ -954,7 +972,10 @@ defmodule GranaWeb.AnalysisLive do
                           {format_score(analysis.result_json["nota"])}
                         </span>
                         <div class="min-w-0">
-                          <h4 class="font-semibold text-xs sm:text-sm truncate" title={analysis.result_json["titulo"]}>
+                          <h4
+                            class="font-semibold text-xs sm:text-sm truncate"
+                            title={analysis.result_json["titulo"]}
+                          >
                             {analysis.result_json["titulo"]}
                           </h4>
                           <div class="flex flex-wrap items-center gap-1 mt-0.5">
