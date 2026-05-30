@@ -442,14 +442,20 @@ defmodule Grana.Banking do
   end
 
   defp find_transfer_matches(debits, credits) do
+    # Índice de créditos por valor (em centavos) para evitar varrer todos os
+    # créditos por débito (O(n²) → ~O(n)). group_by preserva a ordem original
+    # dentro de cada bucket, e o Decimal.equal? no predicado mantém a precisão.
+    credits_by_amount = Enum.group_by(credits, &transfer_amount_key(&1.amount))
+
     # Track which credits have already been matched to avoid double-matching
     {matched_ids, _used_credits} =
       Enum.reduce(debits, {[], MapSet.new()}, fn debit, {ids, used} ->
         debit_amount = Decimal.abs(debit.amount)
         debit_bank = debit.bank_statement && debit.bank_statement.bank
+        candidates = Map.get(credits_by_amount, transfer_amount_key(debit.amount), [])
 
         match =
-          Enum.find(credits, fn credit ->
+          Enum.find(candidates, fn credit ->
             credit_bank = credit.bank_statement && credit.bank_statement.bank
 
             not MapSet.member?(used, credit.id) and
@@ -465,6 +471,11 @@ defmodule Grana.Banking do
       end)
 
     matched_ids
+  end
+
+  # Chave de agrupamento por valor absoluto em centavos (money tem 2 casas).
+  defp transfer_amount_key(amount) do
+    amount |> Decimal.abs() |> Decimal.mult(100) |> Decimal.round() |> Decimal.to_integer()
   end
 
   # Category Rules
