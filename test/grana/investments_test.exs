@@ -78,4 +78,58 @@ defmodule Grana.InvestmentsTest do
       assert found.id == stmt.id
     end
   end
+
+  describe "lucro realizado (preço médio)" do
+    test "usa custo médio ponderado, não vendas-compras agregado", %{
+      user: user,
+      institution: institution
+    } do
+      {:ok, stmt} =
+        Investments.create_statement(%{
+          filename: "t.csv",
+          user_id: user.id,
+          institution_id: institution.id
+        })
+
+      base = %{
+        user_id: user.id,
+        statement_id: stmt.id,
+        institution_id: institution.id,
+        asset_name: "PETR4",
+        asset_ticker: "PETR4",
+        asset_type: "acao"
+      }
+
+      Investments.bulk_insert_transactions([
+        Map.merge(base, %{
+          date: ~D[2026-01-01],
+          operation: "compra",
+          quantity: Decimal.new(10),
+          unit_price: Decimal.new(10),
+          total_amount: Decimal.new(100)
+        }),
+        Map.merge(base, %{
+          date: ~D[2026-02-01],
+          operation: "compra",
+          quantity: Decimal.new(10),
+          unit_price: Decimal.new(20),
+          total_amount: Decimal.new(200)
+        }),
+        Map.merge(base, %{
+          date: ~D[2026-03-01],
+          operation: "venda",
+          quantity: Decimal.new(10),
+          unit_price: Decimal.new(25),
+          total_amount: Decimal.new(250)
+        })
+      ])
+
+      summary = Investments.portfolio_summary(user.id)
+      asset = Enum.find(summary.proventos_by_asset, &(&1.ticker == "PETR4"))
+
+      # custo médio = 15; venda de 10 @ 25 → lucro realizado (25-15)*10 = 100
+      assert asset
+      assert Decimal.equal?(asset.realized_profit, Decimal.new(100))
+    end
+  end
 end
