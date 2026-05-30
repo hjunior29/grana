@@ -557,25 +557,15 @@ defmodule GranaWeb.UploadLive do
     socket =
       case {successes, errors} do
         {[], errors} ->
-          error_messages =
-            Enum.map(errors, fn {:error, name, reason} ->
-              "#{name}: #{format_error(reason, bank)}"
-            end)
-
-          put_flash(socket, :error, Enum.join(error_messages, " | "))
+          put_flash(socket, :error, build_error_message(errors, bank))
 
         {_, []} ->
           put_flash(socket, :info, "#{length(successes)} arquivo(s) processado(s) com sucesso!")
 
         {_, errors} ->
-          error_msgs =
-            Enum.map(errors, fn {:error, name, reason} ->
-              "#{name}: #{format_error(reason, bank)}"
-            end)
-
           socket
           |> put_flash(:info, "#{length(successes)} processado(s) com sucesso")
-          |> put_flash(:error, Enum.join(error_msgs, " | "))
+          |> put_flash(:error, build_error_message(errors, bank))
       end
 
     socket =
@@ -594,6 +584,18 @@ defmodule GranaWeb.UploadLive do
      push_patch(socket, to: "/upload?tab=#{socket.assigns.tab}&page=1&source=#{source}")}
   end
 
+  # Limita a 5 erros exibidos (+N mais) para a flash não crescer sem limite.
+  defp build_error_message(errors, bank) do
+    shown = Enum.take(errors, 5)
+
+    msgs =
+      Enum.map(shown, fn {:error, name, reason} -> "#{name}: #{format_error(reason, bank)}" end)
+
+    extra = length(errors) - length(shown)
+    base = Enum.join(msgs, " | ")
+    if extra > 0, do: base <> " (+#{extra} mais)", else: base
+  end
+
   defp format_error("No transactions found in file", "outro") do
     "Nenhuma transação encontrada no arquivo."
   end
@@ -610,7 +612,9 @@ defmodule GranaWeb.UploadLive do
     "Nenhuma transação encontrada no PDF. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
   end
 
-  defp format_error(reason, _bank), do: reason
+  defp format_error(reason, _bank) when is_binary(reason), do: reason
+  # Nunca expõe termos internos crus (tuplas/atoms) ao usuário.
+  defp format_error(_reason, _bank), do: "Não foi possível processar o arquivo."
 
   @impl true
   def render(assigns) do

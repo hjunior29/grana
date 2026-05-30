@@ -13,15 +13,23 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
   end
 
   defp normalize_encoding(content) do
-    case String.valid?(content) do
-      true -> content
-      false -> :unicode.characters_to_binary(content, :latin1, :utf8) |> ensure_binary()
+    if String.valid?(content) do
+      content
+    else
+      case :unicode.characters_to_binary(content, :latin1, :utf8) do
+        result when is_binary(result) ->
+          result
+
+        # Falha/parcial de conversão: não descartamos o arquivo inteiro —
+        # preservamos o que dá, substituindo só os bytes inválidos.
+        {:incomplete, partial, _rest} when is_binary(partial) ->
+          String.replace_invalid(partial)
+
+        _ ->
+          String.replace_invalid(content)
+      end
     end
   end
-
-  defp ensure_binary(result) when is_binary(result), do: result
-  defp ensure_binary({:error, _, _}), do: ""
-  defp ensure_binary({:incomplete, partial, _}), do: partial
 
   defp extract_year(lines) do
     header = List.first(lines) || ""
