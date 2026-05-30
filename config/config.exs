@@ -94,6 +94,14 @@ config :grana, Oban,
      ]}
   ]
 
+# Default encryption key for dev/test (overridden in runtime.exs via CLOAK_KEY env var)
+# Generate a production key with: :crypto.strong_rand_bytes(32) |> Base.encode64()
+config :grana, :cloak_key, "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
+
+# Configure Hammer (rate limiting)
+config :hammer,
+  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 60, cleanup_interval_ms: 60_000 * 10]}
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -4,6 +4,8 @@ defmodule GranaWeb.UserSessionController do
   alias Grana.Accounts
   alias GranaWeb.UserAuth
 
+  plug GranaWeb.RateLimit, [action: :login] when action in [:create]
+
   def create(conn, %{"_action" => "confirmed"} = params) do
     create(conn, params, "Usuário confirmou com sucesso.")
   end

@@ -4,6 +4,7 @@ defmodule Grana.Banking.AIAnalyzer do
   alias Grana.Investments
   alias Grana.Investments.Constants
   alias Grana.AI.Provider
+  alias Grana.AI.PromptSanitizer
 
   # ── Banking Analysis ──
 
@@ -224,20 +225,14 @@ defmodule Grana.Banking.AIAnalyzer do
   defp build_prompt(summary, period, filter_desc, custom_prompt, extra, year, month) do
     base = base_prompt_data(summary, extra, year, month)
 
-    custom_prompt =
-      case custom_prompt do
-        nil -> ""
-        "" -> ""
-        p -> "\nPERGUNTA/INSTRUÇÃO DO USUÁRIO (responda no campo \"resposta\" do JSON):\n#{p}\n"
-      end
-
-    has_prompt = custom_prompt != ""
+    custom_prompt_section = PromptSanitizer.wrap_custom_prompt(custom_prompt)
+    has_prompt = custom_prompt_section != ""
 
     """
     Analise os dados financeiros de #{period} de um usuário brasileiro e forneça insights úteis.
 
     #{filter_desc}#{base}
-    #{custom_prompt}
+    #{custom_prompt_section}
     #{json_format_instruction(has_prompt)}
     """
   end
@@ -339,7 +334,8 @@ defmodule Grana.Banking.AIAnalyzer do
       |> Enum.take(15)
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
-        "- #{t.description}: R$ #{fmt(Decimal.abs(t.amount))} (#{cat})"
+        desc = PromptSanitizer.sanitize_description(t.description)
+        "- #{desc}: R$ #{fmt(Decimal.abs(t.amount))} (#{cat})"
       end)
       |> Enum.join("\n")
 
@@ -351,7 +347,8 @@ defmodule Grana.Banking.AIAnalyzer do
       |> Enum.take(10)
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
-        "- #{t.description}: R$ #{fmt(t.amount)} (#{cat})"
+        desc = PromptSanitizer.sanitize_description(t.description)
+        "- #{desc}: R$ #{fmt(t.amount)} (#{cat})"
       end)
       |> Enum.join("\n")
 
@@ -368,7 +365,9 @@ defmodule Grana.Banking.AIAnalyzer do
             remaining = txn.installment_total - txn.installment_current
             remaining_value = Decimal.mult(Decimal.abs(txn.amount), remaining)
 
-            "- #{txn.description}: R$ #{fmt(Decimal.abs(txn.amount))}/mês (#{txn.installment_current}/#{txn.installment_total}) - Restante: R$ #{fmt(remaining_value)} (#{cat})"
+            desc = PromptSanitizer.sanitize_description(txn.description)
+
+            "- #{desc}: R$ #{fmt(Decimal.abs(txn.amount))}/mês (#{txn.installment_current}/#{txn.installment_total}) - Restante: R$ #{fmt(remaining_value)} (#{cat})"
           end)
           |> Enum.join("\n")
 
@@ -645,13 +644,7 @@ defmodule Grana.Banking.AIAnalyzer do
           "\nGANHOS POR ATIVO:\n#{text}\n"
       end
 
-    custom_part =
-      case custom_prompt do
-        nil -> ""
-        "" -> ""
-        p -> "\nPERGUNTA/INSTRUÇÃO DO USUÁRIO (responda no campo \"resposta\" do JSON):\n#{p}\n"
-      end
-
+    custom_part = PromptSanitizer.wrap_custom_prompt(custom_prompt)
     has_prompt = custom_part != ""
 
     """

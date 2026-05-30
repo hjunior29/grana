@@ -230,6 +230,37 @@ defmodule Grana.BankingTest do
     end
   end
 
+  describe "delete_statements/2 authorization" do
+    test "delete_statements with correct user_id deletes the statements", %{user: user} do
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      assert {1, _} = Banking.delete_statements([stmt.id], user.id)
+      assert Banking.list_statements(user.id) == []
+    end
+
+    test "delete_statements with wrong user_id does not delete the statements", %{user: user} do
+      other_user = user_fixture()
+
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      assert {0, _} = Banking.delete_statements([stmt.id], other_user.id)
+      assert length(Banking.list_statements(user.id)) == 1
+    end
+
+    test "get_statement! with wrong user_id raises", %{user: user} do
+      other_user = user_fixture()
+
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Banking.get_statement!(stmt.id, other_user.id)
+      end
+    end
+  end
+
   describe "category_rules" do
     test "create_category_rule creates a rule", %{user: user} do
       Banking.ensure_default_categories(user.id)
@@ -273,6 +304,105 @@ defmodule Grana.BankingTest do
 
       result = Banking.categorize_transaction("XYZABC123 Random Description", user.id)
       assert result == uncat.id
+    end
+
+    test "categorize_transactions loads rules once for multiple descriptions", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      food_cat = Enum.find(Banking.list_categories(user.id), &(&1.name == "Alimentação"))
+      health_cat = Enum.find(Banking.list_categories(user.id), &(&1.name == "Saúde"))
+
+      Banking.create_category_rule(%{
+        pattern: "padaria xpto",
+        user_id: user.id,
+        category_id: food_cat.id
+      })
+
+      Banking.create_category_rule(%{
+        pattern: "drogasil",
+        user_id: user.id,
+        category_id: health_cat.id
+      })
+
+      result =
+        Banking.categorize_transactions(
+          ["Padaria XPTO Centro", "DROGASIL Loja 123", "XYZABC Unknown"],
+          user.id
+        )
+
+      assert result["Padaria XPTO Centro"] == food_cat.id
+      assert result["DROGASIL Loja 123"] == health_cat.id
+      uncat = Banking.get_uncategorized_category(user.id)
+      assert result["XYZABC Unknown"] == uncat.id
+    end
+
+    test "categorize_transactions returns same results as individual calls", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      food_cat = Enum.find(Banking.list_categories(user.id), &(&1.name == "Alimentação"))
+
+      Banking.create_category_rule(%{
+        pattern: "padaria xpto",
+        user_id: user.id,
+        category_id: food_cat.id
+      })
+
+      descriptions = ["Padaria XPTO Centro", "SUPERMERCADO GREGORIO", "Random thing"]
+
+      batch_result = Banking.categorize_transactions(descriptions, user.id)
+
+      for desc <- descriptions do
+        individual = Banking.categorize_transaction(desc, user.id)
+        assert batch_result[desc] == individual
+      end
+    end
+  end
+
+  describe "detect_internal_transfers" do
+    test "detect_internal_transfers is atomic - all updates succeed together", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      uncat = Banking.get_uncategorized_category(user.id)
+
+      {:ok, extrato_stmt} =
+        Banking.create_statement(%{
+          bank: "nubank",
+          filename: "extrato.csv",
+          statement_type: "extrato",
+          user_id: user.id
+        })
+
+      Banking.bulk_insert_transactions([
+        %{
+          date: ~D[2026-01-10],
+          description: "Pagamento de fatura cartao",
+          amount: Decimal.new("-500.00"),
+          type: "debit",
+          bank_statement_id: extrato_stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        },
+        %{
+          date: ~D[2026-01-15],
+          description: "Compra normal",
+          amount: Decimal.new("-50.00"),
+          type: "debit",
+          bank_statement_id: extrato_stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        }
+      ])
+
+      result = Banking.detect_internal_transfers(user.id)
+      assert result == :ok
+
+      transactions = Banking.list_transactions(user.id)
+      cc_payment = Enum.find(transactions, &(&1.description == "Pagamento de fatura cartao"))
+      normal = Enum.find(transactions, &(&1.description == "Compra normal"))
+
+      assert cc_payment.is_internal_transfer == true
+      assert normal.is_internal_transfer == false
+    end
+
+    test "detect_internal_transfers returns :ok on success", %{user: user} do
+      assert Banking.detect_internal_transfers(user.id) == :ok
     end
   end
 

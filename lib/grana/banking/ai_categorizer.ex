@@ -1,6 +1,7 @@
 defmodule Grana.Banking.AICategorizer do
   alias Grana.Accounts
   alias Grana.AI.Provider
+  alias Grana.AI.PromptSanitizer
 
   def categorize_batch(descriptions, categories, user_id) when is_list(descriptions) do
     case Accounts.get_user_ai_config(user_id) do
@@ -15,14 +16,16 @@ defmodule Grana.Banking.AICategorizer do
     numbered_descriptions =
       descriptions
       |> Enum.with_index(1)
-      |> Enum.map(fn {desc, i} -> "#{i}. #{desc}" end)
+      |> Enum.map(fn {desc, i} -> "#{i}. #{PromptSanitizer.sanitize_description(desc)}" end)
       |> Enum.join("\n")
+
+    wrapped_transactions = PromptSanitizer.wrap_transactions(numbered_descriptions)
 
     prompt = """
     Categorize each bank transaction below into one of these categories: #{category_names}
 
     Transactions:
-    #{numbered_descriptions}
+    #{wrapped_transactions}
 
     Return ONLY a JSON array of category names in the same order, like: ["Alimentação", "Transporte", ...]
     If unsure, use "Sem Categoria". No explanation, just the JSON array.

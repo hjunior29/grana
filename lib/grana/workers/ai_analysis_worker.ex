@@ -67,8 +67,10 @@ defmodule Grana.Workers.AIAnalysisWorker do
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn
       {k, v} when is_binary(k) and k in @known_keys -> {String.to_existing_atom(k), v}
-      {k, v} when is_binary(k) -> {String.to_atom(k), v}
+      {k, v} when is_binary(k) -> {k, atomize_keys(v)}
       {k, v} -> {k, v}
     end)
   end
+
+  defp atomize_keys(value), do: value
 end

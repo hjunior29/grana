@@ -311,9 +311,11 @@ defmodule GranaWeb.UploadLive do
   end
 
   def handle_event("delete", _params, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
     case socket.assigns.delete_target do
       {:single, stmt} ->
-        delete_by_composite(stmt)
+        delete_by_composite(stmt, user_id)
 
         socket
         |> assign(:delete_target, nil)
@@ -325,8 +327,8 @@ defmodule GranaWeb.UploadLive do
 
         {bank_ids, inv_ids} = split_composite_ids(selected)
 
-        if bank_ids != [], do: Banking.delete_statements(bank_ids)
-        if inv_ids != [], do: Investments.delete_statements(inv_ids)
+        if bank_ids != [], do: Banking.delete_statements(bank_ids, user_id)
+        if inv_ids != [], do: Investments.delete_statements(inv_ids, user_id)
 
         total = length(bank_ids) + length(inv_ids)
 
@@ -341,13 +343,13 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
-  defp delete_by_composite(%{source: "banking", raw_id: id}) do
-    stmt = Grana.Repo.get!(Grana.Banking.BankStatement, id)
+  defp delete_by_composite(%{source: "banking", raw_id: id}, user_id) do
+    stmt = Banking.get_statement!(id, user_id)
     Banking.delete_statement(stmt)
   end
 
-  defp delete_by_composite(%{source: "investment", raw_id: id}) do
-    stmt = Grana.Repo.get!(Grana.Investments.Statement, id)
+  defp delete_by_composite(%{source: "investment", raw_id: id}, user_id) do
+    stmt = Investments.get_statement!(id, user_id)
     Investments.delete_statement(stmt)
   end
 
