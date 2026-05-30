@@ -930,6 +930,7 @@ defmodule Grana.Banking do
         transactions
         |> Enum.map(& &1.bank_statement)
         |> Enum.uniq_by(& &1.id)
+        |> Enum.reject(&is_nil(&1.period_end))
         |> Map.new(fn bs -> {bs.id, bs.period_end.month} end)
       else
         %{}
@@ -1078,6 +1079,14 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
+  # Parcelas restantes, à prova de nil (a query já filtra current < total, mas
+  # defendemos contra dados parciais para não derrubar a projeção).
+  defp installments_remaining(%{installment_total: total, installment_current: current})
+       when is_integer(total) and is_integer(current),
+       do: max(total - current, 0)
+
+  defp installments_remaining(_), do: 0
+
   def installment_projection_summary(user_id, opts \\ []) do
     installments = list_active_installments(user_id, opts)
 
@@ -1085,7 +1094,7 @@ defmodule Grana.Banking do
 
     total_remaining =
       Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
-        remaining = txn.installment_total - txn.installment_current
+        remaining = installments_remaining(txn)
         Decimal.add(acc, Decimal.mult(Decimal.abs(txn.amount), remaining))
       end)
 
@@ -1123,7 +1132,7 @@ defmodule Grana.Banking do
 
       total =
         Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
-          remaining = txn.installment_total - txn.installment_current
+          remaining = installments_remaining(txn)
 
           if offset < remaining do
             Decimal.add(acc, Decimal.abs(txn.amount))

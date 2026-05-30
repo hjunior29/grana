@@ -14,13 +14,18 @@ defmodule Grana.Banking.Parsers.Bradesco do
   defp is_metadata_line?(line) do
     trimmed = String.trim(line)
 
+    # Primeiro campo do CSV (separado por ";"), p/ detectar a linha de "Total"
+    # sem descartar transações cujo histórico contenha a palavra (ex.: "TOTAL POSTO").
+    first_field =
+      trimmed |> String.split(";") |> List.first() |> to_string() |> String.trim()
+
     trimmed == "" or
       String.starts_with?(trimmed, ";") or
       String.starts_with?(trimmed, "Filtro") or
       String.starts_with?(trimmed, "Os dados") or
       String.starts_with?(trimmed, "Últimos") or
       String.starts_with?(trimmed, "Extrato") or
-      String.contains?(trimmed, "Total") or
+      String.starts_with?(first_field, "Total") or
       Regex.match?(~r/^;+$/, trimmed)
   end
 

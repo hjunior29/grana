@@ -262,8 +262,24 @@ defmodule Grana.Investments do
   def bulk_insert_transactions(transactions_attrs) do
     now = DateTime.utc_now(:second)
 
+    # insert_all ignora o changeset; validamos cada entry e descartamos as
+    # inválidas (campos obrigatórios, operation/asset_type fora do domínio) em
+    # vez de persistir dado inconsistente.
+    {valid, invalid} =
+      Enum.split_with(transactions_attrs, fn attrs ->
+        Transaction.changeset(%Transaction{}, attrs).valid?
+      end)
+
+    if invalid != [] do
+      require Logger
+
+      Logger.warning(
+        "Investments.bulk_insert_transactions: #{length(invalid)} transação(ões) inválida(s) descartada(s)"
+      )
+    end
+
     entries =
-      Enum.map(transactions_attrs, fn attrs ->
+      Enum.map(valid, fn attrs ->
         attrs
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
