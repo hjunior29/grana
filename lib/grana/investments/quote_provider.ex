@@ -102,9 +102,14 @@ defmodule Grana.Investments.QuoteProvider do
   end
 
   defp fetch_one(ticker, token) do
-    url = "#{@base_url}/#{ticker}?token=#{token}"
+    url = "#{@base_url}/#{ticker}"
 
-    case Req.get(url, receive_timeout: 15_000) do
+    # Token vai no header Authorization (não na query string), evitando vazar a
+    # credencial em logs de acesso/proxy. brapi.dev aceita Bearer token.
+    case Req.get(url,
+           auth: {:bearer, token},
+           receive_timeout: 15_000
+         ) do
       {:ok, %Req.Response{status: 200, body: %{"results" => [r | _]}}} ->
         now = System.monotonic_time(:millisecond)
         symbol = r["symbol"]
