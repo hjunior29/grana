@@ -169,7 +169,9 @@ defmodule Grana.Banking.StatementProcessor do
         descriptions = Enum.map(items, & &1.description)
 
         case AICategorizer.categorize_batch(descriptions, categories, user_id) do
-          {:ok, ai_category_ids} ->
+          {:ok, ai_category_ids} when length(ai_category_ids) == length(descriptions) ->
+            # zip casa por posição: só aplicamos se a contagem bater exatamente,
+            # senão o alinhamento descrição↔categoria estaria quebrado.
             ai_map =
               Enum.zip(descriptions, ai_category_ids)
               |> Map.new()
@@ -186,6 +188,15 @@ defmodule Grana.Banking.StatementProcessor do
                   txn
               end
             end)
+
+          {:ok, _mismatched} ->
+            require Logger
+
+            Logger.warning(
+              "AICategorizer: contagem divergente (#{length(descriptions)} descrições); mantendo categorização por regras"
+            )
+
+            rule_categorized
 
           {:error, _} ->
             rule_categorized
