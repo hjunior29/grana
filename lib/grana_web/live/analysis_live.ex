@@ -90,7 +90,7 @@ defmodule GranaWeb.AnalysisLive do
   # ── Banking Events ──
 
   def handle_event("select_year", %{"year" => year_str}, socket) do
-    year = String.to_integer(year_str)
+    year = safe_to_int(year_str, Date.utc_today().year)
 
     case socket.assigns.tab do
       "banking" ->
@@ -114,7 +114,7 @@ defmodule GranaWeb.AnalysisLive do
   end
 
   def handle_event("select_month", %{"month" => month_str}, socket) do
-    month = String.to_integer(month_str)
+    month = safe_to_int(month_str, 0)
 
     case socket.assigns.tab do
       "banking" ->
@@ -210,15 +210,20 @@ defmodule GranaWeb.AnalysisLive do
   end
 
   def handle_event("toggle_analysis", %{"id" => id_str}, socket) do
-    id = String.to_integer(id_str)
-    expanded = socket.assigns.expanded_analyses
+    case safe_to_int(id_str) do
+      nil ->
+        {:noreply, socket}
 
-    expanded =
-      if MapSet.member?(expanded, id),
-        do: MapSet.delete(expanded, id),
-        else: MapSet.put(expanded, id)
+      id ->
+        expanded = socket.assigns.expanded_analyses
 
-    {:noreply, assign(socket, :expanded_analyses, expanded)}
+        expanded =
+          if MapSet.member?(expanded, id),
+            do: MapSet.delete(expanded, id),
+            else: MapSet.put(expanded, id)
+
+        {:noreply, assign(socket, :expanded_analyses, expanded)}
+    end
   end
 
   def handle_event("dismiss_api_alert", _params, socket) do
@@ -226,19 +231,24 @@ defmodule GranaWeb.AnalysisLive do
   end
 
   def handle_event("toggle_year", %{"year" => year}, socket) do
-    year = String.to_integer(year)
-    collapsed = socket.assigns.collapsed_years
+    case safe_to_int(year) do
+      nil ->
+        {:noreply, socket}
 
-    collapsed =
-      if MapSet.member?(collapsed, year),
-        do: MapSet.delete(collapsed, year),
-        else: MapSet.put(collapsed, year)
+      year ->
+        collapsed = socket.assigns.collapsed_years
 
-    {:noreply, assign(socket, :collapsed_years, collapsed)}
+        collapsed =
+          if MapSet.member?(collapsed, year),
+            do: MapSet.delete(collapsed, year),
+            else: MapSet.put(collapsed, year)
+
+        {:noreply, assign(socket, :collapsed_years, collapsed)}
+    end
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :delete_target, String.to_integer(id))}
+    {:noreply, assign(socket, :delete_target, safe_to_int(id))}
   end
 
   def handle_event("cancel_delete", _params, socket) do
@@ -380,18 +390,27 @@ defmodule GranaWeb.AnalysisLive do
     push_patch(socket, to: "/analysis?#{qs}", replace: true)
   end
 
+  # Safely parses client-supplied integers (URL params, phx-value). Returns the
+  # default (nil) on garbage instead of crashing the LiveView with String.to_integer.
+  defp safe_to_int(value, default \\ nil) do
+    case value |> to_string() |> Integer.parse() do
+      {n, _} -> n
+      :error -> default
+    end
+  end
+
   defp apply_inv_url_params(socket, params) do
     socket
     |> then(fn s ->
-      case params["inv_year"] do
+      case safe_to_int(params["inv_year"]) do
         nil -> s
-        y -> put_inv_filter(s, :year, String.to_integer(y))
+        y -> put_inv_filter(s, :year, y)
       end
     end)
     |> then(fn s ->
-      case params["inv_month"] do
+      case safe_to_int(params["inv_month"]) do
         nil -> s
-        m -> put_inv_filter(s, :month, String.to_integer(m))
+        m -> put_inv_filter(s, :month, m)
       end
     end)
     |> then(fn s ->

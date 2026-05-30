@@ -91,7 +91,7 @@ defmodule Grana.Banking do
       attrs = Map.merge(cat_attrs, %{user_id: user_id, is_system: true})
 
       %Category{}
-      |> Category.changeset(attrs)
+      |> Category.system_changeset(attrs)
       |> Repo.insert(on_conflict: :nothing, conflict_target: [:name, :user_id])
     end)
 

@@ -43,11 +43,11 @@ defmodule Grana.AI.Providers.Gemini do
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, val), do: Map.put(map, key, val)
 
+  @default_receive_timeout 30_000
+
   defp do_request(url, body, config) do
-    opts =
-      if config[:receive_timeout],
-        do: [receive_timeout: config.receive_timeout],
-        else: []
+    # Always bound the request so a hung Gemini call can't block the worker/LiveView.
+    opts = [receive_timeout: config[:receive_timeout] || @default_receive_timeout]
 
     headers = [{"x-goog-api-key", config.api_key}]
 

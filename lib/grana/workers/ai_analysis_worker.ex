@@ -35,6 +35,9 @@ defmodule Grana.Workers.AIAnalysisWorker do
 
         "investments" ->
           AIAnalyzer.analyze_investments_with_filters(user_id, filters, custom_prompt)
+
+        other ->
+          {:error, "Contexto de análise inválido: #{inspect(other)}"}
       end
 
     case result do
@@ -49,21 +52,13 @@ defmodule Grana.Workers.AIAnalysisWorker do
             result_json: analysis_result
           })
 
-        Oban.Job
-        |> Grana.Repo.get(job_id)
-        |> Ecto.Changeset.change(%{
-          meta: %{"analysis" => analysis_result}
-        })
-        |> Grana.Repo.update()
+        update_job_meta(job_id, %{"analysis" => analysis_result})
 
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:analysis_complete, :ok})
         :ok
 
       {:error, msg} ->
-        Oban.Job
-        |> Grana.Repo.get(job_id)
-        |> Ecto.Changeset.change(%{meta: %{"status" => "error", "error" => inspect(msg)}})
-        |> Grana.Repo.update()
+        update_job_meta(job_id, %{"status" => "error", "error" => inspect(msg)})
 
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:analysis_complete, {:error, msg}})
 
@@ -75,6 +70,15 @@ defmodule Grana.Workers.AIAnalysisWorker do
         else
           {:error, msg}
         end
+    end
+  end
+
+  # Guards against the job row having been pruned/deleted between perform start
+  # and here (Repo.get would return nil and Ecto.Changeset.change(nil) would crash).
+  defp update_job_meta(job_id, meta) do
+    case Grana.Repo.get(Oban.Job, job_id) do
+      nil -> :ok
+      job -> job |> Ecto.Changeset.change(%{meta: meta}) |> Grana.Repo.update()
     end
   end
 

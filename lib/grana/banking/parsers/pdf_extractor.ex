@@ -247,11 +247,29 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
   defp to_decimal(val) when is_integer(val), do: Decimal.new(val)
 
   defp to_decimal(val) when is_binary(val) do
-    case Decimal.parse(val) do
+    case val |> normalize_number() |> Decimal.parse() do
       {d, _} -> d
       :error -> Decimal.new(0)
     end
   end
 
   defp to_decimal(_), do: Decimal.new(0)
+
+  # Normalizes pt-BR formatted numbers ("1.234,56" / "1234,56") to a form
+  # Decimal.parse understands. Without this, Decimal.parse("1.234,56") stops at
+  # the comma and silently truncates the centavos to 1.234.
+  defp normalize_number(str) do
+    str = String.trim(str)
+
+    cond do
+      String.contains?(str, ",") and String.contains?(str, ".") ->
+        str |> String.replace(".", "") |> String.replace(",", ".")
+
+      String.contains?(str, ",") ->
+        String.replace(str, ",", ".")
+
+      true ->
+        str
+    end
+  end
 end
