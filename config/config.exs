@@ -90,7 +90,8 @@ config :grana, Oban,
     Oban.Plugins.Lifeline,
     {Oban.Plugins.Cron,
      crontab: [
-       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications}
+       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications},
+       {"*/30 * * * *", Grana.Workers.QuoteFetcher, queue: :quotes}
      ]}
   ]
 

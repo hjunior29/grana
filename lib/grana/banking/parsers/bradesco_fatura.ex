@@ -109,18 +109,21 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
   defp parse_date(date_str, year) do
     case String.split(date_str, "/") do
       [day, month] ->
-        Date.new(
-          year,
-          String.to_integer(month),
-          String.to_integer(day)
-        )
+        with {d, ""} <- Integer.parse(day),
+             {m, ""} <- Integer.parse(month) do
+          Date.new(year, m, d)
+        else
+          _ -> :error
+        end
 
       [day, month, year_str] ->
-        Date.new(
-          String.to_integer(year_str),
-          String.to_integer(month),
-          String.to_integer(day)
-        )
+        with {d, ""} <- Integer.parse(day),
+             {m, ""} <- Integer.parse(month),
+             {y, ""} <- Integer.parse(year_str) do
+          Date.new(y, m, d)
+        else
+          _ -> :error
+        end
 
       _ ->
         :error

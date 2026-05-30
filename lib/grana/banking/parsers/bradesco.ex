@@ -64,16 +64,13 @@ defmodule Grana.Banking.Parsers.Bradesco do
   end
 
   defp parse_date(date_str) do
-    case String.split(date_str, "/") do
-      [day, month, year] ->
-        Date.new(
-          String.to_integer(year),
-          String.to_integer(month),
-          String.to_integer(day)
-        )
-
-      _ ->
-        :error
+    with [day, month, year] <- String.split(date_str, "/"),
+         {d, ""} <- Integer.parse(day),
+         {m, ""} <- Integer.parse(month),
+         {y, ""} <- Integer.parse(year) do
+      Date.new(y, m, d)
+    else
+      _ -> :error
     end
   end
 
