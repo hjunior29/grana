@@ -23,17 +23,22 @@ defmodule Grana.Workers.InvestmentUploadWorker do
       |> Enum.with_index(1)
       |> Enum.map(fn {%{"filename" => filename, "content_b64" => content_b64}, index} ->
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:processing_file, index, total, filename})
-        content = Base.decode64!(content_b64)
 
         result =
-          case Investments.StatementProcessor.process(
-                 content,
-                 institution_slug,
-                 user_id,
-                 filename
-               ) do
-            {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
-            {:error, reason} -> {:error, filename, reason}
+          case Base.decode64(content_b64) do
+            {:ok, content} ->
+              case Investments.StatementProcessor.process(
+                     content,
+                     institution_slug,
+                     user_id,
+                     filename
+                   ) do
+                {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
+                {:error, reason} -> {:error, filename, reason}
+              end
+
+            :error ->
+              {:error, filename, "Arquivo com codificação inválida"}
           end
 
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:file_done, index, total})

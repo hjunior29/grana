@@ -133,7 +133,12 @@ defmodule GranaWeb.UserLive.Login do
 
     form = to_form(%{"email" => email}, as: "user")
 
-    {:ok, assign(socket, form: form, trigger_submit: false)}
+    {:ok,
+     assign(socket,
+       form: form,
+       trigger_submit: false,
+       client_ip: GranaWeb.RateLimit.get_ip(socket)
+     )}
   end
 
   @impl true
@@ -142,20 +147,29 @@ defmodule GranaWeb.UserLive.Login do
   end
 
   def handle_event("submit_magic", %{"user" => %{"email" => email}}, socket) do
-    if user = Accounts.get_user_by_email(email) do
-      Accounts.deliver_login_instructions(
-        user,
-        &url(~p"/users/log-in/#{&1}")
-      )
+    case GranaWeb.RateLimit.check(:magic_link, socket.assigns.client_ip) do
+      :deny ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
+         |> push_navigate(to: ~p"/users/log-in")}
+
+      :allow ->
+        if user = Accounts.get_user_by_email(email) do
+          Accounts.deliver_login_instructions(
+            user,
+            &url(~p"/users/log-in/#{&1}")
+          )
+        end
+
+        info =
+          "Se seu email estiver no nosso sistema, você receberá instruções para entrar em breve."
+
+        {:noreply,
+         socket
+         |> put_flash(:info, info)
+         |> push_navigate(to: ~p"/users/log-in")}
     end
-
-    info =
-      "Se seu email estiver no nosso sistema, você receberá instruções para entrar em breve."
-
-    {:noreply,
-     socket
-     |> put_flash(:info, info)
-     |> push_navigate(to: ~p"/users/log-in")}
   end
 
   defp local_mail_adapter? do

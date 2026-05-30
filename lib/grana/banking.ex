@@ -151,9 +151,9 @@ defmodule Grana.Banking do
     Repo.delete(statement)
   end
 
-  def delete_statements(ids) when is_list(ids) do
+  def delete_statements(ids, user_id) when is_list(ids) do
     BankStatement
-    |> where([s], s.id in ^ids)
+    |> where([s], s.id in ^ids and s.user_id == ^user_id)
     |> Repo.delete_all()
   end
 
@@ -364,18 +364,24 @@ defmodule Grana.Banking do
   ]
 
   def detect_internal_transfers(user_id) do
-    # 1) Reset all
-    Transaction
-    |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
-    |> Repo.update_all(set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)])
+    Repo.transaction(fn ->
+      # 1) Reset all
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
+      |> Repo.update_all(
+        set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
+      )
 
-    # 2) Mark credit card bill payments in extratos
-    mark_cc_bill_payments(user_id)
+      # 2) Mark credit card bill payments in extratos
+      mark_cc_bill_payments(user_id)
 
-    # 3) Mark matching inter-account transfers
-    mark_inter_account_transfers(user_id)
-
-    :ok
+      # 3) Mark matching inter-account transfers
+      mark_inter_account_transfers(user_id)
+    end)
+    |> case do
+      {:ok, _} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp mark_cc_bill_payments(user_id) do
@@ -481,6 +487,23 @@ defmodule Grana.Banking do
 
   def categorize_transaction(description, user_id) do
     rules = list_category_rules(user_id)
+    categorize_transaction_with_rules(description, rules, user_id)
+  end
+
+  @doc """
+  Categorize multiple descriptions at once, loading rules only once.
+  Returns a map of %{description => category_id}.
+  """
+  def categorize_transactions(descriptions, user_id) when is_list(descriptions) do
+    rules = list_category_rules(user_id)
+
+    Map.new(descriptions, fn description ->
+      {description, categorize_transaction_with_rules(description, rules, user_id)}
+    end)
+  end
+
+  @doc false
+  def categorize_transaction_with_rules(description, rules, user_id) do
     desc_lower = String.downcase(description)
 
     matched_rule =

@@ -32,6 +32,9 @@ config :swoosh, :api_client, false
 # Disable Oban in tests
 config :grana, Oban, testing: :manual
 
+# Skip rate limiting in tests
+config :grana, :skip_rate_limit, true
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

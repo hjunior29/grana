@@ -40,6 +40,12 @@ config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
 config :grana, :brapi_token, System.get_env("BRAPI_TOKEN")
 config :grana, :roadmap_url, System.get_env("ROADMAP_URL")
 
+# Encryption key for sensitive fields (API keys).
+# Generate with: :crypto.strong_rand_bytes(32) |> Base.encode64()
+if cloak_key = System.get_env("CLOAK_KEY") do
+  config :grana, :cloak_key, cloak_key
+end
+
 if System.get_env("PHX_SERVER") do
   config :grana, GranaWeb.Endpoint, server: true
 end

@@ -72,7 +72,8 @@ defmodule Grana.MixProject do
       {:error_tracker, "~> 0.7"},
       {:xlsxir, "~> 1.6"},
       {:oban, "~> 2.18"},
-      {:oban_web, "~> 2.10"}
+      {:oban_web, "~> 2.10"},
+      {:hammer, "~> 6.0"}
     ]
   end
 

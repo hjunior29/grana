@@ -32,5 +32,9 @@ defmodule Grana.Banking.BankStatement do
     |> validate_required([:bank, :filename, :user_id])
     |> validate_inclusion(:status, ["processing", "completed", "error"])
     |> validate_inclusion(:statement_type, ["extrato", "fatura"])
+    |> unique_constraint([:user_id, :bank, :filename, :period_start, :period_end],
+      name: :bank_statements_unique_upload,
+      message: "este extrato já foi importado anteriormente"
+    )
   end
 end

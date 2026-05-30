@@ -123,9 +123,9 @@ defmodule Grana.Investments do
     Repo.delete(statement)
   end
 
-  def delete_statements(ids) when is_list(ids) do
+  def delete_statements(ids, user_id) when is_list(ids) do
     Statement
-    |> where([s], s.id in ^ids)
+    |> where([s], s.id in ^ids and s.user_id == ^user_id)
     |> Repo.delete_all()
   end
 
@@ -857,10 +857,34 @@ defmodule Grana.Investments do
   end
 
   @doc """
-  Returns all distinct active tickers (with net quantity > 0) across all users.
+  Returns active tickers (with net quantity > 0) for a specific user.
   Filters to valid B3 ticker format (e.g. PETR4, HGLG11).
   """
-  def all_active_tickers do
+  def all_active_tickers(user_id) do
+    Transaction
+    |> where([t], t.operation in ["compra", "venda"] and t.user_id == ^user_id)
+    |> group_by([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
+    |> having(
+      [t],
+      fragment(
+        "COALESCE(SUM(CASE WHEN ? = 'compra' THEN ? ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN ? = 'venda' THEN ? ELSE 0 END), 0) > 0",
+        t.operation,
+        t.quantity,
+        t.operation,
+        t.quantity
+      )
+    )
+    |> select([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
+    |> Repo.all()
+    |> Enum.filter(&(&1 && String.match?(&1, ~r/^[A-Z]{4}\d{1,2}$/i)))
+  end
+
+  @doc """
+  Returns all distinct active tickers (with net quantity > 0) across ALL users.
+  Intended only for global cache warming (e.g. QuoteFetcher cron job).
+  Filters to valid B3 ticker format (e.g. PETR4, HGLG11).
+  """
+  def all_active_tickers_global do
     Transaction
     |> where([t], t.operation in ["compra", "venda"])
     |> group_by([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
