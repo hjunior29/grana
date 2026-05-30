@@ -73,7 +73,8 @@ defmodule Grana.MixProject do
       {:xlsxir, "~> 1.6"},
       {:oban, "~> 2.18"},
       {:oban_web, "~> 2.10"},
-      {:hammer, "~> 6.0"}
+      {:hammer, "~> 6.0"},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 
