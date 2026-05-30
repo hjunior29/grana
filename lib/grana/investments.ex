@@ -452,7 +452,9 @@ defmodule Grana.Investments do
     end
 
     quotes =
-      case Grana.Investments.QuoteProvider.get_quotes(tickers) do
+      case Grana.Investments.QuoteProvider.get_quotes(tickers,
+             fetch_remote: Keyword.get(opts, :allow_fetch, true)
+           ) do
         {:ok, q} -> q
         _ -> %{}
       end
@@ -464,12 +466,12 @@ defmodule Grana.Investments do
 
         if quote && h.is_active do
           current_value = Decimal.mult(h.net_qty, quote.price)
-          gain_loss = Decimal.sub(current_value, h.net_total)
+          gain_loss = Decimal.sub(current_value, h.cost_basis)
 
           gain_loss_pct =
-            if Decimal.compare(h.net_total, 0) != :eq,
+            if Decimal.compare(h.cost_basis, 0) != :eq,
               do:
-                h.net_total
+                h.cost_basis
                 |> then(&Decimal.div(gain_loss, &1))
                 |> Decimal.mult(100)
                 |> Decimal.round(2),
@@ -484,7 +486,7 @@ defmodule Grana.Investments do
             logo_url: quote.logo_url
           })
         else
-          current_value = if h.is_active, do: h.net_total, else: Decimal.new(0)
+          current_value = if h.is_active, do: h.cost_basis, else: Decimal.new(0)
 
           Map.merge(h, %{
             current_price: nil,
@@ -502,12 +504,12 @@ defmodule Grana.Investments do
       |> Enum.filter(& &1.is_active)
       |> Enum.reduce(Decimal.new(0), fn h, acc -> Decimal.add(acc, h.current_value) end)
 
-    total_gain_loss = Decimal.sub(market_value, summary.net_position)
+    total_gain_loss = Decimal.sub(market_value, summary.cost_basis_total)
 
     total_gain_loss_pct =
-      if Decimal.compare(summary.net_position, 0) != :eq,
+      if Decimal.compare(summary.cost_basis_total, 0) != :eq,
         do:
-          summary.net_position
+          summary.cost_basis_total
           |> then(&Decimal.div(total_gain_loss, &1))
           |> Decimal.mult(100)
           |> Decimal.round(2),
@@ -662,6 +664,13 @@ defmodule Grana.Investments do
         inst = Map.get(institutions_map, h.institution_id)
         inst_logo = if inst, do: Institution.logo_url(inst)
 
+        # Cost basis of the REMAINING position. For quantity-based assets this is
+        # average purchase price × remaining quantity — NOT bought_total − sold_total,
+        # which wrongly nets sale proceeds (revenue) against purchase cost and
+        # distorts gain/loss on partial sales. Quantity-less assets (e.g. fixed
+        # income) keep net_total.
+        cost_basis = remaining_cost_basis(h.bought_qty, h.bought_total, net_qty, net_total)
+
         is_active =
           Decimal.compare(net_qty, 0) == :gt or
             (Decimal.compare(h.bought_qty, 0) == :eq and
@@ -679,6 +688,7 @@ defmodule Grana.Investments do
           bought_total: h.bought_total,
           sold_total: h.sold_total,
           net_total: net_total,
+          cost_basis: cost_basis,
           is_active: is_active
         }
       end)
@@ -689,6 +699,13 @@ defmodule Grana.Investments do
       holdings
       |> Enum.filter(& &1.is_active)
       |> Enum.reduce(Decimal.new(0), fn h, acc -> Decimal.add(acc, h.net_total) end)
+
+    # Cost basis of held positions (avg cost × remaining qty). This is the correct
+    # denominator for gain/loss against market value.
+    cost_basis_total =
+      holdings
+      |> Enum.filter(& &1.is_active)
+      |> Enum.reduce(Decimal.new(0), fn h, acc -> Decimal.add(acc, h.cost_basis) end)
 
     # By asset type
     by_asset_type =
@@ -845,6 +862,7 @@ defmodule Grana.Investments do
       dividends: totals.dividends,
       total_fees: totals.total_fees,
       net_position: net_position,
+      cost_basis_total: cost_basis_total,
       proventos: proventos,
       holdings: holdings,
       by_asset_type: by_asset_type,
@@ -854,6 +872,23 @@ defmodule Grana.Investments do
       dividend_only_assets: dividend_only_assets,
       transaction_count: totals.transaction_count
     }
+  end
+
+  # Average-cost basis of the remaining quantity. Falls back to net cash flow for
+  # quantity-less assets (bought_qty == 0), and to 0 for fully-closed positions.
+  defp remaining_cost_basis(bought_qty, bought_total, net_qty, net_total) do
+    cond do
+      Decimal.compare(bought_qty, 0) != :gt ->
+        net_total
+
+      Decimal.compare(net_qty, 0) != :gt ->
+        Decimal.new(0)
+
+      true ->
+        bought_total
+        |> Decimal.div(bought_qty)
+        |> Decimal.mult(net_qty)
+    end
   end
 
   @doc """

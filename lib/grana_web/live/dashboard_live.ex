@@ -465,6 +465,9 @@ defmodule GranaWeb.DashboardLive do
       end
       |> maybe_add(:institution_id, inst)
       |> maybe_add(:asset_type, asset_type)
+      # Only hit the brapi API when the socket is connected; the disconnected
+      # static render serves cached quotes so it never blocks on external HTTP.
+      |> Keyword.put(:allow_fetch, connected?(socket))
 
     period_opts =
       case view_mode do
@@ -1187,7 +1190,7 @@ defmodule GranaWeb.DashboardLive do
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
             <div class="space-y-1">
               <.link
-                :for={txn <- top_expenses(@summary.transactions, 10)}
+                :for={txn <- Enum.take(@summary.top_expenses, 10)}
                 navigate={txn_url(assigns, txn)}
                 class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
               >
@@ -1224,7 +1227,7 @@ defmodule GranaWeb.DashboardLive do
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
             <div class="space-y-1">
               <.link
-                :for={txn <- top_income(@summary.transactions, 10)}
+                :for={txn <- Enum.take(@summary.top_income, 10)}
                 navigate={txn_url(assigns, txn)}
                 class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
               >
@@ -2194,20 +2197,6 @@ defmodule GranaWeb.DashboardLive do
       _ ->
         0
     end
-  end
-
-  defp top_expenses(transactions, limit) do
-    transactions
-    |> Enum.filter(&(&1.type == "debit"))
-    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
-    |> Enum.take(limit)
-  end
-
-  defp top_income(transactions, limit) do
-    transactions
-    |> Enum.filter(&(&1.type == "credit"))
-    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
-    |> Enum.take(limit)
   end
 
   # ── Banking Chart Data ──
