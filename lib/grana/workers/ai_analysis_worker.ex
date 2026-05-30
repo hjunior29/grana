@@ -2,7 +2,15 @@ defmodule Grana.Workers.AIAnalysisWorker do
   @moduledoc """
   Oban worker for AI-powered financial analysis via Gemini.
   """
-  use Oban.Worker, queue: :ai_analysis, max_attempts: 2
+  use Oban.Worker,
+    queue: :ai_analysis,
+    max_attempts: 2,
+    unique: [
+      period: 120,
+      fields: [:worker, :args],
+      keys: [:user_id, :context, :filters, :custom_prompt],
+      states: Oban.Job.states() -- [:cancelled, :discarded, :completed]
+    ]
 
   alias Grana.Banking
   alias Grana.Banking.AIAnalyzer
@@ -58,8 +66,23 @@ defmodule Grana.Workers.AIAnalysisWorker do
         |> Grana.Repo.update()
 
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:analysis_complete, {:error, msg}})
-        {:error, msg}
+
+        # Permanent failures (missing key, malformed model output) won't succeed on
+        # retry — discard them so we don't burn the second attempt / extra API cost.
+        # Transient failures (timeout, rate limit, 5xx) keep the normal retry path.
+        if permanent_error?(msg) do
+          {:discard, msg}
+        else
+          {:error, msg}
+        end
     end
+  end
+
+  @permanent_markers ~w(api_key chave no_api_key json inválid invalid parse formato unauthorized 401 403)
+
+  defp permanent_error?(msg) do
+    text = msg |> to_string() |> String.downcase()
+    Enum.any?(@permanent_markers, &String.contains?(text, &1))
   end
 
   @known_keys ~w(year month bank type statement_type institution_id asset_type)

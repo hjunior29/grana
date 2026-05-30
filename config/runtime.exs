@@ -64,7 +64,15 @@ if config_env() == :dev and System.get_env("SMTP_IN_DEV") == "true" do
       username: System.get_env("SMTP_USERNAME"),
       password: System.get_env("SMTP_PASSWORD"),
       tls: :always,
-      tls_options: [verify: :verify_none],
+      tls_options: [
+        verify: :verify_peer,
+        cacerts: :public_key.cacerts_get(),
+        server_name_indication: String.to_charlist(smtp_host),
+        depth: 3,
+        customize_hostname_check: [
+          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
+      ],
       auth: :always,
       ssl: false
 
@@ -84,8 +92,30 @@ if config_env() == :prod do
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
+  # Enable TLS to the database when DB_SSL=true (recommended for managed/external
+  # databases). With Fly's private IPv6 network the traffic is already isolated,
+  # so SSL defaults to off. When enabled, the server certificate is validated.
+  db_ssl? = System.get_env("DB_SSL") in ~w(true 1)
+  db_host = URI.parse(database_url).host || "localhost"
+
+  db_ssl_opts =
+    if db_ssl? do
+      [
+        verify: :verify_peer,
+        cacerts: :public_key.cacerts_get(),
+        server_name_indication: String.to_charlist(db_host),
+        depth: 3,
+        customize_hostname_check: [
+          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
+      ]
+    else
+      []
+    end
+
   config :grana, Grana.Repo,
-    # ssl: true,
+    ssl: db_ssl?,
+    ssl_opts: db_ssl_opts,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
@@ -163,7 +193,15 @@ if config_env() == :prod do
     username: System.get_env("SMTP_USERNAME"),
     password: System.get_env("SMTP_PASSWORD"),
     tls: :always,
-    tls_options: [verify: :verify_none],
+    tls_options: [
+      verify: :verify_peer,
+      cacerts: :public_key.cacerts_get(),
+      server_name_indication: String.to_charlist(smtp_host),
+      depth: 3,
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ],
     auth: :always,
     ssl: false
 

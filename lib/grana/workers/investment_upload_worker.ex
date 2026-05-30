@@ -4,6 +4,7 @@ defmodule Grana.Workers.InvestmentUploadWorker do
   """
   use Oban.Worker, queue: :uploads, max_attempts: 1
 
+  require Logger
   alias Grana.Investments
 
   @impl Oban.Worker
@@ -27,14 +28,24 @@ defmodule Grana.Workers.InvestmentUploadWorker do
         result =
           case Base.decode64(content_b64) do
             {:ok, content} ->
-              case Investments.StatementProcessor.process(
-                     content,
-                     institution_slug,
-                     user_id,
-                     filename
-                   ) do
-                {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
-                {:error, reason} -> {:error, filename, reason}
+              try do
+                case Investments.StatementProcessor.process(
+                       content,
+                       institution_slug,
+                       user_id,
+                       filename
+                     ) do
+                  {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
+                  {:error, reason} -> {:error, filename, reason}
+                end
+              rescue
+                e ->
+                  Logger.error(
+                    "Falha ao processar investimentos #{filename}: #{Exception.message(e)}\n" <>
+                      Exception.format_stacktrace(__STACKTRACE__)
+                  )
+
+                  {:error, filename, "Não foi possível processar este arquivo"}
               end
 
             :error ->

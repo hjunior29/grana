@@ -4,6 +4,7 @@ defmodule Grana.Workers.StatementUploadWorker do
   """
   use Oban.Worker, queue: :uploads, max_attempts: 1
 
+  require Logger
   alias Grana.Banking.StatementProcessor
 
   @impl Oban.Worker
@@ -28,9 +29,19 @@ defmodule Grana.Workers.StatementUploadWorker do
         result =
           case Base.decode64(content_b64) do
             {:ok, content} ->
-              case StatementProcessor.process(content, bank, statement_type, user_id, filename) do
-                {:ok, r} -> {:ok, filename, r.transaction_count}
-                {:error, reason} -> {:error, filename, reason}
+              try do
+                case StatementProcessor.process(content, bank, statement_type, user_id, filename) do
+                  {:ok, r} -> {:ok, filename, r.transaction_count}
+                  {:error, reason} -> {:error, filename, reason}
+                end
+              rescue
+                e ->
+                  Logger.error(
+                    "Falha ao processar extrato #{filename}: #{Exception.message(e)}\n" <>
+                      Exception.format_stacktrace(__STACKTRACE__)
+                  )
+
+                  {:error, filename, "Não foi possível processar este arquivo"}
               end
 
             :error ->
