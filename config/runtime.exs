@@ -1,6 +1,8 @@
 import Config
 
-if File.exists?(".env") do
+# Carrega .env apenas em dev/test. Em produção a config vem de variáveis de
+# ambiente reais (fly secrets); ler um .env solto no release sobrescreveria isso.
+if config_env() in [:dev, :test] and File.exists?(".env") do
   ".env"
   |> File.read!()
   |> String.split("\n", trim: true)

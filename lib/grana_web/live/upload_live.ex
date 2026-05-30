@@ -356,9 +356,20 @@ defmodule GranaWeb.UploadLive do
   defp split_composite_ids(ids) do
     Enum.reduce(ids, {[], []}, fn id, {banks, invs} ->
       case id do
-        "bank_" <> raw -> {[String.to_integer(raw) | banks], invs}
-        "inv_" <> raw -> {banks, [String.to_integer(raw) | invs]}
-        _ -> {banks, invs}
+        "bank_" <> raw ->
+          case Integer.parse(raw) do
+            {n, ""} -> {[n | banks], invs}
+            _ -> {banks, invs}
+          end
+
+        "inv_" <> raw ->
+          case Integer.parse(raw) do
+            {n, ""} -> {banks, [n | invs]}
+            _ -> {banks, invs}
+          end
+
+        _ ->
+          {banks, invs}
       end
     end)
   end

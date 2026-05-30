@@ -96,7 +96,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("select_year", %{"year" => year_str}, socket) do
-    year = String.to_integer(year_str)
+    year = GranaWeb.Params.to_int(year_str, Date.utc_today().year)
 
     case socket.assigns.tab do
       "banking" ->
@@ -134,7 +134,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("select_month", %{"month" => month_str}, socket) do
-    month = String.to_integer(month_str)
+    month = GranaWeb.Params.to_int(month_str, 0)
 
     case socket.assigns.tab do
       "banking" ->
@@ -192,7 +192,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("toggle-category", %{"id" => id_str}, socket) do
-    excluded = toggle_set(socket.assigns.excluded_categories, String.to_integer(id_str))
+    excluded = toggle_set(socket.assigns.excluded_categories, GranaWeb.Params.to_int(id_str, -1))
     {:noreply, assign(socket, :excluded_categories, excluded)}
   end
 
@@ -2017,13 +2017,13 @@ defmodule GranaWeb.DashboardLive do
     |> then(fn s ->
       case params["inv_year"] do
         nil -> s
-        y -> assign(s, :inv_selected_year, String.to_integer(y))
+        y -> assign(s, :inv_selected_year, GranaWeb.Params.to_int(y, Date.utc_today().year))
       end
     end)
     |> then(fn s ->
       case params["inv_month"] do
         nil -> s
-        m -> assign(s, :inv_selected_month, String.to_integer(m))
+        m -> assign(s, :inv_selected_month, GranaWeb.Params.to_int(m, 0))
       end
     end)
     |> then(fn s ->
