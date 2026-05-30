@@ -712,6 +712,7 @@ defmodule Grana.Banking.AIAnalyzer do
 
   defp parse_response(response_body) do
     text = Provider.extract_text(response_body)
+    finish = Provider.finish_reason(response_body)
 
     json_text =
       case Regex.run(~r/\{.*\}/s, text) do
@@ -720,14 +721,39 @@ defmodule Grana.Banking.AIAnalyzer do
       end
 
     case Jason.decode(json_text) do
-      {:ok, %{"nota" => _, "titulo" => _, "resumo" => _, "pontos" => _} = result} ->
-        {:ok, result}
+      {:ok, result} when is_map(result) ->
+        if valid_analysis?(result),
+          do: {:ok, result},
+          else: {:error, "Formato de resposta inesperado da IA"}
 
-      {:ok, _} ->
-        {:error, "Formato de resposta inesperado da IA"}
-
-      {:error, _} ->
-        {:error, "Falha ao processar resposta da IA"}
+      _ ->
+        {:error, decode_error_message(finish)}
     end
   end
+
+  # Valida o contrato mínimo de saída: campos presentes e com os tipos que a UI
+  # consome (pontos precisa ser lista; nota um número ou string numérica).
+  defp valid_analysis?(%{"titulo" => titulo, "resumo" => resumo, "pontos" => pontos} = result)
+       when is_binary(titulo) and is_binary(resumo) and is_list(pontos) do
+    case Map.get(result, "nota") do
+      n when is_number(n) -> true
+      n when is_binary(n) -> match?({_, _}, Float.parse(n))
+      _ -> false
+    end
+  end
+
+  defp valid_analysis?(_), do: false
+
+  defp decode_error_message("MAX_TOKENS"),
+    do:
+      "A resposta da IA foi cortada por exceder o limite de tokens. Reduza o período analisado ou seja mais específico na pergunta."
+
+  defp decode_error_message("SAFETY"),
+    do: "A IA bloqueou a resposta por filtros de segurança. Reformule a pergunta."
+
+  defp decode_error_message("RECITATION"),
+    do: "A IA interrompeu a resposta (conteúdo recitado). Tente novamente com outra pergunta."
+
+  defp decode_error_message(_),
+    do: "Falha ao processar resposta da IA"
 end

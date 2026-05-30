@@ -23,5 +23,13 @@ defmodule Grana.AI.Provider do
     |> to_string()
   end
 
+  @doc """
+  Motivo de término da geração (ex.: "STOP", "MAX_TOKENS", "SAFETY"), quando
+  disponível na resposta. Usado para diagnosticar respostas truncadas/bloqueadas.
+  """
+  def finish_reason(response_body) do
+    get_in(response_body, ["candidates", Access.at(0), "finishReason"])
+  end
+
   defp provider_module("gemini"), do: Grana.AI.Providers.Gemini
 end
