@@ -251,17 +251,22 @@ defmodule GranaWeb.AnalysisLive do
         {:noreply, socket}
 
       id ->
-        analysis = Banking.get_ai_analysis!(id)
-        {:ok, _} = Banking.delete_ai_analysis(analysis)
-        analyses = Banking.list_ai_analyses(socket.assigns.current_scope.user.id)
+        user_id = socket.assigns.current_scope.user.id
 
         socket =
-          socket
-          |> assign(:analyses, analyses)
-          |> assign(:delete_target, nil)
-          |> put_flash(:info, "Análise removida")
+          try do
+            analysis = Banking.get_ai_analysis!(id, user_id)
+            {:ok, _} = Banking.delete_ai_analysis(analysis)
 
-        {:noreply, socket}
+            socket
+            |> assign(:analyses, Banking.list_ai_analyses(user_id))
+            |> put_flash(:info, "Análise removida")
+          rescue
+            Ecto.NoResultsError ->
+              put_flash(socket, :error, "Análise não encontrada.")
+          end
+
+        {:noreply, assign(socket, :delete_target, nil)}
     end
   end
 

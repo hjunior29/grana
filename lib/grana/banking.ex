@@ -1138,7 +1138,11 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
-  def get_ai_analysis!(id), do: Repo.get!(AIAnalysis, id)
+  def get_ai_analysis!(id, user_id) do
+    AIAnalysis
+    |> where([a], a.id == ^id and a.user_id == ^user_id)
+    |> Repo.one!()
+  end
 
   def delete_ai_analysis(%AIAnalysis{} = analysis) do
     Repo.delete(analysis)
