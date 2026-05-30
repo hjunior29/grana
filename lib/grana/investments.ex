@@ -839,10 +839,14 @@ defmodule Grana.Investments do
       })
       |> Repo.all()
 
+    # Lucro realizado por ativo via preço médio (método BR), em vez de
+    # vendas-compras agregado, que distorce o resultado em compras/vendas múltiplas.
+    realized_map = realized_profit_by_ticker(base)
+
     proventos_by_asset =
       proventos_by_asset_raw
       |> Enum.map(fn p ->
-        realized_profit = Decimal.sub(p.sold, p.bought)
+        realized_profit = Map.get(realized_map, p.ticker, Decimal.new(0))
         total = Decimal.add(Decimal.max(realized_profit, Decimal.new(0)), p.divs)
         inst = Map.get(institutions_map, p.institution_id)
         inst_logo = if inst, do: Institution.logo_url(inst)
@@ -888,6 +892,76 @@ defmodule Grana.Investments do
       dividend_only_assets: dividend_only_assets,
       transaction_count: totals.transaction_count
     }
+  end
+
+  # Lucro realizado por ticker, calculado por preço médio (custo médio ponderado).
+  # Processa compras/vendas em ordem cronológica; em cada venda realiza
+  # (preço de venda − custo médio) × qtd vendida. Ativos sem quantidade
+  # (renda fixa) caem no método de fluxo (vendas − compras).
+  defp realized_profit_by_ticker(base) do
+    base
+    |> exclude(:preload)
+    |> exclude(:order_by)
+    |> where([t], t.operation in ["compra", "venda"])
+    |> order_by([t], asc: t.date, asc: t.id)
+    |> select([t], %{
+      ticker: fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name),
+      operation: t.operation,
+      quantity: t.quantity,
+      total: fragment("ABS(?)", t.total_amount)
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.ticker)
+    |> Map.new(fn {ticker, txns} -> {ticker, realized_for_asset(txns)} end)
+  end
+
+  defp realized_for_asset(txns) do
+    zero = Decimal.new(0)
+    has_qty = Enum.any?(txns, fn t -> Decimal.compare(t.quantity, 0) == :gt end)
+
+    if has_qty do
+      {realized, _qty, _cost} =
+        Enum.reduce(txns, {zero, zero, zero}, fn t, {realized, qty, cost} ->
+          case t.operation do
+            "compra" ->
+              {realized, Decimal.add(qty, t.quantity), Decimal.add(cost, t.total)}
+
+            "venda" ->
+              if Decimal.compare(qty, 0) == :gt do
+                avg = Decimal.div(cost, qty)
+                sell_qty = Decimal.min(t.quantity, qty)
+
+                unit_price =
+                  if Decimal.compare(t.quantity, 0) == :gt,
+                    do: Decimal.div(t.total, t.quantity),
+                    else: zero
+
+                proceeds = Decimal.mult(unit_price, sell_qty)
+                cost_of_sold = Decimal.mult(avg, sell_qty)
+
+                {Decimal.add(realized, Decimal.sub(proceeds, cost_of_sold)),
+                 Decimal.sub(qty, sell_qty), Decimal.sub(cost, cost_of_sold)}
+              else
+                {realized, qty, cost}
+              end
+
+            _ ->
+              {realized, qty, cost}
+          end
+        end)
+
+      realized
+    else
+      sold = sum_op(txns, "venda")
+      bought = sum_op(txns, "compra")
+      Decimal.sub(sold, bought)
+    end
+  end
+
+  defp sum_op(txns, op) do
+    txns
+    |> Enum.filter(&(&1.operation == op))
+    |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.total) end)
   end
 
   # Average-cost basis of the remaining quantity. Falls back to net cash flow for
