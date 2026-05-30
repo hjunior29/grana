@@ -783,13 +783,20 @@ defmodule Grana.Banking do
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
+    # Pre-compute only the top debits/credits instead of returning (and holding
+    # in LiveView assigns) the full transaction list, which can be thousands of rows.
+    # 15 covers both the dashboard (shows 10) and the AI prompt (uses up to 15).
+    top_expenses = top_n_by_amount(transactions, "debit", 15)
+    top_income = top_n_by_amount(transactions, "credit", 15)
+
     %{
       total_income: total_income,
       total_expenses: total_expenses,
       total_investments: total_investments,
       balance: Decimal.sub(total_income, Decimal.add(total_expenses, total_investments)),
       by_category: by_category,
-      transactions: transactions,
+      top_expenses: top_expenses,
+      top_income: top_income,
       transaction_count: length(relevant),
       income_count: length(income_txns),
       expense_count: length(expense_debits),
@@ -797,6 +804,13 @@ defmodule Grana.Banking do
       refund_count: length(refunds),
       internal_count: length(internal)
     }
+  end
+
+  defp top_n_by_amount(transactions, type, limit) do
+    transactions
+    |> Enum.filter(&(&1.type == type))
+    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
+    |> Enum.take(limit)
   end
 
   defp bill_payment?(t) do
@@ -1196,13 +1210,40 @@ defmodule Grana.Banking do
   def create_financial_goal(attrs) do
     %FinancialGoal{}
     |> FinancialGoal.changeset(attrs)
+    |> validate_goal_category_ownership()
     |> Repo.insert()
   end
 
   def update_financial_goal(%FinancialGoal{} = goal, attrs) do
     goal
     |> FinancialGoal.changeset(attrs)
+    |> validate_goal_category_ownership()
     |> Repo.update()
+  end
+
+  # Guards against cross-user reference: a goal's category must belong to the
+  # same user. Without this, a crafted category_id from the client could attach
+  # another user's category to the goal.
+  defp validate_goal_category_ownership(changeset) do
+    category_id = Ecto.Changeset.get_field(changeset, :category_id)
+    user_id = Ecto.Changeset.get_field(changeset, :user_id)
+
+    cond do
+      is_nil(category_id) or is_nil(user_id) ->
+        changeset
+
+      category_belongs_to_user?(category_id, user_id) ->
+        changeset
+
+      true ->
+        Ecto.Changeset.add_error(changeset, :category_id, "categoria inválida")
+    end
+  end
+
+  defp category_belongs_to_user?(category_id, user_id) do
+    Category
+    |> where([c], c.id == ^category_id and c.user_id == ^user_id)
+    |> Repo.exists?()
   end
 
   def delete_financial_goal(%FinancialGoal{} = goal) do

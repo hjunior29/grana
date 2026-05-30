@@ -9,22 +9,34 @@ defmodule Grana.Investments.QuoteProvider do
   @ttl_ms :timer.minutes(30)
   @base_url "https://brapi.dev/api/quote"
 
-  def get_quotes([]), do: {:ok, %{}}
+  def get_quotes(tickers, opts \\ [])
 
-  def get_quotes(tickers) when is_list(tickers) do
+  def get_quotes([], _opts), do: {:ok, %{}}
+
+  def get_quotes(tickers, opts) when is_list(tickers) do
     tickers = tickers |> Enum.map(&String.upcase/1) |> Enum.uniq()
 
     ensure_table()
     {cached, missing} = split_cached(tickers)
 
-    case fetch_missing(missing) do
-      {:ok, fetched} ->
-        {:ok, Map.merge(cached, fetched)}
+    # When fetch_remote is false (e.g. a disconnected LiveView render), never make
+    # the blocking external HTTP call — serve whatever is cached (fresh or stale).
+    # The connected render / QuoteFetcher cron refreshes the cache.
+    if Keyword.get(opts, :fetch_remote, true) do
+      case fetch_missing(missing) do
+        {:ok, fetched} ->
+          {:ok, Map.merge(cached, fetched)}
 
-      {:error, reason} ->
-        Logger.warning("QuoteProvider: API fetch failed (#{inspect(reason)}), using stale cache")
-        stale = lookup_stale(missing)
-        {:ok, Map.merge(cached, stale)}
+        {:error, reason} ->
+          Logger.warning(
+            "QuoteProvider: API fetch failed (#{inspect(reason)}), using stale cache"
+          )
+
+          stale = lookup_stale(missing)
+          {:ok, Map.merge(cached, stale)}
+      end
+    else
+      {:ok, Map.merge(cached, lookup_stale(missing))}
     end
   end
 

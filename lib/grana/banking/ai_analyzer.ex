@@ -326,12 +326,9 @@ defmodule Grana.Banking.AIAnalyzer do
           "\nRECEITAS VS DESPESAS (mensal):\n#{text}\n"
       end
 
-    # ── Top despesas ──
+    # ── Top despesas ── (pré-computadas em build_summary; até 15)
     top_expenses =
-      summary.transactions
-      |> Enum.filter(&(&1.type == "debit"))
-      |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
-      |> Enum.take(15)
+      summary.top_expenses
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
         desc = PromptSanitizer.sanitize_description(t.description)
@@ -341,9 +338,7 @@ defmodule Grana.Banking.AIAnalyzer do
 
     # ── Top receitas ──
     top_income =
-      summary.transactions
-      |> Enum.filter(&(&1.type == "credit"))
-      |> Enum.sort_by(fn t -> Decimal.to_float(t.amount) end, :desc)
+      summary.top_income
       |> Enum.take(10)
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
