@@ -45,33 +45,40 @@ defmodule GranaWeb.UploadLive do
     history_filter = params["source"] || "all"
     user_id = socket.assigns.current_scope.user.id
 
-    # Fetch all statements from both sources
-    banking_stmts =
+    # Pagina o merge de duas fontes sem carregar tudo: o top-K global (K = page*per_page)
+    # está necessariamente entre os top-K de cada fonte, então buscamos só isso de cada.
+    fetch_limit = page * @per_page
+
+    {banking_stmts, banking_total} =
       if history_filter in ["all", "banking"] do
-        Banking.list_statements(user_id)
-        |> Enum.map(&normalize_banking_stmt/1)
+        {stmts, total} =
+          Banking.list_statements_paginated(user_id, page: 1, per_page: fetch_limit)
+
+        {Enum.map(stmts, &normalize_banking_stmt/1), total}
       else
-        []
+        {[], 0}
       end
 
-    inv_stmts =
+    {inv_stmts, inv_total} =
       if history_filter in ["all", "investment"] do
-        Investments.list_statements(user_id)
-        |> Enum.map(&normalize_inv_stmt/1)
+        {stmts, total} =
+          Investments.list_statements_paginated(user_id, page: 1, per_page: fetch_limit)
+
+        {Enum.map(stmts, &normalize_inv_stmt/1), total}
       else
-        []
+        {[], 0}
       end
 
-    # Merge, sort by inserted_at desc, and paginate
-    all_stmts =
+    # Merge, sort by inserted_at desc, and slice the current page
+    merged =
       (banking_stmts ++ inv_stmts)
       |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
 
-    total = length(all_stmts)
+    total = banking_total + inv_total
     total_pages = max(1, ceil(total / @per_page))
     offset = (page - 1) * @per_page
 
-    page_stmts = Enum.slice(all_stmts, offset, @per_page)
+    page_stmts = Enum.slice(merged, offset, @per_page)
 
     socket =
       socket
