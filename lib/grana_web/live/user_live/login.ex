@@ -17,7 +17,7 @@ defmodule GranaWeb.UserLive.Login do
               <% else %>
                 Não tem uma conta? <.link
                   navigate={~p"/users/register"}
-                  class="font-semibold text-brand hover:underline"
+                  class="font-semibold text-primary hover:underline"
                   phx-no-format
                 >Cadastre-se</.link> agora.
               <% end %>
@@ -36,7 +36,6 @@ defmodule GranaWeb.UserLive.Login do
         </div>
 
         <.form
-          :let={f}
           for={@form}
           id="login_form_magic"
           action={~p"/users/log-in"}
@@ -45,7 +44,8 @@ defmodule GranaWeb.UserLive.Login do
         >
           <.input
             readonly={!!@current_scope}
-            field={f[:email]}
+            id="login_form_magic_email"
+            field={@form[:email]}
             type="email"
             label="Email"
             autocomplete="email"
@@ -60,7 +60,6 @@ defmodule GranaWeb.UserLive.Login do
         <div class="divider">ou</div>
 
         <.form
-          :let={f}
           for={@form}
           id="login_form_password"
           action={~p"/users/log-in"}
@@ -70,7 +69,8 @@ defmodule GranaWeb.UserLive.Login do
         >
           <.input
             readonly={!!@current_scope}
-            field={f[:email]}
+            id="login_form_password_email"
+            field={@form[:email]}
             type="email"
             label="Email"
             autocomplete="email"
@@ -128,7 +128,12 @@ defmodule GranaWeb.UserLive.Login do
 
     form = to_form(%{"email" => email}, as: "user")
 
-    {:ok, assign(socket, form: form, trigger_submit: false)}
+    {:ok,
+     assign(socket,
+       form: form,
+       trigger_submit: false,
+       client_ip: GranaWeb.RateLimit.get_ip(socket)
+     )}
   end
 
   @impl true
@@ -137,20 +142,29 @@ defmodule GranaWeb.UserLive.Login do
   end
 
   def handle_event("submit_magic", %{"user" => %{"email" => email}}, socket) do
-    if user = Accounts.get_user_by_email(email) do
-      Accounts.deliver_login_instructions(
-        user,
-        &url(~p"/users/log-in/#{&1}")
-      )
+    case GranaWeb.RateLimit.check(:magic_link, socket.assigns.client_ip) do
+      :deny ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
+         |> push_navigate(to: ~p"/users/log-in")}
+
+      :allow ->
+        if user = Accounts.get_user_by_email(email) do
+          Accounts.deliver_login_instructions(
+            user,
+            &url(~p"/users/log-in/#{&1}")
+          )
+        end
+
+        info =
+          "Se seu email estiver no nosso sistema, você receberá instruções para entrar em breve."
+
+        {:noreply,
+         socket
+         |> put_flash(:info, info)
+         |> push_navigate(to: ~p"/users/log-in")}
     end
-
-    info =
-      "Se seu email estiver no nosso sistema, você receberá instruções para entrar em breve."
-
-    {:noreply,
-     socket
-     |> put_flash(:info, info)
-     |> push_navigate(to: ~p"/users/log-in")}
   end
 
   defp local_mail_adapter? do

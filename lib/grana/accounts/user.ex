@@ -11,7 +11,7 @@ defmodule Grana.Accounts.User do
 
     field :ai_provider, :string, default: "gemini"
     field :ai_model, :string, default: "gemini-2.0-flash"
-    field :ai_api_key, :string, redact: true
+    field :ai_api_key, Grana.Encrypted.Binary, redact: true
 
     timestamps(type: :utc_datetime)
   end

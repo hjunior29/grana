@@ -66,7 +66,7 @@ defmodule GranaWeb.GoalsLive do
 
   def handle_event("edit_goal", %{"id" => id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    goal = Banking.get_financial_goal!(String.to_integer(id), user_id)
+    goal = Banking.get_financial_goal!(GranaWeb.Params.to_int(id, -1), user_id)
     changeset = FinancialGoal.changeset(goal, %{})
 
     {:noreply,
@@ -130,12 +130,17 @@ defmodule GranaWeb.GoalsLive do
          |> put_flash(:info, "Meta criada!")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Erro ao criar meta. Verifique se já não existe uma meta desse tipo.")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Erro ao criar meta. Verifique se já não existe uma meta desse tipo."
+         )}
     end
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :delete_target, String.to_integer(id))}
+    {:noreply, assign(socket, :delete_target, GranaWeb.Params.to_int(id, -1))}
   end
 
   def handle_event("cancel_delete", _params, socket) do
@@ -302,7 +307,12 @@ defmodule GranaWeb.GoalsLive do
         </div>
 
         <%!-- New/Edit Modal --%>
-        <dialog :if={@show_form} class="modal modal-open" phx-window-keydown="hide_form" phx-key="Escape">
+        <dialog
+          :if={@show_form}
+          class="modal modal-open"
+          phx-window-keydown="hide_form"
+          phx-key="Escape"
+        >
           <div class="modal-box">
             <h3 class="text-lg font-bold mb-4">
               {if @editing_goal, do: "Editar Meta", else: "Nova Meta"}
@@ -334,7 +344,11 @@ defmodule GranaWeb.GoalsLive do
 
               <div>
                 <label class="label text-sm font-medium">Valor alvo (R$)</label>
-                <div id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"} phx-hook="CurrencyInput" phx-update="ignore">
+                <div
+                  id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"}
+                  phx-hook="CurrencyInput"
+                  phx-update="ignore"
+                >
                   <input
                     type="hidden"
                     name="goal[target_value]"

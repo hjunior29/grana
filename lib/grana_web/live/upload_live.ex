@@ -45,33 +45,40 @@ defmodule GranaWeb.UploadLive do
     history_filter = params["source"] || "all"
     user_id = socket.assigns.current_scope.user.id
 
-    # Fetch all statements from both sources
-    banking_stmts =
+    # Pagina o merge de duas fontes sem carregar tudo: o top-K global (K = page*per_page)
+    # está necessariamente entre os top-K de cada fonte, então buscamos só isso de cada.
+    fetch_limit = page * @per_page
+
+    {banking_stmts, banking_total} =
       if history_filter in ["all", "banking"] do
-        Banking.list_statements(user_id)
-        |> Enum.map(&normalize_banking_stmt/1)
+        {stmts, total} =
+          Banking.list_statements_paginated(user_id, page: 1, per_page: fetch_limit)
+
+        {Enum.map(stmts, &normalize_banking_stmt/1), total}
       else
-        []
+        {[], 0}
       end
 
-    inv_stmts =
+    {inv_stmts, inv_total} =
       if history_filter in ["all", "investment"] do
-        Investments.list_statements(user_id)
-        |> Enum.map(&normalize_inv_stmt/1)
+        {stmts, total} =
+          Investments.list_statements_paginated(user_id, page: 1, per_page: fetch_limit)
+
+        {Enum.map(stmts, &normalize_inv_stmt/1), total}
       else
-        []
+        {[], 0}
       end
 
-    # Merge, sort by inserted_at desc, and paginate
-    all_stmts =
+    # Merge, sort by inserted_at desc, and slice the current page
+    merged =
       (banking_stmts ++ inv_stmts)
       |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
 
-    total = length(all_stmts)
+    total = banking_total + inv_total
     total_pages = max(1, ceil(total / @per_page))
     offset = (page - 1) * @per_page
 
-    page_stmts = Enum.slice(all_stmts, offset, @per_page)
+    page_stmts = Enum.slice(merged, offset, @per_page)
 
     socket =
       socket
@@ -311,9 +318,11 @@ defmodule GranaWeb.UploadLive do
   end
 
   def handle_event("delete", _params, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
     case socket.assigns.delete_target do
       {:single, stmt} ->
-        delete_by_composite(stmt)
+        delete_by_composite(stmt, user_id)
 
         socket
         |> assign(:delete_target, nil)
@@ -325,8 +334,8 @@ defmodule GranaWeb.UploadLive do
 
         {bank_ids, inv_ids} = split_composite_ids(selected)
 
-        if bank_ids != [], do: Banking.delete_statements(bank_ids)
-        if inv_ids != [], do: Investments.delete_statements(inv_ids)
+        if bank_ids != [], do: Banking.delete_statements(bank_ids, user_id)
+        if inv_ids != [], do: Investments.delete_statements(inv_ids, user_id)
 
         total = length(bank_ids) + length(inv_ids)
 
@@ -341,22 +350,33 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
-  defp delete_by_composite(%{source: "banking", raw_id: id}) do
-    stmt = Grana.Repo.get!(Grana.Banking.BankStatement, id)
+  defp delete_by_composite(%{source: "banking", raw_id: id}, user_id) do
+    stmt = Banking.get_statement!(id, user_id)
     Banking.delete_statement(stmt)
   end
 
-  defp delete_by_composite(%{source: "investment", raw_id: id}) do
-    stmt = Grana.Repo.get!(Grana.Investments.Statement, id)
+  defp delete_by_composite(%{source: "investment", raw_id: id}, user_id) do
+    stmt = Investments.get_statement!(id, user_id)
     Investments.delete_statement(stmt)
   end
 
   defp split_composite_ids(ids) do
     Enum.reduce(ids, {[], []}, fn id, {banks, invs} ->
       case id do
-        "bank_" <> raw -> {[String.to_integer(raw) | banks], invs}
-        "inv_" <> raw -> {banks, [String.to_integer(raw) | invs]}
-        _ -> {banks, invs}
+        "bank_" <> raw ->
+          case Integer.parse(raw) do
+            {n, ""} -> {[n | banks], invs}
+            _ -> {banks, invs}
+          end
+
+        "inv_" <> raw ->
+          case Integer.parse(raw) do
+            {n, ""} -> {banks, [n | invs]}
+            _ -> {banks, invs}
+          end
+
+        _ ->
+          {banks, invs}
       end
     end)
   end
@@ -544,25 +564,15 @@ defmodule GranaWeb.UploadLive do
     socket =
       case {successes, errors} do
         {[], errors} ->
-          error_messages =
-            Enum.map(errors, fn {:error, name, reason} ->
-              "#{name}: #{format_error(reason, bank)}"
-            end)
-
-          put_flash(socket, :error, Enum.join(error_messages, " | "))
+          put_flash(socket, :error, build_error_message(errors, bank))
 
         {_, []} ->
           put_flash(socket, :info, "#{length(successes)} arquivo(s) processado(s) com sucesso!")
 
         {_, errors} ->
-          error_msgs =
-            Enum.map(errors, fn {:error, name, reason} ->
-              "#{name}: #{format_error(reason, bank)}"
-            end)
-
           socket
           |> put_flash(:info, "#{length(successes)} processado(s) com sucesso")
-          |> put_flash(:error, Enum.join(error_msgs, " | "))
+          |> put_flash(:error, build_error_message(errors, bank))
       end
 
     socket =
@@ -581,6 +591,18 @@ defmodule GranaWeb.UploadLive do
      push_patch(socket, to: "/upload?tab=#{socket.assigns.tab}&page=1&source=#{source}")}
   end
 
+  # Limita a 5 erros exibidos (+N mais) para a flash não crescer sem limite.
+  defp build_error_message(errors, bank) do
+    shown = Enum.take(errors, 5)
+
+    msgs =
+      Enum.map(shown, fn {:error, name, reason} -> "#{name}: #{format_error(reason, bank)}" end)
+
+    extra = length(errors) - length(shown)
+    base = Enum.join(msgs, " | ")
+    if extra > 0, do: base <> " (+#{extra} mais)", else: base
+  end
+
   defp format_error("No transactions found in file", "outro") do
     "Nenhuma transação encontrada no arquivo."
   end
@@ -597,7 +619,9 @@ defmodule GranaWeb.UploadLive do
     "Nenhuma transação encontrada no PDF. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
   end
 
-  defp format_error(reason, _bank), do: reason
+  defp format_error(reason, _bank) when is_binary(reason), do: reason
+  # Nunca expõe termos internos crus (tuplas/atoms) ao usuário.
+  defp format_error(_reason, _bank), do: "Não foi possível processar o arquivo."
 
   @impl true
   def render(assigns) do
@@ -606,10 +630,12 @@ defmodule GranaWeb.UploadLive do
       <div class="max-w-6xl mx-auto scrollbar-gutter">
         <div class="mb-4 sm:mb-8 text-center sm:text-left">
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Upload</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">Importe e gerencie seus extratos e faturas</p>
+          <p class="text-xs sm:text-sm opacity-60 mt-1">
+            Importe e gerencie seus extratos e faturas
+          </p>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-8 -ml-2">
+        <div role="tablist" class="tabs tabs-border mb-8">
           <button
             role="tab"
             phx-click="switch_tab"

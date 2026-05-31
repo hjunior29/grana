@@ -96,7 +96,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("select_year", %{"year" => year_str}, socket) do
-    year = String.to_integer(year_str)
+    year = GranaWeb.Params.to_int(year_str, Date.utc_today().year)
 
     case socket.assigns.tab do
       "banking" ->
@@ -134,7 +134,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("select_month", %{"month" => month_str}, socket) do
-    month = String.to_integer(month_str)
+    month = GranaWeb.Params.to_int(month_str, 0)
 
     case socket.assigns.tab do
       "banking" ->
@@ -192,7 +192,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("toggle-category", %{"id" => id_str}, socket) do
-    excluded = toggle_set(socket.assigns.excluded_categories, String.to_integer(id_str))
+    excluded = toggle_set(socket.assigns.excluded_categories, GranaWeb.Params.to_int(id_str, -1))
     {:noreply, assign(socket, :excluded_categories, excluded)}
   end
 
@@ -330,7 +330,8 @@ defmodule GranaWeb.DashboardLive do
     |> assign(:top_category, top_category)
     |> assign(:installment_summary, installment_summary)
     |> assign(:installment_projections, installment_projections)
-    |> assign(:goals_progress,
+    |> assign(
+      :goals_progress,
       case view_mode do
         "month" -> Banking.goals_progress(user_id, year, month)
         _ -> []
@@ -464,6 +465,9 @@ defmodule GranaWeb.DashboardLive do
       end
       |> maybe_add(:institution_id, inst)
       |> maybe_add(:asset_type, asset_type)
+      # Only hit the brapi API when the socket is connected; the disconnected
+      # static render serves cached quotes so it never blocks on external HTTP.
+      |> Keyword.put(:allow_fetch, connected?(socket))
 
     period_opts =
       case view_mode do
@@ -635,7 +639,7 @@ defmodule GranaWeb.DashboardLive do
           <p class="text-xs sm:text-sm opacity-60 mt-1">Visão geral das suas finanças</p>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-6 -ml-4">
+        <div role="tablist" class="tabs tabs-border mb-6">
           <button
             role="tab"
             phx-click="switch_tab"
@@ -1176,7 +1180,7 @@ defmodule GranaWeb.DashboardLive do
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
             <div class="space-y-1">
               <.link
-                :for={txn <- top_expenses(@summary.transactions, 10)}
+                :for={txn <- Enum.take(@summary.top_expenses, 10)}
                 navigate={txn_url(assigns, txn)}
                 class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
               >
@@ -1213,7 +1217,7 @@ defmodule GranaWeb.DashboardLive do
             <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
             <div class="space-y-1">
               <.link
-                :for={txn <- top_income(@summary.transactions, 10)}
+                :for={txn <- Enum.take(@summary.top_income, 10)}
                 navigate={txn_url(assigns, txn)}
                 class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
               >
@@ -1880,7 +1884,10 @@ defmodule GranaWeb.DashboardLive do
                     </div>
                     <div class="flex flex-col">
                       <span class="font-medium text-sm">{h.ticker || "—"}</span>
-                      <span class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs" title={h.name}>
+                      <span
+                        class="text-xs opacity-50 truncate max-w-[120px] sm:max-w-xs"
+                        title={h.name}
+                      >
                         {h.name}
                       </span>
                     </div>
@@ -2000,13 +2007,13 @@ defmodule GranaWeb.DashboardLive do
     |> then(fn s ->
       case params["inv_year"] do
         nil -> s
-        y -> assign(s, :inv_selected_year, String.to_integer(y))
+        y -> assign(s, :inv_selected_year, GranaWeb.Params.to_int(y, Date.utc_today().year))
       end
     end)
     |> then(fn s ->
       case params["inv_month"] do
         nil -> s
-        m -> assign(s, :inv_selected_month, String.to_integer(m))
+        m -> assign(s, :inv_selected_month, GranaWeb.Params.to_int(m, 0))
       end
     end)
     |> then(fn s ->
@@ -2180,20 +2187,6 @@ defmodule GranaWeb.DashboardLive do
       _ ->
         0
     end
-  end
-
-  defp top_expenses(transactions, limit) do
-    transactions
-    |> Enum.filter(&(&1.type == "debit"))
-    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
-    |> Enum.take(limit)
-  end
-
-  defp top_income(transactions, limit) do
-    transactions
-    |> Enum.filter(&(&1.type == "credit"))
-    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
-    |> Enum.take(limit)
   end
 
   # ── Banking Chart Data ──

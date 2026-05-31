@@ -95,13 +95,13 @@ defmodule Grana.Accounts.UserNotifier do
         """,
         url,
         "Entrar na minha conta",
-        "Este link expira em 10 minutos. Se você não solicitou este acesso, ignore este email."
+        "Este link expira em 15 minutos. Se você não solicitou este acesso, ignore este email."
       ),
       email_text(
         "Entrar na sua conta",
         "Você solicitou um link para entrar na sua conta Grana.\n\nClique no link abaixo para acessar:",
         url,
-        "Este link expira em 10 minutos. Se você não solicitou este acesso, ignore este email."
+        "Este link expira em 15 minutos. Se você não solicitou este acesso, ignore este email."
       )
     )
   end

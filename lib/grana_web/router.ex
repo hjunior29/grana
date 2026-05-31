@@ -3,6 +3,26 @@ defmodule GranaWeb.Router do
 
   import GranaWeb.UserAuth
 
+  # CSP aplicada só às rotas do app (não aos dashboards admin/dev, que usam
+  # inline scripts/styles). script-src 'self' bloqueia JS injetado (defesa extra
+  # de XSS); style-src/img-src/connect-src liberam o necessário p/ charts, logos
+  # externos (brapi) e o websocket do LiveView.
+  @content_security_policy Enum.join(
+                             [
+                               "default-src 'self'",
+                               "script-src 'self'",
+                               "style-src 'self' 'unsafe-inline'",
+                               "img-src 'self' data: https:",
+                               "font-src 'self' data:",
+                               "connect-src 'self' ws: wss:",
+                               "frame-ancestors 'none'",
+                               "base-uri 'self'",
+                               "form-action 'self'",
+                               "object-src 'none'"
+                             ],
+                             "; "
+                           )
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -13,12 +33,16 @@ defmodule GranaWeb.Router do
     plug :fetch_current_scope_for_user
   end
 
+  pipeline :csp do
+    plug :put_secure_browser_headers, %{"content-security-policy" => @content_security_policy}
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
   end
 
   scope "/", GranaWeb do
-    pipe_through :browser
+    pipe_through [:browser, :csp]
 
     live_session :public, on_mount: [{GranaWeb.UserAuth, :mount_current_scope}] do
       live "/", LandingLive, :index
@@ -52,7 +76,7 @@ defmodule GranaWeb.Router do
   ## Authentication routes
 
   scope "/", GranaWeb do
-    pipe_through [:browser, :require_authenticated_user]
+    pipe_through [:browser, :csp, :require_authenticated_user]
 
     live_session :require_authenticated_user,
       on_mount: [{GranaWeb.UserAuth, :require_authenticated}] do
@@ -72,7 +96,7 @@ defmodule GranaWeb.Router do
   end
 
   scope "/", GranaWeb do
-    pipe_through [:browser]
+    pipe_through [:browser, :csp]
 
     live_session :current_user,
       on_mount: [{GranaWeb.UserAuth, :mount_current_scope}] do

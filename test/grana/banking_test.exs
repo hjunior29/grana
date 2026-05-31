@@ -230,6 +230,37 @@ defmodule Grana.BankingTest do
     end
   end
 
+  describe "delete_statements/2 authorization" do
+    test "delete_statements with correct user_id deletes the statements", %{user: user} do
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      assert {1, _} = Banking.delete_statements([stmt.id], user.id)
+      assert Banking.list_statements(user.id) == []
+    end
+
+    test "delete_statements with wrong user_id does not delete the statements", %{user: user} do
+      other_user = user_fixture()
+
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      assert {0, _} = Banking.delete_statements([stmt.id], other_user.id)
+      assert length(Banking.list_statements(user.id)) == 1
+    end
+
+    test "get_statement! with wrong user_id raises", %{user: user} do
+      other_user = user_fixture()
+
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Banking.get_statement!(stmt.id, other_user.id)
+      end
+    end
+  end
+
   describe "category_rules" do
     test "create_category_rule creates a rule", %{user: user} do
       Banking.ensure_default_categories(user.id)
@@ -274,6 +305,105 @@ defmodule Grana.BankingTest do
       result = Banking.categorize_transaction("XYZABC123 Random Description", user.id)
       assert result == uncat.id
     end
+
+    test "categorize_transactions loads rules once for multiple descriptions", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      food_cat = Enum.find(Banking.list_categories(user.id), &(&1.name == "Alimentação"))
+      health_cat = Enum.find(Banking.list_categories(user.id), &(&1.name == "Saúde"))
+
+      Banking.create_category_rule(%{
+        pattern: "padaria xpto",
+        user_id: user.id,
+        category_id: food_cat.id
+      })
+
+      Banking.create_category_rule(%{
+        pattern: "drogasil",
+        user_id: user.id,
+        category_id: health_cat.id
+      })
+
+      result =
+        Banking.categorize_transactions(
+          ["Padaria XPTO Centro", "DROGASIL Loja 123", "XYZABC Unknown"],
+          user.id
+        )
+
+      assert result["Padaria XPTO Centro"] == food_cat.id
+      assert result["DROGASIL Loja 123"] == health_cat.id
+      uncat = Banking.get_uncategorized_category(user.id)
+      assert result["XYZABC Unknown"] == uncat.id
+    end
+
+    test "categorize_transactions returns same results as individual calls", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      food_cat = Enum.find(Banking.list_categories(user.id), &(&1.name == "Alimentação"))
+
+      Banking.create_category_rule(%{
+        pattern: "padaria xpto",
+        user_id: user.id,
+        category_id: food_cat.id
+      })
+
+      descriptions = ["Padaria XPTO Centro", "SUPERMERCADO GREGORIO", "Random thing"]
+
+      batch_result = Banking.categorize_transactions(descriptions, user.id)
+
+      for desc <- descriptions do
+        individual = Banking.categorize_transaction(desc, user.id)
+        assert batch_result[desc] == individual
+      end
+    end
+  end
+
+  describe "detect_internal_transfers" do
+    test "detect_internal_transfers is atomic - all updates succeed together", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      uncat = Banking.get_uncategorized_category(user.id)
+
+      {:ok, extrato_stmt} =
+        Banking.create_statement(%{
+          bank: "nubank",
+          filename: "extrato.csv",
+          statement_type: "extrato",
+          user_id: user.id
+        })
+
+      Banking.bulk_insert_transactions([
+        %{
+          date: ~D[2026-01-10],
+          description: "Pagamento de fatura cartao",
+          amount: Decimal.new("-500.00"),
+          type: "debit",
+          bank_statement_id: extrato_stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        },
+        %{
+          date: ~D[2026-01-15],
+          description: "Compra normal",
+          amount: Decimal.new("-50.00"),
+          type: "debit",
+          bank_statement_id: extrato_stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        }
+      ])
+
+      result = Banking.detect_internal_transfers(user.id)
+      assert result == :ok
+
+      transactions = Banking.list_transactions(user.id)
+      cc_payment = Enum.find(transactions, &(&1.description == "Pagamento de fatura cartao"))
+      normal = Enum.find(transactions, &(&1.description == "Compra normal"))
+
+      assert cc_payment.is_internal_transfer == true
+      assert normal.is_internal_transfer == false
+    end
+
+    test "detect_internal_transfers returns :ok on success", %{user: user} do
+      assert Banking.detect_internal_transfers(user.id) == :ok
+    end
   end
 
   describe "monthly_summary" do
@@ -309,6 +439,167 @@ defmodule Grana.BankingTest do
       assert Decimal.compare(summary.total_income, Decimal.new("5000.00")) == :eq
       assert Decimal.compare(summary.total_expenses, Decimal.new("200.00")) == :eq
       assert summary.transaction_count == 2
+    end
+
+    test "subtracts refunds, separates investments, excludes internal transfers", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      cats = Banking.list_categories(user.id)
+      food = Enum.find(cats, &(&1.name == "Alimentação"))
+      invest = Enum.find(cats, &(&1.kind == "investment"))
+
+      {:ok, stmt} =
+        Banking.create_statement(%{bank: "nubank", filename: "test.csv", user_id: user.id})
+
+      base = %{bank_statement_id: stmt.id, user_id: user.id, date: ~D[2026-02-10]}
+
+      Banking.bulk_insert_transactions([
+        Map.merge(base, %{
+          description: "Salário",
+          amount: Decimal.new("5000.00"),
+          type: "credit",
+          category_id: food.id
+        }),
+        Map.merge(base, %{
+          description: "Mercado",
+          amount: Decimal.new("-200.00"),
+          type: "debit",
+          category_id: food.id
+        }),
+        Map.merge(base, %{
+          description: "Estorno compra",
+          amount: Decimal.new("50.00"),
+          type: "credit",
+          category_id: food.id
+        }),
+        Map.merge(base, %{
+          description: "Aporte CDB",
+          amount: Decimal.new("-300.00"),
+          type: "debit",
+          category_id: invest.id
+        }),
+        Map.merge(base, %{
+          description: "Transferência interna",
+          amount: Decimal.new("-1000.00"),
+          type: "debit",
+          category_id: food.id,
+          is_internal_transfer: true
+        })
+      ])
+
+      summary = Banking.monthly_summary(user.id, 2026, 2)
+
+      # income exclui o estorno (que é tratado como refund)
+      assert Decimal.equal?(summary.total_income, Decimal.new("5000.00"))
+      # despesa bruta 200 menos estorno 50
+      assert Decimal.equal?(summary.total_expenses, Decimal.new("150.00"))
+      assert Decimal.equal?(summary.total_investments, Decimal.new("300.00"))
+      assert summary.internal_count == 1
+      assert summary.refund_count == 1
+      assert Decimal.equal?(summary.balance, Decimal.new("4550.00"))
+
+      # não retém a lista completa em memória; expõe só os tops
+      refute Map.has_key?(summary, :transactions)
+      assert Map.has_key?(summary, :top_expenses)
+    end
+  end
+
+  describe "get_ai_analysis!/2 authorization (IDOR)" do
+    test "raises when the analysis belongs to another user", %{user: user} do
+      other = user_fixture()
+
+      {:ok, analysis} =
+        Banking.create_ai_analysis(%{
+          user_id: other.id,
+          prompt: nil,
+          filters_json: %{},
+          result_json: %{"titulo" => "x"}
+        })
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Banking.get_ai_analysis!(analysis.id, user.id)
+      end
+
+      assert Banking.get_ai_analysis!(analysis.id, other.id).id == analysis.id
+    end
+  end
+
+  describe "create_financial_goal/1 category ownership" do
+    test "rejects a category owned by another user", %{user: user} do
+      other = user_fixture()
+      Banking.ensure_default_categories(other.id)
+      other_cat = hd(Banking.list_categories(other.id))
+
+      assert {:error, changeset} =
+               Banking.create_financial_goal(%{
+                 "type" => "category_limit",
+                 "target_value" => "100",
+                 "user_id" => user.id,
+                 "category_id" => other_cat.id
+               })
+
+      assert changeset.errors[:category_id]
+    end
+
+    test "accepts a category owned by the user", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      cat = hd(Banking.list_categories(user.id))
+
+      assert {:ok, _goal} =
+               Banking.create_financial_goal(%{
+                 "type" => "category_limit",
+                 "target_value" => "100",
+                 "user_id" => user.id,
+                 "category_id" => cat.id
+               })
+    end
+  end
+
+  describe "list_active_installments/2 isolamento (IDOR)" do
+    test "não vaza parcelas de outro usuário com o mesmo installment_group_id", %{user: user} do
+      other = user_fixture()
+      # group_id é hash de descrição+total → idêntico entre usuários
+      group_id = Grana.Banking.Parsers.InstallmentParser.generate_group_id("netflix", 3)
+
+      {:ok, s1} = Banking.create_statement(%{bank: "nubank", filename: "a.csv", user_id: user.id})
+
+      {:ok, s2} =
+        Banking.create_statement(%{bank: "nubank", filename: "b.csv", user_id: other.id})
+
+      inst = fn uid, sid ->
+        %{
+          date: ~D[2026-01-10],
+          description: "Netflix",
+          amount: Decimal.new("-30.00"),
+          type: "debit",
+          bank_statement_id: sid,
+          user_id: uid,
+          installment_current: 1,
+          installment_total: 3,
+          installment_group_id: group_id
+        }
+      end
+
+      Banking.bulk_insert_transactions([inst.(user.id, s1.id)])
+      Banking.bulk_insert_transactions([inst.(other.id, s2.id)])
+
+      result = Banking.list_active_installments(user.id)
+      assert length(result) == 1
+      assert Enum.all?(result, &(&1.user_id == user.id))
+    end
+  end
+
+  describe "category_belongs_to_user?/2" do
+    test "verdadeiro só para categoria do próprio usuário", %{user: user} do
+      other = user_fixture()
+      Banking.ensure_default_categories(user.id)
+      Banking.ensure_default_categories(other.id)
+
+      own = hd(Banking.list_categories(user.id))
+      foreign = hd(Banking.list_categories(other.id))
+
+      assert Banking.category_belongs_to_user?(own.id, user.id)
+      refute Banking.category_belongs_to_user?(foreign.id, user.id)
+      refute Banking.category_belongs_to_user?(-1, user.id)
     end
   end
 end

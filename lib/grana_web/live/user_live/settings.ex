@@ -355,9 +355,14 @@ defmodule GranaWeb.UserLive.Settings do
 
   def handle_event("confirm_delete", _params, socket) do
     user = socket.assigns.current_scope.user
+    # Capturado antes do delete: o cascade remove os tokens, mas precisamos das
+    # referências para derrubar quaisquer sessões LiveView ativas em outras abas.
+    session_tokens = Accounts.list_user_session_tokens(user)
 
     case Accounts.delete_user(user) do
       {:ok, _} ->
+        GranaWeb.UserAuth.disconnect_sessions(session_tokens)
+
         {:noreply,
          socket
          |> redirect(to: ~p"/users/log-in")

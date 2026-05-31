@@ -29,6 +29,15 @@ kill_signal = 'SIGTERM'
     hard_limit = 1000
     soft_limit = 1000
 
+  # HTTP health check so a deploy is only considered healthy once the app
+  # actually responds (instead of just the machine booting).
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
+    method = 'GET'
+    path = '/'
+
 [[vm]]
   memory = '1gb'
   cpus = 1

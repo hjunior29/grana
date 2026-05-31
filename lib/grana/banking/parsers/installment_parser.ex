@@ -7,9 +7,10 @@ defmodule Grana.Banking.Parsers.InstallmentParser do
   def extract(description) do
     patterns = [
       # "Netflix - Parcela 3/12" or "Netflix - Parc 3/12" or "Netflix - Parc. 3/12"
-      ~r/\s*-\s*[Pp]arc(?:ela)?\.?\s*(\d+)\/(\d+)\s*$/,
-      # "TIMES OFFICE 1/3" (Bradesco style - number at end with space before)
-      ~r/\s+(\d+)\/(\d+)\s*$/
+      ~r/\s*-\s*[Pp]arc(?:ela)?\.?\s*(\d{1,2})\/(\d{1,2})\s*$/,
+      # "TIMES OFFICE 1/3" (Bradesco style - number at end with space before).
+      # Limitado a 1-2 dígitos para não casar anos ("/2024") nem códigos longos.
+      ~r/\s+(\d{1,2})\/(\d{1,2})\s*$/
     ]
 
     Enum.reduce_while(patterns, {description, nil, nil}, fn pattern, acc ->

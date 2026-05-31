@@ -14,13 +14,18 @@ defmodule Grana.Banking.Parsers.Bradesco do
   defp is_metadata_line?(line) do
     trimmed = String.trim(line)
 
+    # Primeiro campo do CSV (separado por ";"), p/ detectar a linha de "Total"
+    # sem descartar transações cujo histórico contenha a palavra (ex.: "TOTAL POSTO").
+    first_field =
+      trimmed |> String.split(";") |> List.first() |> to_string() |> String.trim()
+
     trimmed == "" or
       String.starts_with?(trimmed, ";") or
       String.starts_with?(trimmed, "Filtro") or
       String.starts_with?(trimmed, "Os dados") or
       String.starts_with?(trimmed, "Últimos") or
       String.starts_with?(trimmed, "Extrato") or
-      String.contains?(trimmed, "Total") or
+      String.starts_with?(first_field, "Total") or
       Regex.match?(~r/^;+$/, trimmed)
   end
 
@@ -64,16 +69,13 @@ defmodule Grana.Banking.Parsers.Bradesco do
   end
 
   defp parse_date(date_str) do
-    case String.split(date_str, "/") do
-      [day, month, year] ->
-        Date.new(
-          String.to_integer(year),
-          String.to_integer(month),
-          String.to_integer(day)
-        )
-
-      _ ->
-        :error
+    with [day, month, year] <- String.split(date_str, "/"),
+         {d, ""} <- Integer.parse(day),
+         {m, ""} <- Integer.parse(month),
+         {y, ""} <- Integer.parse(year) do
+      Date.new(y, m, d)
+    else
+      _ -> :error
     end
   end
 

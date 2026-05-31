@@ -14,7 +14,7 @@ defmodule GranaWeb.UserLive.Registration do
             Registre uma nova conta
             <:subtitle>
               Já tem uma conta?
-              <.link navigate={~p"/users/log-in"} class="font-semibold text-brand hover:underline">
+              <.link navigate={~p"/users/log-in"} class="font-semibold text-primary hover:underline">
                 Entrar
               </.link>
               para acessar sua conta.
@@ -73,7 +73,8 @@ defmodule GranaWeb.UserLive.Registration do
     {:ok,
      socket
      |> assign_form(changeset)
-     |> assign(:terms_accepted, false), temporary_assigns: [form: nil]}
+     |> assign(:terms_accepted, false)
+     |> assign(:client_ip, GranaWeb.RateLimit.get_ip(socket)), temporary_assigns: [form: nil]}
   end
 
   @impl true
@@ -87,24 +88,35 @@ defmodule GranaWeb.UserLive.Registration do
   end
 
   def handle_event("save", %{"user" => user_params}, socket) do
-    case Accounts.register_user(user_params) do
-      {:ok, user} ->
-        {:ok, _} =
-          Accounts.deliver_login_instructions(
-            user,
-            &url(~p"/users/log-in/#{&1}")
-          )
-
+    case GranaWeb.RateLimit.check(:registration, socket.assigns.client_ip) do
+      :deny ->
         {:noreply,
-         socket
-         |> put_flash(
-           :info,
-           "Um e-mail foi enviado para #{user.email}, por favor acesse-o para confirmar sua conta."
-         )
-         |> push_navigate(to: ~p"/users/log-in")}
+         put_flash(
+           socket,
+           :error,
+           "Muitas tentativas. Aguarde um momento antes de tentar novamente."
+         )}
 
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign_form(socket, changeset)}
+      :allow ->
+        case Accounts.register_user(user_params) do
+          {:ok, user} ->
+            {:ok, _} =
+              Accounts.deliver_login_instructions(
+                user,
+                &url(~p"/users/log-in/#{&1}")
+              )
+
+            {:noreply,
+             socket
+             |> put_flash(
+               :info,
+               "Um e-mail foi enviado para #{user.email}, por favor acesse-o para confirmar sua conta."
+             )
+             |> push_navigate(to: ~p"/users/log-in")}
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            {:noreply, assign_form(socket, changeset)}
+        end
     end
   end
 

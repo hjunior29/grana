@@ -90,9 +90,19 @@ config :grana, Oban,
     Oban.Plugins.Lifeline,
     {Oban.Plugins.Cron,
      crontab: [
-       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications}
+       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications},
+       {"*/30 * * * *", Grana.Workers.QuoteFetcher, queue: :quotes}
      ]}
   ]
+
+# Encryption key (Grana.Encrypted.Binary): NÃO definido aqui (config compartilhado).
+# Dev/test usam uma chave fixa em config/dev.exs e config/test.exs; produção EXIGE
+# a env CLOAK_KEY (config/runtime.exs faz raise se ausente). Assim a cifragem-at-rest
+# das chaves de IA nunca cai para uma chave pública/commitada em produção.
+
+# Configure Hammer (rate limiting)
+config :hammer,
+  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 60, cleanup_interval_ms: 60_000 * 10]}
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

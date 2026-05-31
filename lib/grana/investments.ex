@@ -123,9 +123,9 @@ defmodule Grana.Investments do
     Repo.delete(statement)
   end
 
-  def delete_statements(ids) when is_list(ids) do
+  def delete_statements(ids, user_id) when is_list(ids) do
     Statement
-    |> where([s], s.id in ^ids)
+    |> where([s], s.id in ^ids and s.user_id == ^user_id)
     |> Repo.delete_all()
   end
 
@@ -262,8 +262,24 @@ defmodule Grana.Investments do
   def bulk_insert_transactions(transactions_attrs) do
     now = DateTime.utc_now(:second)
 
+    # insert_all ignora o changeset; validamos cada entry e descartamos as
+    # inválidas (campos obrigatórios, operation/asset_type fora do domínio) em
+    # vez de persistir dado inconsistente.
+    {valid, invalid} =
+      Enum.split_with(transactions_attrs, fn attrs ->
+        Transaction.changeset(%Transaction{}, attrs).valid?
+      end)
+
+    if invalid != [] do
+      require Logger
+
+      Logger.warning(
+        "Investments.bulk_insert_transactions: #{length(invalid)} transação(ões) inválida(s) descartada(s)"
+      )
+    end
+
     entries =
-      Enum.map(transactions_attrs, fn attrs ->
+      Enum.map(valid, fn attrs ->
         attrs
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
@@ -452,7 +468,9 @@ defmodule Grana.Investments do
     end
 
     quotes =
-      case Grana.Investments.QuoteProvider.get_quotes(tickers) do
+      case Grana.Investments.QuoteProvider.get_quotes(tickers,
+             fetch_remote: Keyword.get(opts, :allow_fetch, true)
+           ) do
         {:ok, q} -> q
         _ -> %{}
       end
@@ -464,12 +482,12 @@ defmodule Grana.Investments do
 
         if quote && h.is_active do
           current_value = Decimal.mult(h.net_qty, quote.price)
-          gain_loss = Decimal.sub(current_value, h.net_total)
+          gain_loss = Decimal.sub(current_value, h.cost_basis)
 
           gain_loss_pct =
-            if Decimal.compare(h.net_total, 0) != :eq,
+            if Decimal.compare(h.cost_basis, 0) != :eq,
               do:
-                h.net_total
+                h.cost_basis
                 |> then(&Decimal.div(gain_loss, &1))
                 |> Decimal.mult(100)
                 |> Decimal.round(2),
@@ -484,7 +502,7 @@ defmodule Grana.Investments do
             logo_url: quote.logo_url
           })
         else
-          current_value = if h.is_active, do: h.net_total, else: Decimal.new(0)
+          current_value = if h.is_active, do: h.cost_basis, else: Decimal.new(0)
 
           Map.merge(h, %{
             current_price: nil,
@@ -502,12 +520,12 @@ defmodule Grana.Investments do
       |> Enum.filter(& &1.is_active)
       |> Enum.reduce(Decimal.new(0), fn h, acc -> Decimal.add(acc, h.current_value) end)
 
-    total_gain_loss = Decimal.sub(market_value, summary.net_position)
+    total_gain_loss = Decimal.sub(market_value, summary.cost_basis_total)
 
     total_gain_loss_pct =
-      if Decimal.compare(summary.net_position, 0) != :eq,
+      if Decimal.compare(summary.cost_basis_total, 0) != :eq,
         do:
-          summary.net_position
+          summary.cost_basis_total
           |> then(&Decimal.div(total_gain_loss, &1))
           |> Decimal.mult(100)
           |> Decimal.round(2),
@@ -662,6 +680,13 @@ defmodule Grana.Investments do
         inst = Map.get(institutions_map, h.institution_id)
         inst_logo = if inst, do: Institution.logo_url(inst)
 
+        # Cost basis of the REMAINING position. For quantity-based assets this is
+        # average purchase price × remaining quantity — NOT bought_total − sold_total,
+        # which wrongly nets sale proceeds (revenue) against purchase cost and
+        # distorts gain/loss on partial sales. Quantity-less assets (e.g. fixed
+        # income) keep net_total.
+        cost_basis = remaining_cost_basis(h.bought_qty, h.bought_total, net_qty, net_total)
+
         is_active =
           Decimal.compare(net_qty, 0) == :gt or
             (Decimal.compare(h.bought_qty, 0) == :eq and
@@ -679,6 +704,7 @@ defmodule Grana.Investments do
           bought_total: h.bought_total,
           sold_total: h.sold_total,
           net_total: net_total,
+          cost_basis: cost_basis,
           is_active: is_active
         }
       end)
@@ -689,6 +715,13 @@ defmodule Grana.Investments do
       holdings
       |> Enum.filter(& &1.is_active)
       |> Enum.reduce(Decimal.new(0), fn h, acc -> Decimal.add(acc, h.net_total) end)
+
+    # Cost basis of held positions (avg cost × remaining qty). This is the correct
+    # denominator for gain/loss against market value.
+    cost_basis_total =
+      holdings
+      |> Enum.filter(& &1.is_active)
+      |> Enum.reduce(Decimal.new(0), fn h, acc -> Decimal.add(acc, h.cost_basis) end)
 
     # By asset type
     by_asset_type =
@@ -806,10 +839,14 @@ defmodule Grana.Investments do
       })
       |> Repo.all()
 
+    # Lucro realizado por ativo via preço médio (método BR), em vez de
+    # vendas-compras agregado, que distorce o resultado em compras/vendas múltiplas.
+    realized_map = realized_profit_by_ticker(base)
+
     proventos_by_asset =
       proventos_by_asset_raw
       |> Enum.map(fn p ->
-        realized_profit = Decimal.sub(p.sold, p.bought)
+        realized_profit = Map.get(realized_map, p.ticker, Decimal.new(0))
         total = Decimal.add(Decimal.max(realized_profit, Decimal.new(0)), p.divs)
         inst = Map.get(institutions_map, p.institution_id)
         inst_logo = if inst, do: Institution.logo_url(inst)
@@ -845,6 +882,7 @@ defmodule Grana.Investments do
       dividends: totals.dividends,
       total_fees: totals.total_fees,
       net_position: net_position,
+      cost_basis_total: cost_basis_total,
       proventos: proventos,
       holdings: holdings,
       by_asset_type: by_asset_type,
@@ -856,11 +894,122 @@ defmodule Grana.Investments do
     }
   end
 
+  # Lucro realizado por ticker, calculado por preço médio (custo médio ponderado).
+  # Processa compras/vendas em ordem cronológica; em cada venda realiza
+  # (preço de venda − custo médio) × qtd vendida. Ativos sem quantidade
+  # (renda fixa) caem no método de fluxo (vendas − compras).
+  defp realized_profit_by_ticker(base) do
+    base
+    |> exclude(:preload)
+    |> exclude(:order_by)
+    |> where([t], t.operation in ["compra", "venda"])
+    |> order_by([t], asc: t.date, asc: t.id)
+    |> select([t], %{
+      ticker: fragment("COALESCE(UPPER(TRIM(?)), TRIM(?))", t.asset_ticker, t.asset_name),
+      operation: t.operation,
+      quantity: t.quantity,
+      total: fragment("ABS(?)", t.total_amount)
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.ticker)
+    |> Map.new(fn {ticker, txns} -> {ticker, realized_for_asset(txns)} end)
+  end
+
+  defp realized_for_asset(txns) do
+    zero = Decimal.new(0)
+    has_qty = Enum.any?(txns, fn t -> Decimal.compare(t.quantity, 0) == :gt end)
+
+    if has_qty do
+      {realized, _qty, _cost} =
+        Enum.reduce(txns, {zero, zero, zero}, fn t, {realized, qty, cost} ->
+          case t.operation do
+            "compra" ->
+              {realized, Decimal.add(qty, t.quantity), Decimal.add(cost, t.total)}
+
+            "venda" ->
+              if Decimal.compare(qty, 0) == :gt do
+                avg = Decimal.div(cost, qty)
+                sell_qty = Decimal.min(t.quantity, qty)
+
+                unit_price =
+                  if Decimal.compare(t.quantity, 0) == :gt,
+                    do: Decimal.div(t.total, t.quantity),
+                    else: zero
+
+                proceeds = Decimal.mult(unit_price, sell_qty)
+                cost_of_sold = Decimal.mult(avg, sell_qty)
+
+                {Decimal.add(realized, Decimal.sub(proceeds, cost_of_sold)),
+                 Decimal.sub(qty, sell_qty), Decimal.sub(cost, cost_of_sold)}
+              else
+                {realized, qty, cost}
+              end
+
+            _ ->
+              {realized, qty, cost}
+          end
+        end)
+
+      realized
+    else
+      sold = sum_op(txns, "venda")
+      bought = sum_op(txns, "compra")
+      Decimal.sub(sold, bought)
+    end
+  end
+
+  defp sum_op(txns, op) do
+    txns
+    |> Enum.filter(&(&1.operation == op))
+    |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, t.total) end)
+  end
+
+  # Average-cost basis of the remaining quantity. Falls back to net cash flow for
+  # quantity-less assets (bought_qty == 0), and to 0 for fully-closed positions.
+  defp remaining_cost_basis(bought_qty, bought_total, net_qty, net_total) do
+    cond do
+      Decimal.compare(bought_qty, 0) != :gt ->
+        net_total
+
+      Decimal.compare(net_qty, 0) != :gt ->
+        Decimal.new(0)
+
+      true ->
+        bought_total
+        |> Decimal.div(bought_qty)
+        |> Decimal.mult(net_qty)
+    end
+  end
+
   @doc """
-  Returns all distinct active tickers (with net quantity > 0) across all users.
+  Returns active tickers (with net quantity > 0) for a specific user.
   Filters to valid B3 ticker format (e.g. PETR4, HGLG11).
   """
-  def all_active_tickers do
+  def all_active_tickers(user_id) do
+    Transaction
+    |> where([t], t.operation in ["compra", "venda"] and t.user_id == ^user_id)
+    |> group_by([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
+    |> having(
+      [t],
+      fragment(
+        "COALESCE(SUM(CASE WHEN ? = 'compra' THEN ? ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN ? = 'venda' THEN ? ELSE 0 END), 0) > 0",
+        t.operation,
+        t.quantity,
+        t.operation,
+        t.quantity
+      )
+    )
+    |> select([t], fragment("UPPER(TRIM(?))", t.asset_ticker))
+    |> Repo.all()
+    |> Enum.filter(&(&1 && String.match?(&1, ~r/^[A-Z]{4}\d{1,2}$/i)))
+  end
+
+  @doc """
+  Returns all distinct active tickers (with net quantity > 0) across ALL users.
+  Intended only for global cache warming (e.g. QuoteFetcher cron job).
+  Filters to valid B3 ticker format (e.g. PETR4, HGLG11).
+  """
+  def all_active_tickers_global do
     Transaction
     |> where([t], t.operation in ["compra", "venda"])
     |> group_by([t], fragment("UPPER(TRIM(?))", t.asset_ticker))

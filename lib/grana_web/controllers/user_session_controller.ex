@@ -4,6 +4,8 @@ defmodule GranaWeb.UserSessionController do
   alias Grana.Accounts
   alias GranaWeb.UserAuth
 
+  plug GranaWeb.RateLimit, [action: :login] when action in [:create]
+
   def create(conn, %{"_action" => "confirmed"} = params) do
     create(conn, params, "Usuário confirmou com sucesso.")
   end
@@ -48,15 +50,32 @@ defmodule GranaWeb.UserSessionController do
 
   def update_password(conn, %{"user" => user_params} = params) do
     user = conn.assigns.current_scope.user
-    true = Accounts.sudo_mode?(user)
-    {:ok, {_user, expired_tokens}} = Accounts.update_user_password(user, user_params)
 
-    # disconnect all existing LiveViews with old sessions
-    UserAuth.disconnect_sessions(expired_tokens)
+    cond do
+      not Accounts.sudo_mode?(user) ->
+        conn
+        |> put_flash(:error, "Sua sessão expirou. Faça login novamente para alterar a senha.")
+        |> redirect(to: ~p"/users/settings")
 
-    conn
-    |> put_session(:user_return_to, ~p"/users/settings")
-    |> create(params, "Senha atualizada com sucesso!")
+      true ->
+        case Accounts.update_user_password(user, user_params) do
+          {:ok, {_user, expired_tokens}} ->
+            # disconnect all existing LiveViews with old sessions
+            UserAuth.disconnect_sessions(expired_tokens)
+
+            conn
+            |> put_session(:user_return_to, ~p"/users/settings")
+            |> create(params, "Senha atualizada com sucesso!")
+
+          {:error, _changeset} ->
+            conn
+            |> put_flash(
+              :error,
+              "Não foi possível atualizar a senha. Verifique os dados informados."
+            )
+            |> redirect(to: ~p"/users/settings")
+        end
+    end
   end
 
   def delete(conn, _params) do
