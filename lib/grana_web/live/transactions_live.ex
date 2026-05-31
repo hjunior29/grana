@@ -308,22 +308,26 @@ defmodule GranaWeb.TransactionsLive do
 
   def handle_event("save-category", %{"txn_id" => id, "category_id" => category_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    transaction = Banking.get_transaction!(parse_int(id, -1), user_id)
     cat_id = parse_int(category_id, -1)
 
-    {:ok, _} = Banking.update_transaction(transaction, %{category_id: cat_id})
+    if Banking.category_belongs_to_user?(cat_id, user_id) do
+      transaction = Banking.get_transaction!(parse_int(id, -1), user_id)
+      {:ok, _} = Banking.update_transaction(transaction, %{category_id: cat_id})
 
-    description = transaction.description |> String.downcase() |> String.trim()
-    Banking.create_category_rule(%{pattern: description, user_id: user_id, category_id: cat_id})
+      description = transaction.description |> String.downcase() |> String.trim()
+      Banking.create_category_rule(%{pattern: description, user_id: user_id, category_id: cat_id})
 
-    query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+      query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
 
-    socket =
-      socket
-      |> put_flash(:info, "Categoria atualizada e regra salva")
-      |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
+      socket =
+        socket
+        |> put_flash(:info, "Categoria atualizada e regra salva")
+        |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
 
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "Categoria inválida.")}
+    end
   end
 
   def handle_event("toggle-select", %{"id" => id}, socket) do
@@ -355,17 +359,20 @@ defmodule GranaWeb.TransactionsLive do
     ids = MapSet.to_list(socket.assigns.selected_ids)
     cat_id = parse_int(category_id, -1)
 
-    {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
+    if Banking.category_belongs_to_user?(cat_id, user_id) do
+      {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
+      query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
 
-    query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+      socket =
+        socket
+        |> assign(:selected_ids, MapSet.new())
+        |> put_flash(:info, "#{count} transação(ões) atualizada(s)")
+        |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
 
-    socket =
-      socket
-      |> assign(:selected_ids, MapSet.new())
-      |> put_flash(:info, "#{count} transação(ões) atualizada(s)")
-      |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
-
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "Categoria inválida.")}
+    end
   end
 
   def handle_event("clear-selection", _params, socket) do

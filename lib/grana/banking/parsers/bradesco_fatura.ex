@@ -4,11 +4,11 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
   def parse(csv_content) do
     content = normalize_encoding(csv_content)
     lines = String.split(content, ~r/\r\n|\r|\n/)
-    year = extract_year(lines)
+    ref = extract_reference(lines)
 
     lines
     |> Enum.reject(&is_metadata_line?/1)
-    |> Enum.map(&parse_line(&1, year))
+    |> Enum.map(&parse_line(&1, ref))
     |> Enum.reject(&is_nil/1)
   end
 
@@ -31,12 +31,18 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
     end
   end
 
-  defp extract_year(lines) do
+  # Data de referência da fatura (mês/ano do cabeçalho), usada para inferir o ano
+  # de lançamentos no formato DD/MM na virada de ano.
+  defp extract_reference(lines) do
     header = List.first(lines) || ""
 
     case Regex.run(~r/(\d{2})\/(\d{2})\/(\d{4})/, header) do
-      [_, _day, _month, year] -> String.to_integer(year)
-      _ -> Date.utc_today().year
+      [_, _day, month, year] ->
+        {String.to_integer(year), String.to_integer(month)}
+
+      _ ->
+        today = Date.utc_today()
+        {today.year, today.month}
     end
   end
 
@@ -66,10 +72,10 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
       Regex.match?(~r/^[A-Z ]+;;;/, trimmed)
   end
 
-  defp parse_line(line, year) do
+  defp parse_line(line, ref) do
     case String.split(line, ";") do
       [date_str, description, _usd, brl | _] ->
-        case parse_date(String.trim(date_str), year) do
+        case parse_date(String.trim(date_str), ref) do
           {:ok, date} ->
             amount = parse_br_number(String.trim(brl))
 
@@ -114,11 +120,14 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
     end
   end
 
-  defp parse_date(date_str, year) do
+  defp parse_date(date_str, {ref_year, ref_month}) do
     case String.split(date_str, "/") do
       [day, month] ->
         with {d, ""} <- Integer.parse(day),
              {m, ""} <- Integer.parse(month) do
+          # Lançamento DD/MM sem ano: se o mês é posterior ao mês da fatura
+          # (ex.: dezembro numa fatura de janeiro), pertence ao ano anterior.
+          year = if m > ref_month, do: ref_year - 1, else: ref_year
           Date.new(year, m, d)
         else
           _ -> :error

@@ -95,9 +95,10 @@ config :grana, Oban,
      ]}
   ]
 
-# Default encryption key for dev/test (overridden in runtime.exs via CLOAK_KEY env var)
-# Generate a production key with: :crypto.strong_rand_bytes(32) |> Base.encode64()
-config :grana, :cloak_key, "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
+# Encryption key (Grana.Encrypted.Binary): NÃO definido aqui (config compartilhado).
+# Dev/test usam uma chave fixa em config/dev.exs e config/test.exs; produção EXIGE
+# a env CLOAK_KEY (config/runtime.exs faz raise se ausente). Assim a cifragem-at-rest
+# das chaves de IA nunca cai para uma chave pública/commitada em produção.
 
 # Configure Hammer (rate limiting)
 config :hammer,

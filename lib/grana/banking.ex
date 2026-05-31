@@ -1084,6 +1084,10 @@ defmodule Grana.Banking do
     |> join(:inner, [t], s in subquery(subquery),
       on: t.installment_group_id == s.group_id and t.installment_current == s.max_current
     )
+    # IMPORTANTE: installment_group_id é um hash de descrição+total, então é
+    # COMPARTILHADO entre usuários (ex.: "Netflix 12x"). Sem este escopo, a query
+    # externa vazaria parcelas de outros usuários (IDOR).
+    |> where([t, _s], t.user_id == ^user_id)
     |> where([t, _s], t.installment_current < t.installment_total)
     |> preload(:category)
     |> order_by([t], desc: fragment("ABS(?)", t.amount))
@@ -1260,7 +1264,11 @@ defmodule Grana.Banking do
     end
   end
 
-  defp category_belongs_to_user?(category_id, user_id) do
+  @doc """
+  Verdadeiro se a categoria pertence ao usuário. Use antes de gravar `category_id`
+  vindo do cliente, evitando referência cross-tenant ou FK inválido.
+  """
+  def category_belongs_to_user?(category_id, user_id) do
     Category
     |> where([c], c.id == ^category_id and c.user_id == ^user_id)
     |> Repo.exists?()

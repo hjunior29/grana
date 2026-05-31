@@ -1,5 +1,8 @@
 import Config
 
+# Chave de cifragem fixa só para testes (Grana.Encrypted.Binary).
+config :grana, :cloak_key, "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
+
 # Only in tests, remove the complexity from the password hashing algorithm
 config :bcrypt_elixir, :log_rounds, 1
 
