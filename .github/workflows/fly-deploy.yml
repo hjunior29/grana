@@ -6,6 +6,9 @@ on:
   push:
     branches:
       - main
+  pull_request: # roda o quality gate (job test) nas PRs para main
+    branches:
+      - main
 jobs:
   test:
     name: Test & lint
@@ -60,6 +63,8 @@ jobs:
   deploy:
     name: Deploy app
     needs: test
+    # Só faz deploy no push/merge para main (nunca em PR — a PR só roda o gate).
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     concurrency: deploy-group # optional: ensure only one action runs at a time
     steps:
