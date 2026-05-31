@@ -4,31 +4,45 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
   def parse(csv_content) do
     content = normalize_encoding(csv_content)
     lines = String.split(content, ~r/\r\n|\r|\n/)
-    year = extract_year(lines)
+    ref = extract_reference(lines)
 
     lines
     |> Enum.reject(&is_metadata_line?/1)
-    |> Enum.map(&parse_line(&1, year))
+    |> Enum.map(&parse_line(&1, ref))
     |> Enum.reject(&is_nil/1)
   end
 
   defp normalize_encoding(content) do
-    case String.valid?(content) do
-      true -> content
-      false -> :unicode.characters_to_binary(content, :latin1, :utf8) |> ensure_binary()
+    if String.valid?(content) do
+      content
+    else
+      case :unicode.characters_to_binary(content, :latin1, :utf8) do
+        result when is_binary(result) ->
+          result
+
+        # Falha/parcial de conversão: não descartamos o arquivo inteiro —
+        # preservamos o que dá, substituindo só os bytes inválidos.
+        {:incomplete, partial, _rest} when is_binary(partial) ->
+          String.replace_invalid(partial)
+
+        _ ->
+          String.replace_invalid(content)
+      end
     end
   end
 
-  defp ensure_binary(result) when is_binary(result), do: result
-  defp ensure_binary({:error, _, _}), do: ""
-  defp ensure_binary({:incomplete, partial, _}), do: partial
-
-  defp extract_year(lines) do
+  # Data de referência da fatura (mês/ano do cabeçalho), usada para inferir o ano
+  # de lançamentos no formato DD/MM na virada de ano.
+  defp extract_reference(lines) do
     header = List.first(lines) || ""
 
     case Regex.run(~r/(\d{2})\/(\d{2})\/(\d{4})/, header) do
-      [_, _day, _month, year] -> String.to_integer(year)
-      _ -> Date.utc_today().year
+      [_, _day, month, year] ->
+        {String.to_integer(year), String.to_integer(month)}
+
+      _ ->
+        today = Date.utc_today()
+        {today.year, today.month}
     end
   end
 
@@ -58,10 +72,10 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
       Regex.match?(~r/^[A-Z ]+;;;/, trimmed)
   end
 
-  defp parse_line(line, year) do
+  defp parse_line(line, ref) do
     case String.split(line, ";") do
       [date_str, description, _usd, brl | _] ->
-        case parse_date(String.trim(date_str), year) do
+        case parse_date(String.trim(date_str), ref) do
           {:ok, date} ->
             amount = parse_br_number(String.trim(brl))
 
@@ -106,21 +120,27 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
     end
   end
 
-  defp parse_date(date_str, year) do
+  defp parse_date(date_str, {ref_year, ref_month}) do
     case String.split(date_str, "/") do
       [day, month] ->
-        Date.new(
-          year,
-          String.to_integer(month),
-          String.to_integer(day)
-        )
+        with {d, ""} <- Integer.parse(day),
+             {m, ""} <- Integer.parse(month) do
+          # Lançamento DD/MM sem ano: se o mês é posterior ao mês da fatura
+          # (ex.: dezembro numa fatura de janeiro), pertence ao ano anterior.
+          year = if m > ref_month, do: ref_year - 1, else: ref_year
+          Date.new(year, m, d)
+        else
+          _ -> :error
+        end
 
       [day, month, year_str] ->
-        Date.new(
-          String.to_integer(year_str),
-          String.to_integer(month),
-          String.to_integer(day)
-        )
+        with {d, ""} <- Integer.parse(day),
+             {m, ""} <- Integer.parse(month),
+             {y, ""} <- Integer.parse(year_str) do
+          Date.new(y, m, d)
+        else
+          _ -> :error
+        end
 
       _ ->
         :error

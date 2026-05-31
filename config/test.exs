@@ -1,5 +1,8 @@
 import Config
 
+# Chave de cifragem fixa só para testes (Grana.Encrypted.Binary).
+config :grana, :cloak_key, "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
+
 # Only in tests, remove the complexity from the password hashing algorithm
 config :bcrypt_elixir, :log_rounds, 1
 
@@ -32,8 +35,14 @@ config :swoosh, :api_client, false
 # Disable Oban in tests
 config :grana, Oban, testing: :manual
 
+# Skip rate limiting in tests
+config :grana, :skip_rate_limit, true
+
 # Print only warnings and errors during test
 config :logger, level: :warning
+
+# Keep generated Ecto validation messages aligned with the existing test suite.
+config :grana, GranaWeb.Gettext, default_locale: "en"
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime

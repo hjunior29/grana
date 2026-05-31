@@ -98,7 +98,7 @@ defmodule GranaWeb.TransactionsLive do
           nil
 
         id ->
-          stmt = Banking.get_statement!(String.to_integer(id), user_id)
+          stmt = Banking.get_statement!(parse_int(id, -1), user_id)
           %{id: stmt.id, filename: stmt.filename, bank: stmt.bank}
       end
 
@@ -155,7 +155,7 @@ defmodule GranaWeb.TransactionsLive do
           nil
 
         id ->
-          stmt = Investments.get_statement!(String.to_integer(id), user_id)
+          stmt = Investments.get_statement!(parse_int(id, -1), user_id)
           inst_name = if stmt.institution, do: stmt.institution.name, else: "—"
 
           inst_logo =
@@ -287,7 +287,7 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   def handle_event("toggle-description", %{"id" => id}, socket) do
-    id = String.to_integer(id)
+    id = parse_int(id, -1)
     expanded = socket.assigns.expanded_ids
 
     expanded =
@@ -299,7 +299,7 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   def handle_event("edit-category", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :editing_id, String.to_integer(id))}
+    {:noreply, assign(socket, :editing_id, parse_int(id, -1))}
   end
 
   def handle_event("cancel-edit", _params, socket) do
@@ -308,26 +308,30 @@ defmodule GranaWeb.TransactionsLive do
 
   def handle_event("save-category", %{"txn_id" => id, "category_id" => category_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    transaction = Banking.get_transaction!(String.to_integer(id), user_id)
-    cat_id = String.to_integer(category_id)
+    cat_id = parse_int(category_id, -1)
 
-    {:ok, _} = Banking.update_transaction(transaction, %{category_id: cat_id})
+    if Banking.category_belongs_to_user?(cat_id, user_id) do
+      transaction = Banking.get_transaction!(parse_int(id, -1), user_id)
+      {:ok, _} = Banking.update_transaction(transaction, %{category_id: cat_id})
 
-    description = transaction.description |> String.downcase() |> String.trim()
-    Banking.create_category_rule(%{pattern: description, user_id: user_id, category_id: cat_id})
+      description = transaction.description |> String.downcase() |> String.trim()
+      Banking.create_category_rule(%{pattern: description, user_id: user_id, category_id: cat_id})
 
-    query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+      query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
 
-    socket =
-      socket
-      |> put_flash(:info, "Categoria atualizada e regra salva")
-      |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
+      socket =
+        socket
+        |> put_flash(:info, "Categoria atualizada e regra salva")
+        |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
 
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "Categoria inválida.")}
+    end
   end
 
   def handle_event("toggle-select", %{"id" => id}, socket) do
-    id = String.to_integer(id)
+    id = parse_int(id, -1)
     selected = socket.assigns.selected_ids
 
     selected =
@@ -353,19 +357,22 @@ defmodule GranaWeb.TransactionsLive do
   def handle_event("bulk-categorize", %{"category_id" => category_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     ids = MapSet.to_list(socket.assigns.selected_ids)
-    cat_id = String.to_integer(category_id)
+    cat_id = parse_int(category_id, -1)
 
-    {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
+    if Banking.category_belongs_to_user?(cat_id, user_id) do
+      {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
+      query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
 
-    query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+      socket =
+        socket
+        |> assign(:selected_ids, MapSet.new())
+        |> put_flash(:info, "#{count} transação(ões) atualizada(s)")
+        |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
 
-    socket =
-      socket
-      |> assign(:selected_ids, MapSet.new())
-      |> put_flash(:info, "#{count} transação(ões) atualizada(s)")
-      |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
-
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "Categoria inválida.")}
+    end
   end
 
   def handle_event("clear-selection", _params, socket) do
@@ -447,7 +454,7 @@ defmodule GranaWeb.TransactionsLive do
           </p>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-6 -ml-4">
+        <div role="tablist" class="tabs tabs-border mb-6">
           <button
             role="tab"
             phx-click="switch_tab"

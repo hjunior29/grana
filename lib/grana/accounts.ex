@@ -275,9 +275,20 @@ defmodule Grana.Accounts do
 
   @doc """
   Deletes a user and all associated data.
+
+  All `users_tokens` are removed by FK cascade (`on_delete: :delete_all`), which
+  invalidates the session and remember-me cookies server-side.
   """
   def delete_user(user) do
     Repo.delete(user)
+  end
+
+  @doc """
+  Lists a user's active session tokens. Used to disconnect any live LiveView
+  sessions when the account is deleted.
+  """
+  def list_user_session_tokens(user) do
+    Repo.all(from(t in UserToken, where: t.user_id == ^user.id and t.context == "session"))
   end
 
   @doc """

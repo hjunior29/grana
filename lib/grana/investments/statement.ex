@@ -30,5 +30,9 @@ defmodule Grana.Investments.Statement do
     ])
     |> validate_required([:filename, :user_id, :institution_id])
     |> validate_inclusion(:status, ["processing", "completed", "error"])
+    |> unique_constraint([:user_id, :institution_id, :filename, :period_start, :period_end],
+      name: :investment_statements_unique_upload,
+      message: "este extrato já foi importado anteriormente"
+    )
   end
 end

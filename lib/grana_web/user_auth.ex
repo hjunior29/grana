@@ -67,7 +67,8 @@ defmodule GranaWeb.UserAuth do
   def fetch_current_scope_for_user(conn, _opts) do
     with {token, conn} <- ensure_user_token(conn),
          {user, token_inserted_at} <- Accounts.get_user_by_session_token(token) do
-      ErrorTracker.set_context(%{user_id: user.id, user_email: user.email})
+      # Só o id no contexto de erros — e-mail é PII e não deve ir para o tracker.
+      ErrorTracker.set_context(%{user_id: user.id})
 
       conn
       |> assign(:current_scope, Scope.for_user(user))

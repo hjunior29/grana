@@ -4,6 +4,7 @@ defmodule Grana.Workers.InvestmentUploadWorker do
   """
   use Oban.Worker, queue: :uploads, max_attempts: 1
 
+  require Logger
   alias Grana.Investments
 
   @impl Oban.Worker
@@ -23,17 +24,32 @@ defmodule Grana.Workers.InvestmentUploadWorker do
       |> Enum.with_index(1)
       |> Enum.map(fn {%{"filename" => filename, "content_b64" => content_b64}, index} ->
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:processing_file, index, total, filename})
-        content = Base.decode64!(content_b64)
 
         result =
-          case Investments.StatementProcessor.process(
-                 content,
-                 institution_slug,
-                 user_id,
-                 filename
-               ) do
-            {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
-            {:error, reason} -> {:error, filename, reason}
+          case Base.decode64(content_b64) do
+            {:ok, content} ->
+              try do
+                case Investments.StatementProcessor.process(
+                       content,
+                       institution_slug,
+                       user_id,
+                       filename
+                     ) do
+                  {:ok, r} -> {:ok, filename, r.transaction_count, Map.get(r, :warnings, [])}
+                  {:error, reason} -> {:error, filename, reason}
+                end
+              rescue
+                e ->
+                  Logger.error(
+                    "Falha ao processar investimentos #{filename}: #{Exception.message(e)}\n" <>
+                      Exception.format_stacktrace(__STACKTRACE__)
+                  )
+
+                  {:error, filename, "Não foi possível processar este arquivo"}
+              end
+
+            :error ->
+              {:error, filename, "Arquivo com codificação inválida"}
           end
 
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:file_done, index, total})

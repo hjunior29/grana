@@ -10,7 +10,7 @@ defmodule Grana.Workers.QuoteFetcher do
 
   @impl Oban.Worker
   def perform(_job) do
-    tickers = Investments.all_active_tickers()
+    tickers = Investments.all_active_tickers_global()
 
     case tickers do
       [] ->

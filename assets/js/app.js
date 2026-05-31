@@ -4,8 +4,23 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 
+// --- Theme ---
+const setTheme = (theme) => {
+  if (theme === "system") {
+    localStorage.removeItem("phx:theme")
+    document.documentElement.removeAttribute("data-theme")
+  } else {
+    localStorage.setItem("phx:theme", theme)
+    document.documentElement.setAttribute("data-theme", theme)
+  }
+}
+
+setTheme(localStorage.getItem("phx:theme") || "system")
+window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"))
+window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme))
+
 // --- Tooltip Utility ---
-const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:oklch(var(--b3) / 0.85);backdrop-filter:blur(8px);color:oklch(var(--bc));box-shadow:0 4px 12px rgba(0,0,0,0.2);font-size:13px;pointer-events:none;white-space:nowrap;display:none"
+const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:color-mix(in oklch, var(--color-base-300) 88%, transparent);backdrop-filter:blur(12px);color:var(--color-base-content);box-shadow:0 14px 36px color-mix(in oklch, var(--color-base-content) 20%, transparent);font-size:13px;pointer-events:none;white-space:nowrap;display:none;border:1px solid var(--grana-border)"
 
 function showTooltip(container, event, html) {
   let tip = container.querySelector(".chart-tooltip")
@@ -42,6 +57,19 @@ function pct(val, total) {
   return total > 0 ? ((val / total) * 100).toFixed(1) : "0"
 }
 
+// Escapes a value for safe interpolation into HTML/SVG text and double-quoted
+// attributes. Category names/colors are user-controlled, so any value coming
+// from server data must pass through this before being put into innerHTML.
+function escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+window.escapeHtml = escapeHtml
+
 // Expose tooltip utilities for inline scripts (landing page)
 window.showTooltip = showTooltip
 window.hideTooltip = hideTooltip
@@ -58,7 +86,7 @@ const CategoryChart = {
       const name = target.dataset.catName
       const value = parseFloat(target.dataset.catValue)
       const total = parseFloat(target.dataset.catTotal)
-      showTooltip(this.el, e, `<strong>${name}</strong><br>${fmtBRL(value)} · ${pct(value, total)}%`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(name)}</strong><br>${fmtBRL(value)} · ${pct(value, total)}%`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -97,8 +125,8 @@ const CategoryChart = {
       const ix2 = cx + innerRadius * Math.cos(startAngle)
       const iy2 = cy + innerRadius * Math.sin(startAngle)
 
-      const urlAttr = item.url ? ` data-cat-url="${item.url}"` : ""
-      svg += `<path d="M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${item.color}" opacity="0.85" class="transition-all hover:opacity-100 cursor-pointer" style="transform-origin:${cx}px ${cy}px" data-cat-name="${item.name}" data-cat-value="${item.value}" data-cat-total="${total}"${urlAttr}></path>`
+      const urlAttr = item.url ? ` data-cat-url="${escapeHtml(item.url)}"` : ""
+      svg += `<path d="M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${escapeHtml(item.color)}" opacity="0.85" class="transition-all hover:opacity-100 cursor-pointer" style="transform-origin:${cx}px ${cy}px" data-cat-name="${escapeHtml(item.name)}" data-cat-value="${item.value}" data-cat-total="${total}"${urlAttr}></path>`
       startAngle = endAngle
     })
 
@@ -125,7 +153,7 @@ const DailyChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-day-date]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${target.dataset.dayDate}</strong><br>${fmtBRL(parseFloat(target.dataset.dayValue))}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${fmtBRL(parseFloat(target.dataset.dayValue))}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -155,12 +183,12 @@ const DailyChart = {
       const x = padding.left + (i * (chartWidth / data.length)) + 1
       const y = padding.top + chartHeight - barHeight
 
-      const urlAttr = item.url ? ` data-day-url="${item.url}"` : ""
+      const urlAttr = item.url ? ` data-day-url="${escapeHtml(item.url)}"` : ""
       const barFill = this.el.dataset.barFill || "fill-primary"
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${item.date}" data-day-value="${item.value}"${urlAttr}></rect>`
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${escapeHtml(item.date)}" data-day-value="${item.value}"${urlAttr}></rect>`
 
       if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
-        svg += `<text x="${x + barWidth / 2}" y="${height - 5}" text-anchor="middle" class="fill-base-content text-[8px] opacity-40">${item.date}</text>`
+        svg += `<text x="${x + barWidth / 2}" y="${height - 5}" text-anchor="middle" class="fill-base-content text-[8px] opacity-40">${escapeHtml(item.date)}</text>`
       }
     })
 
@@ -257,7 +285,7 @@ const IncomeExpensesChart = {
       const incomeLabel = this.el.dataset.incomeLabel || "Receitas"
       const expensesLabel = this.el.dataset.expensesLabel || "Despesas"
       const typeLabel = type === "income" ? incomeLabel : expensesLabel
-      showTooltip(this.el, e, `<strong>${label}</strong><br>${typeLabel}: ${fmtBRL(value)}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(label)}</strong><br>${escapeHtml(typeLabel)}: ${fmtBRL(value)}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -291,14 +319,15 @@ const IncomeExpensesChart = {
       const incomeH = (item.income / maxVal) * chartHeight
       const expenseH = (item.expenses / maxVal) * chartHeight
 
-      const incUrl = item.income_url ? ` data-ie-url="${item.income_url}"` : ""
-      const expUrl = item.expenses_url ? ` data-ie-url="${item.expenses_url}"` : ""
+      const incUrl = item.income_url ? ` data-ie-url="${escapeHtml(item.income_url)}"` : ""
+      const expUrl = item.expenses_url ? ` data-ie-url="${escapeHtml(item.expenses_url)}"` : ""
 
       const incFill = this.el.dataset.incomeFill || "fill-success"
       const expFill = this.el.dataset.expensesFill || "fill-error"
-      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
-      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${item.label}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
-      svg += `<text x="${groupX + groupWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${item.label}</text>`
+      const safeLabel = escapeHtml(item.label)
+      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
+      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
+      svg += `<text x="${groupX + groupWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${safeLabel}</text>`
     })
 
     svg += `</svg>`
@@ -326,7 +355,7 @@ const ProjectionChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-proj-label]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${target.dataset.projLabel}</strong><br>${fmtBRL(parseFloat(target.dataset.projValue))}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${fmtBRL(parseFloat(target.dataset.projValue))}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
   },
@@ -352,8 +381,9 @@ const ProjectionChart = {
       const x = padding.left + (i * (chartWidth / data.length)) + 2
       const y = padding.top + chartHeight - barHeight
 
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${item.label}" data-proj-value="${item.value}"></rect>`
-      svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${item.label}</text>`
+      const safeLabel = escapeHtml(item.label)
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
+      svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${safeLabel}</text>`
     })
 
     svg += `</svg>`
@@ -644,7 +674,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: Hooks,
 })
 
-topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
+topbar.config({barColors: {0: "oklch(68% 0.16 166)"}, shadowColor: "rgba(0, 0, 0, .18)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 

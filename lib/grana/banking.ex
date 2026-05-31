@@ -1,7 +1,15 @@
 defmodule Grana.Banking do
   import Ecto.Query
   alias Grana.Repo
-  alias Grana.Banking.{BankStatement, Transaction, Category, CategoryRule, AIAnalysis, FinancialGoal}
+
+  alias Grana.Banking.{
+    BankStatement,
+    Transaction,
+    Category,
+    CategoryRule,
+    AIAnalysis,
+    FinancialGoal
+  }
 
   # Categories
 
@@ -83,7 +91,7 @@ defmodule Grana.Banking do
       attrs = Map.merge(cat_attrs, %{user_id: user_id, is_system: true})
 
       %Category{}
-      |> Category.changeset(attrs)
+      |> Category.system_changeset(attrs)
       |> Repo.insert(on_conflict: :nothing, conflict_target: [:name, :user_id])
     end)
 
@@ -143,9 +151,9 @@ defmodule Grana.Banking do
     Repo.delete(statement)
   end
 
-  def delete_statements(ids) when is_list(ids) do
+  def delete_statements(ids, user_id) when is_list(ids) do
     BankStatement
-    |> where([s], s.id in ^ids)
+    |> where([s], s.id in ^ids and s.user_id == ^user_id)
     |> Repo.delete_all()
   end
 
@@ -356,18 +364,24 @@ defmodule Grana.Banking do
   ]
 
   def detect_internal_transfers(user_id) do
-    # 1) Reset all
-    Transaction
-    |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
-    |> Repo.update_all(set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)])
+    Repo.transaction(fn ->
+      # 1) Reset all
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
+      |> Repo.update_all(
+        set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
+      )
 
-    # 2) Mark credit card bill payments in extratos
-    mark_cc_bill_payments(user_id)
+      # 2) Mark credit card bill payments in extratos
+      mark_cc_bill_payments(user_id)
 
-    # 3) Mark matching inter-account transfers
-    mark_inter_account_transfers(user_id)
-
-    :ok
+      # 3) Mark matching inter-account transfers
+      mark_inter_account_transfers(user_id)
+    end)
+    |> case do
+      {:ok, _} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp mark_cc_bill_payments(user_id) do
@@ -428,14 +442,20 @@ defmodule Grana.Banking do
   end
 
   defp find_transfer_matches(debits, credits) do
+    # Índice de créditos por valor (em centavos) para evitar varrer todos os
+    # créditos por débito (O(n²) → ~O(n)). group_by preserva a ordem original
+    # dentro de cada bucket, e o Decimal.equal? no predicado mantém a precisão.
+    credits_by_amount = Enum.group_by(credits, &transfer_amount_key(&1.amount))
+
     # Track which credits have already been matched to avoid double-matching
     {matched_ids, _used_credits} =
       Enum.reduce(debits, {[], MapSet.new()}, fn debit, {ids, used} ->
         debit_amount = Decimal.abs(debit.amount)
         debit_bank = debit.bank_statement && debit.bank_statement.bank
+        candidates = Map.get(credits_by_amount, transfer_amount_key(debit.amount), [])
 
         match =
-          Enum.find(credits, fn credit ->
+          Enum.find(candidates, fn credit ->
             credit_bank = credit.bank_statement && credit.bank_statement.bank
 
             not MapSet.member?(used, credit.id) and
@@ -451,6 +471,11 @@ defmodule Grana.Banking do
       end)
 
     matched_ids
+  end
+
+  # Chave de agrupamento por valor absoluto em centavos (money tem 2 casas).
+  defp transfer_amount_key(amount) do
+    amount |> Decimal.abs() |> Decimal.mult(100) |> Decimal.round() |> Decimal.to_integer()
   end
 
   # Category Rules
@@ -473,6 +498,23 @@ defmodule Grana.Banking do
 
   def categorize_transaction(description, user_id) do
     rules = list_category_rules(user_id)
+    categorize_transaction_with_rules(description, rules, user_id)
+  end
+
+  @doc """
+  Categorize multiple descriptions at once, loading rules only once.
+  Returns a map of %{description => category_id}.
+  """
+  def categorize_transactions(descriptions, user_id) when is_list(descriptions) do
+    rules = list_category_rules(user_id)
+
+    Map.new(descriptions, fn description ->
+      {description, categorize_transaction_with_rules(description, rules, user_id)}
+    end)
+  end
+
+  @doc false
+  def categorize_transaction_with_rules(description, rules, user_id) do
     desc_lower = String.downcase(description)
 
     matched_rule =
@@ -752,13 +794,20 @@ defmodule Grana.Banking do
       end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
+    # Pre-compute only the top debits/credits instead of returning (and holding
+    # in LiveView assigns) the full transaction list, which can be thousands of rows.
+    # 15 covers both the dashboard (shows 10) and the AI prompt (uses up to 15).
+    top_expenses = top_n_by_amount(transactions, "debit", 15)
+    top_income = top_n_by_amount(transactions, "credit", 15)
+
     %{
       total_income: total_income,
       total_expenses: total_expenses,
       total_investments: total_investments,
       balance: Decimal.sub(total_income, Decimal.add(total_expenses, total_investments)),
       by_category: by_category,
-      transactions: transactions,
+      top_expenses: top_expenses,
+      top_income: top_income,
       transaction_count: length(relevant),
       income_count: length(income_txns),
       expense_count: length(expense_debits),
@@ -766,6 +815,13 @@ defmodule Grana.Banking do
       refund_count: length(refunds),
       internal_count: length(internal)
     }
+  end
+
+  defp top_n_by_amount(transactions, type, limit) do
+    transactions
+    |> Enum.filter(&(&1.type == type))
+    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
+    |> Enum.take(limit)
   end
 
   defp bill_payment?(t) do
@@ -885,6 +941,7 @@ defmodule Grana.Banking do
         transactions
         |> Enum.map(& &1.bank_statement)
         |> Enum.uniq_by(& &1.id)
+        |> Enum.reject(&is_nil(&1.period_end))
         |> Map.new(fn bs -> {bs.id, bs.period_end.month} end)
       else
         %{}
@@ -1027,11 +1084,23 @@ defmodule Grana.Banking do
     |> join(:inner, [t], s in subquery(subquery),
       on: t.installment_group_id == s.group_id and t.installment_current == s.max_current
     )
+    # IMPORTANTE: installment_group_id é um hash de descrição+total, então é
+    # COMPARTILHADO entre usuários (ex.: "Netflix 12x"). Sem este escopo, a query
+    # externa vazaria parcelas de outros usuários (IDOR).
+    |> where([t, _s], t.user_id == ^user_id)
     |> where([t, _s], t.installment_current < t.installment_total)
     |> preload(:category)
     |> order_by([t], desc: fragment("ABS(?)", t.amount))
     |> Repo.all()
   end
+
+  # Parcelas restantes, à prova de nil (a query já filtra current < total, mas
+  # defendemos contra dados parciais para não derrubar a projeção).
+  defp installments_remaining(%{installment_total: total, installment_current: current})
+       when is_integer(total) and is_integer(current),
+       do: max(total - current, 0)
+
+  defp installments_remaining(_), do: 0
 
   def installment_projection_summary(user_id, opts \\ []) do
     installments = list_active_installments(user_id, opts)
@@ -1040,7 +1109,7 @@ defmodule Grana.Banking do
 
     total_remaining =
       Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
-        remaining = txn.installment_total - txn.installment_current
+        remaining = installments_remaining(txn)
         Decimal.add(acc, Decimal.mult(Decimal.abs(txn.amount), remaining))
       end)
 
@@ -1078,7 +1147,7 @@ defmodule Grana.Banking do
 
       total =
         Enum.reduce(installments, Decimal.new(0), fn txn, acc ->
-          remaining = txn.installment_total - txn.installment_current
+          remaining = installments_remaining(txn)
 
           if offset < remaining do
             Decimal.add(acc, Decimal.abs(txn.amount))
@@ -1107,7 +1176,11 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
-  def get_ai_analysis!(id), do: Repo.get!(AIAnalysis, id)
+  def get_ai_analysis!(id, user_id) do
+    AIAnalysis
+    |> where([a], a.id == ^id and a.user_id == ^user_id)
+    |> Repo.one!()
+  end
 
   def delete_ai_analysis(%AIAnalysis{} = analysis) do
     Repo.delete(analysis)
@@ -1161,13 +1234,44 @@ defmodule Grana.Banking do
   def create_financial_goal(attrs) do
     %FinancialGoal{}
     |> FinancialGoal.changeset(attrs)
+    |> validate_goal_category_ownership()
     |> Repo.insert()
   end
 
   def update_financial_goal(%FinancialGoal{} = goal, attrs) do
     goal
     |> FinancialGoal.changeset(attrs)
+    |> validate_goal_category_ownership()
     |> Repo.update()
+  end
+
+  # Guards against cross-user reference: a goal's category must belong to the
+  # same user. Without this, a crafted category_id from the client could attach
+  # another user's category to the goal.
+  defp validate_goal_category_ownership(changeset) do
+    category_id = Ecto.Changeset.get_field(changeset, :category_id)
+    user_id = Ecto.Changeset.get_field(changeset, :user_id)
+
+    cond do
+      is_nil(category_id) or is_nil(user_id) ->
+        changeset
+
+      category_belongs_to_user?(category_id, user_id) ->
+        changeset
+
+      true ->
+        Ecto.Changeset.add_error(changeset, :category_id, "categoria inválida")
+    end
+  end
+
+  @doc """
+  Verdadeiro se a categoria pertence ao usuário. Use antes de gravar `category_id`
+  vindo do cliente, evitando referência cross-tenant ou FK inválido.
+  """
+  def category_belongs_to_user?(category_id, user_id) do
+    Category
+    |> where([c], c.id == ^category_id and c.user_id == ^user_id)
+    |> Repo.exists?()
   end
 
   def delete_financial_goal(%FinancialGoal{} = goal) do

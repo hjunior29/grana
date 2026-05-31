@@ -6,11 +6,67 @@ on:
   push:
     branches:
       - main
+  pull_request: # roda o quality gate (job test) nas PRs para main
+    branches:
+      - main
 jobs:
+  test:
+    name: Test & lint
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "28.0.4"
+
+      - name: Cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - run: mix deps.get
+      - run: mix deps.unlock --check-unused
+      # Dependency vulnerability scan. The decimal advisory (GHSA-rhv4-8758-jx7v)
+      # is ignored on purpose: the only fix is decimal 3.0, but postgrex still pins
+      # `decimal ~> 2.0`, so it can't be bumped yet. Re-evaluate when postgrex allows 3.0.
+      - run: mix deps.audit --ignore-advisory-ids GHSA-rhv4-8758-jx7v
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      # Static analysis (consistência/correção). Débito estrutural legado está
+      # marcado como baseline em .credo.exs; o gate falha em regressões novas.
+      - run: mix credo --strict
+      # Roda os testes E aplica o piso de cobertura (minimum_coverage em coveralls.json).
+      - run: mix coveralls
+
   deploy:
     name: Deploy app
+    needs: test
+    # Só faz deploy no push/merge para main (nunca em PR — a PR só roda o gate).
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-group # optional: ensure only one action runs at a time
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master

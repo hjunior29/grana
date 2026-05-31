@@ -62,26 +62,39 @@ defmodule Grana.Investments.StatementProcessor do
     if new_entries == [] do
       {:error, "Todas as transações deste arquivo já foram importadas anteriormente"}
     else
-      {:ok, statement} =
-        Investments.create_statement(%{
-          filename: filename,
-          user_id: user_id,
-          institution_id: institution.id,
-          period_start: period_start,
-          period_end: period_end,
-          status: "processing"
-        })
+      result =
+        Grana.Repo.transaction(fn ->
+          case Investments.create_statement(%{
+                 filename: filename,
+                 user_id: user_id,
+                 institution_id: institution.id,
+                 period_start: period_start,
+                 period_end: period_end,
+                 status: "processing"
+               }) do
+            {:ok, statement} ->
+              entries = Enum.map(new_entries, &Map.put(&1, :statement_id, statement.id))
 
-      entries = Enum.map(new_entries, &Map.put(&1, :statement_id, statement.id))
+              {count, _} = Investments.bulk_insert_transactions(entries)
 
-      {count, _} = Investments.bulk_insert_transactions(entries)
+              {:ok, _} =
+                Investments.update_statement(statement, %{
+                  status: "completed",
+                  total_transactions: count
+                })
 
-      Investments.update_statement(statement, %{
-        status: "completed",
-        total_transactions: count
-      })
+              %{statement_id: statement.id, transaction_count: count, warnings: warnings}
 
-      {:ok, %{statement_id: statement.id, transaction_count: count, warnings: warnings}}
+            {:error, _changeset} ->
+              Grana.Repo.rollback(:duplicate_statement)
+          end
+        end)
+
+      case result do
+        {:ok, data} -> {:ok, data}
+        {:error, :duplicate_statement} -> {:error, "Este extrato já foi importado anteriormente"}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 

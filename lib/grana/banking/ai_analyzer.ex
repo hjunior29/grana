@@ -4,6 +4,7 @@ defmodule Grana.Banking.AIAnalyzer do
   alias Grana.Investments
   alias Grana.Investments.Constants
   alias Grana.AI.Provider
+  alias Grana.AI.PromptSanitizer
 
   # ── Banking Analysis ──
 
@@ -224,20 +225,14 @@ defmodule Grana.Banking.AIAnalyzer do
   defp build_prompt(summary, period, filter_desc, custom_prompt, extra, year, month) do
     base = base_prompt_data(summary, extra, year, month)
 
-    custom_prompt =
-      case custom_prompt do
-        nil -> ""
-        "" -> ""
-        p -> "\nPERGUNTA/INSTRUÇÃO DO USUÁRIO (responda no campo \"resposta\" do JSON):\n#{p}\n"
-      end
-
-    has_prompt = custom_prompt != ""
+    custom_prompt_section = PromptSanitizer.wrap_custom_prompt(custom_prompt)
+    has_prompt = custom_prompt_section != ""
 
     """
     Analise os dados financeiros de #{period} de um usuário brasileiro e forneça insights úteis.
 
     #{filter_desc}#{base}
-    #{custom_prompt}
+    #{custom_prompt_section}
     #{json_format_instruction(has_prompt)}
     """
   end
@@ -331,27 +326,24 @@ defmodule Grana.Banking.AIAnalyzer do
           "\nRECEITAS VS DESPESAS (mensal):\n#{text}\n"
       end
 
-    # ── Top despesas ──
+    # ── Top despesas ── (pré-computadas em build_summary; até 15)
     top_expenses =
-      summary.transactions
-      |> Enum.filter(&(&1.type == "debit"))
-      |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
-      |> Enum.take(15)
+      summary.top_expenses
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
-        "- #{t.description}: R$ #{fmt(Decimal.abs(t.amount))} (#{cat})"
+        desc = PromptSanitizer.sanitize_description(t.description)
+        "- #{desc}: R$ #{fmt(Decimal.abs(t.amount))} (#{cat})"
       end)
       |> Enum.join("\n")
 
     # ── Top receitas ──
     top_income =
-      summary.transactions
-      |> Enum.filter(&(&1.type == "credit"))
-      |> Enum.sort_by(fn t -> Decimal.to_float(t.amount) end, :desc)
+      summary.top_income
       |> Enum.take(10)
       |> Enum.map(fn t ->
         cat = if t.category, do: t.category.name, else: "Sem Categoria"
-        "- #{t.description}: R$ #{fmt(t.amount)} (#{cat})"
+        desc = PromptSanitizer.sanitize_description(t.description)
+        "- #{desc}: R$ #{fmt(t.amount)} (#{cat})"
       end)
       |> Enum.join("\n")
 
@@ -368,7 +360,9 @@ defmodule Grana.Banking.AIAnalyzer do
             remaining = txn.installment_total - txn.installment_current
             remaining_value = Decimal.mult(Decimal.abs(txn.amount), remaining)
 
-            "- #{txn.description}: R$ #{fmt(Decimal.abs(txn.amount))}/mês (#{txn.installment_current}/#{txn.installment_total}) - Restante: R$ #{fmt(remaining_value)} (#{cat})"
+            desc = PromptSanitizer.sanitize_description(txn.description)
+
+            "- #{desc}: R$ #{fmt(Decimal.abs(txn.amount))}/mês (#{txn.installment_current}/#{txn.installment_total}) - Restante: R$ #{fmt(remaining_value)} (#{cat})"
           end)
           |> Enum.join("\n")
 
@@ -645,13 +639,7 @@ defmodule Grana.Banking.AIAnalyzer do
           "\nGANHOS POR ATIVO:\n#{text}\n"
       end
 
-    custom_part =
-      case custom_prompt do
-        nil -> ""
-        "" -> ""
-        p -> "\nPERGUNTA/INSTRUÇÃO DO USUÁRIO (responda no campo \"resposta\" do JSON):\n#{p}\n"
-      end
-
+    custom_part = PromptSanitizer.wrap_custom_prompt(custom_prompt)
     has_prompt = custom_part != ""
 
     """
@@ -724,6 +712,7 @@ defmodule Grana.Banking.AIAnalyzer do
 
   defp parse_response(response_body) do
     text = Provider.extract_text(response_body)
+    finish = Provider.finish_reason(response_body)
 
     json_text =
       case Regex.run(~r/\{.*\}/s, text) do
@@ -732,14 +721,39 @@ defmodule Grana.Banking.AIAnalyzer do
       end
 
     case Jason.decode(json_text) do
-      {:ok, %{"nota" => _, "titulo" => _, "resumo" => _, "pontos" => _} = result} ->
-        {:ok, result}
+      {:ok, result} when is_map(result) ->
+        if valid_analysis?(result),
+          do: {:ok, result},
+          else: {:error, "Formato de resposta inesperado da IA"}
 
-      {:ok, _} ->
-        {:error, "Formato de resposta inesperado da IA"}
-
-      {:error, _} ->
-        {:error, "Falha ao processar resposta da IA"}
+      _ ->
+        {:error, decode_error_message(finish)}
     end
   end
+
+  # Valida o contrato mínimo de saída: campos presentes e com os tipos que a UI
+  # consome (pontos precisa ser lista; nota um número ou string numérica).
+  defp valid_analysis?(%{"titulo" => titulo, "resumo" => resumo, "pontos" => pontos} = result)
+       when is_binary(titulo) and is_binary(resumo) and is_list(pontos) do
+    case Map.get(result, "nota") do
+      n when is_number(n) -> true
+      n when is_binary(n) -> match?({_, _}, Float.parse(n))
+      _ -> false
+    end
+  end
+
+  defp valid_analysis?(_), do: false
+
+  defp decode_error_message("MAX_TOKENS"),
+    do:
+      "A resposta da IA foi cortada por exceder o limite de tokens. Reduza o período analisado ou seja mais específico na pergunta."
+
+  defp decode_error_message("SAFETY"),
+    do: "A IA bloqueou a resposta por filtros de segurança. Reformule a pergunta."
+
+  defp decode_error_message("RECITATION"),
+    do: "A IA interrompeu a resposta (conteúdo recitado). Tente novamente com outra pergunta."
+
+  defp decode_error_message(_),
+    do: "Falha ao processar resposta da IA"
 end

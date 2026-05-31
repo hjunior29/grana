@@ -13,30 +13,28 @@ defmodule Grana.Banking.Parsers.Nubank do
   defp parse_line(line) do
     case String.split(line, ",", parts: 4) do
       [date_str, value_str, identifier, description] ->
-        case parse_date(String.trim(date_str)) do
-          {:ok, date} ->
-            amount = parse_amount(String.trim(value_str))
-            type = if Decimal.compare(amount, 0) == :lt, do: "debit", else: "credit"
+        with {:ok, date} <- parse_date(String.trim(date_str)),
+             amount when not is_nil(amount) <- parse_amount(String.trim(value_str)) do
+          type = if Decimal.compare(amount, 0) == :lt, do: "debit", else: "credit"
 
-            trimmed_desc = String.trim(description)
-            cleaned_desc = clean_description(trimmed_desc)
-            {final_desc, inst_current, inst_total} = InstallmentParser.extract(cleaned_desc)
-            group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
+          trimmed_desc = String.trim(description)
+          cleaned_desc = clean_description(trimmed_desc)
+          {final_desc, inst_current, inst_total} = InstallmentParser.extract(cleaned_desc)
+          group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
 
-            %{
-              date: date,
-              amount: amount,
-              type: type,
-              identifier: String.trim(identifier),
-              description: final_desc,
-              original_description: trimmed_desc,
-              installment_current: inst_current,
-              installment_total: inst_total,
-              installment_group_id: group_id
-            }
-
-          _ ->
-            nil
+          %{
+            date: date,
+            amount: amount,
+            type: type,
+            identifier: String.trim(identifier),
+            description: final_desc,
+            original_description: trimmed_desc,
+            installment_current: inst_current,
+            installment_total: inst_total,
+            installment_group_id: group_id
+          }
+        else
+          _ -> nil
         end
 
       _ ->
@@ -45,21 +43,21 @@ defmodule Grana.Banking.Parsers.Nubank do
   end
 
   defp parse_date(date_str) do
-    case String.split(date_str, "/") do
-      [day, month, year] ->
-        Date.new(
-          String.to_integer(year),
-          String.to_integer(month),
-          String.to_integer(day)
-        )
-
-      _ ->
-        :error
+    with [day, month, year] <- String.split(date_str, "/"),
+         {d, ""} <- Integer.parse(day),
+         {m, ""} <- Integer.parse(month),
+         {y, ""} <- Integer.parse(year) do
+      Date.new(y, m, d)
+    else
+      _ -> :error
     end
   end
 
   defp parse_amount(value_str) do
-    Decimal.new(value_str)
+    case Decimal.parse(value_str) do
+      {decimal, _rest} -> decimal
+      :error -> nil
+    end
   end
 
   defp clean_description(desc) do

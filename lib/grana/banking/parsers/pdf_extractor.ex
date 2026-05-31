@@ -233,16 +233,13 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
   defp parse_transaction(_), do: nil
 
   defp parse_date(date_str) do
-    case String.split(date_str, "/") do
-      [day, month, year] ->
-        Date.new(
-          String.to_integer(year),
-          String.to_integer(month),
-          String.to_integer(day)
-        )
-
-      _ ->
-        :error
+    with [day, month, year] <- String.split(date_str, "/"),
+         {d, ""} <- Integer.parse(day),
+         {m, ""} <- Integer.parse(month),
+         {y, ""} <- Integer.parse(year) do
+      Date.new(y, m, d)
+    else
+      _ -> :error
     end
   end
 
@@ -250,11 +247,29 @@ defmodule Grana.Banking.Parsers.PdfExtractor do
   defp to_decimal(val) when is_integer(val), do: Decimal.new(val)
 
   defp to_decimal(val) when is_binary(val) do
-    case Decimal.parse(val) do
+    case val |> normalize_number() |> Decimal.parse() do
       {d, _} -> d
       :error -> Decimal.new(0)
     end
   end
 
   defp to_decimal(_), do: Decimal.new(0)
+
+  # Normalizes pt-BR formatted numbers ("1.234,56" / "1234,56") to a form
+  # Decimal.parse understands. Without this, Decimal.parse("1.234,56") stops at
+  # the comma and silently truncates the centavos to 1.234.
+  defp normalize_number(str) do
+    str = String.trim(str)
+
+    cond do
+      String.contains?(str, ",") and String.contains?(str, ".") ->
+        str |> String.replace(".", "") |> String.replace(",", ".")
+
+      String.contains?(str, ",") ->
+        String.replace(str, ",", ".")
+
+      true ->
+        str
+    end
+  end
 end

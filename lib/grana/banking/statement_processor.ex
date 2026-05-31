@@ -26,49 +26,71 @@ defmodule Grana.Banking.StatementProcessor do
   defp do_process(transactions, bank, statement_type, user_id, filename, categories) do
     {period_start, period_end} = get_period(transactions)
 
-    {:ok, statement} =
-      Banking.create_statement(%{
-        bank: bank,
-        filename: filename,
-        statement_type: statement_type,
-        user_id: user_id,
-        period_start: period_start,
-        period_end: period_end,
-        status: "processing"
-      })
-
     categorized_transactions = categorize_all(transactions, categories, user_id)
 
-    entries =
-      Enum.map(categorized_transactions, fn txn ->
-        %{
-          date: txn.date,
-          description: txn.description,
-          original_description: txn.original_description,
-          amount: txn.amount,
-          type: txn.type,
-          identifier: txn.identifier,
-          installment_current: txn[:installment_current],
-          installment_total: txn[:installment_total],
-          installment_group_id: txn[:installment_group_id],
-          bank_statement_id: statement.id,
-          user_id: user_id,
-          category_id: txn.category_id
-        }
+    transaction_result =
+      Grana.Repo.transaction(fn ->
+        case Banking.create_statement(%{
+               bank: bank,
+               filename: filename,
+               statement_type: statement_type,
+               user_id: user_id,
+               period_start: period_start,
+               period_end: period_end,
+               status: "processing"
+             }) do
+          {:ok, statement} ->
+            entries =
+              Enum.map(categorized_transactions, fn txn ->
+                %{
+                  date: txn.date,
+                  description: txn.description,
+                  original_description: txn.original_description,
+                  amount: txn.amount,
+                  type: txn.type,
+                  identifier: txn.identifier,
+                  installment_current: txn[:installment_current],
+                  installment_total: txn[:installment_total],
+                  installment_group_id: txn[:installment_group_id],
+                  bank_statement_id: statement.id,
+                  user_id: user_id,
+                  category_id: txn.category_id
+                }
+              end)
+
+            entries = deduplicate(entries, user_id)
+
+            {count, _} = Banking.bulk_insert_transactions(entries)
+
+            {:ok, _} =
+              Banking.update_statement(statement, %{
+                status: "completed",
+                total_transactions: count
+              })
+
+            %{statement_id: statement.id, transaction_count: count}
+
+          {:error, changeset} ->
+            Grana.Repo.rollback(
+              {:duplicate_statement,
+               Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)}
+            )
+        end
       end)
 
-    entries = deduplicate(entries, user_id)
+    case transaction_result do
+      {:ok, result} ->
+        case Banking.detect_internal_transfers(user_id) do
+          :ok -> {:ok, result}
+          {:error, reason} -> {:error, reason}
+        end
 
-    {count, _} = Banking.bulk_insert_transactions(entries)
+      {:error, {:duplicate_statement, _}} ->
+        {:error, "Este extrato já foi importado anteriormente"}
 
-    Banking.update_statement(statement, %{
-      status: "completed",
-      total_transactions: count
-    })
-
-    Banking.detect_internal_transfers(user_id)
-
-    {:ok, %{statement_id: statement.id, transaction_count: count}}
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp parse_file(file_content, "outro", statement_type, filename, user_id) do
@@ -121,9 +143,12 @@ defmodule Grana.Banking.StatementProcessor do
   end
 
   defp categorize_all(transactions, categories, user_id) do
+    descriptions = Enum.map(transactions, & &1.description)
+    category_map = Banking.categorize_transactions(descriptions, user_id)
+
     rule_categorized =
       Enum.map(transactions, fn txn ->
-        category_id = Banking.categorize_transaction(txn.description, user_id)
+        category_id = Map.get(category_map, txn.description)
         Map.put(txn, :category_id, category_id)
       end)
 
@@ -144,7 +169,9 @@ defmodule Grana.Banking.StatementProcessor do
         descriptions = Enum.map(items, & &1.description)
 
         case AICategorizer.categorize_batch(descriptions, categories, user_id) do
-          {:ok, ai_category_ids} ->
+          {:ok, ai_category_ids} when length(ai_category_ids) == length(descriptions) ->
+            # zip casa por posição: só aplicamos se a contagem bater exatamente,
+            # senão o alinhamento descrição↔categoria estaria quebrado.
             ai_map =
               Enum.zip(descriptions, ai_category_ids)
               |> Map.new()
@@ -161,6 +188,15 @@ defmodule Grana.Banking.StatementProcessor do
                   txn
               end
             end)
+
+          {:ok, _mismatched} ->
+            require Logger
+
+            Logger.warning(
+              "AICategorizer: contagem divergente (#{length(descriptions)} descrições); mantendo categorização por regras"
+            )
+
+            rule_categorized
 
           {:error, _} ->
             rule_categorized

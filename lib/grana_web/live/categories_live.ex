@@ -337,7 +337,7 @@ defmodule GranaWeb.CategoriesLive do
 
   def handle_event("edit_category", %{"id" => id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    category = Banking.get_category!(String.to_integer(id), user_id)
+    category = Banking.get_category!(GranaWeb.Params.to_int(id, -1), user_id)
     changeset = Category.changeset(category, %{})
 
     {:noreply,
@@ -402,7 +402,7 @@ defmodule GranaWeb.CategoriesLive do
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    category = Banking.get_category!(String.to_integer(id), user_id)
+    category = Banking.get_category!(GranaWeb.Params.to_int(id, -1), user_id)
     {:noreply, assign(socket, :delete_target, category)}
   end
 

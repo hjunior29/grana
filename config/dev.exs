@@ -1,5 +1,9 @@
 import Config
 
+# Chave de cifragem fixa só para desenvolvimento (Grana.Encrypted.Binary).
+# Produção exige CLOAK_KEY via env (config/runtime.exs).
+config :grana, :cloak_key, "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
+
 # Configure your database
 config :grana, Grana.Repo,
   username: "postgres",
