@@ -82,21 +82,16 @@ defmodule GranaWeb.CategoriesLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="rounded-lg border border-base-300 bg-base-200 shadow-sm mb-6 p-5 sm:p-6">
-          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p class="text-sm font-medium text-primary mb-3">
-                <.icon name="hero-tag" class="size-4" /> Taxonomia do orçamento
-              </p>
-              <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Categorias</h1>
-              <p class="mt-2 text-sm text-base-content/60">
-                Gerencie as categorias de suas transações
-              </p>
-            </div>
-            <button phx-click="new_category" class="btn btn-primary btn-sm sm:btn-md">
-              <.icon name="hero-plus" class="size-4" /> Nova Categoria
-            </button>
+        <div class="mb-4 sm:mb-8 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
+          <div class="text-center sm:text-left">
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Categorias</h1>
+            <p class="text-xs sm:text-sm opacity-60 mt-1">
+              Gerencie as categorias de suas transações
+            </p>
           </div>
+          <button phx-click="new_category" class="btn btn-primary btn-sm">
+            <.icon name="hero-plus" class="size-4" /> Nova Categoria
+          </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -6,14 +6,9 @@ defmodule GranaWeb.UserLive.Login do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-sm space-y-5">
+    <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
+      <div class="mx-auto max-w-sm space-y-4">
         <div class="text-center">
-          <img
-            src={~p"/images/logo-animated.gif"}
-            alt="Grana"
-            class="mx-auto mb-4 size-20 rounded-2xl"
-          />
           <.header>
             <p>Entrar</p>
             <:subtitle>
