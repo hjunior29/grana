@@ -1,3 +1,105 @@
+# Grana — Guia do projeto (para agentes)
+
+> Contexto para agentes de IA (Codex). Leia isto **antes** de vasculhar o código.
+> O equivalente para o Claude está em [`CLAUDE.md`](CLAUDE.md) (mesmo conteúdo de projeto).
+> As **regras do framework Phoenix v1.8** estão mais abaixo, após este guia.
+
+## O que é
+
+**Grana** é um **organizador financeiro pessoal** em **Elixir / Phoenix LiveView**.
+O usuário importa extratos/faturas bancárias e movimentações de investimentos; o app
+extrai e categoriza transações (regras + IA), mostra dashboards/gráficos, acompanha metas
+e gera análises com IA (**BYOK** — o usuário usa a própria chave Gemini).
+
+Funcionalidades: importação de **Nubank/Bradesco** (extrato e fatura, CSV/PDF) e
+investimentos **B3** (XLSX), **GCB** (CSV) e CSV/PDF genéricos; categorização por regras + IA;
+dashboard (receitas/despesas/investimentos, gráficos, projeção de parcelas, carteira com
+cotações brapi.dev); metas; análises com IA; export CSV; auth própria (magic link + senha)
+com rate limiting.
+
+## Stack
+
+Elixir ~> 1.18 / Phoenix 1.8 (LiveView 1.1) · PostgreSQL (Ecto) · Tailwind v4 + daisyUI ·
+Oban (jobs) · **Req** (HTTP — não usar HTTPoison/Tesla/httpc) · Swoosh (e-mail) · Bandit ·
+Gemini (`Grana.AI.Provider`, BYOK) · AES-256-GCM (`Grana.Encrypted.Binary`) para chaves de IA ·
+Hammer (rate limit) · ErrorTracker · Deploy Fly.io.
+
+## Arquitetura
+
+Contextos em `lib/grana/`:
+- **`Grana.Accounts`** — usuários, tokens, scopes, notificações.
+- **`Grana.Banking`** — extratos, transações, categorias, regras, metas (`FinancialGoal`),
+  análises de IA, e os resumos do dashboard (`build_summary`/`monthly_summary`).
+- **`Grana.Investments`** — extratos, transações, instituições, cotações (`QuoteProvider`),
+  `portfolio_summary`/`portfolio_with_market_data`.
+- **`Grana.AI`** — `Provider` + `providers/gemini`, `PromptSanitizer`.
+- **`Grana.Workers`** — Oban: `statement_upload`, `investment_upload`, `ai_analysis`,
+  `quote_fetcher` (cron 30min), `inactivity_reminder`.
+- **`Grana.Encrypted.Binary`** — cifra a coluna `users.ai_api_key`.
+
+Web em `lib/grana_web/`: LiveViews (`dashboard`, `transactions`, `upload`, `analysis`,
+`goals`, `categories`, `landing`, `terms`, `user_live/*`), controllers (`user_session`,
+`transactions_export`), `components` (`core_components`, `layouts`), plugs (`RateLimit`,
+`Params`), router (pipeline `:browser` + `:csp`).
+
+Parsers: `lib/grana/banking/parsers/*` e `lib/grana/investments/parsers/*`.
+Arquivos reais para teste: **`priv/examples/`**.
+
+## Como rodar
+
+Pré-requisitos: Docker (Postgres) + Elixir/Erlang (Dockerfile: Elixir 1.18.4 / OTP 28).
+Use o **Makefile** (`make help`):
+
+```bash
+make setup     # Postgres (docker-compose) + deps + cria/migra banco + assets
+make server    # Postgres + Phoenix em http://localhost:4000
+```
+
+Sem Makefile: `mix setup` então `mix phx.server` (precisa de Postgres em `localhost:5432`,
+usuário/senha `postgres`). O Postgres de dev vem do `docker-compose.yml` (`make db.up`).
+
+Env: dev/test não exige nada (há defaults; `.env` na raiz é lido só em dev/test).
+Produção exige `DATABASE_URL`, `SECRET_KEY_BASE`, `CLOAK_KEY`, `SMTP_HOST` (raise se faltarem);
+opcionais `BRAPI_TOKEN`, `ADMIN_EMAIL`, `ROADMAP_URL`, `DB_SSL`, `PHX_HOST`. A chave Gemini é
+por usuário (BYOK), definida na UI e cifrada no banco.
+
+## Como testar e validar implementações
+
+A suíte precisa do Postgres (`make db.up`); `mix test` cria/migra o banco de teste.
+
+```bash
+make test        # mix test
+make coverage    # testes + cobertura (piso em coveralls.json)
+make gate        # QUALITY GATE completo — rode antes de abrir PR
+```
+
+`make gate` espelha o CI: `format --check-formatted`, `deps.unlock --check-unused`,
+`deps.audit` (ignora o CVE do `decimal`, bloqueado por `postgrex ~> 2.0`),
+`compile --warnings-as-errors`, `credo --strict`, `coveralls` (piso de cobertura).
+
+Padrões de teste: use `Grana.DataCase` + `Grana.AccountsFixtures`; **sempre** adicione teste
+de **isolamento por usuário (IDOR)** para queries novas; teste parsers com `priv/examples/` +
+entradas malformadas; asserte dinheiro com `Decimal.equal?/2`.
+
+## Convenções e invariantes (CRÍTICO)
+
+1. **Dinheiro é `Decimal`**, nunca float.
+2. **Toda query Ecto escopada por `user_id`** (multi-tenant); `get_*!/2` recebem `user_id`.
+   Nunca buscar por id do cliente sem o dono; validar ids cross-tenant antes de gravar.
+3. **Chaves de IA cifradas at-rest** (`Grana.Encrypted.Binary`); `CLOAK_KEY` obrigatória em prod.
+4. **IDs do cliente** (URL/`phx-value`) via `GranaWeb.Params.to_int/2` ou `parse_int/2` (nunca `String.to_integer` cru).
+5. Importação transacional + unique constraint anti-duplicata; parsers descartam linha ruim; workers com `try/rescue` por arquivo.
+6. **Rode `make gate` antes de abrir PR.** Não baixe o piso de cobertura nem desabilite checks do Credo para "passar".
+
+## CI / Deploy
+
+`.github/workflows/fly-deploy.yml`: o **gate** (job `test`) roda em **push e PRs para `main`**;
+o **deploy** (Fly) roda **só no merge em `main`**. Dependabot em `.github/dependabot.yml`.
+
+---
+
+# Convenções do framework Phoenix
+
 This is a web application written using the Phoenix web framework.
 
 ## Project guidelines
