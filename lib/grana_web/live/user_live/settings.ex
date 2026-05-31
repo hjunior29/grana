@@ -10,12 +10,9 @@ defmodule GranaWeb.UserLive.Settings do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-xl mx-auto">
-        <div class="rounded-lg border border-base-300 bg-base-200 shadow-sm mb-6 p-5 sm:p-6">
-          <p class="text-sm font-medium text-primary mb-3">
-            <.icon name="hero-cog-6-tooth" class="size-4" /> Preferências
-          </p>
-          <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Configurações</h1>
-          <p class="mt-2 text-sm text-base-content/60">
+        <div class="mb-4 sm:mb-8 text-center sm:text-left">
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Configurações</h1>
+          <p class="text-xs sm:text-sm opacity-60 mt-1">
             Gerencie sua conta, preferências e integrações
           </p>
         </div>
