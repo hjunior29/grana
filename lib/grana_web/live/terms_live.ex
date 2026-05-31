@@ -11,8 +11,8 @@ defmodule GranaWeb.TermsLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-3xl">
-        <div class="terms-panel">
-          <p class="page-kicker mb-4">
+        <div class="rounded-lg border border-base-300 bg-base-200">
+          <p class="text-sm font-medium text-primary mb-4">
             <.icon name="hero-shield-check" class="size-4" /> Transparência
           </p>
           <h1 class="text-3xl font-black tracking-normal sm:text-5xl">

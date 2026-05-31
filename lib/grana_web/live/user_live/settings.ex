@@ -10,8 +10,8 @@ defmodule GranaWeb.UserLive.Settings do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-xl mx-auto">
-        <div class="surface-panel mb-6 p-5 sm:p-6">
-          <p class="page-kicker mb-3">
+        <div class="rounded-lg border border-base-300 bg-base-200 shadow-sm mb-6 p-5 sm:p-6">
+          <p class="text-sm font-medium text-primary mb-3">
             <.icon name="hero-cog-6-tooth" class="size-4" /> Preferências
           </p>
           <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Configurações</h1>
