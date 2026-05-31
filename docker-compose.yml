@@ -1,0 +1,26 @@
+# Banco de dados para desenvolvimento/testes locais.
+# Postgres NÃO faz parte do Dockerfile da aplicação (esse é o release de produção);
+# o DB local fica aqui. Suba com `make db.up` (ou `docker compose up -d`).
+#
+# Credenciais batem com config/dev.exs e config/test.exs (postgres/postgres @ 5432).
+services:
+  db:
+    image: postgres:16
+    container_name: grana-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # Os bancos grana_dev e grana_test são criados pelo Ecto (make db.setup).
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - grana_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  grana_pgdata:
