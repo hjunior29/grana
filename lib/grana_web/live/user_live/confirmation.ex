@@ -6,14 +6,9 @@ defmodule GranaWeb.UserLive.Confirmation do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
       <div class="mx-auto max-w-sm">
         <div class="text-center">
-          <img
-            src={~p"/images/logo-animated.gif"}
-            alt="Grana"
-            class="mx-auto mb-4 size-20 rounded-2xl"
-          />
           <.header>Bem vindo, {@user.email}</.header>
         </div>
 

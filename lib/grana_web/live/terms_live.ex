@@ -9,19 +9,34 @@ defmodule GranaWeb.TermsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-3xl">
-        <div class="rounded-lg border border-base-300 bg-base-200">
-          <p class="text-sm font-medium text-primary mb-4">
-            <.icon name="hero-shield-check" class="size-4" /> Transparência
-          </p>
-          <h1 class="text-3xl font-black tracking-normal sm:text-5xl">
-            Termos de Uso e Política de Privacidade
-          </h1>
-          <p class="mt-3 text-sm opacity-50">Última atualização: 17 de fevereiro de 2026</p>
+    <div class="min-h-screen">
+      <nav class="navbar bg-base-100/10 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-4 sm:px-6 lg:px-8">
+        <div class="flex-1">
+          <a href="/" class="flex items-center gap-2 text-xl font-bold tracking-tight">
+            <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
+            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Grana</span>
+          </a>
         </div>
+        <div class="flex-none">
+          <div class="flex items-center gap-3">
+            <Layouts.theme_toggle :if={!@current_scope} />
+            <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
+              Entrar
+            </.link>
+            <.link :if={!@current_scope} navigate={~p"/users/register"} class="btn btn-primary btn-sm">
+              Criar Conta
+            </.link>
+          </div>
+        </div>
+      </nav>
 
-        <div class="prose prose-sm max-w-none space-y-8 px-1 py-10 sm:px-2">
+      <div class="max-w-3xl mx-auto px-4 py-16">
+        <h1 class="text-3xl font-bold tracking-tight mb-2">
+          Termos de Uso e Política de Privacidade
+        </h1>
+        <p class="text-sm opacity-50 mb-10">Última atualização: 17 de fevereiro de 2026</p>
+
+        <div class="prose prose-sm max-w-none opacity-80 space-y-8">
           <%!-- Termos de Uso --%>
           <section>
             <h2 class="text-xl font-bold mb-4">1. Termos de Uso</h2>
@@ -230,15 +245,12 @@ defmodule GranaWeb.TermsLive do
         </div>
 
         <div class="mt-12 pt-8 border-t border-base-content/10 text-center">
-          <.link
-            navigate={if @current_scope, do: ~p"/dashboard", else: ~p"/users/register"}
-            class="btn btn-primary"
-          >
+          <button class="btn btn-primary" onclick="history.back()">
             Li os Termos de Uso e Política de Privacidade
-          </.link>
+          </button>
         </div>
       </div>
-    </Layouts.app>
+    </div>
     """
   end
 end
