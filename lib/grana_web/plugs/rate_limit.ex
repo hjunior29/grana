@@ -27,9 +27,7 @@ defmodule GranaWeb.RateLimit do
   def call(conn, opts) do
     action = Keyword.fetch!(opts, :action)
 
-    remote_ip = conn.remote_ip |> :inet.ntoa() |> to_string()
-
-    case check(action, remote_ip) do
+    case check(action, conn_ip(conn)) do
       :allow ->
         conn
 
@@ -77,18 +75,50 @@ defmodule GranaWeb.RateLimit do
   end
 
   @doc """
-  Extracts the client IP from a LiveView socket as a string.
-
-  Requires `connect_info: [:peer_data]` in the socket configuration,
-  or falls back to "unknown".
+  Extracts the client IP do socket LiveView. Atrás do proxy do Fly, usa o último
+  IP de X-Forwarded-For (o que o proxy anexa = cliente real) via connect_info
+  :x_headers; cai para peer_data quando não há proxy (dev/local).
   """
   @spec get_ip(Phoenix.LiveView.Socket.t()) :: String.t()
   def get_ip(socket) do
-    case Phoenix.LiveView.get_connect_info(socket, :peer_data) do
-      %{address: ip} -> ip |> :inet.ntoa() |> to_string()
-      _ -> "unknown"
+    headers = Phoenix.LiveView.get_connect_info(socket, :x_headers) || []
+    xff = for {"x-forwarded-for", v} <- headers, do: v
+
+    case xff_last(xff) do
+      nil ->
+        case Phoenix.LiveView.get_connect_info(socket, :peer_data) do
+          %{address: ip} -> ip |> :inet.ntoa() |> to_string()
+          _ -> "unknown"
+        end
+
+      ip ->
+        ip
     end
   end
+
+  # IP do cliente para requests de controller. Prefere Fly-Client-IP (setado e
+  # não-spoofável atrás do proxy do Fly); senão o último IP de X-Forwarded-For;
+  # senão o remote_ip (dev/local).
+  defp conn_ip(conn) do
+    case get_req_header(conn, "fly-client-ip") do
+      [ip | _] when is_binary(ip) and ip != "" ->
+        ip
+
+      _ ->
+        xff_last(get_req_header(conn, "x-forwarded-for")) ||
+          conn.remote_ip |> :inet.ntoa() |> to_string()
+    end
+  end
+
+  # Último IP de uma lista X-Forwarded-For (o appendado pelo proxy de borda).
+  defp xff_last([value | _]) when is_binary(value) do
+    value |> String.split(",") |> List.last() |> to_string() |> String.trim() |> presence()
+  end
+
+  defp xff_last(_), do: nil
+
+  defp presence(""), do: nil
+  defp presence(s), do: s
 
   defp redirect_path(:login), do: "/users/log-in"
   defp redirect_path(:magic_link), do: "/users/log-in"

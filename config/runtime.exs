@@ -136,6 +136,16 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  # Chave de cifragem das API keys de IA (Grana.Encrypted.Binary). EXIGIDA em
+  # produção — sem ela, a cifragem-at-rest cairia para a chave de dev pública.
+  config :grana,
+         :cloak_key,
+         System.get_env("CLOAK_KEY") ||
+           raise("""
+           environment variable CLOAK_KEY is missing.
+           Generate one with: mix phx.gen.secret 32
+           """)
+
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :grana, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
