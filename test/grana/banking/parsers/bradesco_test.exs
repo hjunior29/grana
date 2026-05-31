@@ -56,7 +56,7 @@ defmodule Grana.Banking.Parsers.BradescoTest do
   test "parses full example file" do
     content = File.read!("priv/examples/extrato-bradesco.csv")
     result = Bradesco.parse(content)
-    assert length(result) > 0
+    assert result != []
     assert Enum.all?(result, &(&1.date != nil))
     assert Enum.all?(result, &(&1.amount != nil))
   end

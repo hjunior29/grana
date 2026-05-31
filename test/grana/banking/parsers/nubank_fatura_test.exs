@@ -50,7 +50,7 @@ defmodule Grana.Banking.Parsers.NubankFaturaTest do
 
     debits = Enum.filter(result, &(&1.type == "debit"))
     credits = Enum.filter(result, &(&1.type == "credit"))
-    assert length(debits) > 0
-    assert length(credits) > 0
+    assert debits != []
+    assert credits != []
   end
 end

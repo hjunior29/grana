@@ -54,7 +54,7 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
     content = File.read!("priv/examples/fatura-bradesco.csv")
     refute String.valid?(content)
     result = BradescoFatura.parse(content)
-    assert length(result) > 0
+    assert result != []
   end
 
   test "lançamento de dezembro em fatura de fevereiro fica no ano anterior" do
