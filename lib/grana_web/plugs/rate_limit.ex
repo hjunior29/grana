@@ -27,7 +27,7 @@ defmodule GranaWeb.RateLimit do
   def call(conn, opts) do
     action = Keyword.fetch!(opts, :action)
 
-    case check(action, conn_ip(conn)) do
+    case check(action, client_ip(conn)) do
       :allow ->
         conn
 
@@ -96,10 +96,12 @@ defmodule GranaWeb.RateLimit do
     end
   end
 
-  # IP do cliente para requests de controller. Prefere Fly-Client-IP (setado e
-  # não-spoofável atrás do proxy do Fly); senão o último IP de X-Forwarded-For;
-  # senão o remote_ip (dev/local).
-  defp conn_ip(conn) do
+  @doc """
+  IP do cliente para requests de controller. Prefere Fly-Client-IP (setado e
+  não-spoofável atrás do proxy do Fly); senão o último IP de X-Forwarded-For;
+  senão o remote_ip (dev/local).
+  """
+  def client_ip(conn) do
     case get_req_header(conn, "fly-client-ip") do
       [ip | _] when is_binary(ip) and ip != "" ->
         ip

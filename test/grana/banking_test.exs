@@ -553,4 +553,53 @@ defmodule Grana.BankingTest do
                })
     end
   end
+
+  describe "list_active_installments/2 isolamento (IDOR)" do
+    test "não vaza parcelas de outro usuário com o mesmo installment_group_id", %{user: user} do
+      other = user_fixture()
+      # group_id é hash de descrição+total → idêntico entre usuários
+      group_id = Grana.Banking.Parsers.InstallmentParser.generate_group_id("netflix", 3)
+
+      {:ok, s1} = Banking.create_statement(%{bank: "nubank", filename: "a.csv", user_id: user.id})
+
+      {:ok, s2} =
+        Banking.create_statement(%{bank: "nubank", filename: "b.csv", user_id: other.id})
+
+      inst = fn uid, sid ->
+        %{
+          date: ~D[2026-01-10],
+          description: "Netflix",
+          amount: Decimal.new("-30.00"),
+          type: "debit",
+          bank_statement_id: sid,
+          user_id: uid,
+          installment_current: 1,
+          installment_total: 3,
+          installment_group_id: group_id
+        }
+      end
+
+      Banking.bulk_insert_transactions([inst.(user.id, s1.id)])
+      Banking.bulk_insert_transactions([inst.(other.id, s2.id)])
+
+      result = Banking.list_active_installments(user.id)
+      assert length(result) == 1
+      assert Enum.all?(result, &(&1.user_id == user.id))
+    end
+  end
+
+  describe "category_belongs_to_user?/2" do
+    test "verdadeiro só para categoria do próprio usuário", %{user: user} do
+      other = user_fixture()
+      Banking.ensure_default_categories(user.id)
+      Banking.ensure_default_categories(other.id)
+
+      own = hd(Banking.list_categories(user.id))
+      foreign = hd(Banking.list_categories(other.id))
+
+      assert Banking.category_belongs_to_user?(own.id, user.id)
+      refute Banking.category_belongs_to_user?(foreign.id, user.id)
+      refute Banking.category_belongs_to_user?(-1, user.id)
+    end
+  end
 end
