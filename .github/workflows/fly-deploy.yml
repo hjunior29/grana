@@ -51,7 +51,11 @@ jobs:
       - run: mix deps.audit --ignore-advisory-ids GHSA-rhv4-8758-jx7v
       - run: mix format --check-formatted
       - run: mix compile --warnings-as-errors
-      - run: mix test
+      # Static analysis (consistência/correção). Débito estrutural legado está
+      # marcado como baseline em .credo.exs; o gate falha em regressões novas.
+      - run: mix credo --strict
+      # Roda os testes E aplica o piso de cobertura (minimum_coverage em coveralls.json).
+      - run: mix coveralls
 
   deploy:
     name: Deploy app
