@@ -56,4 +56,19 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
     result = BradescoFatura.parse(content)
     assert length(result) > 0
   end
+
+  test "lançamento de dezembro em fatura de fevereiro fica no ano anterior" do
+    # Cabeçalho da fatura: 15/02/2026 (mês de referência = fevereiro)
+    csv = """
+    Data: 15/02/2026 11:00:04\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r20/12;COMPRA DE DEZEMBRO ;0,00;100,00\r\r04/02;COMPRA DE FEVEREIRO ;0,00;50,00
+    """
+
+    result = BradescoFatura.parse(csv)
+    dez = Enum.find(result, &String.contains?(&1.description, "DEZEMBRO"))
+    fev = Enum.find(result, &String.contains?(&1.description, "FEVEREIRO"))
+
+    # Dezembro (mês 12 > 2) cai no ano anterior; fevereiro fica no ano da fatura.
+    assert dez.date == ~D[2025-12-20]
+    assert fev.date == ~D[2026-02-04]
+  end
 end
