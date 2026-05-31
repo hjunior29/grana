@@ -7,7 +7,7 @@ defmodule GranaWeb.UserLive.Confirmation do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="auth-card">
+      <div class="mx-auto max-w-sm">
         <div class="text-center">
           <img
             src={~p"/images/logo-animated.gif"}

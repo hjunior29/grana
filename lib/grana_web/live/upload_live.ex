@@ -628,10 +628,10 @@ defmodule GranaWeb.UploadLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto scrollbar-gutter">
-        <div class="surface-panel mb-6 p-5 sm:p-6">
+        <div class="rounded-lg border border-base-300 bg-base-200 shadow-sm mb-6 p-5 sm:p-6">
           <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p class="page-kicker mb-3">
+              <p class="text-sm font-medium text-primary mb-3">
                 <.icon name="hero-cloud-arrow-up" class="size-4" /> Entrada de dados
               </p>
               <h1 class="text-3xl font-black tracking-normal sm:text-4xl">Upload</h1>

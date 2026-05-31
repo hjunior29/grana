@@ -7,7 +7,7 @@ defmodule GranaWeb.UserLive.Login do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="auth-card space-y-5">
+      <div class="mx-auto max-w-sm space-y-5">
         <div class="text-center">
           <img
             src={~p"/images/logo-animated.gif"}

@@ -14,13 +14,13 @@ defmodule GranaWeb.LandingLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-7xl">
-        <section class="finance-hero">
-          <div class="finance-hero-copy">
-            <div class="page-kicker mb-5">
+        <section class="grid gap-10 py-12 sm:py-16 lg:grid-cols-2 lg:items-center">
+          <div>
+            <div class="text-sm font-medium text-primary mb-5">
               <.icon name="hero-sparkles" class="size-4" /> Organizador financeiro pessoal
             </div>
 
-            <h1 class="headline-balance text-5xl font-black leading-[0.95] tracking-normal sm:text-7xl lg:text-8xl">
+            <h1 class="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
               Controle total das suas finanças
             </h1>
 
@@ -46,7 +46,7 @@ defmodule GranaWeb.LandingLive do
               </.link>
             </div>
 
-            <div class="integration-strip mt-8 grid grid-cols-2 gap-3 p-3 sm:flex sm:items-center sm:gap-4">
+            <div class="mt-8 flex flex-col gap-3 rounded-lg border border-base-300 bg-base-200 p-3 sm:flex-row sm:items-center sm:gap-4">
               <span class="text-xs font-bold uppercase tracking-wide text-base-content/50">
                 Importa de
               </span>
@@ -66,43 +66,32 @@ defmodule GranaWeb.LandingLive do
             </div>
           </div>
 
-          <div class="hero-visual">
-            <div class="hero-panel hero-balance-card floating-card">
+          <div class="card border border-base-300 bg-base-200 shadow-sm">
+            <div class="card-body">
               <div class="flex items-start justify-between gap-4">
                 <div>
                   <p class="text-sm font-bold text-base-content/55">Saldo organizado</p>
-                  <p class="mt-2 text-4xl font-black tracking-normal">R$ 8.420,16</p>
+                  <p class="mt-2 text-4xl font-bold tracking-tight">R$ 8.420,16</p>
                   <p class="mt-2 text-sm text-success">
                     <.icon name="hero-arrow-trending-up" class="size-4" />
                     18% melhor que o mês anterior
                   </p>
                 </div>
-                <div class="brand-image-ring">
-                  <img src={~p"/images/logo-animated.gif"} alt="Grana" class="size-16 rounded-xl" />
-                </div>
+                <img src={~p"/images/logo-animated.gif"} alt="Grana" class="size-16 rounded-xl" />
               </div>
 
-              <div class="hero-chart-bars mt-8" aria-hidden="true">
-                <span style="height: 44%"></span>
-                <span style="height: 70%"></span>
-                <span style="height: 52%"></span>
-                <span style="height: 86%"></span>
-                <span style="height: 62%"></span>
-                <span style="height: 96%"></span>
-                <span style="height: 76%"></span>
-                <span style="height: 58%"></span>
+              <div class="mt-6 flex h-28 items-end gap-1.5" aria-hidden="true">
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 44%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 70%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 52%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 86%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 62%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 96%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 76%"></span>
+                <span class="flex-1 rounded-t bg-primary/70" style="height: 58%"></span>
               </div>
-            </div>
 
-            <div class="hero-panel floating-card absolute left-0 top-[17rem] w-[78%] sm:w-[21rem]">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-xs font-bold uppercase text-base-content/45">Categorias</p>
-                  <p class="mt-1 text-lg font-black">Gastos sob controle</p>
-                </div>
-                <span class="badge badge-success">IA</span>
-              </div>
-              <div class="mt-4 space-y-3">
+              <div class="mt-6 space-y-3">
                 <div class="flex items-center gap-3">
                   <span class="size-3 rounded-full bg-success"></span>
                   <span class="flex-1 text-sm">Mercado</span>
@@ -120,44 +109,16 @@ defmodule GranaWeb.LandingLive do
                 </div>
               </div>
             </div>
-
-            <div class="hero-panel floating-card absolute bottom-4 right-0 w-[82%] sm:w-[22rem]">
-              <div class="flex items-center gap-3">
-                <div class="feature-icon">
-                  <.icon name="hero-bolt" class="size-5" />
-                </div>
-                <div>
-                  <p class="text-sm font-bold">Processamento Automático</p>
-                  <p class="text-xs text-base-content/55">
-                    Extrato lido, transações agrupadas e anomalias destacadas.
-                  </p>
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-                <div class="rounded-lg bg-base-100/60 p-3">
-                  <p class="font-black text-success">142</p>
-                  <p class="text-base-content/45">transações</p>
-                </div>
-                <div class="rounded-lg bg-base-100/60 p-3">
-                  <p class="font-black text-warning">9</p>
-                  <p class="text-base-content/45">alertas</p>
-                </div>
-                <div class="rounded-lg bg-base-100/60 p-3">
-                  <p class="font-black text-info">4</p>
-                  <p class="text-base-content/45">fontes</p>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
         <section id="recursos" class="py-12 sm:py-20">
           <div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <p class="page-kicker mb-4">
+              <p class="text-sm font-medium text-primary mb-4">
                 <.icon name="hero-squares-2x2" class="size-4" /> Tudo no mesmo fluxo
               </p>
-              <h2 class="text-3xl font-black tracking-normal sm:text-5xl">
+              <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
                 Uma UI feita para organizar dinheiro sem esforço
               </h2>
             </div>
@@ -168,31 +129,31 @@ defmodule GranaWeb.LandingLive do
           </div>
 
           <div class="grid gap-4 md:grid-cols-3">
-            <article class="feature-card">
-              <div class="feature-icon">
+            <article class="card border border-base-300 bg-base-200 p-6">
+              <div class="flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <.icon name="hero-cloud-arrow-up" class="size-5" />
               </div>
-              <h3 class="mt-5 text-xl font-black">Upload Simples</h3>
+              <h3 class="mt-5 text-xl font-bold">Upload Simples</h3>
               <p class="mt-3 text-sm leading-7 text-base-content/65">
                 Arraste arquivos CSV, PDF ou XLSX e acompanhe o processamento com progresso animado.
               </p>
             </article>
 
-            <article class="feature-card">
-              <div class="feature-icon">
+            <article class="card border border-base-300 bg-base-200 p-6">
+              <div class="flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <.icon name="hero-sparkles" class="size-5" />
               </div>
-              <h3 class="mt-5 text-xl font-black">Categorização Inteligente</h3>
+              <h3 class="mt-5 text-xl font-bold">Categorização Inteligente</h3>
               <p class="mt-3 text-sm leading-7 text-base-content/65">
                 Categorias, regras e IA trabalham juntas para reduzir ajustes manuais no dia a dia.
               </p>
             </article>
 
-            <article class="feature-card">
-              <div class="feature-icon">
+            <article class="card border border-base-300 bg-base-200 p-6">
+              <div class="flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <.icon name="hero-chart-pie" class="size-5" />
               </div>
-              <h3 class="mt-5 text-xl font-black">Gráficos Detalhados</h3>
+              <h3 class="mt-5 text-xl font-bold">Gráficos Detalhados</h3>
               <p class="mt-3 text-sm leading-7 text-base-content/65">
                 Veja gastos por categoria, evolução mensal, projeções de parcelas e carteira de investimentos.
               </p>
@@ -201,12 +162,12 @@ defmodule GranaWeb.LandingLive do
         </section>
 
         <section id="como-funciona" class="py-12 sm:py-20">
-          <div class="grid gap-6 lg:grid-cols-[0.78fr_1fr] lg:items-start">
+          <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
             <div>
-              <p class="page-kicker mb-4">
+              <p class="text-sm font-medium text-primary mb-4">
                 <.icon name="hero-play" class="size-4" /> Como funciona
               </p>
-              <h2 class="text-3xl font-black tracking-normal sm:text-5xl">
+              <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
                 Três etapas, uma visão limpa
               </h2>
               <p class="mt-4 text-sm leading-7 text-base-content/60">
@@ -216,11 +177,13 @@ defmodule GranaWeb.LandingLive do
             </div>
 
             <div class="grid gap-4">
-              <article class="workflow-step">
+              <article class="card border border-base-300 bg-base-200 p-5">
                 <div class="flex gap-4">
-                  <div class="workflow-icon">1</div>
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-content">
+                    1
+                  </div>
                   <div>
-                    <h3 class="text-lg font-black">Faça Upload</h3>
+                    <h3 class="text-lg font-bold">Faça Upload</h3>
                     <p class="mt-2 text-sm leading-7 text-base-content/65">
                       Envie extratos bancários, faturas, notas de investimento e arquivos da B3 ou GCB.
                     </p>
@@ -228,11 +191,13 @@ defmodule GranaWeb.LandingLive do
                 </div>
               </article>
 
-              <article class="workflow-step">
+              <article class="card border border-base-300 bg-base-200 p-5">
                 <div class="flex gap-4">
-                  <div class="workflow-icon">2</div>
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-content">
+                    2
+                  </div>
                   <div>
-                    <h3 class="text-lg font-black">Processamento Automático</h3>
+                    <h3 class="text-lg font-bold">Processamento Automático</h3>
                     <p class="mt-2 text-sm leading-7 text-base-content/65">
                       O Grana extrai transações, identifica fontes, aplica categorias e preserva o histórico.
                     </p>
@@ -240,11 +205,13 @@ defmodule GranaWeb.LandingLive do
                 </div>
               </article>
 
-              <article class="workflow-step">
+              <article class="card border border-base-300 bg-base-200 p-5">
                 <div class="flex gap-4">
-                  <div class="workflow-icon">3</div>
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-content">
+                    3
+                  </div>
                   <div>
-                    <h3 class="text-lg font-black">Analise, ajuste e economize</h3>
+                    <h3 class="text-lg font-bold">Analise, ajuste e economize</h3>
                     <p class="mt-2 text-sm leading-7 text-base-content/65">
                       Use dashboards, metas e análises com IA para encontrar padrões e decidir o próximo passo.
                     </p>
@@ -256,10 +223,10 @@ defmodule GranaWeb.LandingLive do
         </section>
 
         <section class="py-12 sm:py-20">
-          <div class="surface-panel overflow-hidden p-6 sm:p-8">
+          <div class="rounded-lg border border-base-300 bg-base-200 shadow-sm overflow-hidden p-6 sm:p-8">
             <div class="grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-center">
               <div>
-                <p class="page-kicker mb-4">
+                <p class="text-sm font-medium text-primary mb-4">
                   <.icon name="hero-shield-check" class="size-4" /> Privacidade primeiro
                 </p>
                 <h2 class="text-3xl font-black tracking-normal sm:text-5xl">
