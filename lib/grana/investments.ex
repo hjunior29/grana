@@ -137,6 +137,21 @@ defmodule Grana.Investments do
     |> Repo.all()
   end
 
+  @doc """
+  Proventos (dividendo/JCP/rendimento/amortização) do usuário, como mapas
+  `%{id:, date:, amount:}`. Usado pela conciliação banking↔investimentos para
+  evitar contar o mesmo rendimento duas vezes (crédito no extrato bancário +
+  provento na B3).
+  """
+  def list_proventos(user_id) do
+    ops = Grana.Investments.Constants.dividend_ops()
+
+    Transaction
+    |> where([t], t.user_id == ^user_id and t.operation in ^ops)
+    |> select([t], %{id: t.id, date: t.date, amount: t.total_amount})
+    |> Repo.all()
+  end
+
   def list_transactions_paginated(user_id, opts \\ []) do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 50)

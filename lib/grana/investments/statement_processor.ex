@@ -91,9 +91,17 @@ defmodule Grana.Investments.StatementProcessor do
         end)
 
       case result do
-        {:ok, data} -> {:ok, data}
-        {:error, :duplicate_statement} -> {:error, "Este extrato já foi importado anteriormente"}
-        {:error, reason} -> {:error, reason}
+        {:ok, data} ->
+          # Proventos recém-importados podem casar com créditos de rendimento já
+          # presentes no extrato bancário — reconcilia para não contar em dobro.
+          Grana.Banking.detect_internal_transfers(user_id)
+          {:ok, data}
+
+        {:error, :duplicate_statement} ->
+          {:error, "Este extrato já foi importado anteriormente"}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     end
   end
