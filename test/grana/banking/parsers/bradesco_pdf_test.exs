@@ -75,7 +75,12 @@ defmodule Grana.Banking.Parsers.BradescoPdfTest do
     end
 
     test "junta descrição multi-linha incluindo a contraparte (DES:/REM:)", %{txns: txns} do
-      assert pix = Enum.find(txns, &(&1.description == "PIX QR CODE DINAMICO - Fulano Moreira Basto"))
+      assert pix =
+               Enum.find(
+                 txns,
+                 &(&1.description == "PIX QR CODE DINAMICO - Fulano Moreira Basto")
+               )
+
       assert pix.type == "debit"
       assert Decimal.equal?(pix.amount, Decimal.new("-60.00"))
       assert pix.date == ~D[2026-02-06]

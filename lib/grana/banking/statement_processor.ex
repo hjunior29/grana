@@ -1,5 +1,6 @@
 defmodule Grana.Banking.StatementProcessor do
   alias Grana.Banking
+
   alias Grana.Banking.Parsers.{
     Nubank,
     NubankFatura,
