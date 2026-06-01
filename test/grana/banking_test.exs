@@ -406,6 +406,88 @@ defmodule Grana.BankingTest do
     end
   end
 
+  describe "detect_internal_transfers - liquidação de proventos da B3" do
+    setup %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      uncat = Banking.get_uncategorized_category(user.id)
+
+      {:ok, extrato} =
+        Banking.create_statement(%{
+          bank: "bradesco",
+          filename: "extrato.pdf",
+          statement_type: "extrato",
+          user_id: user.id
+        })
+
+      %{extrato: extrato, uncat: uncat}
+    end
+
+    test "marca crédito de rendimento que casa com provento da B3 (mesmo valor e dia)",
+         %{user: user, extrato: extrato, uncat: uncat} do
+      insert_credit(extrato, uncat, user, "PGTO DE RENDIMENTO - B3 - FII HOTEL MX", "19.00",
+        date: ~D[2026-02-06]
+      )
+
+      create_provento(user, ~D[2026-02-06], "19.00")
+
+      assert Banking.detect_internal_transfers(user.id) == :ok
+      assert find_txn(user, "HOTEL MX").is_internal_transfer == true
+    end
+
+    test "NÃO marca quando não existe provento correspondente na B3",
+         %{user: user, extrato: extrato, uncat: uncat} do
+      insert_credit(extrato, uncat, user, "PGTO DE RENDIMENTO - B3 - FII HOTEL MX", "19.00",
+        date: ~D[2026-02-06]
+      )
+
+      assert Banking.detect_internal_transfers(user.id) == :ok
+      assert find_txn(user, "HOTEL MX").is_internal_transfer == false
+    end
+
+    test "NÃO marca RENTAB (rendimento do próprio banco) mesmo com provento de igual valor/dia",
+         %{user: user, extrato: extrato, uncat: uncat} do
+      insert_credit(extrato, uncat, user, "RENTAB.INVEST FACILCRED", "0.32", date: ~D[2026-02-06])
+
+      create_provento(user, ~D[2026-02-06], "0.32")
+
+      assert Banking.detect_internal_transfers(user.id) == :ok
+      assert find_txn(user, "RENTAB").is_internal_transfer == false
+    end
+
+    test "NÃO marca quando o valor difere", %{user: user, extrato: extrato, uncat: uncat} do
+      insert_credit(extrato, uncat, user, "PGTO DE RENDIMENTO - B3 - FII HOTEL MX", "19.00",
+        date: ~D[2026-02-06]
+      )
+
+      create_provento(user, ~D[2026-02-06], "20.00")
+
+      assert Banking.detect_internal_transfers(user.id) == :ok
+      assert find_txn(user, "HOTEL MX").is_internal_transfer == false
+    end
+
+    test "um provento casa com no máximo um crédito (sem dupla marcação)",
+         %{user: user, extrato: extrato, uncat: uncat} do
+      insert_credit(extrato, uncat, user, "PGTO DE RENDIMENTO - B3 - FII HOTEL MX", "19.00",
+        date: ~D[2026-02-06]
+      )
+
+      insert_credit(extrato, uncat, user, "PGTO DE RENDIMENTO - B3 - FII OUTRO", "19.00",
+        date: ~D[2026-02-06]
+      )
+
+      # Apenas um provento de R$19,00 nesse dia.
+      create_provento(user, ~D[2026-02-06], "19.00")
+
+      assert Banking.detect_internal_transfers(user.id) == :ok
+
+      marked =
+        Banking.list_transactions(user.id)
+        |> Enum.count(& &1.is_internal_transfer)
+
+      assert marked == 1
+    end
+  end
+
   describe "monthly_summary" do
     test "returns summary with income and expenses", %{user: user} do
       Banking.ensure_default_categories(user.id)
@@ -601,5 +683,50 @@ defmodule Grana.BankingTest do
       refute Banking.category_belongs_to_user?(foreign.id, user.id)
       refute Banking.category_belongs_to_user?(-1, user.id)
     end
+  end
+
+  # --- helpers ---
+
+  defp insert_credit(stmt, category, user, description, amount, opts) do
+    Banking.bulk_insert_transactions([
+      %{
+        date: Keyword.fetch!(opts, :date),
+        description: description,
+        amount: Decimal.new(amount),
+        type: "credit",
+        bank_statement_id: stmt.id,
+        user_id: user.id,
+        category_id: category.id
+      }
+    ])
+  end
+
+  defp create_provento(user, date, amount) do
+    inst = Grana.Investments.ensure_b3_institution(user.id)
+
+    {:ok, stmt} =
+      Grana.Investments.create_statement(%{
+        filename: "b3-#{Date.to_iso8601(date)}-#{amount}.xlsx",
+        user_id: user.id,
+        institution_id: inst.id,
+        status: "completed"
+      })
+
+    Grana.Investments.bulk_insert_transactions([
+      %{
+        date: date,
+        asset_name: "FII HOTEL MX",
+        asset_type: "fii",
+        operation: "rendimento",
+        total_amount: Decimal.new(amount),
+        user_id: user.id,
+        statement_id: stmt.id
+      }
+    ])
+  end
+
+  defp find_txn(user, fragment) do
+    Banking.list_transactions(user.id)
+    |> Enum.find(&String.contains?(&1.description, fragment))
   end
 end
