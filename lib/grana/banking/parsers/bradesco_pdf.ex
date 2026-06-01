@@ -148,7 +148,8 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
   end
 
   defp subtotal?(description) do
-    String.starts_with?(description, "Total") or String.starts_with?(description, "SALDO ANTERIOR")
+    String.starts_with?(description, "Total") or
+      String.starts_with?(description, "SALDO ANTERIOR")
   end
 
   # Remove transações re-listadas na folha "Últimos Lançamentos": mesma data,
