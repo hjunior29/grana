@@ -1,6 +1,16 @@
 defmodule Grana.Banking.StatementProcessor do
   alias Grana.Banking
-  alias Grana.Banking.Parsers.{Nubank, NubankFatura, Bradesco, BradescoFatura, PdfExtractor}
+  alias Grana.Banking.Parsers.{
+    Nubank,
+    NubankFatura,
+    Bradesco,
+    BradescoFatura,
+    BradescoPdf,
+    PdfText,
+    PdfExtractor
+  }
+
+  require Logger
   alias Grana.Banking.AICategorizer
 
   def process(file_content, bank, statement_type, user_id, filename) do
@@ -120,13 +130,58 @@ defmodule Grana.Banking.StatementProcessor do
   defp parse_file(file_content, bank, statement_type, filename, user_id) do
     case file_type(filename) do
       :pdf ->
-        case PdfExtractor.extract(file_content, bank, user_id) do
-          {:ok, transactions} -> transactions
-          {:error, reason} -> {:error, reason}
-        end
+        parse_pdf(file_content, bank, statement_type, user_id)
 
       :csv ->
         parse_csv(file_content, bank, statement_type)
+    end
+  end
+
+  # Extrato do Bradesco: tenta o parser determinístico (pdftotext + regex,
+  # sem IA, sem alucinação). Cai no fallback de IA se o PDF não tiver camada de
+  # texto, o pdftotext não estiver disponível, ou nada reconhecível for achado.
+  defp parse_pdf(file_content, "bradesco" = bank, "extrato", user_id) do
+    case PdfText.extract(file_content) do
+      {:ok, text} ->
+        case BradescoPdf.parse(text) do
+          [] ->
+            Logger.info("BradescoPdf não encontrou transações; usando fallback de IA")
+            ai_pdf(file_content, bank, user_id)
+
+          transactions when is_list(transactions) ->
+            log_reconciliation(text)
+            transactions
+        end
+
+      {:error, reason} ->
+        Logger.info("PdfText indisponível (#{inspect(reason)}); usando fallback de IA")
+        ai_pdf(file_content, bank, user_id)
+    end
+  end
+
+  defp parse_pdf(file_content, bank, _statement_type, user_id) do
+    ai_pdf(file_content, bank, user_id)
+  end
+
+  defp ai_pdf(file_content, bank, user_id) do
+    case PdfExtractor.extract(file_content, bank, user_id) do
+      {:ok, transactions} -> transactions
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Confere os valores extraídos contra o saldo impresso no extrato. Não bloqueia
+  # a importação — apenas registra divergências (sinal de mudança de layout).
+  defp log_reconciliation(text) do
+    case BradescoPdf.reconcile(text) do
+      :ok ->
+        :ok
+
+      {:error, issues} ->
+        Logger.warning(
+          "BradescoPdf: #{length(issues)} divergência(s) de reconciliação saldo↔movimento: " <>
+            inspect(Enum.take(issues, 5))
+        )
     end
   end
 

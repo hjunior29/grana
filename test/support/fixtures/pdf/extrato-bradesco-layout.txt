@@ -1,0 +1,201 @@
+                                             Bradesco Celular
+                                             Data: 15/02/2026 - 12h07
+                                             Nome: HELDER JUNIOR SILVA LIMA
+
+
+Extrato de: Agência: 2274 | Conta: 51093-9 | Movimentação entre: 06/02/2026 e 15/02/2026                                Folha: 1/3
+
+
+Data               Histórico                                                 Docto.        Crédito (R$)   Débito (R$)   Saldo (R$)
+
+
+
+05/02/2026        COD. LANC. 0                                                                     0,00                 15.871,37
+
+
+                  PGTO DE RENDIMENTO - B3*
+06/02/2026                                                                  0008162               19,00                 15.890,37
+                  FII HOTEL MX
+
+
+                  RENTAB.INVEST FACILCRED*                                  7071217                0,02                 15.890,39
+
+
+                  PIX QR CODE DINAMICO
+                                                                            1332274                            60,00    15.830,39
+                  DES: Klailton Pereira Souz 06/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            1343376                            77,02    15.753,37
+                  DES: SAMARINO COMERCIAL DE 06/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2150155                            17,18    15.736,19
+                  DES: 99 FOOD 06/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2151266                            30,32    15.705,87
+                  DES: 99 FOOD 06/02
+
+
+09/02/2026        RENTAB.INVEST FACILCRED*                                  7071217                0,32                 15.706,19
+
+
+                  RENTAB.INVEST FACILCRED*                                  8606144                0,07                 15.706,26
+
+
+
+                  RENTAB.INVEST FACILCRED*                                  9168104                0,21                 15.706,47
+
+
+                  PAGTO ELETRON COBRANCA
+                                                                            0000008                          4.612,79   11.093,68
+                  NU PAGAMENTOS SA
+
+
+                  TITULO DE CAPITALIZACAO
+                                                                            0902274                           100,00    10.993,68
+                  CAPITALIZACAO 1171 0051170311-5
+
+
+                  TRANSFERENCIA PIX
+                                                                            1049507                              6,00   10.987,68
+                  DES: NATHAN BRANDAO RAMOS 09/02
+
+
+                  PIX QR CODE ESTATICO
+                                                                            1417161                           181,20    10.806,48
+                  DES: MERCADO PAGO INSTITUI 09/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            1216062                            25,96    10.780,52
+                  DES: 99 FOOD 09/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            1626324                           299,90    10.480,62
+                  DES: AMO OUTLET 08/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            1802032                           819,89     9.660,73
+                  DES: C E A 08/02
+                                             Bradesco Celular
+                                             Data: 15/02/2026 - 12h07
+                                             Nome: HELDER JUNIOR SILVA LIMA
+
+
+Extrato de: Agência: 2274 | Conta: 51093-9 | Movimentação entre: 06/02/2026 e 15/02/2026                                Folha: 2/3
+
+
+Data               Histórico                                                 Docto.        Crédito (R$)   Débito (R$)   Saldo (R$)
+
+
+
+10/02/2026        RENTAB.INVEST FACILCRED*                                  8606144                0,01                  9.660,74
+
+
+                  PIX QR CODE ESTATICO
+                                                                            1820241                           319,98     9.340,76
+                  DES: TIM S A 10/02
+
+
+                  TRANSFERENCIA PIX
+11/02/2026                                                                  1439583            1.165,00                 10.505,76
+                  REM: FLAMBRA LTDA 11/02
+
+
+                  RENTAB.INVEST FACILCRED*                                  8606144                0,07                 10.505,83
+
+
+                  TRANSFERENCIA PIX
+                                                                            0008212                            13,00    10.492,83
+                  DES: Natanael Junio Souza 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            1405359                            45,00    10.447,83
+                  DES: Davi Gonçalves da Sil 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            1406052                            45,00    10.402,83
+                  DES: Luis Felipe Ribeiro V 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            1407062                            45,00    10.357,83
+                  DES: Magda Helena Lagares 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            1408241                            45,00    10.312,83
+                  DES: ANDRE GIOMETTI RAPCHA 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            1409244                            45,00    10.267,83
+                  DES: TOMAS DE CASTILHO SPI 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            1422226                            45,00    10.222,83
+                  DES: Lucas Gabriel Coimbra 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2058124                          2.400,00    7.822,83
+                  DES: J lia Rodrigues Pinto 11/02
+
+
+                  PGTO DE RENDIMENTO - B3*
+12/02/2026                                                                  0008162               22,80                  7.845,63
+                  FII KINEA RI
+
+
+                  RENTAB.INVEST FACILCRED*                                  8606144                0,01                  7.845,64
+
+
+                  PAGTO ELETRON COBRANCA
+                                                                            0000006                           114,49     7.731,15
+                  BRADESCO VIDA E PREVIDENCIA
+
+
+                  TRANSFERENCIA PIX
+                                                                            1323335                            45,00     7.686,15
+                  DES: NATHAN BRANDAO RAMOS 12/02
+
+
+Total                                                                                          1.207,51      9.392,73    7.686,15
+                                             Bradesco Celular
+                                             Data: 15/02/2026 - 12h07
+                                             Nome: HELDER JUNIOR SILVA LIMA
+
+
+Extrato de: Agência: 2274 | Conta: 51093-9 | Últimos Lancamentos                                               Folha: 3/3
+
+
+Data               Histórico                                            Docto.    Crédito (R$)   Débito (R$)   Saldo (R$)
+
+
+
+12/02/2026        COD. LANC. 0                                                                                  7.686,14
+
+
+                  RENTAB.INVEST FACILCRED*                              8606144           0,01                  7.686,15
+
+
+                  PGTO DE RENDIMENTO - B3*
+13/02/2026                                                              0008162          10,56                  7.696,71
+                  FII KINEA
+
+                  PGTO DE RENDIMENTO - B3*
+                                                                        0008162          13,20                  7.709,91
+                  FII HGLG PAX
+
+
+Total                                                                                    23,77                  7.709,91
