@@ -1,0 +1,201 @@
+                                             Bradesco Celular
+                                             Data: 15/02/2026 - 12h07
+                                             Nome: FULANO DE TAL SOUZA
+
+
+Extrato de: Agência: 1234 | Conta: 98765-4 | Movimentação entre: 06/02/2026 e 15/02/2026                                Folha: 1/3
+
+
+Data               Histórico                                                 Docto.        Crédito (R$)   Débito (R$)   Saldo (R$)
+
+
+
+05/02/2026        COD. LANC. 0                                                                     0,00                 14.284,23
+
+
+                  PGTO DE RENDIMENTO - B3*
+06/02/2026                                                                  2000037               17,00                 14.301,23
+                  FII EXEMPLO
+
+
+                  RENTAB.INVEST FACILCRED*                                  2000074                0,02                 14.301,25
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000111                            50,00    14.251,25
+                  DES: Fulano Moreira Bastos 06/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000148                            62,39    14.188,86
+                  DES: COMERCIO EXEMPLO LTDA 06/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000185                            15,29    14.173,57
+                  DES: LANCHES 06/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000222                            26,08    14.147,49
+                  DES: LANCHES 06/02
+
+
+09/02/2026        RENTAB.INVEST FACILCRED*                                  2000074                0,32                 14.147,81
+
+
+                  RENTAB.INVEST FACILCRED*                                  2000259                0,07                 14.147,88
+
+
+
+                  RENTAB.INVEST FACILCRED*                                  2000296                0,21                 14.148,09
+
+
+                  PAGTO ELETRON COBRANCA
+                                                                            2000333                          4.105,38   10.042,71
+                  NU PAGAMENTOS SA
+
+
+                  TITULO DE CAPITALIZACAO
+                                                                            2000370                            83,00     9.959,71
+                  CAPITALIZACAO 1234 0000000000-0
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000407                              5,00    9.954,71
+                  DES: CICLANO DIAS MOREIRA 09/02
+
+
+                  PIX QR CODE ESTATICO
+                                                                            2000444                           157,64     9.797,07
+                  DES: PAGAMENTOS EXEMPLO SA 09/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000481                            21,29     9.775,78
+                  DES: LANCHES 09/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000518                           257,91     9.517,87
+                  DES: LOJA MODAS 08/02
+
+
+                  PIX QR CODE DINAMICO
+                                                                            2000555                           688,71     8.829,16
+                  DES: LOJAS 08/02
+                                             Bradesco Celular
+                                             Data: 15/02/2026 - 12h07
+                                             Nome: FULANO DE TAL SOUZA
+
+
+Extrato de: Agência: 1234 | Conta: 98765-4 | Movimentação entre: 06/02/2026 e 15/02/2026                                Folha: 2/3
+
+
+Data               Histórico                                                 Docto.        Crédito (R$)   Débito (R$)   Saldo (R$)
+
+
+
+10/02/2026        RENTAB.INVEST FACILCRED*                                  2000259                0,01                  8.829,17
+
+
+                  PIX QR CODE ESTATICO
+                                                                            2000592                           265,58     8.563,59
+                  DES: TELECOM 10/02
+
+
+                  TRANSFERENCIA PIX
+11/02/2026                                                                  2000629            1.014,00                  9.577,59
+                  REM: EMPRESA LTDA 11/02
+
+
+                  RENTAB.INVEST FACILCRED*                                  2000259                0,07                  9.577,66
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000666                            10,00     9.567,66
+                  DES: Beltrano Lima Castro 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000703                            37,00     9.530,66
+                  DES: Carlos Mendes da Silv 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000740                            37,00     9.493,66
+                  DES: Pedro Augusto Ramos V 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000777                            37,00     9.456,66
+                  DES: Rosa Helena Monteiro 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000814                            37,00     9.419,66
+                  DES: PAULO ROBERTO MARTINS 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000851                            37,00     9.382,66
+                  DES: JORGE DE OLIVEIRA NET 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000888                            37,00     9.345,66
+                  DES: Mateus Rocha Siqueira 11/02
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000925                          2.088,00    7.257,66
+                  DES: Julia Campos Ferreira 11/02
+
+
+                  PGTO DE RENDIMENTO - B3*
+12/02/2026                                                                  2000037               20,29                  7.277,95
+                  FII MODELO RI
+
+
+                  RENTAB.INVEST FACILCRED*                                  2000259                0,01                  7.277,96
+
+
+                  PAGTO ELETRON COBRANCA
+                                                                            2000962                           101,90     7.176,06
+                  SEGURADORA EXEMPLO
+
+
+                  TRANSFERENCIA PIX
+                                                                            2000999                            37,00     7.139,06
+                  DES: CICLANO DIAS MOREIRA 12/02
+
+
+Total                                                                                          1.052,00      8.197,17    7.139,06
+                                             Bradesco Celular
+                                             Data: 15/02/2026 - 12h07
+                                             Nome: FULANO DE TAL SOUZA
+
+
+Extrato de: Agência: 1234 | Conta: 98765-4 | Últimos Lancamentos                                               Folha: 3/3
+
+
+Data               Histórico                                            Docto.    Crédito (R$)   Débito (R$)   Saldo (R$)
+
+
+
+12/02/2026        COD. LANC. 0                                                                                  7.139,05
+
+
+                  RENTAB.INVEST FACILCRED*                              2000259           0,01                  7.139,06
+
+
+                  PGTO DE RENDIMENTO - B3*
+13/02/2026                                                              2000037           8,87                  7.147,93
+                  FII MODELO
+
+                  PGTO DE RENDIMENTO - B3*
+                                                                        2000037          11,88                  7.159,81
+                  FII TESTE PAX
+
+
+Total                                                                                    20,76                  7.159,81

@@ -391,7 +391,7 @@ defmodule GranaWeb.UploadLive do
         String.ends_with?(String.downcase(entry.client_name), ".pdf")
       end)
 
-    needs_api_key = has_pdf or bank == "outro"
+    needs_api_key = (has_pdf and not deterministic_pdf?(bank, statement_type)) or bank == "outro"
 
     cond do
       is_nil(bank) ->
@@ -417,6 +417,11 @@ defmodule GranaWeb.UploadLive do
         {:noreply, socket}
     end
   end
+
+  # PDFs que conseguimos extrair de forma determinística (pdftotext) não exigem
+  # API key. A IA só entra como fallback (PDF escaneado / sem camada de texto).
+  defp deterministic_pdf?("bradesco", "extrato"), do: true
+  defp deterministic_pdf?(_bank, _statement_type), do: false
 
   defp handle_investment_upload(socket) do
     %{current_scope: scope} = socket.assigns
@@ -617,6 +622,11 @@ defmodule GranaWeb.UploadLive do
 
   defp format_error("No transactions found in PDF", bank) do
     "Nenhuma transação encontrada no PDF. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
+  end
+
+  defp format_error(:no_api_key, _bank) do
+    "Não foi possível extrair o PDF automaticamente (pode ser digitalizado). " <>
+      "Configure uma API Key do Gemini nas Configurações para processá-lo via IA."
   end
 
   defp format_error(reason, _bank) when is_binary(reason), do: reason
