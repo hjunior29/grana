@@ -53,6 +53,11 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/categories"} class="text-sm">Categorias</.link>
             </li>
             <li>
+              <.link navigate={~p"/dashboard?#{%{tab: "recurring"}}"} class="text-sm">
+                Despesas Fixas
+              </.link>
+            </li>
+            <li>
               <.link navigate={~p"/goals"} class="text-sm">Metas</.link>
             </li>
             <li>
@@ -122,6 +127,11 @@ defmodule GranaWeb.Layouts do
               <li>
                 <.link navigate={~p"/categories"}>
                   <.icon name="hero-tag" class="size-4" /> Categorias
+                </.link>
+              </li>
+              <li>
+                <.link navigate={~p"/dashboard?#{%{tab: "recurring"}}"}>
+                  <.icon name="hero-arrow-path" class="size-4" /> Despesas Fixas
                 </.link>
               </li>
               <li>

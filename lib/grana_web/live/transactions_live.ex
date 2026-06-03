@@ -6,6 +6,8 @@ defmodule GranaWeb.TransactionsLive do
   alias Grana.Investments.Constants
 
   @per_page 50
+  @banking_sort_fields ~w(date description bank category type amount)
+  @banking_sort_dirs ~w(asc desc)
 
   @impl true
   def mount(_params, _session, socket) do
@@ -23,6 +25,7 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:categories, categories)
       |> assign(:banks, banks)
       |> assign(:editing_id, nil)
+      |> assign(:recurring_editing_id, nil)
       |> assign(:expanded_ids, MapSet.new())
       |> assign(:selected_ids, MapSet.new())
       |> assign(:statement_info, nil)
@@ -62,7 +65,9 @@ defmodule GranaWeb.TransactionsLive do
       amount_max: params["amount_max"] || "",
       internal: params["internal"] || "all",
       filter: params["filter"] || "all",
-      statement_id: params["statement_id"] || nil
+      statement_id: params["statement_id"] || nil,
+      sort_by: normalize_sort_by(params["sort_by"]),
+      sort_dir: normalize_sort_dir(params["sort_dir"])
     }
 
     page = parse_int(params["page"], 1)
@@ -80,6 +85,8 @@ defmodule GranaWeb.TransactionsLive do
       |> maybe_add_opt(:amount_max, parse_decimal(filters.amount_max))
       |> maybe_add_opt(:internal, filters.internal)
       |> maybe_add_opt(:bank_statement_id, parse_int_opt(filters.statement_id))
+      |> maybe_add_opt(:sort_by, filters.sort_by)
+      |> maybe_add_opt(:sort_dir, filters.sort_dir)
 
     opts =
       case filters.filter do
@@ -91,6 +98,7 @@ defmodule GranaWeb.TransactionsLive do
     total_pages = max(1, ceil(total / @per_page))
     summary = Banking.transactions_summary(user_id, opts)
     internal_count = Enum.count(transactions, & &1.is_internal_transfer)
+    recurring_statuses = Banking.recurring_statuses(user_id, transactions)
 
     statement_info =
       case filters.statement_id do
@@ -108,7 +116,9 @@ defmodule GranaWeb.TransactionsLive do
     |> assign(:total_pages, total_pages)
     |> assign(:total, total)
     |> assign(:transactions, transactions)
+    |> assign(:recurring_statuses, recurring_statuses)
     |> assign(:editing_id, nil)
+    |> assign(:recurring_editing_id, nil)
     |> assign(:selected_ids, MapSet.new())
     |> assign(:statement_info, statement_info)
     |> assign(:summary, summary)
@@ -220,7 +230,9 @@ defmodule GranaWeb.TransactionsLive do
             date_to: params["date_to"] || "",
             amount_min: params["amount_min"] || "",
             amount_max: params["amount_max"] || "",
-            internal: params["internal"] || "all"
+            internal: params["internal"] || "all",
+            sort_by: socket.assigns.filters.sort_by,
+            sort_dir: socket.assigns.filters.sort_dir
           }
           |> maybe_keep_statement(socket.assigns.filters)
           |> build_query_string()
@@ -306,6 +318,14 @@ defmodule GranaWeb.TransactionsLive do
     {:noreply, assign(socket, :editing_id, nil)}
   end
 
+  def handle_event("edit-recurring", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :recurring_editing_id, parse_int(id, -1))}
+  end
+
+  def handle_event("cancel-recurring", _params, socket) do
+    {:noreply, assign(socket, :recurring_editing_id, nil)}
+  end
+
   def handle_event("save-category", %{"txn_id" => id, "category_id" => category_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     cat_id = parse_int(category_id, -1)
@@ -327,6 +347,30 @@ defmodule GranaWeb.TransactionsLive do
       {:noreply, socket}
     else
       {:noreply, put_flash(socket, :error, "Categoria inválida.")}
+    end
+  end
+
+  def handle_event("save-recurring", %{"txn_id" => id, "mode" => mode}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    txn_id = parse_int(id, -1)
+
+    case Banking.set_transaction_recurring_mode(user_id, txn_id, mode) do
+      {:ok, _rule} ->
+        query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+
+        socket =
+          socket
+          |> assign(:recurring_editing_id, nil)
+          |> put_flash(:info, recurring_flash(mode))
+          |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
+
+        {:noreply, socket}
+
+      {:error, :not_recurring_expense} ->
+        {:noreply, put_flash(socket, :error, "Só despesas bancárias podem virar fixas.")}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Não foi possível atualizar a recorrência.")}
     end
   end
 
@@ -383,6 +427,15 @@ defmodule GranaWeb.TransactionsLive do
 
   defp maybe_keep_statement(params, %{statement_id: nil}), do: params
   defp maybe_keep_statement(params, %{statement_id: id}), do: Map.put(params, :statement_id, id)
+
+  defp normalize_sort_by(sort_by) when sort_by in @banking_sort_fields, do: sort_by
+  defp normalize_sort_by(_sort_by), do: "date"
+
+  defp normalize_sort_dir(sort_dir) when sort_dir in @banking_sort_dirs, do: sort_dir
+  defp normalize_sort_dir(_sort_dir), do: "desc"
+
+  defp recurring_flash("fixed"), do: "Despesa marcada como fixa"
+  defp recurring_flash("variable"), do: "Despesa marcada como variável"
 
   defp build_query_string(filters) do
     filters
@@ -496,7 +549,7 @@ defmodule GranaWeb.TransactionsLive do
     </div>
 
     <div class="card bg-base-200 p-4 mb-6">
-      <form phx-change="apply_filters" phx-submit="apply_filters">
+      <form id="banking-transactions-filters" phx-change="apply_filters" phx-submit="apply_filters">
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <div class="col-span-2">
             <input
@@ -673,7 +726,7 @@ defmodule GranaWeb.TransactionsLive do
     </div>
 
     <div :if={@transactions != []} class="overflow-x-auto">
-      <table class="table">
+      <table id="banking-transactions-table" class="table">
         <thead>
           <tr>
             <th class="w-8">
@@ -684,16 +737,18 @@ defmodule GranaWeb.TransactionsLive do
                 phx-click="toggle-select-all"
               />
             </th>
-            <th>Data</th>
-            <th>Descrição</th>
-            <th>Banco</th>
-            <th>Categoria</th>
-            <th class="text-right">Valor</th>
+            <.sortable_header filters={@filters} field="date" label="Data" />
+            <.sortable_header filters={@filters} field="description" label="Descrição" />
+            <.sortable_header filters={@filters} field="bank" label="Banco" />
+            <.sortable_header filters={@filters} field="category" label="Categoria" />
+            <th>Recorrência</th>
+            <.sortable_header filters={@filters} field="amount" label="Valor" class="text-right" />
           </tr>
         </thead>
         <tbody>
           <tr
             :for={txn <- @transactions}
+            id={"banking-transaction-#{txn.id}"}
             class={["hover", txn.is_internal_transfer && "opacity-50"]}
           >
             <td>
@@ -777,6 +832,7 @@ defmodule GranaWeb.TransactionsLive do
                 </span>
               </button>
             </td>
+            <td>{render_recurring_cell(assigns, txn)}</td>
             <td class={[
               "text-right text-sm font-medium whitespace-nowrap",
               (txn.type == "credit" && "text-success") || "text-error"
@@ -1067,6 +1123,115 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   # ── Formatting helpers ──
+
+  defp sortable_header(assigns) do
+    assigns = assign_new(assigns, :class, fn -> "" end)
+
+    ~H"""
+    <th class={@class}>
+      <.link
+        patch={sort_url(@filters, @field)}
+        class={[
+          "inline-flex items-center gap-1 rounded-md transition hover:text-primary",
+          @class == "text-right" && "justify-end w-full"
+        ]}
+      >
+        <span>{@label}</span>
+        <.icon
+          :if={@filters.sort_by == @field}
+          name={sort_icon(@filters.sort_dir)}
+          class="size-3"
+        />
+      </.link>
+    </th>
+    """
+  end
+
+  defp render_recurring_cell(assigns, txn) do
+    assigns =
+      assigns
+      |> assign(:txn, txn)
+      |> assign(:recurring, recurring_status(assigns.recurring_statuses, txn.id))
+
+    ~H"""
+    <div class="min-w-24">
+      <form
+        :if={@recurring.editable and @recurring_editing_id == @txn.id}
+        id={"transaction-recurring-form-#{@txn.id}"}
+        phx-change="save-recurring"
+        phx-click-away="cancel-recurring"
+        class="inline-flex"
+      >
+        <input type="hidden" name="txn_id" value={@txn.id} />
+        <select
+          name="mode"
+          aria-label="Recorrência da despesa"
+          class="select select-xs border-primary/40 text-xs font-medium"
+        >
+          <option value="fixed" selected={@recurring.status == "fixed"}>Fixa</option>
+          <option value="variable" selected={@recurring.status == "variable"}>Variável</option>
+        </select>
+      </form>
+
+      <button
+        :if={@recurring.editable and @recurring_editing_id != @txn.id}
+        id={"transaction-recurring-chip-#{@txn.id}"}
+        type="button"
+        phx-click="edit-recurring"
+        phx-value-id={@txn.id}
+        class={recurring_chip_class(@recurring.status)}
+        title="Alterar recorrência"
+      >
+        {recurring_label(@recurring.status)}
+      </button>
+
+      <span :if={!@recurring.editable} class="text-xs opacity-30">—</span>
+    </div>
+    """
+  end
+
+  defp sort_url(filters, field) do
+    next_dir =
+      if filters.sort_by == field and filters.sort_dir == "asc",
+        do: "desc",
+        else: "asc"
+
+    qs =
+      filters
+      |> Map.put(:tab, "banking")
+      |> Map.put(:sort_by, field)
+      |> Map.put(:sort_dir, next_dir)
+      |> build_query_string()
+
+    "/transactions?#{qs}"
+  end
+
+  defp sort_icon("asc"), do: "hero-chevron-up"
+  defp sort_icon(_), do: "hero-chevron-down"
+
+  defp recurring_status(statuses, id) do
+    Map.get(statuses, id, %{status: "none", pattern: "", editable: false})
+  end
+
+  defp recurring_label("fixed"), do: "Fixa"
+  defp recurring_label("variable"), do: "Variável"
+  defp recurring_label(_), do: "—"
+
+  # Mesma "caixa" do badge de categoria (badge badge-sm), só trocando a cor:
+  # roxo para fixa, cinza para variável.
+  defp recurring_chip_class("fixed") do
+    [
+      "badge badge-sm cursor-pointer transition",
+      "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+    ]
+  end
+
+  defp recurring_chip_class("variable") do
+    [
+      "badge badge-sm cursor-pointer transition",
+      "border-base-content/20 bg-base-content/5 text-base-content/60 hover:bg-base-content/10"
+    ]
+  end
 
   defp page_url(base, filters, page) do
     qs = build_query_string(Map.merge(filters, Map.put(base, :page, page)))

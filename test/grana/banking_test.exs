@@ -228,6 +228,76 @@ defmodule Grana.BankingTest do
       {:ok, updated} = Banking.update_transaction(txn, %{category_id: food_cat.id})
       assert updated.category_id == food_cat.id
     end
+
+    test "list_transactions_paginated sorts by requested column", %{
+      user: user,
+      statement: stmt,
+      uncat: uncat
+    } do
+      Banking.bulk_insert_transactions([
+        %{
+          date: ~D[2026-01-02],
+          description: "Beta",
+          amount: Decimal.new("-20.00"),
+          type: "debit",
+          bank_statement_id: stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        },
+        %{
+          date: ~D[2026-01-01],
+          description: "Alpha",
+          amount: Decimal.new("-50.00"),
+          type: "debit",
+          bank_statement_id: stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        }
+      ])
+
+      {by_description, 2} =
+        Banking.list_transactions_paginated(user.id,
+          sort_by: "description",
+          sort_dir: "asc"
+        )
+
+      assert Enum.map(by_description, & &1.description) == ["Alpha", "Beta"]
+
+      {by_amount, 2} =
+        Banking.list_transactions_paginated(user.id,
+          sort_by: "amount",
+          sort_dir: "desc"
+        )
+
+      assert Enum.map(by_amount, & &1.description) == ["Alpha", "Beta"]
+    end
+
+    test "set_transaction_recurring_mode creates a rule from transaction merchant", %{
+      user: user,
+      statement: stmt,
+      uncat: uncat
+    } do
+      Banking.bulk_insert_transactions([
+        %{
+          date: ~D[2024-01-01],
+          description: "PIX QR CODE DINAMICO - SPOTIFY",
+          amount: Decimal.new("-21.90"),
+          type: "debit",
+          bank_statement_id: stmt.id,
+          user_id: user.id,
+          category_id: uncat.id
+        }
+      ])
+
+      [txn] = Banking.list_transactions(user.id)
+
+      assert {:ok, rule} = Banking.set_transaction_recurring_mode(user.id, txn.id, "fixed")
+      assert rule.pattern == "spotify"
+      assert rule.mode == "fixed"
+
+      statuses = Banking.recurring_statuses(user.id, [txn])
+      assert Map.fetch!(statuses, txn.id).status == "fixed"
+    end
   end
 
   describe "delete_statements/2 authorization" do
@@ -403,6 +473,35 @@ defmodule Grana.BankingTest do
 
     test "detect_internal_transfers returns :ok on success", %{user: user} do
       assert Banking.detect_internal_transfers(user.id) == :ok
+    end
+
+    test "marca 'GASTOS CARTAO DE CREDITO' do extrato como transferência interna", %{user: user} do
+      Banking.ensure_default_categories(user.id)
+      uncat = Banking.get_uncategorized_category(user.id)
+
+      {:ok, extrato} =
+        Banking.create_statement(%{
+          bank: "bradesco",
+          filename: "e.csv",
+          statement_type: "extrato",
+          user_id: user.id
+        })
+
+      Banking.bulk_insert_transactions([
+        %{
+          date: ~D[2026-05-10],
+          description: "GASTOS CARTAO DE CREDITO",
+          amount: Decimal.new("-1200.00"),
+          type: "debit",
+          bank_statement_id: extrato.id,
+          user_id: user.id,
+          category_id: uncat.id
+        }
+      ])
+
+      assert Banking.detect_internal_transfers(user.id) == :ok
+      assert [txn] = Banking.list_transactions(user.id)
+      assert txn.is_internal_transfer == true
     end
   end
 
