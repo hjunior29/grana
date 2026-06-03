@@ -42,6 +42,11 @@ defmodule GranaWeb.DashboardLive do
       |> load_banking_data()
       # Investment state (lazy loaded on first tab switch)
       |> assign(:inv_loaded, false)
+      # Recurring-expenses state (lazy loaded on first tab switch)
+      |> assign(:rec_loaded, false)
+      |> assign(:rec_window, "6")
+      |> assign(:rec_bank, "all")
+      |> assign(:rec_type, "all")
 
     {:ok, socket}
   end
@@ -62,6 +67,11 @@ defmodule GranaWeb.DashboardLive do
           |> apply_inv_url_params(params)
           |> assign(:tab, "investments")
 
+        "recurring" ->
+          socket
+          |> then(fn s -> if s.assigns[:rec_loaded], do: s, else: load_recurring_data(s) end)
+          |> assign(:tab, "recurring")
+
         _ ->
           assign(socket, :tab, "banking")
       end
@@ -74,6 +84,20 @@ defmodule GranaWeb.DashboardLive do
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, push_patch(socket, to: ~p"/dashboard?tab=#{tab}")}
+  end
+
+  # ── Events: Recurring expenses tab ──
+
+  def handle_event("rec_set_window", %{"window" => window}, socket) do
+    {:noreply, socket |> assign(:rec_window, window) |> load_recurring_data()}
+  end
+
+  def handle_event("rec_select_bank", %{"bank" => bank}, socket) do
+    {:noreply, socket |> assign(:rec_bank, bank) |> load_recurring_data()}
+  end
+
+  def handle_event("rec_select_type", %{"type" => type}, socket) do
+    {:noreply, socket |> assign(:rec_type, type) |> load_recurring_data()}
   end
 
   # ── Events: Shared (dispatched by tab) ──
@@ -230,6 +254,41 @@ defmodule GranaWeb.DashboardLive do
   end
 
   # ── Data Loading: Banking ──
+
+  defp load_recurring_data(socket) do
+    window =
+      case socket.assigns.rec_window do
+        "12" -> 12
+        "all" -> :all
+        _ -> 6
+      end
+
+    analysis =
+      Banking.recurring_analysis(socket.assigns.current_scope.user.id,
+        window: window,
+        bank: socket.assigns.rec_bank,
+        statement_type: socket.assigns.rec_type
+      )
+
+    socket
+    |> assign(:rec_analysis, analysis)
+    |> assign(:rec_chart, rec_chart_data(analysis))
+    |> assign(:rec_loaded, true)
+  end
+
+  defp rec_chart_data(analysis) do
+    analysis.monthly
+    |> Enum.map(fn m ->
+      {_year, month} = m.ym
+
+      %{
+        label: Banking.month_name_short(month),
+        income: Decimal.to_float(m.fixed),
+        expenses: Decimal.to_float(m.variable)
+      }
+    end)
+    |> Jason.encode!()
+  end
 
   defp load_banking_data(socket) do
     %{
@@ -534,6 +593,28 @@ defmodule GranaWeb.DashboardLive do
 
   # ── URL Helpers ──
 
+  # URL para Transações respeitando os filtros da aba de despesas fixas (banco e
+  # fonte), em vez do período do bancário. Mostra todo o histórico do comerciante.
+  defp rec_transactions_url(assigns, extra) do
+    base =
+      %{}
+      |> then(fn p ->
+        if assigns.rec_bank != "all", do: Map.put(p, :bank, assigns.rec_bank), else: p
+      end)
+      |> then(fn p ->
+        if assigns.rec_type != "all", do: Map.put(p, :statement_type, assigns.rec_type), else: p
+      end)
+
+    qs =
+      base
+      |> Map.merge(extra)
+      |> Enum.reject(fn {_k, v} -> v in [nil, "", "all"] end)
+      |> Enum.map(fn {k, v} -> "#{k}=#{URI.encode_www_form(to_string(v))}" end)
+      |> Enum.join("&")
+
+    "/transactions?#{qs}"
+  end
+
   defp transactions_url(assigns, extra \\ %{}) do
     %{
       selected_year: year,
@@ -656,15 +737,191 @@ defmodule GranaWeb.DashboardLive do
           >
             <.icon name="hero-chart-bar" class="size-4 mr-1" /> Investimentos
           </button>
+          <button
+            role="tab"
+            phx-click="switch_tab"
+            phx-value-tab="recurring"
+            class={["tab", @tab == "recurring" && "tab-active"]}
+          >
+            <.icon name="hero-arrow-path" class="size-4 mr-1" /> Despesas Fixas
+          </button>
         </div>
 
-        <%= if @tab == "banking" do %>
-          {render_banking_tab(assigns)}
-        <% else %>
-          {render_investments_tab(assigns)}
+        <%= cond do %>
+          <% @tab == "investments" -> %>
+            {render_investments_tab(assigns)}
+          <% @tab == "recurring" -> %>
+            {render_recurring_tab(assigns)}
+          <% true -> %>
+            {render_banking_tab(assigns)}
         <% end %>
       </div>
     </Layouts.app>
+    """
+  end
+
+  # ── Recurring Expenses Tab Render ──
+
+  defp render_recurring_tab(assigns) do
+    ~H"""
+    <div class="mb-4 sm:mb-6 space-y-2">
+      <%!-- Row 1: Período --%>
+      <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+        <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Período</span>
+        <button
+          :for={{label, value} <- [{"6 meses", "6"}, {"12 meses", "12"}, {"Tudo", "all"}]}
+          phx-click="rec_set_window"
+          phx-value-window={value}
+          class={["btn btn-xs sm:btn-sm", (@rec_window == value && "btn-primary") || "btn-ghost"]}
+        >
+          {label}
+        </button>
+      </div>
+
+      <%!-- Row 2: Banco + Fonte --%>
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div :if={@banks != []} class="flex items-center gap-1">
+          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
+          <button
+            phx-click="rec_select_bank"
+            phx-value-bank="all"
+            class={["btn btn-xs", (@rec_bank == "all" && "btn-primary") || "btn-ghost"]}
+          >
+            Todos
+          </button>
+          <button
+            :for={b <- @banks}
+            phx-click="rec_select_bank"
+            phx-value-bank={b}
+            class={["btn btn-xs gap-1", (@rec_bank == b && "btn-primary") || "btn-ghost"]}
+          >
+            <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
+            <span class="hidden sm:inline">{String.capitalize(b)}</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
+          <button
+            phx-click="rec_select_type"
+            phx-value-type="all"
+            class={["btn btn-xs", (@rec_type == "all" && "btn-primary") || "btn-ghost"]}
+          >
+            Todas
+          </button>
+          <button
+            phx-click="rec_select_type"
+            phx-value-type="extrato"
+            class={["btn btn-xs gap-1", (@rec_type == "extrato" && "btn-primary") || "btn-ghost"]}
+          >
+            <.icon name="hero-banknotes" class="size-3" />
+            <span class="hidden sm:inline">Extrato</span>
+          </button>
+          <button
+            phx-click="rec_select_type"
+            phx-value-type="fatura"
+            class={["btn btn-xs gap-1", (@rec_type == "fatura" && "btn-primary") || "btn-ghost"]}
+          >
+            <.icon name="hero-credit-card" class="size-3" />
+            <span class="hidden sm:inline">Fatura</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <%= if @rec_analysis.total_months == 0 do %>
+      <div class="text-center py-16 opacity-60">
+        <.icon name="hero-arrow-path" class="size-10 mx-auto mb-3 opacity-40" />
+        <p>Nenhuma despesa encontrada nesse período.</p>
+        <p class="text-sm mt-1">
+          Importe extratos/faturas em <.link navigate={~p"/upload"} class="link">Uploads</.link>.
+        </p>
+      </div>
+    <% else %>
+      <div class="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-8">
+        <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+          <div class="stat-title text-xs">Fixas / mês</div>
+          <div class="stat-value text-primary text-sm sm:text-lg">
+            {format_currency(@rec_analysis.avg_fixed)}
+          </div>
+          <div class="stat-desc text-xs">{length(@rec_analysis.fixed)} recorrente(s)</div>
+        </div>
+        <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
+          <div class="stat-title text-xs">Variáveis / mês</div>
+          <div class="stat-value text-warning text-sm sm:text-lg">
+            {format_currency(@rec_analysis.avg_variable)}
+          </div>
+          <div class="stat-desc text-xs">{@rec_analysis.total_months} meses analisados</div>
+        </div>
+      </div>
+
+      <div class="card bg-base-200 mb-4 sm:mb-8">
+        <div class="card-body p-4 sm:p-6">
+          <h3 class="font-semibold text-sm sm:text-base mb-2">Fixas vs variáveis por mês</h3>
+          <div
+            id="recurring-chart"
+            phx-hook="IncomeExpensesChart"
+            data-monthly={@rec_chart}
+            data-income-label="Fixas"
+            data-expenses-label="Variáveis"
+            data-income-fill="fill-primary"
+            data-expenses-fill="fill-warning"
+            data-income-color="bg-primary/70"
+            data-expenses-color="bg-warning/70"
+          >
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-200">
+        <div class="card-body p-4 sm:p-6">
+          <h3 class="font-semibold text-sm sm:text-base mb-3">
+            Despesas fixas
+            <span class="text-sm font-normal opacity-50">({length(@rec_analysis.fixed)})</span>
+          </h3>
+          <div :if={@rec_analysis.fixed == []} class="text-sm opacity-60 py-4">
+            Nenhuma despesa fixa na janela selecionada. Abra Transações, filtre seus lançamentos e
+            marque as despesas que devem entrar como fixas.
+          </div>
+          <div :if={@rec_analysis.fixed != []} class="space-y-1">
+            <.link
+              :for={item <- @rec_analysis.fixed}
+              navigate={rec_transactions_url(assigns, %{search: item.name, type: "debit"})}
+              class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 transition-all cursor-pointer hover:bg-base-300"
+            >
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium truncate">{item.name}</div>
+                <div class="text-xs opacity-50 flex items-center gap-2 mt-0.5">
+                  <span class="badge badge-xs badge-ghost">
+                    {item.months_present}/{item.total_months} meses
+                  </span>
+                  <span :if={item.typical_day}>dia {item.typical_day}</span>
+                </div>
+              </div>
+              <div class="shrink-0 hidden sm:block">
+                {render_rec_category(assigns, item.category)}
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-sm font-medium">{format_currency(item.avg_amount)}</div>
+                <div class="text-xs opacity-40">/mês</div>
+              </div>
+              <.icon name="hero-chevron-right" class="size-4 opacity-30 shrink-0" />
+            </.link>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
+  defp render_rec_category(assigns, category) do
+    assigns = assign(assigns, :cat, category)
+
+    ~H"""
+    <span :if={@cat} class="badge badge-sm badge-ghost gap-1.5">
+      <span class="size-2 rounded-full" style={"background-color: #{@cat.color}"}></span>
+      {@cat.name}
+    </span>
+    <span :if={!@cat} class="text-xs opacity-40">—</span>
     """
   end
 

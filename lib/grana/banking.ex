@@ -7,6 +7,7 @@ defmodule Grana.Banking do
     Transaction,
     Category,
     CategoryRule,
+    RecurringRule,
     AIAnalysis,
     FinancialGoal
   }
@@ -173,6 +174,139 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
+  @doc """
+  Análise de despesas fixas (recorrentes) vs variáveis.
+
+  `:window` é o número de meses analisados (default 6) ou `:all` para tudo.
+  Considera apenas despesas reais: débitos, sem transferências internas, sem
+  parcelas (já têm visão própria) e fora de categorias de investimento. As
+  regras salvas pelo usuário definem o estado efetivo quando existem.
+  """
+  def recurring_analysis(user_id, opts \\ []) do
+    today = Keyword.get(opts, :today, Date.utc_today())
+    window = Keyword.get(opts, :window, 6)
+
+    list_opts =
+      [type: "debit", internal: "hide", date_from: window_start(today, window)]
+      |> maybe_put(:bank, Keyword.get(opts, :bank))
+      |> maybe_put(:statement_type, Keyword.get(opts, :statement_type))
+
+    expenses =
+      list_transactions(user_id, list_opts)
+      |> Enum.reject(&(&1.installment_total != nil))
+      |> Enum.reject(&investment_category?/1)
+
+    Grana.Banking.RecurringExpenses.analyze(expenses, rules: recurring_rules_map(user_id))
+  end
+
+  defp maybe_put(opts, _key, value) when value in [nil, "all"], do: opts
+  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
+
+  defp investment_category?(%{category: %{kind: "investment"}}), do: true
+  defp investment_category?(_), do: false
+
+  defp window_start(_today, :all), do: nil
+
+  defp window_start(today, months) when is_integer(months) do
+    total = today.year * 12 + (today.month - 1) - (months - 1)
+    Date.new!(div(total, 12), rem(total, 12) + 1, 1)
+  end
+
+  # Regras de recorrência por comerciante.
+
+  def list_recurring_rules(user_id) do
+    RecurringRule
+    |> where([r], r.user_id == ^user_id)
+    |> order_by([r], asc: r.pattern)
+    |> Repo.all()
+  end
+
+  defp recurring_rules_map(user_id) do
+    user_id
+    |> list_recurring_rules()
+    |> Map.new(fn r -> {r.pattern, r.mode} end)
+  end
+
+  @doc "Marca um comerciante como fixo/variável (cria ou atualiza a regra)."
+  def upsert_recurring_rule(user_id, pattern, mode) do
+    pattern = Grana.Banking.RecurringExpenses.normalize(pattern)
+
+    %RecurringRule{}
+    |> RecurringRule.changeset(%{user_id: user_id, pattern: pattern, mode: mode})
+    |> Repo.insert(
+      on_conflict: [set: [mode: mode, updated_at: DateTime.utc_now(:second)]],
+      conflict_target: [:user_id, :pattern]
+    )
+  end
+
+  @doc "Remove a regra de recorrência do comerciante."
+  def delete_recurring_rule(user_id, pattern) do
+    pattern = Grana.Banking.RecurringExpenses.normalize(pattern)
+
+    RecurringRule
+    |> where([r], r.user_id == ^user_id and r.pattern == ^pattern)
+    |> Repo.delete_all()
+  end
+
+  @doc """
+  Define o modo de recorrência a partir de uma transação do usuário.
+
+  A regra é gravada pelo comerciante normalizado da transação, então variações do
+  mesmo lançamento e importações futuras passam a seguir o modo escolhido.
+  """
+  def set_transaction_recurring_mode(user_id, transaction_id, mode)
+      when mode in ["fixed", "variable"] do
+    transaction = get_transaction!(transaction_id, user_id)
+
+    if recurring_manageable_transaction?(transaction) do
+      upsert_recurring_rule(user_id, transaction.description, mode)
+    else
+      {:error, :not_recurring_expense}
+    end
+  end
+
+  def set_transaction_recurring_mode(_user_id, _transaction_id, _mode),
+    do: {:error, :invalid_mode}
+
+  def recurring_manageable_transaction?(%Transaction{} = transaction) do
+    transaction.type == "debit" and
+      transaction.is_internal_transfer == false and
+      is_nil(transaction.installment_total) and
+      not investment_category?(transaction)
+  end
+
+  @doc """
+  Retorna o estado efetivo de recorrência para transações já carregadas.
+
+  O resultado é um mapa `%{transaction_id => %{status, pattern, editable}}`.
+  """
+  def recurring_statuses(user_id, transactions, opts \\ []) do
+    rules = recurring_rules_map(user_id)
+    analysis = recurring_analysis(user_id, opts)
+
+    fixed_patterns =
+      ((analysis.fixed |> Enum.flat_map(& &1.patterns)) ++
+         (rules
+          |> Enum.filter(fn {_pattern, mode} -> mode == "fixed" end)
+          |> Enum.map(&elem(&1, 0))))
+      |> MapSet.new()
+
+    Map.new(transactions, fn transaction ->
+      pattern = Grana.Banking.RecurringExpenses.normalize(transaction.description)
+
+      status =
+        cond do
+          not recurring_manageable_transaction?(transaction) -> "none"
+          Map.get(rules, pattern) == "fixed" -> "fixed"
+          Map.get(rules, pattern) == "variable" -> "variable"
+          MapSet.member?(fixed_patterns, pattern) -> "fixed"
+          true -> "variable"
+        end
+
+      {transaction.id, %{status: status, pattern: pattern, editable: status != "none"}}
+    end)
+  end
+
   def list_transactions_paginated(user_id, opts \\ []) do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 50)
@@ -195,7 +329,6 @@ defmodule Grana.Banking do
       Transaction
       |> where([t], t.user_id == ^user_id)
       |> preload([:category, :bank_statement])
-      |> order_by([t], desc: t.date)
 
     query = filter_by_category(query, Keyword.get(opts, :category_id))
     query = filter_by_uncategorized(query, Keyword.get(opts, :uncategorized), user_id)
@@ -209,7 +342,41 @@ defmodule Grana.Banking do
     query = filter_by_type(query, Keyword.get(opts, :type))
     query = filter_by_amount_min(query, Keyword.get(opts, :amount_min))
     query = filter_by_amount_max(query, Keyword.get(opts, :amount_max))
-    filter_by_internal(query, Keyword.get(opts, :internal))
+    query = filter_by_internal(query, Keyword.get(opts, :internal))
+
+    sort_transactions(
+      query,
+      Keyword.get(opts, :sort_by, "date"),
+      Keyword.get(opts, :sort_dir, "desc")
+    )
+  end
+
+  defp sort_transactions(query, sort_by, sort_dir) do
+    dir = if sort_dir == "asc", do: :asc, else: :desc
+
+    case sort_by do
+      "description" ->
+        order_by(query, [t], [{^dir, t.description}, {^dir, t.id}])
+
+      "bank" ->
+        query
+        |> join(:left, [t], bs in assoc(t, :bank_statement), as: :sort_bank_statement)
+        |> order_by([t, sort_bank_statement: bs], [{^dir, bs.bank}, {^dir, t.date}, {^dir, t.id}])
+
+      "category" ->
+        query
+        |> join(:left, [t], c in assoc(t, :category), as: :sort_category)
+        |> order_by([t, sort_category: c], [{^dir, c.name}, {^dir, t.date}, {^dir, t.id}])
+
+      "type" ->
+        order_by(query, [t], [{^dir, t.type}, {^dir, t.date}, {^dir, t.id}])
+
+      "amount" ->
+        order_by(query, [t], [{^dir, fragment("ABS(?)", t.amount)}, {^dir, t.date}, {^dir, t.id}])
+
+      _ ->
+        order_by(query, [t], [{^dir, t.date}, {^dir, t.id}])
+    end
   end
 
   defp filter_by_category(query, nil), do: query
@@ -347,11 +514,18 @@ defmodule Grana.Banking do
     "nubank"
   ]
 
-  # Standalone patterns that always indicate CC bill payment
+  # Standalone patterns that always indicate CC bill payment. Quando a fatura do
+  # cartão é importada, o lançamento agregado no extrato ("GASTOS CARTAO DE
+  # CREDITO", "GASTOS CARTOES", etc.) duplica os gastos detalhados da fatura —
+  # por isso é tratado como transferência interna e excluído dos totais.
   @cc_payment_patterns [
     "pagamento de fatura",
     "pag fatura",
-    "pgto fatura"
+    "pgto fatura",
+    "gastos cartao",
+    "gastos cartoes",
+    "gasto cartao",
+    "gastos com cartao"
   ]
 
   @transfer_patterns [

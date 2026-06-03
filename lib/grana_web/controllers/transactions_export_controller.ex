@@ -22,6 +22,8 @@ defmodule GranaWeb.TransactionsExportController do
       |> maybe_add(:amount_max, parse_decimal(params["amount_max"]))
       |> maybe_add(:internal, params["internal"])
       |> maybe_add(:bank_statement_id, parse_int(params["statement_id"]))
+      |> maybe_add(:sort_by, params["sort_by"])
+      |> maybe_add(:sort_dir, params["sort_dir"])
 
     opts =
       case params["filter"] do
