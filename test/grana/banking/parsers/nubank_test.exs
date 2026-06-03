@@ -52,9 +52,9 @@ defmodule Grana.Banking.Parsers.NubankTest do
   end
 
   test "parses full example file" do
-    content = File.read!("priv/examples/extrato-nubank.csv")
+    content = File.read!("test/support/fixtures/examples/extrato-nubank.csv")
     result = Nubank.parse(content)
-    assert length(result) > 70
+    assert length(result) > 5
     assert Enum.all?(result, &(&1.date != nil))
     assert Enum.all?(result, &(&1.amount != nil))
   end

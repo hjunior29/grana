@@ -8,7 +8,7 @@ defmodule Grana.Investments.StatementProcessorTest do
 
   setup do
     user = user_fixture()
-    content = File.read!("priv/examples/extrato-gcb.csv")
+    content = File.read!("test/support/fixtures/examples/extrato-gcb.csv")
     %{user: user, content: content}
   end
 

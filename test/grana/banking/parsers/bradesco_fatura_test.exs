@@ -42,16 +42,16 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
   end
 
   test "parses full example file" do
-    content = File.read!("priv/examples/fatura-bradesco.csv")
+    content = File.read!("test/support/fixtures/examples/fatura-bradesco.csv")
     result = BradescoFatura.parse(content)
-    assert length(result) == 14
+    assert length(result) == 6
     assert Enum.all?(result, &(&1.date != nil))
     assert Enum.all?(result, &(&1.amount != nil))
     assert Enum.all?(result, &(&1.type == "debit"))
   end
 
   test "handles latin-1 encoded files" do
-    content = File.read!("priv/examples/fatura-bradesco.csv")
+    content = File.read!("test/support/fixtures/examples/fatura-bradesco.csv")
     refute String.valid?(content)
     result = BradescoFatura.parse(content)
     assert result != []

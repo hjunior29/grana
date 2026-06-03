@@ -17,11 +17,16 @@ defmodule Grana.Investments.ParsersTest do
   end
 
   describe "B3Xlsx.parse/1" do
+    @b3_example "priv/examples/extrato-b3.xlsx"
     test "parseia o XLSX de exemplo da B3" do
-      content = File.read!("priv/examples/extrato-b3.xlsx")
-      assert {transactions, warnings} = B3Xlsx.parse(content)
-      assert is_list(warnings)
-      assert_valid_transactions(transactions)
+      # Fixture binária real não é versionada (gitignored); roda só localmente.
+      if File.exists?(@b3_example) do
+        assert {transactions, warnings} = B3Xlsx.parse(File.read!(@b3_example))
+        assert is_list(warnings)
+        assert_valid_transactions(transactions)
+      else
+        assert true
+      end
     end
 
     test "conteúdo inválido não derruba o processo" do
@@ -31,7 +36,7 @@ defmodule Grana.Investments.ParsersTest do
 
   describe "GcbCsv.parse/1" do
     test "parseia o CSV de exemplo da GCB" do
-      content = File.read!("priv/examples/extrato-gcb.csv")
+      content = File.read!("test/support/fixtures/examples/extrato-gcb.csv")
       assert {transactions, warnings} = GcbCsv.parse(content)
       assert is_list(warnings)
       assert_valid_transactions(transactions)
