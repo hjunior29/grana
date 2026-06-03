@@ -31,12 +31,18 @@ kill_signal = 'SIGTERM'
 
   # HTTP health check so a deploy is only considered healthy once the app
   # actually responds (instead of just the machine booting).
+  # O header X-Forwarded-Proto evita que o `force_ssl` (rewrite_on
+  # :x_forwarded_proto) redirecione o check interno (HTTP) com 301 — sem ele,
+  # o check nunca recebe 200 e a instância fica "unhealthy".
   [[http_service.checks]]
     interval = '30s'
     timeout = '5s'
     grace_period = '15s'
     method = 'GET'
     path = '/'
+
+    [http_service.checks.headers]
+      X-Forwarded-Proto = 'https'
 
 [[vm]]
   memory = '1gb'
