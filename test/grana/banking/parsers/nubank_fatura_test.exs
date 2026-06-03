@@ -44,9 +44,9 @@ defmodule Grana.Banking.Parsers.NubankFaturaTest do
   end
 
   test "parses full example file" do
-    content = File.read!("priv/examples/fatura-nubank.csv")
+    content = File.read!("test/support/fixtures/examples/fatura-nubank.csv")
     result = NubankFatura.parse(content)
-    assert length(result) == 54
+    assert length(result) == 8
 
     debits = Enum.filter(result, &(&1.type == "debit"))
     credits = Enum.filter(result, &(&1.type == "credit"))

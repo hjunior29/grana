@@ -9,7 +9,7 @@ defmodule Grana.Banking.StatementProcessorTest do
   setup do
     user = user_fixture()
     Banking.ensure_default_categories(user.id)
-    content = File.read!("priv/examples/extrato-nubank.csv")
+    content = File.read!("test/support/fixtures/examples/extrato-nubank.csv")
     %{user: user, content: content}
   end
 
