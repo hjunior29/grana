@@ -1,0 +1,42 @@
+name: "Elixir setup"
+description: >-
+  Instala Erlang/Elixir, restaura o cache de deps/_build e (opcionalmente) baixa
+  as dependências. Usada por todos os jobs do CI para evitar repetição.
+
+inputs:
+  elixir-version:
+    description: "Versão do Elixir"
+    required: false
+    default: "1.18.4"
+  otp-version:
+    description: "Versão do OTP"
+    required: false
+    default: "28.0.4"
+  fetch-deps:
+    description: "Rodar `mix deps.get` (idempotente; rápido com cache)"
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Instalar Erlang/Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: ${{ inputs.elixir-version }}
+        otp-version: ${{ inputs.otp-version }}
+
+    - name: Cache de deps e _build
+      uses: actions/cache@v4
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ inputs.otp-version }}-${{ inputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-${{ inputs.otp-version }}-${{ inputs.elixir-version }}-
+
+    - name: Baixar dependências
+      if: inputs.fetch-deps == 'true'
+      shell: bash
+      run: mix deps.get

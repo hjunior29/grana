@@ -1,20 +1,120 @@
+# Pipeline de CI/CD do Grana.
+#
+# Cada verificação do quality gate é um JOB separado (📦 deps, 🎨 format,
+# 🔨 compile, 🔎 credo, 🛡️ audit, 🧪 test) para ficar visível no GitHub Actions
+# exatamente o que está rodando e o que falhou — em vez de um job monolítico.
+#
+# `✅ Quality gate` agrega todas as verificações num único status (bom para exigir
+# como check obrigatório em branch protection). `🚀 Deploy` só roda fora de PR:
+# em pull_request todo o gate roda, mas o deploy é pulado.
+#
+#   push/dispatch (main):  deps → [format, compile, credo, audit, test] → gate → deploy
+#   pull_request (main):   deps → [format, compile, credo, audit, test] → gate   (sem deploy)
+#
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
 
-name: Fly Deploy
+name: CI
+
 on:
-  workflow_dispatch: # allows manual trigger from GitHub UI
+  workflow_dispatch: # permite disparo manual pela UI do GitHub
   push:
     branches:
       - main
-  pull_request: # roda o quality gate (job test) nas PRs para main
+  pull_request: # roda o quality gate completo nas PRs para main (sem deploy)
     branches:
       - main
+
+# Um push novo no mesmo ref cancela o run anterior — mas só em PR. Na main não
+# cancelamos (um run em andamento pode estar no meio de um deploy).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MIX_ENV: test
+  ELIXIR_VERSION: "1.18.4"
+  OTP_VERSION: "28.0.4"
+  # CVE do Decimal (GHSA-rhv4-8758-jx7v) ignorada de propósito: o fix exige
+  # decimal 3.0, mas postgrex ainda fixa `decimal ~> 2.0`. Reavaliar quando o
+  # postgrex permitir 3.0.
+  AUDIT_IGNORE: GHSA-rhv4-8758-jx7v
+
 jobs:
-  test:
-    name: Test & lint
+  # ── 📦 Aquece o cache de deps/_build para os jobs seguintes ─────────────────
+  deps:
+    name: 📦 Dependencies
     runs-on: ubuntu-latest
-    env:
-      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/elixir-setup
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - name: Compilar dependências
+        run: mix deps.compile
+
+  # ── 🎨 Formatação ───────────────────────────────────────────────────────────
+  format:
+    name: 🎨 Format
+    runs-on: ubuntu-latest
+    needs: deps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/elixir-setup
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - run: mix format --check-formatted
+
+  # ── 🔨 Compilação sem warnings ───────────────────────────────────────────────
+  compile:
+    name: 🔨 Compile (warnings as errors)
+    runs-on: ubuntu-latest
+    needs: deps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/elixir-setup
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      # --force garante que o código do app seja recompilado (e os warnings
+      # apareçam) mesmo com o _build restaurado do cache.
+      - run: mix compile --force --warnings-as-errors
+
+  # ── 🔎 Análise estática ──────────────────────────────────────────────────────
+  credo:
+    name: 🔎 Credo
+    runs-on: ubuntu-latest
+    needs: deps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/elixir-setup
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - run: mix credo --strict
+
+  # ── 🛡️ Dependências: travadas e sem CVEs ──────────────────────────────────────
+  audit:
+    name: 🛡️ Deps audit
+    runs-on: ubuntu-latest
+    needs: deps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/elixir-setup
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - name: Sem dependências não usadas no lock
+        run: mix deps.unlock --check-unused
+      - name: Scan de vulnerabilidades
+        run: mix deps.audit --ignore-advisory-ids ${{ env.AUDIT_IGNORE }}
+
+  # ── 🧪 Testes + piso de cobertura ─────────────────────────────────────────────
+  test:
+    name: 🧪 Test & coverage
+    runs-on: ubuntu-latest
+    needs: deps
     services:
       db:
         image: postgres:16
@@ -31,42 +131,33 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
-
-      - uses: erlef/setup-beam@v1
+      - uses: ./.github/actions/elixir-setup
         with:
-          elixir-version: "1.18.4"
-          otp-version: "28.0.4"
-
-      - name: Cache deps and _build
-        uses: actions/cache@v4
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
-
-      - run: mix deps.get
-      - run: mix deps.unlock --check-unused
-      # Dependency vulnerability scan. The decimal advisory (GHSA-rhv4-8758-jx7v)
-      # is ignored on purpose: the only fix is decimal 3.0, but postgrex still pins
-      # `decimal ~> 2.0`, so it can't be bumped yet. Re-evaluate when postgrex allows 3.0.
-      - run: mix deps.audit --ignore-advisory-ids GHSA-rhv4-8758-jx7v
-      - run: mix format --check-formatted
-      - run: mix compile --warnings-as-errors
-      # Static analysis (consistência/correção). Débito estrutural legado está
-      # marcado como baseline em .credo.exs; o gate falha em regressões novas.
-      - run: mix credo --strict
-      # Roda os testes E aplica o piso de cobertura (minimum_coverage em coveralls.json).
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      # Roda a suíte E aplica o piso de cobertura (minimum_coverage em coveralls.json).
       - run: mix coveralls
 
-  deploy:
-    name: Deploy app
-    needs: test
-    # Só faz deploy no push/merge para main (nunca em PR — a PR só roda o gate).
-    if: github.event_name != 'pull_request'
+  # ── ✅ Status agregado do quality gate ────────────────────────────────────────
+  # Junta todas as verificações num único check. Use ESTE job como status
+  # obrigatório em branch protection (em vez de listar cada um).
+  quality_gate:
+    name: ✅ Quality gate
     runs-on: ubuntu-latest
-    concurrency: deploy-group # optional: ensure only one action runs at a time
+    needs: [format, compile, credo, audit, test]
+    steps:
+      - name: Todas as verificações passaram
+        run: echo "✅ format + compile + credo + audit + test — quality gate verde."
+
+  # ── 🚀 Deploy (somente fora de PR) ────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: quality_gate
+    # Só faz deploy no push/merge para main (ou disparo manual). Em PR o gate
+    # roda inteiro, mas o deploy é pulado.
+    if: github.event_name != 'pull_request'
+    concurrency: deploy-group # garante um único deploy por vez
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
