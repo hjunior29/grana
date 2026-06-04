@@ -116,7 +116,10 @@ config :hammer,
 config :grana, Grana.Cache,
   enabled: false,
   namespace: "grana:cache",
-  ttl_seconds: 300
+  ttl_seconds: 300,
+  # socket_opts passados ao Redix. Em prod o runtime usa [:inet6] (o Upstash do
+  # Fly só existe na rede 6PN IPv6); em dev fica vazio (Redis local em IPv4).
+  socket_opts: []
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

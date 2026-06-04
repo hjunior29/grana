@@ -42,9 +42,14 @@ defmodule Grana.Cache do
     cfg = config()
 
     if cfg[:enabled] && cfg[:url] do
+      # socket_opts: o Upstash gerenciado do Fly só existe na rede privada 6PN
+      # (IPv6); sem `:inet6` o Redix tenta IPv4 e nunca conecta (igual ao Repo,
+      # que usa ECTO_IPV6). Em dev o Redis é localhost/IPv4 → socket_opts vazio.
+      opts = [name: @conn, sync_connect: false, socket_opts: cfg[:socket_opts] || []]
+
       %{
         id: @conn,
-        start: {Redix, :start_link, [cfg[:url], [name: @conn, sync_connect: false]]}
+        start: {Redix, :start_link, [cfg[:url], opts]}
       }
     end
   end
