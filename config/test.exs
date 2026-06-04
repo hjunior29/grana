@@ -38,6 +38,10 @@ config :grana, Oban, testing: :manual
 # Skip rate limiting in tests
 config :grana, :skip_rate_limit, true
 
+# Cache desligado nos testes: Grana.Cache cai no fallback (executa a query direto),
+# então a suíte não depende de um Redis e não há estado de cache vazando entre testes.
+config :grana, Grana.Cache, enabled: false
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

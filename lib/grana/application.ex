@@ -7,14 +7,19 @@ defmodule Grana.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      GranaWeb.Telemetry,
-      Grana.Repo,
-      {DNSCluster, query: Application.get_env(:grana, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Grana.PubSub},
-      {Oban, Application.fetch_env!(:grana, Oban)},
-      GranaWeb.Endpoint
-    ]
+    # Conexão Redis do cache (só quando habilitado/configurado — ver Grana.Cache).
+    children =
+      [
+        GranaWeb.Telemetry,
+        Grana.Repo
+      ] ++
+        List.wrap(Grana.Cache.child_spec_or_nil()) ++
+        [
+          {DNSCluster, query: Application.get_env(:grana, :dns_cluster_query) || :ignore},
+          {Phoenix.PubSub, name: Grana.PubSub},
+          {Oban, Application.fetch_env!(:grana, Oban)},
+          GranaWeb.Endpoint
+        ]
 
     # Create ETS table for quote cache (owned by Application, survives process restarts)
     if :ets.whereis(:quote_cache) == :undefined do

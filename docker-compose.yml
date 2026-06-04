@@ -1,8 +1,9 @@
-# Banco de dados para desenvolvimento/testes locais.
-# Postgres NÃO faz parte do Dockerfile da aplicação (esse é o release de produção);
-# o DB local fica aqui. Suba com `make db.up` (ou `docker compose up -d`).
+# Infra para desenvolvimento/testes locais (NÃO faz parte do Dockerfile da
+# aplicação — esse é o release de produção). Suba com `make db.up` / `make redis.up`
+# (ou `docker compose up -d`).
 #
 # Credenciais batem com config/dev.exs e config/test.exs (postgres/postgres @ 5432).
+# Em produção o Redis é o Upstash gerenciado do Fly (secret REDIS_URL); aqui é local.
 services:
   db:
     image: postgres:16
@@ -18,6 +19,21 @@ services:
       - grana_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Cache local (espelha o Upstash de produção). `maxmemory-policy allkeys-lru`
+  # replica o "eviction" habilitado no Fly Redis: quando enche, descarta as
+  # chaves menos usadas — comportamento de cache, não de banco durável.
+  redis:
+    image: redis:7-alpine
+    container_name: grana-redis
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10

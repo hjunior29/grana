@@ -67,6 +67,10 @@ defmodule Grana.Workers.StatementUploadWorker do
     |> Ecto.Changeset.change(%{meta: %{"results" => meta_results}})
     |> Grana.Repo.update()
 
+    # Upload altera os dados do usuário: invalida o cache de leituras (os
+    # processors já invalidam por arquivo; aqui é a garantia no nível do upload).
+    Grana.Cache.invalidate_user(user_id)
+
     Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:upload_complete, results})
     :ok
   end

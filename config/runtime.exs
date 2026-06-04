@@ -42,6 +42,29 @@ config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
 config :grana, :brapi_token, System.get_env("BRAPI_TOKEN")
 config :grana, :roadmap_url, System.get_env("ROADMAP_URL")
 
+# Cache (Grana.Cache / Redix). Configurado para dev e prod; em test fica como o
+# default desligado de config.exs (a suíte não depende de Redis). Em dev usa o
+# container local (localhost:6379) se REDIS_URL não estiver setada; em prod a
+# REDIS_URL é o secret do Upstash gerenciado do Fly. Sem URL → cache desligado
+# (a app funciona normalmente, só sem cache).
+if config_env() != :test do
+  redis_url =
+    System.get_env("REDIS_URL") ||
+      if config_env() == :dev, do: "redis://localhost:6379"
+
+  cache_ttl =
+    case Integer.parse(System.get_env("CACHE_TTL_SECONDS") || "300") do
+      {ttl, _} when ttl > 0 -> ttl
+      _ -> 300
+    end
+
+  config :grana, Grana.Cache,
+    enabled: not is_nil(redis_url),
+    url: redis_url,
+    namespace: "grana:cache",
+    ttl_seconds: cache_ttl
+end
+
 # Encryption key for sensitive fields (API keys).
 # Generate with: :crypto.strong_rand_bytes(32) |> Base.encode64()
 if cloak_key = System.get_env("CLOAK_KEY") do
