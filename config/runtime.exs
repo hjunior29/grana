@@ -58,11 +58,19 @@ if config_env() != :test do
       _ -> 300
     end
 
+  # O Redis gerenciado do Fly (Upstash) só é acessível pela rede privada 6PN, que
+  # é IPv6. Por isso o Redix precisa de `:inet6` em prod (mesma razão do ECTO_IPV6
+  # no Repo). Default true em prod; em dev o Redis é localhost/IPv4. Override por
+  # REDIS_IPV6.
+  redis_ipv6? =
+    System.get_env("REDIS_IPV6", if(config_env() == :prod, do: "true", else: "false")) in ~w(true 1)
+
   config :grana, Grana.Cache,
     enabled: not is_nil(redis_url),
     url: redis_url,
     namespace: "grana:cache",
-    ttl_seconds: cache_ttl
+    ttl_seconds: cache_ttl,
+    socket_opts: if(redis_ipv6?, do: [:inet6], else: [])
 end
 
 # Encryption key for sensitive fields (API keys).
