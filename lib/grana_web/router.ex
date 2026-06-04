@@ -82,6 +82,7 @@ defmodule GranaWeb.Router do
       on_mount: [{GranaWeb.UserAuth, :require_authenticated}] do
       live "/dashboard", DashboardLive, :index
       live "/upload", UploadLive, :index
+      live "/calendar", CalendarLive, :index
       live "/transactions", TransactionsLive, :index
       live "/analysis", AnalysisLive, :index
       live "/categories", CategoriesLive, :index

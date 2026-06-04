@@ -166,6 +166,40 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
+  @doc """
+  Meses com dados por tipo de extrato bancário. Devolve
+  `%{"extrato" => MapSet de {ano, mês}, "fatura" => MapSet de {ano, mês}}`.
+  Usado pelo heatmap mensal de uploads.
+  """
+  def coverage_by_statement_type(user_id) do
+    Transaction
+    |> join(:inner, [t], s in BankStatement, on: t.bank_statement_id == s.id)
+    |> where([t], t.user_id == ^user_id)
+    |> select([t, s], {t.date, s.statement_type})
+    |> distinct(true)
+    |> Repo.all()
+    |> Enum.reduce(%{"extrato" => MapSet.new(), "fatura" => MapSet.new()}, fn {date, type}, acc ->
+      if Map.has_key?(acc, type) do
+        Map.update!(acc, type, &MapSet.put(&1, {date.year, date.month}))
+      else
+        acc
+      end
+    end)
+  end
+
+  @doc """
+  Quantidade de uploads bancários distintos com dados em cada mês.
+
+  Um mesmo arquivo com várias transações no mesmo mês conta apenas uma vez.
+  """
+  def upload_counts_by_month(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id)
+    |> select([t], {t.date, t.bank_statement_id})
+    |> Repo.all()
+    |> distinct_upload_counts()
+  end
+
   # Transactions
 
   def list_transactions(user_id, opts \\ []) do
@@ -186,24 +220,38 @@ defmodule Grana.Banking do
     today = Keyword.get(opts, :today, Date.utc_today())
     window = Keyword.get(opts, :window, 6)
 
-    list_opts =
-      [type: "debit", internal: "hide", date_from: window_start(today, window)]
-      |> maybe_put(:bank, Keyword.get(opts, :bank))
-      |> maybe_put(:statement_type, Keyword.get(opts, :statement_type))
-
+    # Carrega TODAS as despesas da janela (sem filtrar por banco/fonte aqui): a
+    # classificação fixa/variável é feita no conjunto inteiro, e o filtro de
+    # banco/fonte só PARTICIONA os totais — assim "Todas" = Extrato + Fatura, com
+    # o mesmo denominador de meses.
     expenses =
-      list_transactions(user_id, list_opts)
+      list_transactions(user_id,
+        type: "debit",
+        internal: "hide",
+        date_from: window_start(today, window)
+      )
       |> Enum.reject(&(&1.installment_total != nil))
       |> Enum.reject(&investment_category?/1)
 
-    Grana.Banking.RecurringExpenses.analyze(expenses, rules: recurring_rules_map(user_id))
+    Grana.Banking.RecurringExpenses.analyze(expenses,
+      rules: recurring_rules_map(user_id),
+      bank: Keyword.get(opts, :bank),
+      source: Keyword.get(opts, :statement_type)
+    )
   end
-
-  defp maybe_put(opts, _key, value) when value in [nil, "all"], do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp investment_category?(%{category: %{kind: "investment"}}), do: true
   defp investment_category?(_), do: false
+
+  defp distinct_upload_counts(rows) do
+    rows
+    |> Enum.reduce(MapSet.new(), fn {date, statement_id}, acc ->
+      MapSet.put(acc, {date.year, date.month, statement_id})
+    end)
+    |> Enum.reduce(%{}, fn {year, month, _statement_id}, acc ->
+      Map.update(acc, {year, month}, 1, &(&1 + 1))
+    end)
+  end
 
   defp window_start(_today, :all), do: nil
 

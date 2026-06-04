@@ -769,7 +769,7 @@ defmodule GranaWeb.DashboardLive do
       <div class="flex flex-wrap items-center gap-1 sm:gap-2">
         <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Período</span>
         <button
-          :for={{label, value} <- [{"6 meses", "6"}, {"12 meses", "12"}, {"Tudo", "all"}]}
+          :for={{label, value} <- [{"6 meses", "6"}, {"12 meses", "12"}]}
           phx-click="rec_set_window"
           phx-value-window={value}
           class={["btn btn-xs sm:btn-sm", (@rec_window == value && "btn-primary") || "btn-ghost"]}

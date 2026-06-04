@@ -214,4 +214,49 @@ defmodule Grana.Banking.RecurringExpensesTest do
       refute "padaria doce" in patterns
     end
   end
+
+  describe "analyze/1 - filtro de fonte é aditivo (Todas = Extrato + Fatura)" do
+    defp src_txn(date, description, amount, source) do
+      %{
+        id: System.unique_integer([:positive]),
+        date: date,
+        description: description,
+        amount: Decimal.new(amount),
+        category: nil,
+        installment_total: nil,
+        bank_statement: %{bank: "bradesco", statement_type: source}
+      }
+    end
+
+    test "fixa e variável somam entre as fontes, com denominador de meses consistente" do
+      ex_var = ~w(PADARIA POSTO FARMACIA LIVRARIA BARZECA PETSHOP)
+      fa_var = ~w(MERCADOX SHELLY DROGAY PETZ ACADEMIAW SALAOZ)
+
+      txns =
+        Enum.flat_map(Enum.with_index(six_months()), fn {{y, m}, i} ->
+          [
+            src_txn(Date.new!(y, m, 5), "NETFLIX.COM", "-44.90", "extrato"),
+            src_txn(Date.new!(y, m, 8), "SPOTIFY", "-21.90", "fatura"),
+            src_txn(Date.new!(y, m, 15), "PIX - #{Enum.at(ex_var, i)}", "-100.00", "extrato"),
+            src_txn(Date.new!(y, m, 20), Enum.at(fa_var, i), "-200.00", "fatura")
+          ]
+        end)
+
+      all = RecurringExpenses.analyze(txns, source: "all")
+      ext = RecurringExpenses.analyze(txns, source: "extrato")
+      fat = RecurringExpenses.analyze(txns, source: "fatura")
+
+      # denominador de meses idêntico nos três (não muda por fonte)
+      assert all.total_months == ext.total_months
+      assert all.total_months == fat.total_months
+
+      # Todas = Extrato + Fatura, por categoria
+      assert Decimal.equal?(Decimal.add(ext.avg_fixed, fat.avg_fixed), all.avg_fixed)
+      assert Decimal.equal?(Decimal.add(ext.avg_variable, fat.avg_variable), all.avg_variable)
+
+      # a classificação não "vaza" entre fontes
+      assert Enum.any?(ext.fixed, &(&1.name == "NETFLIX.COM"))
+      refute Enum.any?(fat.fixed, &(&1.name == "NETFLIX.COM"))
+    end
+  end
 end
