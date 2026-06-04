@@ -206,6 +206,32 @@ const DailyChart = {
   }
 }
 
+const CalendarHeatmap = {
+  mounted() {
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-calendar-month]")
+      if (!target) return hideTooltip(this.el)
+
+      const month = target.dataset.calendarMonth
+      const uploads = target.dataset.calendarUploads
+      const types = target.dataset.calendarTypes
+      const count = parseInt(target.dataset.calendarCount || "0", 10)
+      const uploadColor = count > 0 ? "var(--color-success)" : "color-mix(in oklch, var(--color-base-content) 58%, transparent)"
+
+      showTooltip(
+        this.el,
+        e,
+        `<div style="display:flex;flex-direction:column;gap:4px">
+          <strong>${escapeHtml(month)}</strong>
+          <span style="font-weight:700;color:${uploadColor}">${escapeHtml(uploads)}</span>
+          <span style="opacity:.72">${escapeHtml(types)}</span>
+        </div>`
+      )
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+  }
+}
+
 const AutoDismiss = {
   mounted() {
     this.timer = setTimeout(() => {
@@ -656,6 +682,7 @@ const Hooks = {
   ...colocatedHooks,
   CategoryChart,
   DailyChart,
+  CalendarHeatmap,
   IncomeExpensesChart,
   ProjectionChart,
   AutoDismiss,

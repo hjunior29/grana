@@ -152,6 +152,29 @@ defmodule Grana.Investments do
     |> Repo.all()
   end
 
+  @doc "Meses ({ano, mês}) que têm transações de investimento. Para o heatmap mensal de uploads."
+  def coverage_months(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id)
+    |> select([t], t.date)
+    |> distinct(true)
+    |> Repo.all()
+    |> MapSet.new(&{&1.year, &1.month})
+  end
+
+  @doc """
+  Quantidade de uploads de investimentos distintos com dados em cada mês.
+
+  Um mesmo arquivo com várias transações no mesmo mês conta apenas uma vez.
+  """
+  def upload_counts_by_month(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id)
+    |> select([t], {t.date, t.statement_id})
+    |> Repo.all()
+    |> distinct_upload_counts()
+  end
+
   def list_transactions_paginated(user_id, opts \\ []) do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 50)
@@ -224,6 +247,16 @@ defmodule Grana.Investments do
     query = filter_by_amount_min(query, Keyword.get(opts, :amount_min))
     query = filter_by_amount_max(query, Keyword.get(opts, :amount_max))
     filter_by_statement(query, Keyword.get(opts, :statement_id))
+  end
+
+  defp distinct_upload_counts(rows) do
+    rows
+    |> Enum.reduce(MapSet.new(), fn {date, statement_id}, acc ->
+      MapSet.put(acc, {date.year, date.month, statement_id})
+    end)
+    |> Enum.reduce(%{}, fn {year, month, _statement_id}, acc ->
+      Map.update(acc, {year, month}, 1, &(&1 + 1))
+    end)
   end
 
   defp filter_by_institution(query, nil), do: query

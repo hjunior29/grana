@@ -47,6 +47,10 @@ defmodule Grana.Banking.RecurringExpenses do
   """
   def analyze(transactions, opts \\ []) do
     rules = Keyword.get(opts, :rules, %{})
+    bank_filter = Keyword.get(opts, :bank)
+    source_filter = Keyword.get(opts, :source)
+
+    # Classificação no conjunto INTEIRO (meses e fixo/variável globais).
     expenses = Enum.map(transactions, &normalize_txn/1)
     months = expenses |> Enum.map(& &1.ym) |> Enum.uniq() |> Enum.sort()
     total_months = length(months)
@@ -56,23 +60,37 @@ defmodule Grana.Banking.RecurringExpenses do
       |> cluster()
       |> Enum.map(fn c ->
         rule = rule_for_cluster(c, rules)
-        fixed? = fixed_with_rule(fixed?(c, total_months), rule)
-        {c, fixed?, rule}
+        {c, fixed_with_rule(fixed?(c, total_months), rule)}
       end)
 
-    {fixed_c, variable_c} = Enum.split_with(classified, fn {_c, fixed?, _rule} -> fixed? end)
+    fixed_ids =
+      classified
+      |> Enum.filter(fn {_c, fixed?} -> fixed? end)
+      |> Enum.flat_map(fn {c, _} -> c.ids end)
+      |> MapSet.new()
 
-    fixed_ids = fixed_c |> Enum.flat_map(fn {c, _, _} -> c.ids end) |> MapSet.new()
-    fixed = fixed_c |> Enum.map(&item(&1, total_months)) |> sort_items()
+    # Filtro de exibição (banco/fonte): só PARTICIONA o que já foi classificado.
+    visible_ids =
+      expenses
+      |> Enum.filter(&visible?(&1, bank_filter, source_filter))
+      |> MapSet.new(& &1.id)
+
+    fixed =
+      classified
+      |> Enum.filter(fn {_c, fixed?} -> fixed? end)
+      |> build_items("fixed", visible_ids, total_months)
 
     variable_candidates =
-      variable_c
-      |> Enum.filter(fn {c, _, _} -> c.months_present >= 2 end)
-      |> Enum.map(&item(&1, total_months))
-      |> sort_items()
+      classified
+      |> Enum.reject(fn {_c, fixed?} -> fixed? end)
+      |> Enum.filter(fn {c, _} -> c.months_present >= 2 end)
+      |> build_items("variable", visible_ids, total_months)
       |> Enum.take(15)
 
-    monthly = monthly_breakdown(expenses, fixed_ids, months)
+    monthly =
+      expenses
+      |> Enum.filter(&MapSet.member?(visible_ids, &1.id))
+      |> monthly_breakdown(fixed_ids, months)
 
     %{
       months: months,
@@ -87,6 +105,24 @@ defmodule Grana.Banking.RecurringExpenses do
     }
   end
 
+  # Casa banco/fonte selecionados ("all"/nil = não filtra).
+  defp visible?(expense, bank_filter, source_filter) do
+    (bank_filter in [nil, "all"] or expense.bank == bank_filter) and
+      (source_filter in [nil, "all"] or expense.source == source_filter)
+  end
+
+  # Monta os itens da lista usando só as transações visíveis (do banco/fonte
+  # filtrado) de cada cluster; clusters sem transação visível somem da lista.
+  defp build_items(clusters, status, visible_ids, total_months) do
+    clusters
+    |> Enum.map(fn {c, _fixed?} ->
+      {c, Enum.filter(c.txns, &MapSet.member?(visible_ids, &1.id))}
+    end)
+    |> Enum.reject(fn {_c, vtxns} -> vtxns == [] end)
+    |> Enum.map(fn {c, vtxns} -> item(c, status, vtxns, total_months) end)
+    |> sort_items()
+  end
+
   defp rule_for_cluster(cluster, rules) do
     Enum.find_value(cluster.patterns, &Map.get(rules, &1))
   end
@@ -98,16 +134,23 @@ defmodule Grana.Banking.RecurringExpenses do
   # ---- Normalização da transação ----------------------------------------
 
   defp normalize_txn(t) do
+    stmt = Map.get(t, :bank_statement)
+
     %{
       id: Map.get(t, :id),
       ym: {t.date.year, t.date.month},
       day: t.date.day,
       amount: Decimal.abs(t.amount),
       category: Map.get(t, :category),
+      bank: stmt_field(stmt, :bank),
+      source: stmt_field(stmt, :statement_type),
       raw: merchant(t.description),
       norm: normalize(t.description)
     }
   end
+
+  defp stmt_field(stmt, key) when is_map(stmt), do: Map.get(stmt, key)
+  defp stmt_field(_stmt, _key), do: nil
 
   @doc false
   # Nome de comerciante canônico para agrupamento. Público para teste.
@@ -254,20 +297,22 @@ defmodule Grana.Banking.RecurringExpenses do
 
   # ---- Item (despesa fixa ou candidata) ----------------------------------
 
-  defp item({cluster, fixed?, _rule}, total_months) do
-    txns = cluster.txns
+  # `txns` é o subconjunto visível (banco/fonte filtrado) do cluster; valores e
+  # contagens refletem só esse subconjunto. `status` é a classificação global.
+  defp item(cluster, status, txns, total_months) do
     amounts = Enum.map(txns, & &1.amount)
     latest = Enum.max_by(txns, &Date.from_erl!({elem(&1.ym, 0), elem(&1.ym, 1), &1.day}), Date)
+    months_present = txns |> Enum.map(& &1.ym) |> Enum.uniq() |> length()
 
     %{
       name: display_name(txns),
       pattern: cluster.pattern,
       patterns: cluster.patterns,
-      status: if(fixed?, do: "fixed", else: "variable"),
+      status: status,
       category: most_common_category(txns),
-      months_present: cluster.months_present,
+      months_present: months_present,
       total_months: total_months,
-      occurrences: cluster.occurrences,
+      occurrences: length(txns),
       avg_amount: average(amounts, length(amounts)),
       last_amount: latest.amount,
       typical_day: median_int(Enum.map(txns, & &1.day))
