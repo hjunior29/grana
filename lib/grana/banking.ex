@@ -31,18 +31,22 @@ defmodule Grana.Banking do
     %Category{}
     |> Category.changeset(attrs)
     |> Repo.insert()
+    |> invalidate_cache()
   end
 
   def update_category(%Category{} = category, attrs) do
     category
     |> Category.changeset(attrs)
     |> Repo.update()
+    |> invalidate_cache()
   end
 
   def delete_category(%Category{is_system: true}), do: {:error, :system_category}
 
   def delete_category(%Category{} = category) do
-    Repo.delete(category)
+    category
+    |> Repo.delete()
+    |> invalidate_cache()
   end
 
   def category_stats(user_id) do
@@ -140,22 +144,30 @@ defmodule Grana.Banking do
     %BankStatement{}
     |> BankStatement.changeset(attrs)
     |> Repo.insert()
+    |> invalidate_cache()
   end
 
   def update_statement(statement, attrs) do
     statement
     |> BankStatement.changeset(attrs)
     |> Repo.update()
+    |> invalidate_cache()
   end
 
   def delete_statement(statement) do
-    Repo.delete(statement)
+    statement
+    |> Repo.delete()
+    |> invalidate_cache()
   end
 
   def delete_statements(ids, user_id) when is_list(ids) do
-    BankStatement
-    |> where([s], s.id in ^ids and s.user_id == ^user_id)
-    |> Repo.delete_all()
+    result =
+      BankStatement
+      |> where([s], s.id in ^ids and s.user_id == ^user_id)
+      |> Repo.delete_all()
+
+    Grana.Cache.invalidate_user(user_id)
+    result
   end
 
   def available_banks(user_id) do
@@ -217,6 +229,16 @@ defmodule Grana.Banking do
   regras salvas pelo usuário definem o estado efetivo quando existem.
   """
   def recurring_analysis(user_id, opts \\ []) do
+    # Inclui `today` na chave: a janela é relativa a hoje, então a virada de dia
+    # precisa gerar uma entrada nova (o TTL ainda limita a defasagem a poucos min).
+    cache_opts = Enum.sort(Keyword.put_new(opts, :today, Date.utc_today()))
+
+    Grana.Cache.get_or_store("banking:recurring_analysis", user_id, cache_opts, fn ->
+      do_recurring_analysis(user_id, opts)
+    end)
+  end
+
+  defp do_recurring_analysis(user_id, opts) do
     today = Keyword.get(opts, :today, Date.utc_today())
     window = Keyword.get(opts, :window, 6)
 
@@ -285,15 +307,20 @@ defmodule Grana.Banking do
       on_conflict: [set: [mode: mode, updated_at: DateTime.utc_now(:second)]],
       conflict_target: [:user_id, :pattern]
     )
+    |> tap(fn _ -> Grana.Cache.invalidate_user(user_id) end)
   end
 
   @doc "Remove a regra de recorrência do comerciante."
   def delete_recurring_rule(user_id, pattern) do
     pattern = Grana.Banking.RecurringExpenses.normalize(pattern)
 
-    RecurringRule
-    |> where([r], r.user_id == ^user_id and r.pattern == ^pattern)
-    |> Repo.delete_all()
+    result =
+      RecurringRule
+      |> where([r], r.user_id == ^user_id and r.pattern == ^pattern)
+      |> Repo.delete_all()
+
+    Grana.Cache.invalidate_user(user_id)
+    result
   end
 
   @doc """
@@ -356,6 +383,17 @@ defmodule Grana.Banking do
   end
 
   def list_transactions_paginated(user_id, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:list_transactions_paginated",
+      user_id,
+      Enum.sort(opts),
+      fn ->
+        do_list_transactions_paginated(user_id, opts)
+      end
+    )
+  end
+
+  defp do_list_transactions_paginated(user_id, opts) do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 50)
     offset = (page - 1) * per_page
@@ -532,13 +570,18 @@ defmodule Grana.Banking do
     transaction
     |> Transaction.changeset(attrs)
     |> Repo.update()
+    |> invalidate_cache()
   end
 
   def bulk_update_categories(transaction_ids, category_id, user_id) do
-    from(t in Transaction,
-      where: t.id in ^transaction_ids and t.user_id == ^user_id
-    )
-    |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
+    result =
+      from(t in Transaction,
+        where: t.id in ^transaction_ids and t.user_id == ^user_id
+      )
+      |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
+
+    Grana.Cache.invalidate_user(user_id)
+    result
   end
 
   def bulk_insert_transactions(transactions_attrs) do
@@ -551,7 +594,14 @@ defmodule Grana.Banking do
         |> Map.put(:updated_at, now)
       end)
 
-    Repo.insert_all(Transaction, entries)
+    result = Repo.insert_all(Transaction, entries)
+
+    case transactions_attrs do
+      [%{user_id: uid} | _] when is_integer(uid) -> Grana.Cache.invalidate_user(uid)
+      _ -> :ok
+    end
+
+    result
   end
 
   # Internal Transfer Detection
@@ -615,8 +665,14 @@ defmodule Grana.Banking do
       mark_investment_income_settlements(user_id)
     end)
     |> case do
-      {:ok, _} -> :ok
-      {:error, reason} -> {:error, reason}
+      {:ok, _} ->
+        # Pós-commit: garante que toda importação termine invalidando o cache do
+        # usuário (ambos os processors de upload chamam esta função no final).
+        Grana.Cache.invalidate_user(user_id)
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -791,6 +847,7 @@ defmodule Grana.Banking do
       on_conflict: {:replace, [:category_id, :updated_at]},
       conflict_target: [:pattern, :user_id]
     )
+    |> invalidate_cache()
   end
 
   def categorize_transaction(description, user_id) do
@@ -985,6 +1042,15 @@ defmodule Grana.Banking do
   # Summaries
 
   def monthly_summary(user_id, year, month, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:monthly_summary",
+      user_id,
+      {year, month, Enum.sort(opts)},
+      fn -> do_monthly_summary(user_id, year, month, opts) end
+    )
+  end
+
+  defp do_monthly_summary(user_id, year, month, opts) do
     date_from = Date.new!(year, month, 1)
     date_to = Date.end_of_month(date_from)
 
@@ -1004,11 +1070,22 @@ defmodule Grana.Banking do
   end
 
   def all_time_summary(user_id, opts \\ []) do
-    transactions = list_transactions(user_id, opts)
-    build_summary(transactions)
+    Grana.Cache.get_or_store("banking:all_time_summary", user_id, Enum.sort(opts), fn ->
+      transactions = list_transactions(user_id, opts)
+      build_summary(transactions)
+    end)
   end
 
   def yearly_summary(user_id, year, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:yearly_summary",
+      user_id,
+      {year, Enum.sort(opts)},
+      fn -> do_yearly_summary(user_id, year, opts) end
+    )
+  end
+
+  defp do_yearly_summary(user_id, year, opts) do
     date_from = Date.new!(year, 1, 1)
     date_to = Date.new!(year, 12, 31)
 
@@ -1170,6 +1247,15 @@ defmodule Grana.Banking do
   end
 
   def daily_spending(user_id, year, month, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:daily_spending",
+      user_id,
+      {year, month, Enum.sort(opts)},
+      fn -> do_daily_spending(user_id, year, month, opts) end
+    )
+  end
+
+  defp do_daily_spending(user_id, year, month, opts) do
     date_from = Date.new!(year, month, 1)
     date_to = Date.end_of_month(date_from)
 
@@ -1213,6 +1299,15 @@ defmodule Grana.Banking do
   end
 
   def monthly_income_expenses(user_id, year, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:monthly_income_expenses",
+      user_id,
+      {year, Enum.sort(opts)},
+      fn -> do_monthly_income_expenses(user_id, year, opts) end
+    )
+  end
+
+  defp do_monthly_income_expenses(user_id, year, opts) do
     is_fatura = Keyword.get(opts, :statement_type) == "fatura"
 
     list_opts =
@@ -1294,6 +1389,12 @@ defmodule Grana.Banking do
   end
 
   def transactions_summary(user_id, opts) do
+    Grana.Cache.get_or_store("banking:transactions_summary", user_id, Enum.sort(opts), fn ->
+      do_transactions_summary(user_id, opts)
+    end)
+  end
+
+  defp do_transactions_summary(user_id, opts) do
     build_transactions_query(user_id, opts)
     |> exclude(:preload)
     |> exclude(:order_by)
@@ -1697,4 +1798,14 @@ defmodule Grana.Banking do
         suggestions
     end
   end
+
+  # Invalida o cache de leituras do usuário após uma escrita. Usado no pipe de
+  # Repo.insert/update/delete: passa o resultado adiante intacto e só dispara a
+  # invalidação quando há um struct com user_id (sucesso).
+  defp invalidate_cache({:ok, %{user_id: uid}} = result) when is_integer(uid) do
+    Grana.Cache.invalidate_user(uid)
+    result
+  end
+
+  defp invalidate_cache(result), do: result
 end

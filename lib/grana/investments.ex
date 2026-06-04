@@ -59,18 +59,22 @@ defmodule Grana.Investments do
     %Institution{}
     |> Institution.changeset(attrs)
     |> Repo.insert()
+    |> invalidate_cache()
   end
 
   def update_institution(%Institution{} = institution, attrs) do
     institution
     |> Institution.changeset(attrs)
     |> Repo.update()
+    |> invalidate_cache()
   end
 
   def delete_institution(%Institution{is_system: true}), do: {:error, :system_institution}
 
   def delete_institution(%Institution{} = institution) do
-    Repo.delete(institution)
+    institution
+    |> Repo.delete()
+    |> invalidate_cache()
   end
 
   # Statements
@@ -111,22 +115,30 @@ defmodule Grana.Investments do
     %Statement{}
     |> Statement.changeset(attrs)
     |> Repo.insert()
+    |> invalidate_cache()
   end
 
   def update_statement(statement, attrs) do
     statement
     |> Statement.changeset(attrs)
     |> Repo.update()
+    |> invalidate_cache()
   end
 
   def delete_statement(statement) do
-    Repo.delete(statement)
+    statement
+    |> Repo.delete()
+    |> invalidate_cache()
   end
 
   def delete_statements(ids, user_id) when is_list(ids) do
-    Statement
-    |> where([s], s.id in ^ids and s.user_id == ^user_id)
-    |> Repo.delete_all()
+    result =
+      Statement
+      |> where([s], s.id in ^ids and s.user_id == ^user_id)
+      |> Repo.delete_all()
+
+    Grana.Cache.invalidate_user(user_id)
+    result
   end
 
   # Transactions
@@ -176,6 +188,15 @@ defmodule Grana.Investments do
   end
 
   def list_transactions_paginated(user_id, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "investments:list_transactions_paginated",
+      user_id,
+      Enum.sort(opts),
+      fn -> do_list_transactions_paginated(user_id, opts) end
+    )
+  end
+
+  defp do_list_transactions_paginated(user_id, opts) do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 50)
     offset = (page - 1) * per_page
@@ -188,6 +209,12 @@ defmodule Grana.Investments do
   end
 
   def investments_summary(user_id, opts \\ []) do
+    Grana.Cache.get_or_store("investments:investments_summary", user_id, Enum.sort(opts), fn ->
+      do_investments_summary(user_id, opts)
+    end)
+  end
+
+  defp do_investments_summary(user_id, opts) do
     build_transactions_query(user_id, opts)
     |> exclude(:preload)
     |> exclude(:order_by)
@@ -333,12 +360,28 @@ defmodule Grana.Investments do
         |> Map.put(:updated_at, now)
       end)
 
-    Repo.insert_all(Transaction, entries)
+    result = Repo.insert_all(Transaction, entries)
+
+    case entries do
+      [%{user_id: uid} | _] when is_integer(uid) -> Grana.Cache.invalidate_user(uid)
+      _ -> :ok
+    end
+
+    result
   end
 
   # Summary & Analytics
 
   def monthly_investments(user_id, year, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "investments:monthly_investments",
+      user_id,
+      {year, Enum.sort(opts)},
+      fn -> do_monthly_investments(user_id, year, opts) end
+    )
+  end
+
+  defp do_monthly_investments(user_id, year, opts) do
     date_from = Date.new!(year, 1, 1)
     date_to = Date.new!(year, 12, 31)
     all_opts = opts ++ [date_from: date_from, date_to: date_to]
@@ -433,6 +476,15 @@ defmodule Grana.Investments do
   Returns list of %{key, aportes, dividends}.
   """
   def period_activity(user_id, view_mode, year, month, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "investments:period_activity",
+      user_id,
+      {view_mode, year, month, Enum.sort(opts)},
+      fn -> do_period_activity(user_id, view_mode, year, month, opts) end
+    )
+  end
+
+  defp do_period_activity(user_id, view_mode, year, month, opts) do
     {extra_opts, group_fn} =
       case view_mode do
         "total" ->
@@ -613,6 +665,12 @@ defmodule Grana.Investments do
   Uses SQL aggregation for performance instead of loading all transactions.
   """
   def portfolio_summary(user_id, opts \\ []) do
+    Grana.Cache.get_or_store("investments:portfolio_summary", user_id, Enum.sort(opts), fn ->
+      do_portfolio_summary(user_id, opts)
+    end)
+  end
+
+  defp do_portfolio_summary(user_id, opts) do
     base = build_transactions_query(user_id, opts) |> exclude(:preload) |> exclude(:order_by)
 
     # 1. Global totals (single SQL query)
@@ -1075,4 +1133,14 @@ defmodule Grana.Investments do
     |> Repo.all()
     |> Enum.filter(&(&1 && String.match?(&1, ~r/^[A-Z]{4}\d{1,2}$/i)))
   end
+
+  # Invalida o cache de leituras do usuário após uma escrita. Usado no pipe de
+  # Repo.insert/update/delete: passa o resultado adiante e só dispara a
+  # invalidação quando há um struct com user_id (sucesso).
+  defp invalidate_cache({:ok, %{user_id: uid}} = result) when is_integer(uid) do
+    Grana.Cache.invalidate_user(uid)
+    result
+  end
+
+  defp invalidate_cache(result), do: result
 end

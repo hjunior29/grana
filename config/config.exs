@@ -104,6 +104,20 @@ config :grana, Oban,
 config :hammer,
   backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 60, cleanup_interval_ms: 60_000 * 10]}
 
+# Cache de leituras (Grana.Cache, backed by Redis/Redix). Desligado por padrão;
+# config/runtime.exs habilita em dev/prod quando há REDIS_URL (local em dev, o
+# Upstash do Fly em prod). Em test fica desligado (Grana.Cache cai no fallback,
+# executando a query direto — sem dependência de Redis na suíte).
+#
+# ttl_seconds default = 300 (5 min): a janela de ociosidade após a qual o Fly
+# derruba a máquina (auto_stop_machines). A correção do cache vem da invalidação
+# por usuário em toda escrita/upload; o TTL é só um teto de validade. Ajuste com
+# CACHE_TTL_SECONDS.
+config :grana, Grana.Cache,
+  enabled: false,
+  namespace: "grana:cache",
+  ttl_seconds: 300
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
