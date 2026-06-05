@@ -1,8 +1,9 @@
 defmodule Grana.Banking.Parsers.Bradesco do
-  alias Grana.Banking.Parsers.InstallmentParser
+  alias Grana.Banking.Parsers.{Encoding, InstallmentParser}
 
   def parse(csv_content) do
     csv_content
+    |> Encoding.to_utf8()
     |> String.split("\n")
     |> Enum.drop(2)
     |> Enum.reject(&is_metadata_line?/1)

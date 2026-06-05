@@ -797,8 +797,10 @@ defmodule GranaWeb.TransactionsLive do
             <td>
               <form
                 :if={@editing_id == txn.id}
+                id={"transaction-category-form-#{txn.id}"}
                 phx-change="save-category"
                 phx-click-away="cancel-edit"
+                class="inline-flex"
               >
                 <input type="hidden" name="txn_id" value={txn.id} />
                 <select
@@ -816,6 +818,8 @@ defmodule GranaWeb.TransactionsLive do
               </form>
               <button
                 :if={@editing_id != txn.id}
+                id={"transaction-category-chip-#{txn.id}"}
+                type="button"
                 phx-click="edit-category"
                 phx-value-id={txn.id}
                 class="cursor-pointer"

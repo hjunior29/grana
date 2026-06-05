@@ -681,6 +681,24 @@ defmodule Grana.BankingTest do
       # não retém a lista completa em memória; expõe só os tops
       refute Map.has_key?(summary, :transactions)
       assert Map.has_key?(summary, :top_expenses)
+
+      # #4: a soma da pizza (by_category) bate com o card "Despesas" (líquido de estornos)
+      by_category_total =
+        Enum.reduce(summary.by_category, Decimal.new(0), fn %{total: t}, acc ->
+          Decimal.add(acc, t)
+        end)
+
+      assert Decimal.equal?(by_category_total, summary.total_expenses)
+
+      # #2: Top Despesas/Receitas não vazam transferências internas, estornos nem investimentos
+      top_expense_descriptions = Enum.map(summary.top_expenses, & &1.description)
+      assert "Mercado" in top_expense_descriptions
+      refute "Transferência interna" in top_expense_descriptions
+      refute "Aporte CDB" in top_expense_descriptions
+
+      top_income_descriptions = Enum.map(summary.top_income, & &1.description)
+      assert "Salário" in top_income_descriptions
+      refute "Estorno compra" in top_income_descriptions
     end
   end
 

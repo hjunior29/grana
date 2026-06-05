@@ -1155,24 +1155,31 @@ defmodule Grana.Banking do
 
     total_expenses = Decimal.sub(gross_expenses, refund_total)
 
+    # Estornos por categoria, para descontar da categoria correspondente — assim a
+    # soma da pizza "Despesas por Categoria" bate com o card "Despesas", que é
+    # líquido de estornos (antes a pizza somava o bruto e ficava maior).
+    refunds_by_category =
+      refunds
+      |> Enum.group_by(& &1.category)
+      |> Map.new(fn {category, txns} -> {category, sum_abs(txns)} end)
+
     by_category =
       expense_debits
       |> Enum.group_by(fn t -> t.category end)
       |> Enum.map(fn {category, txns} ->
-        total =
-          Enum.reduce(txns, Decimal.new(0), fn t, acc ->
-            Decimal.add(acc, Decimal.abs(t.amount))
-          end)
-
-        %{category: category, total: total, count: length(txns)}
+        net = Decimal.sub(sum_abs(txns), Map.get(refunds_by_category, category, Decimal.new(0)))
+        %{category: category, total: Decimal.max(Decimal.new(0), net), count: length(txns)}
       end)
+      |> Enum.reject(fn %{total: t} -> Decimal.compare(t, 0) == :eq end)
       |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
 
     # Pre-compute only the top debits/credits instead of returning (and holding
     # in LiveView assigns) the full transaction list, which can be thousands of rows.
     # 15 covers both the dashboard (shows 10) and the AI prompt (uses up to 15).
-    top_expenses = top_n_by_amount(transactions, "debit", 15)
-    top_income = top_n_by_amount(transactions, "credit", 15)
+    # Usa os conjuntos JÁ filtrados (sem transferências internas, pagamentos de
+    # fatura, estornos nem investimentos), senão internas vazariam para o Top.
+    top_expenses = top_n_by_amount(expense_debits, "debit", 15)
+    top_income = top_n_by_amount(income_txns, "credit", 15)
 
     %{
       total_income: total_income,
@@ -1196,6 +1203,12 @@ defmodule Grana.Banking do
     |> Enum.filter(&(&1.type == type))
     |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
     |> Enum.take(limit)
+  end
+
+  defp sum_abs(transactions) do
+    Enum.reduce(transactions, Decimal.new(0), fn t, acc ->
+      Decimal.add(acc, Decimal.abs(t.amount))
+    end)
   end
 
   defp bill_payment?(t) do

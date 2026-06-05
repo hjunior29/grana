@@ -1,8 +1,10 @@
 defmodule GranaWeb.UserLive.Settings do
   use GranaWeb, :live_view
 
-  on_mount {GranaWeb.UserAuth, :require_sudo_mode}
-
+  # Ver a página de configurações exige apenas estar autenticado (não força
+  # reautenticação, que dava a impressão de logout). As AÇÕES sensíveis abaixo
+  # (alterar email/senha, excluir conta) é que exigem sudo mode, com redirect
+  # gracioso para reautenticar — em vez de derrubar/quebrar a sessão.
   alias Grana.Accounts
 
   @impl true
@@ -266,23 +268,27 @@ defmodule GranaWeb.UserLive.Settings do
   end
 
   def handle_event("update_email", params, socket) do
-    %{"user" => user_params} = params
     user = socket.assigns.current_scope.user
-    true = Accounts.sudo_mode?(user)
 
-    case Accounts.change_user_email(user, user_params) do
-      %{valid?: true} = changeset ->
-        Accounts.deliver_user_update_email_instructions(
-          Ecto.Changeset.apply_action!(changeset, :insert),
-          user.email,
-          &url(~p"/users/settings/confirm-email/#{&1}")
-        )
+    if Accounts.sudo_mode?(user) do
+      %{"user" => user_params} = params
 
-        info = "Um link de confirmação foi enviado para o novo endereço de email."
-        {:noreply, socket |> put_flash(:info, info)}
+      case Accounts.change_user_email(user, user_params) do
+        %{valid?: true} = changeset ->
+          Accounts.deliver_user_update_email_instructions(
+            Ecto.Changeset.apply_action!(changeset, :insert),
+            user.email,
+            &url(~p"/users/settings/confirm-email/#{&1}")
+          )
 
-      changeset ->
-        {:noreply, assign(socket, :email_form, to_form(changeset, action: :insert))}
+          info = "Um link de confirmação foi enviado para o novo endereço de email."
+          {:noreply, socket |> put_flash(:info, info)}
+
+        changeset ->
+          {:noreply, assign(socket, :email_form, to_form(changeset, action: :insert))}
+      end
+    else
+      {:noreply, redirect_for_reauth(socket)}
     end
   end
 
@@ -299,16 +305,20 @@ defmodule GranaWeb.UserLive.Settings do
   end
 
   def handle_event("update_password", params, socket) do
-    %{"user" => user_params} = params
     user = socket.assigns.current_scope.user
-    true = Accounts.sudo_mode?(user)
 
-    case Accounts.change_user_password(user, user_params) do
-      %{valid?: true} = changeset ->
-        {:noreply, assign(socket, trigger_submit: true, password_form: to_form(changeset))}
+    if Accounts.sudo_mode?(user) do
+      %{"user" => user_params} = params
 
-      changeset ->
-        {:noreply, assign(socket, password_form: to_form(changeset, action: :insert))}
+      case Accounts.change_user_password(user, user_params) do
+        %{valid?: true} = changeset ->
+          {:noreply, assign(socket, trigger_submit: true, password_form: to_form(changeset))}
+
+        changeset ->
+          {:noreply, assign(socket, password_form: to_form(changeset, action: :insert))}
+      end
+    else
+      {:noreply, redirect_for_reauth(socket)}
     end
   end
 
@@ -355,21 +365,37 @@ defmodule GranaWeb.UserLive.Settings do
 
   def handle_event("confirm_delete", _params, socket) do
     user = socket.assigns.current_scope.user
-    # Capturado antes do delete: o cascade remove os tokens, mas precisamos das
-    # referências para derrubar quaisquer sessões LiveView ativas em outras abas.
-    session_tokens = Accounts.list_user_session_tokens(user)
 
-    case Accounts.delete_user(user) do
-      {:ok, _} ->
-        GranaWeb.UserAuth.disconnect_sessions(session_tokens)
+    if Accounts.sudo_mode?(user) do
+      # Capturado antes do delete: o cascade remove os tokens, mas precisamos das
+      # referências para derrubar quaisquer sessões LiveView ativas em outras abas.
+      session_tokens = Accounts.list_user_session_tokens(user)
 
-        {:noreply,
-         socket
-         |> redirect(to: ~p"/users/log-in")
-         |> put_flash(:info, "Sua conta foi excluída permanentemente.")}
+      case Accounts.delete_user(user) do
+        {:ok, _} ->
+          GranaWeb.UserAuth.disconnect_sessions(session_tokens)
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Erro ao excluir conta.")}
+          {:noreply,
+           socket
+           |> redirect(to: ~p"/users/log-in")
+           |> put_flash(:info, "Sua conta foi excluída permanentemente.")}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Erro ao excluir conta.")}
+      end
+    else
+      {:noreply, redirect_for_reauth(socket)}
     end
+  end
+
+  # Ação sensível sem sudo mode (autenticação recente): manda reautenticar com uma
+  # mensagem clara, em vez de quebrar com `true = sudo_mode?` ou parecer um logout.
+  defp redirect_for_reauth(socket) do
+    socket
+    |> put_flash(
+      :error,
+      "Por segurança, confirme seu login para alterar dados sensíveis da conta."
+    )
+    |> redirect(to: ~p"/users/log-in")
   end
 end
