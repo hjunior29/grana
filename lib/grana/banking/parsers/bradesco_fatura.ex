@@ -1,8 +1,8 @@
 defmodule Grana.Banking.Parsers.BradescoFatura do
-  alias Grana.Banking.Parsers.InstallmentParser
+  alias Grana.Banking.Parsers.{Encoding, InstallmentParser}
 
   def parse(csv_content) do
-    content = normalize_encoding(csv_content)
+    content = Encoding.to_utf8(csv_content)
     lines = String.split(content, ~r/\r\n|\r|\n/)
     ref = extract_reference(lines)
 
@@ -10,25 +10,6 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
     |> Enum.reject(&is_metadata_line?/1)
     |> Enum.map(&parse_line(&1, ref))
     |> Enum.reject(&is_nil/1)
-  end
-
-  defp normalize_encoding(content) do
-    if String.valid?(content) do
-      content
-    else
-      case :unicode.characters_to_binary(content, :latin1, :utf8) do
-        result when is_binary(result) ->
-          result
-
-        # Falha/parcial de conversão: não descartamos o arquivo inteiro —
-        # preservamos o que dá, substituindo só os bytes inválidos.
-        {:incomplete, partial, _rest} when is_binary(partial) ->
-          String.replace_invalid(partial)
-
-        _ ->
-          String.replace_invalid(content)
-      end
-    end
   end
 
   # Data de referência da fatura (mês/ano do cabeçalho), usada para inferir o ano
