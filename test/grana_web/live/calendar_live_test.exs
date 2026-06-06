@@ -89,11 +89,15 @@ defmodule GranaWeb.CalendarLiveTest do
       }
     ])
 
-    {:ok, _view, html} = live(conn, ~p"/upload?tab=calendario")
+    {:ok, view, html} = live(conn, ~p"/upload?tab=calendario")
     assert html =~ "Calendário de Importações"
     assert html =~ "2026"
     assert html =~ ~s(aria-label="Mar/2026 - 3 uploads - Extrato, Fatura, Investimentos")
     assert html =~ ~s(data-calendar-uploads="3 uploads")
+    assert has_element?(view, ".grana-calendar-card")
+    assert has_element?(view, "#calendar-heatmap.grana-calendar-heatmap")
+    assert has_element?(view, ".grana-calendar-cell.calendar-count-3")
+    assert has_element?(view, ".grana-calendar-score-ring")
     assert html =~ "Menos"
     # Pontuação de cobertura ao lado do calendário
     assert html =~ "Cobertura"

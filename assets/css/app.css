@@ -103,6 +103,793 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 html {
-  scrollbar-gutter: stable both-edges;
+  --grana-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  scrollbar-gutter: stable;
 }
 
+/* Internal visual styles
+   `data-theme` still controls light/dark/system. `data-visual-style` only
+   changes the authenticated app shell, so public landing pages keep their
+   current visual identity. */
+:root:has(.grana-app-shell) {
+  background-color: var(--color-base-100);
+}
+
+:root[data-visual-style="signal"]:has(.grana-app-shell) {
+  background:
+    linear-gradient(135deg, rgba(18, 138, 66, 0.08), transparent 34%),
+    linear-gradient(225deg, rgba(166, 107, 0, 0.1), transparent 38%),
+    #eff5ee;
+}
+
+:root[data-visual-style="signal"][data-theme="dark"]:has(.grana-app-shell) {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(66, 255, 117, 0.13), transparent 32rem),
+    radial-gradient(circle at 88% 16%, rgba(255, 184, 74, 0.1), transparent 26rem),
+    #050706;
+}
+
+:root[data-visual-style="bossa"]:has(.grana-app-shell) {
+  background:
+    linear-gradient(90deg, rgba(47, 101, 217, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(239, 63, 47, 0.06) 1px, transparent 1px),
+    #fff7e8;
+  background-size: 48px 48px;
+}
+
+:root[data-visual-style="bossa"][data-theme="dark"]:has(.grana-app-shell) {
+  background:
+    linear-gradient(90deg, rgba(255, 247, 232, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 210, 63, 0.07) 1px, transparent 1px),
+    #202124;
+  background-size: 48px 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-visual-style="signal"]:not([data-theme]):has(.grana-app-shell) {
+    background:
+      radial-gradient(circle at 18% 0%, rgba(66, 255, 117, 0.13), transparent 32rem),
+      radial-gradient(circle at 88% 16%, rgba(255, 184, 74, 0.1), transparent 26rem),
+      #050706;
+  }
+
+  :root[data-visual-style="bossa"]:not([data-theme]):has(.grana-app-shell) {
+    background:
+      linear-gradient(90deg, rgba(255, 247, 232, 0.07) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(255, 210, 63, 0.07) 1px, transparent 1px),
+      #202124;
+    background-size: 48px 48px;
+  }
+}
+
+.grana-app-shell {
+  --grana-visual-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --grana-visual-shadow: 0 16px 44px color-mix(in oklch, var(--color-base-content) 9%, transparent);
+  --grana-visual-shadow-strong: 0 26px 80px color-mix(in oklch, var(--color-base-content) 14%, transparent);
+  --grana-border: var(--grana-visual-border);
+  --grana-calendar-empty: color-mix(in oklch, var(--color-base-300) 82%, transparent);
+  --grana-calendar-empty-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --grana-calendar-future: color-mix(in oklch, var(--color-base-300) 34%, transparent);
+  --grana-calendar-future-border: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  --grana-calendar-1: color-mix(in oklch, var(--color-success) 54%, var(--color-base-100));
+  --grana-calendar-2: var(--color-success);
+  --grana-calendar-3: color-mix(in oklch, var(--color-success) 78%, var(--color-base-content));
+  --grana-calendar-track: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --grana-calendar-ring-glow: color-mix(in oklch, var(--grana-calendar-2) 26%, transparent);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+[data-visual-style="signal"] .grana-app-shell {
+  color-scheme: light;
+  --color-base-100: #eff5ee;
+  --color-base-200: #dfe8e2;
+  --color-base-300: #c7d6cd;
+  --color-base-content: #07100a;
+  --color-primary: #128a42;
+  --color-primary-content: #f2fff6;
+  --color-secondary: #1d6f96;
+  --color-secondary-content: #effaff;
+  --color-accent: #a66b00;
+  --color-accent-content: #fff8e8;
+  --color-neutral: #16251c;
+  --color-neutral-content: #eefbf2;
+  --color-info: #1f7fa6;
+  --color-info-content: #eefaff;
+  --color-success: #128a42;
+  --color-success-content: #f2fff6;
+  --color-warning: #a66b00;
+  --color-warning-content: #fff8e8;
+  --color-error: #b33b2f;
+  --color-error-content: #fff2f0;
+  --radius-selector: 0.2rem;
+  --radius-field: 0.2rem;
+  --radius-box: 0.35rem;
+  --border: 1.5px;
+  --grana-visual-border: rgba(7, 16, 10, 0.16);
+  --grana-visual-shadow: 0 18px 50px rgba(7, 16, 10, 0.12);
+  --grana-visual-shadow-strong: 0 30px 90px rgba(7, 16, 10, 0.18);
+  --grana-calendar-empty: color-mix(in oklch, var(--color-base-300) 76%, transparent);
+  --grana-calendar-empty-border: color-mix(in oklch, var(--color-primary) 22%, transparent);
+  --grana-calendar-future: color-mix(in oklch, var(--color-base-300) 32%, transparent);
+  --grana-calendar-1: color-mix(in oklch, var(--color-secondary) 52%, var(--color-base-200));
+  --grana-calendar-2: var(--color-primary);
+  --grana-calendar-3: var(--color-accent);
+  --grana-calendar-track: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  --grana-calendar-ring-glow: color-mix(in oklch, var(--color-primary) 36%, transparent);
+  background:
+    linear-gradient(135deg, rgba(18, 138, 66, 0.08), transparent 34%),
+    linear-gradient(225deg, rgba(166, 107, 0, 0.1), transparent 38%),
+    var(--color-base-100);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+[data-visual-style="signal"][data-theme="dark"] .grana-app-shell {
+  color-scheme: dark;
+  --color-base-100: #050706;
+  --color-base-200: #09100c;
+  --color-base-300: #111b15;
+  --color-base-content: #e9fff1;
+  --color-primary: #42ff75;
+  --color-primary-content: #07100a;
+  --color-secondary: #17c8ff;
+  --color-secondary-content: #021014;
+  --color-accent: #ffb84a;
+  --color-accent-content: #170f03;
+  --color-neutral: #1c2b22;
+  --color-neutral-content: #e9fff1;
+  --color-info: #17c8ff;
+  --color-info-content: #021014;
+  --color-success: #42ff75;
+  --color-success-content: #07100a;
+  --color-warning: #ffb84a;
+  --color-warning-content: #170f03;
+  --color-error: #ff6b57;
+  --color-error-content: #210402;
+  --grana-visual-border: rgba(66, 255, 117, 0.2);
+  --grana-visual-shadow: 0 18px 56px rgba(0, 0, 0, 0.38);
+  --grana-visual-shadow-strong: 0 32px 96px rgba(0, 0, 0, 0.54);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(66, 255, 117, 0.13), transparent 32rem),
+    radial-gradient(circle at 88% 16%, rgba(255, 184, 74, 0.1), transparent 26rem),
+    #050706;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-visual-style="signal"]:not([data-theme]) .grana-app-shell {
+    color-scheme: dark;
+    --color-base-100: #050706;
+    --color-base-200: #09100c;
+    --color-base-300: #111b15;
+    --color-base-content: #e9fff1;
+    --color-primary: #42ff75;
+    --color-primary-content: #07100a;
+    --color-secondary: #17c8ff;
+    --color-secondary-content: #021014;
+    --color-accent: #ffb84a;
+    --color-accent-content: #170f03;
+    --color-neutral: #1c2b22;
+    --color-neutral-content: #e9fff1;
+    --color-info: #17c8ff;
+    --color-info-content: #021014;
+    --color-success: #42ff75;
+    --color-success-content: #07100a;
+    --color-warning: #ffb84a;
+    --color-warning-content: #170f03;
+    --color-error: #ff6b57;
+    --color-error-content: #210402;
+    --grana-visual-border: rgba(66, 255, 117, 0.2);
+    --grana-visual-shadow: 0 18px 56px rgba(0, 0, 0, 0.38);
+    --grana-visual-shadow-strong: 0 32px 96px rgba(0, 0, 0, 0.54);
+    background:
+      radial-gradient(circle at 18% 0%, rgba(66, 255, 117, 0.13), transparent 32rem),
+      radial-gradient(circle at 88% 16%, rgba(255, 184, 74, 0.1), transparent 26rem),
+      #050706;
+  }
+}
+
+[data-visual-style="bossa"] .grana-app-shell {
+  color-scheme: light;
+  --color-base-100: #fff7e8;
+  --color-base-200: #fff0ce;
+  --color-base-300: #ffe19b;
+  --color-base-content: #202124;
+  --color-primary: #2f65d9;
+  --color-primary-content: #ffffff;
+  --color-secondary: #35b779;
+  --color-secondary-content: #07150e;
+  --color-accent: #ef3f2f;
+  --color-accent-content: #fff7e8;
+  --color-neutral: #202124;
+  --color-neutral-content: #fff7e8;
+  --color-info: #2f65d9;
+  --color-info-content: #ffffff;
+  --color-success: #15945d;
+  --color-success-content: #ffffff;
+  --color-warning: #c79300;
+  --color-warning-content: #1b1400;
+  --color-error: #ef3f2f;
+  --color-error-content: #fff7e8;
+  --radius-selector: 0.15rem;
+  --radius-field: 0.15rem;
+  --radius-box: 0.25rem;
+  --border: 2px;
+  --grana-visual-border: #202124;
+  --grana-visual-shadow: 5px 5px 0 #202124;
+  --grana-visual-shadow-strong: 8px 8px 0 #202124;
+  --grana-calendar-empty: color-mix(in oklch, var(--color-base-300) 72%, var(--color-base-200));
+  --grana-calendar-empty-border: var(--grana-visual-border);
+  --grana-calendar-future: color-mix(in oklch, var(--color-base-200) 62%, transparent);
+  --grana-calendar-future-border: color-mix(in oklch, var(--color-base-content) 22%, transparent);
+  --grana-calendar-1: var(--color-warning);
+  --grana-calendar-2: var(--color-secondary);
+  --grana-calendar-3: var(--color-primary);
+  --grana-calendar-track: color-mix(in oklch, var(--color-base-content) 16%, transparent);
+  --grana-calendar-ring-glow: color-mix(in oklch, var(--color-accent) 32%, transparent);
+  background:
+    linear-gradient(90deg, rgba(47, 101, 217, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(239, 63, 47, 0.06) 1px, transparent 1px),
+    #fff7e8;
+  background-size: 48px 48px;
+}
+
+[data-visual-style="bossa"][data-theme="dark"] .grana-app-shell {
+  color-scheme: dark;
+  --color-base-100: #202124;
+  --color-base-200: #2b2c30;
+  --color-base-300: #3c3d43;
+  --color-base-content: #fff7e8;
+  --color-primary: #6e98ff;
+  --color-primary-content: #07102c;
+  --color-secondary: #35d98d;
+  --color-secondary-content: #06150d;
+  --color-accent: #ff6b57;
+  --color-accent-content: #2a0501;
+  --color-neutral: #fff7e8;
+  --color-neutral-content: #202124;
+  --color-info: #6e98ff;
+  --color-info-content: #07102c;
+  --color-success: #35d98d;
+  --color-success-content: #06150d;
+  --color-warning: #ffd23f;
+  --color-warning-content: #1d1700;
+  --color-error: #ff6b57;
+  --color-error-content: #2a0501;
+  --grana-visual-border: #fff7e8;
+  --grana-visual-shadow: 5px 5px 0 #ef3f2f;
+  --grana-visual-shadow-strong: 8px 8px 0 #ef3f2f;
+  --grana-calendar-empty: color-mix(in oklch, var(--color-base-300) 72%, var(--color-base-200));
+  --grana-calendar-empty-border: var(--grana-visual-border);
+  --grana-calendar-future: color-mix(in oklch, var(--color-base-200) 62%, transparent);
+  --grana-calendar-future-border: color-mix(in oklch, var(--color-base-content) 18%, transparent);
+  --grana-calendar-1: var(--color-warning);
+  --grana-calendar-2: var(--color-secondary);
+  --grana-calendar-3: var(--color-primary);
+  --grana-calendar-track: color-mix(in oklch, var(--color-base-content) 16%, transparent);
+  --grana-calendar-ring-glow: color-mix(in oklch, var(--color-accent) 36%, transparent);
+  background:
+    linear-gradient(90deg, rgba(255, 247, 232, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 210, 63, 0.07) 1px, transparent 1px),
+    #202124;
+  background-size: 48px 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-visual-style="bossa"]:not([data-theme]) .grana-app-shell {
+    color-scheme: dark;
+    --color-base-100: #202124;
+    --color-base-200: #2b2c30;
+    --color-base-300: #3c3d43;
+    --color-base-content: #fff7e8;
+    --color-primary: #6e98ff;
+    --color-primary-content: #07102c;
+    --color-secondary: #35d98d;
+    --color-secondary-content: #06150d;
+    --color-accent: #ff6b57;
+    --color-accent-content: #2a0501;
+    --color-neutral: #fff7e8;
+    --color-neutral-content: #202124;
+    --color-info: #6e98ff;
+    --color-info-content: #07102c;
+    --color-success: #35d98d;
+    --color-success-content: #06150d;
+    --color-warning: #ffd23f;
+    --color-warning-content: #1d1700;
+    --color-error: #ff6b57;
+    --color-error-content: #2a0501;
+    --grana-visual-border: #fff7e8;
+    --grana-visual-shadow: 5px 5px 0 #ef3f2f;
+    --grana-visual-shadow-strong: 8px 8px 0 #ef3f2f;
+    --grana-calendar-empty: color-mix(in oklch, var(--color-base-300) 72%, var(--color-base-200));
+    --grana-calendar-empty-border: var(--grana-visual-border);
+    --grana-calendar-future: color-mix(in oklch, var(--color-base-200) 62%, transparent);
+    --grana-calendar-future-border: color-mix(in oklch, var(--color-base-content) 18%, transparent);
+    --grana-calendar-1: var(--color-warning);
+    --grana-calendar-2: var(--color-secondary);
+    --grana-calendar-3: var(--color-primary);
+    --grana-calendar-track: color-mix(in oklch, var(--color-base-content) 16%, transparent);
+    --grana-calendar-ring-glow: color-mix(in oklch, var(--color-accent) 36%, transparent);
+    background:
+      linear-gradient(90deg, rgba(255, 247, 232, 0.07) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(255, 210, 63, 0.07) 1px, transparent 1px),
+      #202124;
+    background-size: 48px 48px;
+  }
+}
+
+[data-visual-style] .grana-app-header {
+  background-color: color-mix(in oklch, var(--color-base-100) 72%, transparent);
+  border-bottom-color: var(--grana-visual-border);
+  box-shadow: var(--grana-visual-shadow);
+}
+
+:where([data-visual-style] .grana-app-shell) .card,
+:where([data-visual-style] .grana-app-shell) .stat,
+:where([data-visual-style] .grana-app-shell) .dropdown-content,
+:where([data-visual-style] .grana-app-shell) .alert {
+  border: var(--border) solid var(--grana-visual-border);
+  box-shadow: var(--grana-visual-shadow);
+}
+
+:where([data-visual-style] .grana-app-shell) .btn,
+:where([data-visual-style] .grana-app-shell) .input,
+:where([data-visual-style] .grana-app-shell) .select,
+:where([data-visual-style] .grana-app-shell) .textarea,
+:where([data-visual-style] .grana-app-shell) .badge {
+  border-width: var(--border);
+}
+
+:where([data-visual-style] .grana-app-shell) .btn {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+:where([data-visual-style] .grana-app-shell) .btn:hover {
+  transform: translateY(-1px);
+}
+
+:where([data-visual-style] .grana-app-shell) .input,
+:where([data-visual-style] .grana-app-shell) .select,
+:where([data-visual-style] .grana-app-shell) .textarea {
+  background-color: color-mix(in oklch, var(--color-base-100) 88%, var(--color-base-200));
+  border-color: var(--grana-visual-border);
+}
+
+:where([data-visual-style] .grana-app-shell) .table :where(th, td) {
+  border-bottom-color: var(--grana-visual-border);
+}
+
+:where([data-visual-style] .grana-app-shell) .tabs-border .tab {
+  border-color: color-mix(in oklch, var(--color-base-content) 14%, transparent);
+}
+
+[data-visual-style="signal"] .grana-app-shell :where(h1, h2, h3, h4, .btn, .badge, .tab, .stat-title) {
+  letter-spacing: 0;
+}
+
+[data-visual-style="signal"] .grana-app-shell :where(.card, .stat) {
+  background-image: linear-gradient(135deg, color-mix(in oklch, var(--color-primary) 8%, transparent), transparent 44%);
+}
+
+[data-visual-style="signal"] .grana-app-shell .btn-primary {
+  box-shadow: 0 0 24px color-mix(in oklch, var(--color-primary) 28%, transparent);
+}
+
+[data-visual-style="signal"] .grana-app-shell .btn-ghost:hover {
+  background-color: color-mix(in oklch, var(--color-primary) 12%, transparent);
+}
+
+[data-visual-style="signal"] .grana-app-shell .progress::-webkit-progress-value {
+  background-color: var(--color-primary);
+}
+
+[data-visual-style="bossa"] .grana-app-shell :where(.card, .stat, .btn, .input, .select, .textarea, .dropdown-content, .alert) {
+  border-color: var(--grana-visual-border);
+}
+
+[data-visual-style="bossa"] .grana-app-shell :where(.card, .stat, .btn:not(.btn-ghost), .input, .select, .textarea) {
+  box-shadow: var(--grana-visual-shadow);
+}
+
+[data-visual-style="bossa"] .grana-app-shell .btn:hover {
+  transform: translate(-1px, -1px);
+}
+
+[data-visual-style="bossa"] .grana-app-shell .btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--color-accent);
+}
+
+[data-visual-style="bossa"] .grana-app-shell .btn-ghost {
+  background-color: color-mix(in oklch, var(--color-base-100) 75%, transparent);
+}
+
+[data-visual-style="bossa"] .grana-app-shell .tabs-border .tab-active {
+  background-color: var(--color-warning);
+  border-color: var(--grana-visual-border);
+  color: #202124;
+}
+
+:where([data-visual-style] .grana-app-shell) .card:is(.border-primary, .border-info, .border-warning) {
+  --grana-selection-color: var(--color-primary);
+  position: relative;
+  border-color: var(--grana-selection-color);
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--grana-selection-color) 16%, transparent), transparent 54%),
+    var(--color-base-200);
+  box-shadow:
+    0 0 0 3px color-mix(in oklch, var(--grana-selection-color) 26%, transparent),
+    var(--grana-visual-shadow-strong);
+}
+
+:where([data-visual-style] .grana-app-shell) .card.border-info {
+  --grana-selection-color: var(--color-info);
+}
+
+:where([data-visual-style] .grana-app-shell) .card.border-warning {
+  --grana-selection-color: var(--color-warning);
+}
+
+:where([data-visual-style] .grana-app-shell) button.card:is(.border-primary, .border-info, .border-warning)::after {
+  content: "";
+  position: absolute;
+  inset: auto 1.25rem 1rem 1.25rem;
+  height: 0.1875rem;
+  border-radius: 999px;
+  background-color: var(--grana-selection-color);
+  box-shadow: 0 0 18px color-mix(in oklch, var(--grana-selection-color) 36%, transparent);
+}
+
+[data-visual-style="signal"] .grana-app-shell .card:is(.border-primary, .border-info, .border-warning) {
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--grana-selection-color) 18%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklch, var(--color-primary) 8%, transparent), transparent 44%),
+    var(--color-base-200);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--grana-selection-color) 76%, transparent),
+    0 0 30px color-mix(in oklch, var(--grana-selection-color) 28%, transparent),
+    var(--grana-visual-shadow);
+}
+
+[data-visual-style="bossa"] .grana-app-shell .card:is(.border-primary, .border-info, .border-warning) {
+  transform: translate(-2px, -2px);
+  border-color: var(--grana-selection-color);
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--grana-selection-color) 22%, transparent), transparent 62%),
+    var(--color-base-200);
+  box-shadow:
+    4px 4px 0 var(--grana-selection-color),
+    8px 8px 0 var(--grana-visual-border);
+}
+
+[data-visual-style="bossa"] .grana-app-shell button.card:is(.border-primary, .border-info, .border-warning)::after {
+  inset: auto 1.25rem 0.85rem 1.25rem;
+  border: 2px solid var(--grana-visual-border);
+  border-radius: 0;
+  height: 0.35rem;
+  box-shadow: 2px 2px 0 var(--grana-visual-border);
+}
+
+.grana-calendar-card {
+  overflow: hidden;
+}
+
+.grana-calendar-heatmap {
+  isolation: isolate;
+}
+
+.grana-calendar-month-label,
+.grana-calendar-year-label,
+.grana-calendar-legend {
+  color: color-mix(in oklch, var(--color-base-content) 62%, transparent);
+}
+
+.grana-calendar-cell,
+.grana-calendar-legend-swatch {
+  border: 1px solid var(--grana-calendar-empty-border);
+  border-radius: var(--radius-field);
+  background-color: var(--grana-calendar-empty);
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--color-base-content) 9%, transparent);
+}
+
+.grana-calendar-cell {
+  position: relative;
+}
+
+.grana-calendar-cell:not(.calendar-count-future):hover {
+  outline: 2px solid color-mix(in oklch, var(--color-base-content) 22%, transparent);
+  outline-offset: 2px;
+  box-shadow:
+    0 14px 30px color-mix(in oklch, var(--color-base-content) 18%, transparent),
+    inset 0 1px 0 color-mix(in oklch, white 20%, transparent);
+}
+
+.grana-calendar-cell.calendar-count-0,
+.grana-calendar-legend-swatch.calendar-count-0 {
+  background-color: var(--grana-calendar-empty);
+  border-color: var(--grana-calendar-empty-border);
+}
+
+.grana-calendar-cell.calendar-count-future {
+  background-color: var(--grana-calendar-future);
+  border-color: var(--grana-calendar-future-border);
+  box-shadow: none;
+}
+
+.grana-calendar-cell.calendar-count-1,
+.grana-calendar-legend-swatch.calendar-count-1 {
+  background-color: var(--grana-calendar-1);
+  border-color: color-mix(in oklch, var(--grana-calendar-1) 76%, var(--color-base-content));
+}
+
+.grana-calendar-cell.calendar-count-2,
+.grana-calendar-legend-swatch.calendar-count-2 {
+  background-color: var(--grana-calendar-2);
+  border-color: color-mix(in oklch, var(--grana-calendar-2) 76%, var(--color-base-content));
+}
+
+.grana-calendar-cell.calendar-count-3,
+.grana-calendar-legend-swatch.calendar-count-3 {
+  background-color: var(--grana-calendar-3);
+  border-color: color-mix(in oklch, var(--grana-calendar-3) 76%, var(--color-base-content));
+}
+
+.grana-calendar-legend-swatch {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.grana-calendar-score {
+  border-color: var(--grana-visual-border);
+}
+
+.grana-calendar-score-track {
+  color: var(--grana-calendar-track);
+}
+
+.grana-calendar-score-ring {
+  color: var(--grana-calendar-2);
+  filter: drop-shadow(0 10px 18px var(--grana-calendar-ring-glow));
+}
+
+.grana-calendar-score-ring.calendar-count-1 {
+  color: var(--grana-calendar-1);
+}
+
+.grana-calendar-score-ring.calendar-count-2 {
+  color: var(--grana-calendar-2);
+}
+
+.grana-calendar-score-ring.calendar-count-3 {
+  color: var(--grana-calendar-3);
+}
+
+[data-visual-style="signal"] .grana-calendar-card {
+  background-image:
+    linear-gradient(90deg, color-mix(in oklch, var(--color-primary) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in oklch, var(--color-secondary) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, color-mix(in oklch, var(--color-primary) 8%, transparent), transparent 46%);
+  background-size: 24px 24px, 24px 24px, auto;
+}
+
+[data-visual-style="signal"] .grana-calendar-cell,
+[data-visual-style="signal"] .grana-calendar-legend-swatch {
+  border-radius: 0.125rem;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--color-base-content) 8%, transparent),
+    0 0 16px color-mix(in oklch, currentColor 10%, transparent);
+}
+
+[data-visual-style="signal"] .grana-calendar-cell:not(.calendar-count-future):hover {
+  outline-color: color-mix(in oklch, var(--color-primary) 44%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--color-primary) 35%, transparent),
+    0 0 28px color-mix(in oklch, var(--color-primary) 24%, transparent);
+}
+
+[data-visual-style="bossa"] .grana-calendar-card {
+  background-image: none;
+}
+
+[data-visual-style="bossa"] .grana-calendar-cell,
+[data-visual-style="bossa"] .grana-calendar-legend-swatch {
+  border-width: 2px;
+  border-radius: 0.15rem;
+  box-shadow: 2px 2px 0 var(--grana-visual-border);
+}
+
+[data-visual-style="bossa"] .grana-calendar-cell:not(.calendar-count-future):hover {
+  outline: 0;
+  box-shadow: 4px 4px 0 var(--color-accent);
+}
+
+[data-visual-style="bossa"] .grana-calendar-score-ring {
+  filter: drop-shadow(4px 4px 0 color-mix(in oklch, var(--color-accent) 48%, transparent));
+}
+
+.visual-style-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--grana-visual-border);
+  border-radius: var(--radius-box);
+  background-color: color-mix(in oklch, var(--color-base-300) 58%, transparent);
+}
+
+.visual-style-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-box) * 0.8);
+  padding: 0.65rem 0.7rem;
+  color: color-mix(in oklch, var(--color-base-content) 68%, transparent);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.visual-style-option:hover {
+  color: var(--color-base-content);
+  background-color: color-mix(in oklch, var(--color-base-100) 72%, transparent);
+  transform: translateY(-1px);
+}
+
+.visual-style-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.visual-style-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-base-content);
+  font-size: 0.875rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.visual-style-description {
+  color: color-mix(in oklch, var(--color-base-content) 56%, transparent);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.visual-style-preview {
+  position: relative;
+  display: flex;
+  width: 6.5rem;
+  height: 3.6rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 14%, transparent);
+  border-radius: 0.45rem;
+  padding: 0.45rem;
+  background-color: var(--color-base-100);
+  box-shadow: inset 0 1px 0 color-mix(in oklch, white 26%, transparent);
+}
+
+.visual-preview-header {
+  display: block;
+  width: 72%;
+  height: 0.45rem;
+  border-radius: 999px;
+  background-color: color-mix(in oklch, var(--color-base-content) 22%, transparent);
+}
+
+.visual-preview-body {
+  display: grid;
+  grid-template-columns: 1fr 0.7fr;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.visual-preview-body span {
+  display: block;
+  border-radius: 0.25rem;
+  background-color: color-mix(in oklch, var(--color-primary) 36%, var(--color-base-200));
+}
+
+.visual-style-preview-default {
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--color-primary) 8%, transparent), transparent),
+    var(--color-base-100);
+}
+
+.visual-style-preview-default .visual-preview-body span:last-child {
+  background-color: color-mix(in oklch, var(--color-success) 36%, var(--color-base-200));
+}
+
+.visual-style-preview-signal {
+  border-color: color-mix(in oklch, #42ff75 36%, transparent);
+  background:
+    linear-gradient(90deg, rgba(66, 255, 117, 0.16) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(23, 200, 255, 0.12) 1px, transparent 1px),
+    #07100a;
+  background-size: 0.85rem 0.85rem;
+}
+
+.visual-style-preview-signal .visual-preview-header {
+  background-color: #42ff75;
+  box-shadow: 0 0 14px rgba(66, 255, 117, 0.48);
+}
+
+.visual-style-preview-signal .visual-preview-body span {
+  border-radius: 0.12rem;
+  background-color: rgba(23, 200, 255, 0.46);
+}
+
+.visual-style-preview-signal .visual-preview-body span:last-child {
+  background-color: rgba(255, 184, 74, 0.56);
+}
+
+.visual-style-preview-bossa {
+  border: 2px solid #202124;
+  border-radius: 0.2rem;
+  background:
+    linear-gradient(90deg, rgba(47, 101, 217, 0.16) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(239, 63, 47, 0.14) 1px, transparent 1px),
+    #fff7e8;
+  background-size: 1rem 1rem;
+  box-shadow: 3px 3px 0 #ef3f2f;
+}
+
+.visual-style-preview-bossa .visual-preview-header {
+  border-radius: 0;
+  background-color: #ffd23f;
+}
+
+.visual-style-preview-bossa .visual-preview-body span {
+  border: 1px solid #202124;
+  border-radius: 0.1rem;
+  background-color: #35b779;
+  box-shadow: 1px 1px 0 #202124;
+}
+
+.visual-style-preview-bossa .visual-preview-body span:last-child {
+  background-color: #2f65d9;
+}
+
+:root:not([data-visual-style]) .visual-style-option[data-phx-visual-style="default"],
+:root[data-visual-style="signal"] .visual-style-option[data-phx-visual-style="signal"],
+:root[data-visual-style="bossa"] .visual-style-option[data-phx-visual-style="bossa"] {
+  color: var(--color-base-content);
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--color-primary) 16%, transparent), transparent 68%),
+    color-mix(in oklch, var(--color-base-100) 78%, transparent);
+  border-color: color-mix(in oklch, var(--color-primary) 76%, var(--color-base-content));
+  box-shadow:
+    inset 4px 0 0 var(--color-primary),
+    0 10px 22px color-mix(in oklch, var(--color-primary) 18%, transparent);
+}
+
+[data-visual-style="bossa"] .visual-style-option[data-phx-visual-style="bossa"] {
+  color: var(--color-base-content);
+  box-shadow:
+    inset 4px 0 0 var(--color-warning),
+    3px 3px 0 var(--grana-visual-border);
+}
+
+[data-visual-style="signal"] .visual-style-toggle {
+  border-color: color-mix(in oklch, var(--color-primary) 34%, transparent);
+}
