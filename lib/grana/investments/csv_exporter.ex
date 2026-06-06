@@ -12,7 +12,9 @@ defmodule Grana.Investments.CsvExporter do
     "Preço Unit.",
     "Valor Total",
     "Taxas",
-    "Instituição"
+    "Instituição",
+    "Descrição Original",
+    "Identificador"
   ]
 
   def generate(transactions) do
@@ -29,7 +31,9 @@ defmodule Grana.Investments.CsvExporter do
           format_decimal(txn.unit_price),
           format_amount(txn.total_amount),
           format_decimal(txn.fees),
-          institution_name(txn)
+          institution_name(txn),
+          txn.original_description || "",
+          txn.identifier || ""
         ]
         |> Enum.map(&escape_field/1)
         |> Enum.join(@separator)
