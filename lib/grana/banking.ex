@@ -343,6 +343,32 @@ defmodule Grana.Banking do
   def set_transaction_recurring_mode(_user_id, _transaction_id, _mode),
     do: {:error, :invalid_mode}
 
+  @doc """
+  Define o modo de recorrência em lote para as transações selecionadas.
+
+  Considera só despesas gerenciáveis (débito, não interna, sem parcela e fora de
+  investimento) e grava uma regra por comerciante normalizado distinto. Devolve
+  `{:ok, qtd_transações_afetadas}` ou `{:error, :invalid_mode}`.
+  """
+  def bulk_set_recurring_mode(user_id, transaction_ids, mode)
+      when mode in ["fixed", "variable"] and is_list(transaction_ids) do
+    manageable =
+      Transaction
+      |> where([t], t.id in ^transaction_ids and t.user_id == ^user_id)
+      |> preload(:category)
+      |> Repo.all()
+      |> Enum.filter(&recurring_manageable_transaction?/1)
+
+    manageable
+    |> Enum.map(&Grana.Banking.RecurringExpenses.normalize(&1.description))
+    |> Enum.uniq()
+    |> Enum.each(&upsert_recurring_rule(user_id, &1, mode))
+
+    {:ok, length(manageable)}
+  end
+
+  def bulk_set_recurring_mode(_user_id, _ids, _mode), do: {:error, :invalid_mode}
+
   def recurring_manageable_transaction?(%Transaction{} = transaction) do
     transaction.type == "debit" and
       transaction.is_internal_transfer == false and

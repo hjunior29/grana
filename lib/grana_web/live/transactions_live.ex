@@ -377,24 +377,38 @@ defmodule GranaWeb.TransactionsLive do
     {:noreply, assign(socket, :selected_ids, selected)}
   end
 
-  def handle_event("bulk-categorize", %{"category_id" => category_id}, socket) do
+  def handle_event("bulk-apply", params, socket) do
     user_id = socket.assigns.current_scope.user.id
     ids = MapSet.to_list(socket.assigns.selected_ids)
-    cat_id = parse_int(category_id, -1)
+    cat_id = parse_int(params["category_id"] || "", -1)
+    mode = params["mode"]
 
-    if Banking.category_belongs_to_user?(cat_id, user_id) do
-      {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
-      query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+    cond do
+      ids == [] ->
+        {:noreply, put_flash(socket, :error, "Nenhuma transação selecionada.")}
 
-      socket =
-        socket
-        |> assign(:selected_ids, MapSet.new())
-        |> put_flash(:info, "#{count} transação(ões) atualizada(s)")
-        |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
+      cat_id > 0 and not Banking.category_belongs_to_user?(cat_id, user_id) ->
+        {:noreply, put_flash(socket, :error, "Categoria inválida.")}
 
-      {:noreply, socket}
-    else
-      {:noreply, put_flash(socket, :error, "Categoria inválida.")}
+      cat_id <= 0 and mode not in ["fixed", "variable"] ->
+        {:noreply,
+         put_flash(socket, :error, "Escolha uma categoria ou recorrência para aplicar.")}
+
+      true ->
+        msgs =
+          []
+          |> maybe_bulk_category(ids, cat_id, user_id)
+          |> maybe_bulk_recurring(ids, mode, user_id)
+
+        query_params = build_query_string(Map.put(socket.assigns.filters, :tab, "banking"))
+
+        socket =
+          socket
+          |> assign(:selected_ids, MapSet.new())
+          |> put_flash(:info, msgs |> Enum.reverse() |> Enum.join(" · "))
+          |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
+
+        {:noreply, socket}
     end
   end
 
@@ -403,6 +417,21 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   # ── Helpers ──
+
+  # Aplicam (ou não) cada edição em lote, acumulando a mensagem de resultado.
+  defp maybe_bulk_category(msgs, _ids, cat_id, _user_id) when cat_id <= 0, do: msgs
+
+  defp maybe_bulk_category(msgs, ids, cat_id, user_id) do
+    {count, _} = Banking.bulk_update_categories(ids, cat_id, user_id)
+    ["#{count} com categoria atualizada" | msgs]
+  end
+
+  defp maybe_bulk_recurring(msgs, ids, mode, user_id) when mode in ["fixed", "variable"] do
+    {:ok, count} = Banking.bulk_set_recurring_mode(user_id, ids, mode)
+    ["#{count} com recorrência atualizada" | msgs]
+  end
+
+  defp maybe_bulk_recurring(msgs, _ids, _mode, _user_id), do: msgs
 
   defp maybe_keep_statement(params, %{statement_id: nil}), do: params
   defp maybe_keep_statement(params, %{statement_id: id}), do: Map.put(params, :statement_id, id)
@@ -681,18 +710,30 @@ defmodule GranaWeb.TransactionsLive do
 
     <div
       :if={MapSet.size(@selected_ids) > 0}
-      class="flex items-center gap-3 flex-wrap bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4"
+      class="flex items-center gap-x-4 gap-y-2 flex-wrap bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4"
     >
-      <span class="text-sm font-medium">
+      <span class="text-sm font-medium whitespace-nowrap">
         {MapSet.size(@selected_ids)} selecionada(s)
       </span>
-      <form phx-submit="bulk-categorize" class="flex items-center gap-2">
-        <select name="category_id" class="select select-bordered select-sm">
-          <option :for={cat <- @categories} value={cat.id}>{cat.name}</option>
-        </select>
+      <%!-- Edição em lote: defina categoria e/ou recorrência e clique em Aplicar.
+            "Manter" deixa o campo inalterado, então dá pra mexer só num dos dois. --%>
+      <form phx-submit="bulk-apply" class="flex items-end gap-x-3 gap-y-2 flex-wrap">
+        <label class="flex flex-col gap-1">
+          <span class="text-xs opacity-60">Categoria</span>
+          <select name="category_id" class="select select-bordered select-sm">
+            <option :for={cat <- @categories} value={cat.id}>{cat.name}</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-xs opacity-60">Recorrência</span>
+          <select name="mode" class="select select-bordered select-sm">
+            <option value="fixed">Fixa</option>
+            <option value="variable">Variável</option>
+          </select>
+        </label>
         <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
       </form>
-      <button phx-click="clear-selection" class="btn btn-ghost btn-sm">Limpar</button>
+      <button phx-click="clear-selection" class="btn btn-ghost btn-sm ml-auto">Limpar</button>
     </div>
 
     <div :if={@transactions == []} class="text-center py-16">
