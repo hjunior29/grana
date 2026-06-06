@@ -224,6 +224,23 @@ defmodule GranaWeb.UploadLive do
     {:noreply, socket}
   end
 
+  def handle_event("select_upload_category", %{"category" => "platform"}, socket) do
+    socket =
+      socket
+      |> assign(:upload_category, "platform")
+      |> assign(:bank, nil)
+      |> assign(:statement_type, nil)
+      |> assign(:investment_provider, nil)
+      |> cancel_all_uploads()
+      |> allow_upload(:statements,
+        accept: ~w(.csv),
+        max_entries: 12,
+        max_file_size: 5_000_000
+      )
+
+    {:noreply, socket}
+  end
+
   def handle_event(
         "select_investment_provider",
         _params,
@@ -263,6 +280,7 @@ defmodule GranaWeb.UploadLive do
   def handle_event("upload", _params, socket) do
     case socket.assigns.upload_category do
       "investment" -> handle_investment_upload(socket)
+      "platform" -> handle_platform_upload(socket)
       _ -> handle_banking_upload(socket)
     end
   end
@@ -450,6 +468,13 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
+  defp handle_platform_upload(socket) do
+    scope = socket.assigns.current_scope
+    socket = assign(socket, :processing, true)
+    send(self(), {:process_platform_uploads, scope.user.id})
+    {:noreply, socket}
+  end
+
   defp reload_statements(socket) do
     source = Map.get(socket.assigns, :history_filter, "all")
 
@@ -519,6 +544,34 @@ defmodule GranaWeb.UploadLive do
     {:noreply,
      assign(socket,
        upload_bank: institution_slug,
+       progress_current: 0,
+       progress_total: total,
+       progress_filename: ""
+     )}
+  end
+
+  def handle_info({:process_platform_uploads, user_id}, socket) do
+    file_data =
+      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
+        {:ok, {entry.client_name, File.read!(path)}}
+      end)
+
+    total = length(file_data)
+    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
+    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
+
+    files =
+      Enum.map(file_data, fn {filename, content} ->
+        %{"filename" => filename, "content_b64" => Base.encode64(content)}
+      end)
+
+    %{files: files, user_id: user_id, topic: topic}
+    |> Grana.Workers.PlatformImportWorker.new()
+    |> Oban.insert()
+
+    {:noreply,
+     assign(socket,
+       upload_bank: "grana",
        progress_current: 0,
        progress_total: total,
        progress_filename: ""
@@ -678,7 +731,7 @@ defmodule GranaWeb.UploadLive do
         <div :if={@tab == "upload"}>
           <%!-- Upload Category Selection --%>
           <div class={[
-            "grid grid-cols-1 md:grid-cols-2 gap-4 mb-8",
+            "grid grid-cols-1 md:grid-cols-3 gap-4 mb-8",
             @processing && "opacity-50 pointer-events-none"
           ]}>
             <button
@@ -717,6 +770,26 @@ defmodule GranaWeb.UploadLive do
                 <div class="text-left">
                   <h3 class="font-semibold text-lg">Investimento</h3>
                   <p class="text-sm opacity-70">Ações, FIIs, renda fixa e mais</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              phx-click="select_upload_category"
+              phx-value-category="platform"
+              disabled={@processing}
+              class={[
+                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
+                (@upload_category == "platform" && "border-primary") || "border-transparent"
+              ]}
+            >
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+                  <.icon name="hero-arrow-up-tray" class="size-6 text-secondary" />
+                </div>
+                <div class="text-left">
+                  <h3 class="font-semibold text-lg">Grana (exportação)</h3>
+                  <p class="text-sm opacity-70">Reimporte um CSV exportado da plataforma</p>
                 </div>
               </div>
             </button>
@@ -916,6 +989,110 @@ defmodule GranaWeb.UploadLive do
                   <div
                     :if={@processing}
                     id="upload-progress"
+                    phx-hook="ProgressBar"
+                    data-progress={progress_percent(@progress_current, @progress_total)}
+                    data-total={@progress_total}
+                    data-ai={to_string(@progress_ai)}
+                    class="w-full"
+                  >
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-xs"></span>
+                        <span class="text-sm">
+                          <span :if={@progress_filename != ""} class="font-medium">
+                            {@progress_filename}
+                          </span>
+                          <span :if={@progress_total > 1} class="opacity-60">
+                            — {@progress_current}/{@progress_total}
+                          </span>
+                        </span>
+                      </div>
+                      <span data-pct class="text-sm font-mono opacity-60">0%</span>
+                    </div>
+                    <progress class="progress progress-primary w-full" value="0" max="100"></progress>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <%!-- Platform export re-import --%>
+          <div :if={@upload_category == "platform"}>
+            <div class="card bg-base-200 p-8 mb-8">
+              <p class="text-sm opacity-70 mb-4">
+                Envie um ou mais CSVs exportados pelo próprio Grana (de transações ou de
+                investimentos). O banco/origem, as categorias e as instituições são
+                detectados e recriados automaticamente; reimportar não duplica.
+              </p>
+              <form id="upload-form-platform" phx-submit="upload" phx-change="validate">
+                <div class="flex flex-col items-center gap-4">
+                  <div
+                    id="drop-zone-platform"
+                    class={[
+                      "w-full border-2 border-dashed rounded-xl transition-all duration-200",
+                      (!@processing && "border-base-content/20 hover:border-primary/50") ||
+                        "border-base-content/10 opacity-50 pointer-events-none"
+                    ]}
+                    phx-drop-target={!@processing && @uploads.statements.ref}
+                    phx-hook="DropZone"
+                  >
+                    <.live_file_input
+                      upload={@uploads.statements}
+                      class="hidden"
+                      disabled={@processing}
+                    />
+                    <label
+                      for={!@processing && @uploads.statements.ref}
+                      class={[
+                        "block p-8 text-center",
+                        (!@processing && "cursor-pointer") || "cursor-not-allowed"
+                      ]}
+                    >
+                      <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
+                      <p class="font-medium">
+                        Arraste CSVs exportados do Grana, ou clique para selecionar
+                      </p>
+                      <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
+                    </label>
+                  </div>
+
+                  <div :if={@uploads.statements.entries != []} class="w-full space-y-3">
+                    <div
+                      :for={entry <- @uploads.statements.entries}
+                      class="flex items-center justify-between bg-base-100 rounded-lg p-3"
+                    >
+                      <div class="flex items-center gap-3">
+                        <.icon name="hero-document-text" class="size-5 opacity-60" />
+                        <span class="text-sm font-medium">{entry.client_name}</span>
+                        <span class="badge badge-sm">{format_bytes(entry.client_size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        phx-click="cancel-upload"
+                        phx-value-ref={entry.ref}
+                        class="btn btn-ghost btn-xs btn-circle"
+                      >
+                        <.icon name="hero-x-mark" class="size-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div :for={err <- upload_errors(@uploads.statements)} class="text-error text-sm">
+                    {upload_error_to_string(err)}
+                  </div>
+
+                  <button
+                    :if={!@processing}
+                    type="submit"
+                    class="btn btn-primary btn-wide"
+                    disabled={@uploads.statements.entries == []}
+                  >
+                    Importar
+                  </button>
+
+                  <div
+                    :if={@processing}
+                    id="upload-progress-platform"
                     phx-hook="ProgressBar"
                     data-progress={progress_percent(@progress_current, @progress_total)}
                     data-total={@progress_total}
