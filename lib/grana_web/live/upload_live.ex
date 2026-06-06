@@ -26,6 +26,9 @@ defmodule GranaWeb.UploadLive do
       |> assign(:delete_target, nil)
       |> assign(:selected_ids, MapSet.new())
       |> assign(:history_filter, "all")
+      |> assign(:cal_rows, [])
+      |> assign(:cal_has_data, false)
+      |> assign(:cal_score, nil)
       |> assign(:show_api_key_alert, false)
       |> assign(:roadmap_url, Application.get_env(:grana, :roadmap_url))
       |> assign(:roadmap_dismissed, false)
@@ -89,9 +92,26 @@ defmodule GranaWeb.UploadLive do
       |> assign(:stmt_list, page_stmts)
       |> assign(:history_filter, history_filter)
       |> assign(:selected_ids, MapSet.new())
+      |> maybe_load_calendar(tab, user_id)
 
     {:noreply, socket}
   end
+
+  # Calendário de importações: só carrega os dados quando a sub-aba está ativa.
+  defp maybe_load_calendar(socket, "calendario", user_id) do
+    bank = Banking.coverage_by_statement_type(user_id)
+    investimentos = Investments.coverage_months(user_id)
+
+    upload_counts =
+      merge_counts(
+        Banking.upload_counts_by_month(user_id),
+        Investments.upload_counts_by_month(user_id)
+      )
+
+    build_calendar_grid(socket, bank["extrato"], bank["fatura"], investimentos, upload_counts)
+  end
+
+  defp maybe_load_calendar(socket, _tab, _user_id), do: socket
 
   defp normalize_banking_stmt(stmt) do
     %{
@@ -725,6 +745,19 @@ defmodule GranaWeb.UploadLive do
           >
             <.icon name="hero-document-text" class="size-4 mr-1" /> Histórico
             <span :if={@total > 0} class="badge badge-sm badge-ghost ml-1">{@total}</span>
+          </button>
+          <button
+            role="tab"
+            phx-click="switch_tab"
+            phx-value-tab="calendario"
+            disabled={@processing}
+            class={[
+              "tab",
+              @tab == "calendario" && "tab-active",
+              @processing && "opacity-50 cursor-not-allowed"
+            ]}
+          >
+            <.icon name="hero-calendar-days" class="size-4 mr-1" /> Calendário
           </button>
         </div>
 
@@ -1494,6 +1527,148 @@ defmodule GranaWeb.UploadLive do
             </form>
           </dialog>
         </div>
+
+        <div :if={@tab == "calendario"}>
+          <div class="mb-6">
+            <h2 class="text-lg font-semibold">Calendário de Importações</h2>
+            <p class="text-xs sm:text-sm opacity-60 mt-1">
+              Cada quadrado é um mês. Quanto mais verde, mais tipos de documento (extrato, fatura,
+              investimentos) você importou naquele mês. Passe o mouse para ver o total de uploads.
+            </p>
+          </div>
+
+          <div :if={!@cal_has_data} class="text-center py-16 opacity-60">
+            <.icon name="hero-calendar-days" class="size-10 mx-auto mb-3 opacity-40" />
+            <p>Ainda não há dados importados.</p>
+            <p class="text-sm mt-1">
+              Importe extratos, faturas ou investimentos na aba <button
+                type="button"
+                phx-click="switch_tab"
+                phx-value-tab="upload"
+                class="link"
+              >
+                Upload
+              </button>.
+            </p>
+          </div>
+
+          <div :if={@cal_has_data} class="card bg-base-200 w-full">
+            <div class="card-body p-5 sm:p-8">
+              <div class="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-center">
+                <div class="flex-1 min-w-0">
+                  <div
+                    id="calendar-heatmap"
+                    phx-hook="CalendarHeatmap"
+                    phx-update="ignore"
+                    class="w-full"
+                  >
+                    <%!-- Cabeçalho de meses --%>
+                    <div class="flex gap-1 sm:gap-1.5 mb-2">
+                      <div class="w-8 sm:w-12 shrink-0"></div>
+                      <div
+                        :for={m <- 1..12}
+                        class="flex-1 min-w-0 text-center text-[10px] sm:text-sm font-medium opacity-60"
+                      >
+                        {month_label(m)}
+                      </div>
+                    </div>
+
+                    <%!-- Linhas por ano. Sem rolagem: as células usam flex-1/aspect-square
+                          para caber na largura, e o card cresce pra baixo a cada ano. --%>
+                    <div
+                      :for={row <- @cal_rows}
+                      class="flex gap-1 sm:gap-1.5 items-center mb-1 sm:mb-1.5"
+                    >
+                      <div class="w-8 sm:w-12 shrink-0 text-right pr-1 text-xs sm:text-sm font-medium opacity-60">
+                        {row.year}
+                      </div>
+                      <div
+                        :for={cell <- row.cells}
+                        class={[
+                          "flex-1 min-w-0 aspect-square rounded-sm transition duration-150",
+                          cell_hover_class(cell),
+                          cell_class(cell)
+                        ]}
+                        aria-label={cell_title(cell)}
+                        data-calendar-month={cell_month(cell)}
+                        data-calendar-uploads={cell_uploads(cell)}
+                        data-calendar-types={cell_types(cell)}
+                        data-calendar-count={cell_upload_count(cell)}
+                      >
+                      </div>
+                    </div>
+                  </div>
+
+                  <%!-- Legenda --%>
+                  <div class="flex flex-wrap items-center justify-center gap-2 mt-6 text-sm opacity-60">
+                    <span class="mr-1">Menos</span>
+                    <div
+                      class="w-5 h-5 rounded-sm bg-base-300/70 border border-base-content/10"
+                      title="nenhum tipo"
+                    >
+                    </div>
+                    <div
+                      class="w-5 h-5 rounded-sm bg-[#86efac] border border-[#4ade80]"
+                      title="1 tipo"
+                    >
+                    </div>
+                    <div
+                      class="w-5 h-5 rounded-sm bg-[#22c55e] border border-[#16a34a]"
+                      title="2 tipos"
+                    >
+                    </div>
+                    <div
+                      class="w-5 h-5 rounded-sm bg-[#047857] border border-[#065f46]"
+                      title="3 tipos"
+                    >
+                    </div>
+                    <span class="ml-1">Mais</span>
+                    <span class="ml-3 opacity-70">
+                      Verde cheio = extrato + fatura + investimentos no mês.
+                    </span>
+                  </div>
+                </div>
+
+                <%!-- Pontuação de cobertura (donut), no mesmo card --%>
+                <div class="flex flex-col items-center text-center gap-1 shrink-0 lg:w-64 lg:border-l lg:border-base-content/10 lg:pl-8">
+                  <h3 class="text-sm font-semibold opacity-70">Cobertura de importações</h3>
+                  <div class="relative">
+                    <svg viewBox="0 0 120 120" class="w-44 h-44 sm:w-52 sm:h-52 -rotate-90">
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="52"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="11"
+                        class="text-base-300"
+                      />
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="52"
+                        fill="none"
+                        stroke={@cal_score.color}
+                        stroke-width="11"
+                        stroke-linecap="round"
+                        stroke-dasharray={@cal_score.circumference}
+                        stroke-dashoffset={@cal_score.dashoffset}
+                        class="transition-all duration-700 ease-out"
+                      />
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                      <span class="text-4xl font-bold">{@cal_score.pct}%</span>
+                    </div>
+                  </div>
+                  <p class="text-base font-medium mt-1">{@cal_score.label}</p>
+                  <p class="text-xs opacity-50">
+                    {@cal_score.imports} de {@cal_score.ideal} importações
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <dialog
           :if={@show_api_key_alert}
           class="modal modal-open"
@@ -1530,6 +1705,130 @@ defmodule GranaWeb.UploadLive do
     </Layouts.app>
     """
   end
+
+  # ── Calendário de importações (heatmap ano × mês) ──
+
+  defp build_calendar_grid(socket, extrato, fatura, investimentos, upload_counts) do
+    all = extrato |> MapSet.union(fatura) |> MapSet.union(investimentos)
+
+    if MapSet.size(all) == 0 do
+      assign(socket, cal_rows: [], cal_has_data: false, cal_score: nil)
+    else
+      today = Date.utc_today()
+      start_year = all |> Enum.map(&elem(&1, 0)) |> Enum.min()
+
+      rows =
+        for year <- start_year..today.year do
+          cells =
+            for month <- 1..12 do
+              ym = {year, month}
+
+              labels =
+                [
+                  {"Extrato", MapSet.member?(extrato, ym)},
+                  {"Fatura", MapSet.member?(fatura, ym)},
+                  {"Investimentos", MapSet.member?(investimentos, ym)}
+                ]
+                |> Enum.filter(&elem(&1, 1))
+                |> Enum.map(&elem(&1, 0))
+
+              %{
+                month: month,
+                year: year,
+                count: length(labels),
+                upload_count: Map.get(upload_counts, ym, 0),
+                labels: labels,
+                future?: year > today.year or (year == today.year and month > today.month)
+              }
+            end
+
+          %{year: year, cells: cells}
+        end
+
+      # Pontuação: o ideal é 3 imports por mês (extrato + fatura + investimentos),
+      # contados do 1º import até o mês atual → ideal = meses × 3. O total do
+      # usuário soma, por mês, no máximo 3 imports (mês com mais de 3 vale 3).
+      {first_y, first_m} = Enum.min(all)
+      first_index = first_y * 12 + first_m
+      now_index = today.year * 12 + today.month
+      ideal = (now_index - first_index + 1) * 3
+
+      imports =
+        Enum.reduce(upload_counts, 0, fn {{y, m}, cnt}, acc ->
+          idx = y * 12 + m
+          if idx >= first_index and idx <= now_index, do: acc + min(cnt, 3), else: acc
+        end)
+
+      pct = if ideal > 0, do: min(100, round(imports / ideal * 100)), else: 0
+      circumference = 2 * :math.pi() * 52
+
+      score = %{
+        pct: pct,
+        imports: imports,
+        ideal: ideal,
+        color: score_color(pct),
+        label: score_label(pct),
+        circumference: Float.round(circumference, 2),
+        dashoffset: Float.round(circumference * (1 - pct / 100), 2)
+      }
+
+      assign(socket, cal_rows: rows, cal_has_data: true, cal_score: score)
+    end
+  end
+
+  # Cor do donut no mesmo verde do calendário, escurecendo conforme a cobertura.
+  defp score_color(pct) when pct >= 80, do: "#047857"
+  defp score_color(pct) when pct >= 40, do: "#22c55e"
+  defp score_color(_pct), do: "#86efac"
+
+  defp score_label(100), do: "Histórico completo!"
+  defp score_label(pct) when pct >= 80, do: "Quase tudo importado"
+  defp score_label(pct) when pct >= 50, do: "Bom histórico"
+  defp score_label(pct) when pct >= 25, do: "Faltam vários meses"
+  defp score_label(_pct), do: "Histórico bem incompleto"
+
+  defp merge_counts(left, right) do
+    Map.merge(left, right, fn _month, left_count, right_count -> left_count + right_count end)
+  end
+
+  defp pluralize_uploads(1), do: "1 upload"
+  defp pluralize_uploads(count), do: "#{count} uploads"
+
+  defp cell_class(%{future?: true}), do: "bg-base-300/15 border border-base-content/5 opacity-60"
+  defp cell_class(%{count: 0}), do: "bg-base-300/70 border border-base-content/10 cursor-pointer"
+  defp cell_class(%{count: 1}), do: "bg-[#86efac] border border-[#4ade80] cursor-pointer"
+  defp cell_class(%{count: 2}), do: "bg-[#22c55e] border border-[#16a34a] cursor-pointer"
+  defp cell_class(%{count: 3}), do: "bg-[#047857] border border-[#065f46] cursor-pointer"
+
+  defp cell_hover_class(%{future?: true}), do: "pointer-events-none"
+
+  defp cell_hover_class(_cell),
+    do:
+      "hover:-translate-y-0.5 hover:scale-110 hover:brightness-110 hover:shadow-[0_10px_24px_rgba(0,0,0,0.24)] hover:ring-2 hover:ring-base-content/25"
+
+  defp cell_title(%{future?: true}), do: nil
+
+  defp cell_title(%{month: m, year: y, labels: [], upload_count: upload_count}),
+    do: "#{month_label(m)}/#{y} - #{pluralize_uploads(upload_count)} - sem dados"
+
+  defp cell_title(%{month: m, year: y, labels: labels, upload_count: upload_count}),
+    do: "#{month_label(m)}/#{y} - #{pluralize_uploads(upload_count)} - #{Enum.join(labels, ", ")}"
+
+  defp cell_month(%{future?: true}), do: nil
+  defp cell_month(%{month: m, year: y}), do: "#{month_label(m)}/#{y}"
+
+  defp cell_uploads(%{future?: true}), do: nil
+  defp cell_uploads(%{upload_count: upload_count}), do: pluralize_uploads(upload_count)
+
+  defp cell_upload_count(%{future?: true}), do: nil
+  defp cell_upload_count(%{upload_count: upload_count}), do: upload_count
+
+  defp cell_types(%{future?: true}), do: nil
+  defp cell_types(%{labels: []}), do: "Sem dados"
+  defp cell_types(%{labels: labels}), do: Enum.join(labels, ", ")
+
+  @month_abbr {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"}
+  defp month_label(month), do: elem(@month_abbr, month - 1)
 
   defp cancel_all_uploads(socket) do
     Enum.reduce(socket.assigns.uploads.statements.entries, socket, fn entry, acc ->

@@ -59,9 +59,6 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/upload"} class="text-sm">Uploads</.link>
             </li>
             <li>
-              <.link navigate={~p"/calendar"} class="text-sm">Calendário</.link>
-            </li>
-            <li>
               <details class="dropdown dropdown-end">
                 <summary class="btn-md btn-ghost">
                   <.icon name="hero-user-circle" class="size-5" />
@@ -135,11 +132,6 @@ defmodule GranaWeb.Layouts do
               <li>
                 <.link navigate={~p"/upload"}>
                   <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/calendar"}>
-                  <.icon name="hero-calendar-days" class="size-4" /> Calendário
                 </.link>
               </li>
               <hr class="my-1 opacity-30" />

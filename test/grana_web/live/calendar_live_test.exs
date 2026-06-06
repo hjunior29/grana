@@ -9,7 +9,7 @@ defmodule GranaWeb.CalendarLiveTest do
   setup :register_and_log_in_user
 
   test "mostra estado vazio quando não há dados", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/calendar")
+    {:ok, _view, html} = live(conn, ~p"/upload?tab=calendario")
     assert html =~ "Calendário de Importações"
     assert html =~ "Ainda não há dados importados"
   end
@@ -89,16 +89,20 @@ defmodule GranaWeb.CalendarLiveTest do
       }
     ])
 
-    {:ok, _view, html} = live(conn, ~p"/calendar")
+    {:ok, _view, html} = live(conn, ~p"/upload?tab=calendario")
     assert html =~ "Calendário de Importações"
     assert html =~ "2026"
-    assert html =~ ~s(aria-label="mar/2026 - 3 uploads - Extrato, Fatura, Investimentos")
+    assert html =~ ~s(aria-label="Mar/2026 - 3 uploads - Extrato, Fatura, Investimentos")
     assert html =~ ~s(data-calendar-uploads="3 uploads")
     assert html =~ "Menos"
+    # Pontuação de cobertura ao lado do calendário
+    assert html =~ "Cobertura"
+    assert html =~ "importações"
     refute html =~ "Ainda não há dados"
   end
 
   test "redireciona usuário não autenticado" do
-    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(build_conn(), ~p"/calendar")
+    assert {:error, {:redirect, %{to: "/users/log-in"}}} =
+             live(build_conn(), ~p"/upload?tab=calendario")
   end
 end
