@@ -24,8 +24,6 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:tab, "banking")
       |> assign(:categories, categories)
       |> assign(:banks, banks)
-      |> assign(:editing_id, nil)
-      |> assign(:recurring_editing_id, nil)
       |> assign(:expanded_ids, MapSet.new())
       |> assign(:selected_ids, MapSet.new())
       |> assign(:statement_info, nil)
@@ -117,8 +115,6 @@ defmodule GranaWeb.TransactionsLive do
     |> assign(:total, total)
     |> assign(:transactions, transactions)
     |> assign(:recurring_statuses, recurring_statuses)
-    |> assign(:editing_id, nil)
-    |> assign(:recurring_editing_id, nil)
     |> assign(:selected_ids, MapSet.new())
     |> assign(:statement_info, statement_info)
     |> assign(:summary, summary)
@@ -310,22 +306,6 @@ defmodule GranaWeb.TransactionsLive do
     {:noreply, assign(socket, :expanded_ids, expanded)}
   end
 
-  def handle_event("edit-category", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :editing_id, parse_int(id, -1))}
-  end
-
-  def handle_event("cancel-edit", _params, socket) do
-    {:noreply, assign(socket, :editing_id, nil)}
-  end
-
-  def handle_event("edit-recurring", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :recurring_editing_id, parse_int(id, -1))}
-  end
-
-  def handle_event("cancel-recurring", _params, socket) do
-    {:noreply, assign(socket, :recurring_editing_id, nil)}
-  end
-
   def handle_event("save-category", %{"txn_id" => id, "category_id" => category_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     cat_id = parse_int(category_id, -1)
@@ -360,7 +340,6 @@ defmodule GranaWeb.TransactionsLive do
 
         socket =
           socket
-          |> assign(:recurring_editing_id, nil)
           |> put_flash(:info, recurring_flash(mode))
           |> push_patch(to: "/transactions?page=#{socket.assigns.page}&#{query_params}")
 
@@ -795,17 +774,23 @@ defmodule GranaWeb.TransactionsLive do
               </span>
             </td>
             <td>
-              <form
-                :if={@editing_id == txn.id}
-                id={"transaction-category-form-#{txn.id}"}
-                phx-change="save-category"
-                phx-click-away="cancel-edit"
-                class="inline-flex"
-              >
+              <%!-- Select sempre visível, estilizado como o badge: 1 clique abre o menu
+                    nativo (sem a troca badge→select que pedia 2 cliques) e o popup nativo
+                    não é cortado pelo overflow-x da tabela. --%>
+              <form id={"transaction-category-form-#{txn.id}"} phx-change="save-category">
                 <input type="hidden" name="txn_id" value={txn.id} />
                 <select
                   name="category_id"
-                  class="select select-bordered select-xs w-auto min-w-0 max-w-36 text-xs py-0 h-6 min-h-0"
+                  aria-label="Categoria"
+                  class={[
+                    "select select-xs select-bordered rounded-full text-xs font-medium",
+                    "h-6 min-h-0 py-0 pl-3 pr-7 max-w-40 cursor-pointer",
+                    !txn.category && "border-warning text-warning"
+                  ]}
+                  style={
+                    txn.category &&
+                      "background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"
+                  }
                 >
                   <option
                     :for={cat <- @categories}
@@ -816,25 +801,6 @@ defmodule GranaWeb.TransactionsLive do
                   </option>
                 </select>
               </form>
-              <button
-                :if={@editing_id != txn.id}
-                id={"transaction-category-chip-#{txn.id}"}
-                type="button"
-                phx-click="edit-category"
-                phx-value-id={txn.id}
-                class="cursor-pointer"
-              >
-                <span
-                  :if={txn.category}
-                  class="badge badge-sm"
-                  style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-                >
-                  {txn.category.name}
-                </span>
-                <span :if={!txn.category} class="badge badge-sm badge-warning">
-                  Sem Categoria
-                </span>
-              </button>
             </td>
             <td>{render_recurring_cell(assigns, txn)}</td>
             <td class={[
@@ -1160,39 +1126,36 @@ defmodule GranaWeb.TransactionsLive do
     ~H"""
     <div class="min-w-24">
       <form
-        :if={@recurring.editable and @recurring_editing_id == @txn.id}
+        :if={@recurring.editable}
         id={"transaction-recurring-form-#{@txn.id}"}
         phx-change="save-recurring"
-        phx-click-away="cancel-recurring"
-        class="inline-flex"
       >
         <input type="hidden" name="txn_id" value={@txn.id} />
         <select
           name="mode"
           aria-label="Recorrência da despesa"
-          class="select select-xs border-primary/40 text-xs font-medium"
+          class={[
+            "select select-xs select-bordered rounded-full text-xs font-medium",
+            "h-6 min-h-0 py-0 pl-3 pr-7 cursor-pointer",
+            recurring_select_class(@recurring.status)
+          ]}
         >
           <option value="fixed" selected={@recurring.status == "fixed"}>Fixa</option>
           <option value="variable" selected={@recurring.status == "variable"}>Variável</option>
         </select>
       </form>
 
-      <button
-        :if={@recurring.editable and @recurring_editing_id != @txn.id}
-        id={"transaction-recurring-chip-#{@txn.id}"}
-        type="button"
-        phx-click="edit-recurring"
-        phx-value-id={@txn.id}
-        class={recurring_chip_class(@recurring.status)}
-        title="Alterar recorrência"
-      >
-        {recurring_label(@recurring.status)}
-      </button>
-
       <span :if={!@recurring.editable} class="text-xs opacity-30">—</span>
     </div>
     """
   end
+
+  # Cores do select de recorrência: roxo para fixa, cinza para variável (mesmo
+  # esquema do antigo chip).
+  defp recurring_select_class("fixed"), do: "border-primary/40 bg-primary/10 text-primary"
+
+  defp recurring_select_class(_),
+    do: "border-base-content/20 bg-base-content/5 text-base-content/70"
 
   defp sort_url(filters, field) do
     next_dir =
@@ -1215,26 +1178,6 @@ defmodule GranaWeb.TransactionsLive do
 
   defp recurring_status(statuses, id) do
     Map.get(statuses, id, %{status: "none", pattern: "", editable: false})
-  end
-
-  defp recurring_label("fixed"), do: "Fixa"
-  defp recurring_label("variable"), do: "Variável"
-  defp recurring_label(_), do: "—"
-
-  # Mesma "caixa" do badge de categoria (badge badge-sm), só trocando a cor:
-  # roxo para fixa, cinza para variável.
-  defp recurring_chip_class("fixed") do
-    [
-      "badge badge-sm cursor-pointer transition",
-      "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-    ]
-  end
-
-  defp recurring_chip_class("variable") do
-    [
-      "badge badge-sm cursor-pointer transition",
-      "border-base-content/20 bg-base-content/5 text-base-content/60 hover:bg-base-content/10"
-    ]
   end
 
   defp page_url(base, filters, page) do
