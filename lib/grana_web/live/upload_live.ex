@@ -1532,8 +1532,8 @@ defmodule GranaWeb.UploadLive do
           <div class="mb-6">
             <h2 class="text-lg font-semibold">Calendário de Importações</h2>
             <p class="text-xs sm:text-sm opacity-60 mt-1">
-              Cada quadrado é um mês. Quanto mais verde, mais tipos de documento (extrato, fatura,
-              investimentos) você importou naquele mês. Passe o mouse para ver o total de uploads.
+              Cada quadrado é um mês. Quanto mais intenso, mais tipos de documento (extrato,
+              fatura, investimentos) você importou naquele mês. Passe o mouse para ver os detalhes.
             </p>
           </div>
 
@@ -1552,7 +1552,7 @@ defmodule GranaWeb.UploadLive do
             </p>
           </div>
 
-          <div :if={@cal_has_data} class="card bg-base-200 w-full">
+          <div :if={@cal_has_data} class="grana-calendar-card card bg-base-200 w-full">
             <div class="card-body p-5 sm:p-8">
               <div class="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-center">
                 <div class="flex-1 min-w-0">
@@ -1560,14 +1560,14 @@ defmodule GranaWeb.UploadLive do
                     id="calendar-heatmap"
                     phx-hook="CalendarHeatmap"
                     phx-update="ignore"
-                    class="w-full"
+                    class="grana-calendar-heatmap w-full"
                   >
                     <%!-- Cabeçalho de meses --%>
                     <div class="flex gap-1 sm:gap-1.5 mb-2">
                       <div class="w-8 sm:w-12 shrink-0"></div>
                       <div
                         :for={m <- 1..12}
-                        class="flex-1 min-w-0 text-center text-[10px] sm:text-sm font-medium opacity-60"
+                        class="grana-calendar-month-label flex-1 min-w-0 text-center text-[10px] sm:text-sm font-medium"
                       >
                         {month_label(m)}
                       </div>
@@ -1579,13 +1579,13 @@ defmodule GranaWeb.UploadLive do
                       :for={row <- @cal_rows}
                       class="flex gap-1 sm:gap-1.5 items-center mb-1 sm:mb-1.5"
                     >
-                      <div class="w-8 sm:w-12 shrink-0 text-right pr-1 text-xs sm:text-sm font-medium opacity-60">
+                      <div class="grana-calendar-year-label w-8 sm:w-12 shrink-0 text-right pr-1 text-xs sm:text-sm font-medium">
                         {row.year}
                       </div>
                       <div
                         :for={cell <- row.cells}
                         class={[
-                          "flex-1 min-w-0 aspect-square rounded-sm transition duration-150",
+                          "grana-calendar-cell flex-1 min-w-0 aspect-square transition duration-150",
                           cell_hover_class(cell),
                           cell_class(cell)
                         ]}
@@ -1600,37 +1600,37 @@ defmodule GranaWeb.UploadLive do
                   </div>
 
                   <%!-- Legenda --%>
-                  <div class="flex flex-wrap items-center justify-center gap-2 mt-6 text-sm opacity-60">
+                  <div class="grana-calendar-legend flex flex-wrap items-center justify-center gap-2 mt-6 text-sm">
                     <span class="mr-1">Menos</span>
                     <div
-                      class="w-5 h-5 rounded-sm bg-base-300/70 border border-base-content/10"
+                      class="grana-calendar-legend-swatch calendar-count-0"
                       title="nenhum tipo"
                     >
                     </div>
                     <div
-                      class="w-5 h-5 rounded-sm bg-[#86efac] border border-[#4ade80]"
+                      class="grana-calendar-legend-swatch calendar-count-1"
                       title="1 tipo"
                     >
                     </div>
                     <div
-                      class="w-5 h-5 rounded-sm bg-[#22c55e] border border-[#16a34a]"
+                      class="grana-calendar-legend-swatch calendar-count-2"
                       title="2 tipos"
                     >
                     </div>
                     <div
-                      class="w-5 h-5 rounded-sm bg-[#047857] border border-[#065f46]"
+                      class="grana-calendar-legend-swatch calendar-count-3"
                       title="3 tipos"
                     >
                     </div>
                     <span class="ml-1">Mais</span>
                     <span class="ml-3 opacity-70">
-                      Verde cheio = extrato + fatura + investimentos no mês.
+                      Tom cheio = extrato + fatura + investimentos no mês.
                     </span>
                   </div>
                 </div>
 
                 <%!-- Pontuação de cobertura (donut), no mesmo card --%>
-                <div class="flex flex-col items-center text-center gap-1 shrink-0 lg:w-64 lg:border-l lg:border-base-content/10 lg:pl-8">
+                <div class="grana-calendar-score flex flex-col items-center text-center gap-1 shrink-0 lg:w-64 lg:border-l lg:border-base-content/10 lg:pl-8">
                   <h3 class="text-sm font-semibold opacity-70">Cobertura de importações</h3>
                   <div class="relative">
                     <svg viewBox="0 0 120 120" class="w-44 h-44 sm:w-52 sm:h-52 -rotate-90">
@@ -1641,19 +1641,22 @@ defmodule GranaWeb.UploadLive do
                         fill="none"
                         stroke="currentColor"
                         stroke-width="11"
-                        class="text-base-300"
+                        class="grana-calendar-score-track"
                       />
                       <circle
                         cx="60"
                         cy="60"
                         r="52"
                         fill="none"
-                        stroke={@cal_score.color}
+                        stroke="currentColor"
                         stroke-width="11"
                         stroke-linecap="round"
                         stroke-dasharray={@cal_score.circumference}
                         stroke-dashoffset={@cal_score.dashoffset}
-                        class="transition-all duration-700 ease-out"
+                        class={[
+                          "grana-calendar-score-ring transition-all duration-700 ease-out",
+                          @cal_score.color_class
+                        ]}
                       />
                     </svg>
                     <div class="absolute inset-0 flex items-center justify-center">
@@ -1766,7 +1769,7 @@ defmodule GranaWeb.UploadLive do
         pct: pct,
         imports: imports,
         ideal: ideal,
-        color: score_color(pct),
+        color_class: score_color_class(pct),
         label: score_label(pct),
         circumference: Float.round(circumference, 2),
         dashoffset: Float.round(circumference * (1 - pct / 100), 2)
@@ -1776,10 +1779,9 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
-  # Cor do donut no mesmo verde do calendário, escurecendo conforme a cobertura.
-  defp score_color(pct) when pct >= 80, do: "#047857"
-  defp score_color(pct) when pct >= 40, do: "#22c55e"
-  defp score_color(_pct), do: "#86efac"
+  defp score_color_class(pct) when pct >= 80, do: "calendar-count-3"
+  defp score_color_class(pct) when pct >= 40, do: "calendar-count-2"
+  defp score_color_class(_pct), do: "calendar-count-1"
 
   defp score_label(100), do: "Histórico completo!"
   defp score_label(pct) when pct >= 80, do: "Quase tudo importado"
@@ -1794,17 +1796,16 @@ defmodule GranaWeb.UploadLive do
   defp pluralize_uploads(1), do: "1 upload"
   defp pluralize_uploads(count), do: "#{count} uploads"
 
-  defp cell_class(%{future?: true}), do: "bg-base-300/15 border border-base-content/5 opacity-60"
-  defp cell_class(%{count: 0}), do: "bg-base-300/70 border border-base-content/10 cursor-pointer"
-  defp cell_class(%{count: 1}), do: "bg-[#86efac] border border-[#4ade80] cursor-pointer"
-  defp cell_class(%{count: 2}), do: "bg-[#22c55e] border border-[#16a34a] cursor-pointer"
-  defp cell_class(%{count: 3}), do: "bg-[#047857] border border-[#065f46] cursor-pointer"
+  defp cell_class(%{future?: true}), do: "calendar-count-future opacity-60"
+  defp cell_class(%{count: 0}), do: "calendar-count-0 cursor-pointer"
+  defp cell_class(%{count: 1}), do: "calendar-count-1 cursor-pointer"
+  defp cell_class(%{count: 2}), do: "calendar-count-2 cursor-pointer"
+  defp cell_class(%{count: 3}), do: "calendar-count-3 cursor-pointer"
 
   defp cell_hover_class(%{future?: true}), do: "pointer-events-none"
 
   defp cell_hover_class(_cell),
-    do:
-      "hover:-translate-y-0.5 hover:scale-110 hover:brightness-110 hover:shadow-[0_10px_24px_rgba(0,0,0,0.24)] hover:ring-2 hover:ring-base-content/25"
+    do: "hover:-translate-y-0.5 hover:scale-105 hover:brightness-110"
 
   defp cell_title(%{future?: true}), do: nil
 

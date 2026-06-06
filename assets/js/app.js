@@ -5,6 +5,8 @@ import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 
 // --- Theme ---
+const visualStyles = new Set(["default", "signal", "bossa"])
+
 const setTheme = (theme) => {
   if (theme === "system") {
     localStorage.removeItem("phx:theme")
@@ -15,9 +17,24 @@ const setTheme = (theme) => {
   }
 }
 
+const setVisualStyle = (style) => {
+  const visualStyle = visualStyles.has(style) ? style : "default"
+
+  if (visualStyle === "default") {
+    localStorage.removeItem("phx:visual-style")
+    document.documentElement.removeAttribute("data-visual-style")
+  } else {
+    localStorage.setItem("phx:visual-style", visualStyle)
+    document.documentElement.setAttribute("data-visual-style", visualStyle)
+  }
+}
+
 setTheme(localStorage.getItem("phx:theme") || "system")
+setVisualStyle(localStorage.getItem("phx:visual-style") || "default")
 window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"))
+window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default"))
 window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme))
+window.addEventListener("phx:set-visual-style", (e) => setVisualStyle(e.target.dataset.phxVisualStyle))
 
 // --- Tooltip Utility ---
 const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:color-mix(in oklch, var(--color-base-300) 88%, transparent);backdrop-filter:blur(12px);color:var(--color-base-content);box-shadow:0 14px 36px color-mix(in oklch, var(--color-base-content) 20%, transparent);font-size:13px;pointer-events:none;white-space:nowrap;display:none;border:1px solid var(--grana-border)"
@@ -216,7 +233,9 @@ const CalendarHeatmap = {
       const uploads = target.dataset.calendarUploads
       const types = target.dataset.calendarTypes
       const count = parseInt(target.dataset.calendarCount || "0", 10)
-      const uploadColor = count > 0 ? "var(--color-success)" : "color-mix(in oklch, var(--color-base-content) 58%, transparent)"
+      const uploadColor = count > 0
+        ? `var(--grana-calendar-${Math.min(count, 3)})`
+        : "color-mix(in oklch, var(--color-base-content) 58%, transparent)"
 
       showTooltip(
         this.el,

@@ -74,7 +74,7 @@ defmodule GranaWeb.TransactionsExportController do
     opts =
       []
       |> maybe_add(:search, params["search"])
-      |> maybe_add(:operation, params["operation"])
+      |> maybe_add(:operation, parse_operations(params["operation"]))
       |> maybe_add(:asset_type, params["asset_type"])
       |> maybe_add(:institution_id, parse_int(params["institution_id"]))
       |> maybe_add(:date_from, parse_date(params["date_from"]))
@@ -101,5 +101,15 @@ defmodule GranaWeb.TransactionsExportController do
       {n, _} -> n
       :error -> nil
     end
+  end
+
+  defp parse_operations(nil), do: nil
+  defp parse_operations(""), do: nil
+  defp parse_operations("all"), do: nil
+
+  defp parse_operations(operations) do
+    if String.contains?(operations, ","),
+      do: String.split(operations, ","),
+      else: operations
   end
 end

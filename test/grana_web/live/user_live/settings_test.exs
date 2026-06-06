@@ -16,6 +16,20 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert html =~ "Salvar Senha"
     end
 
+    test "renders visual style preferences", %{conn: conn} do
+      {:ok, lv, _html} =
+        conn
+        |> log_in_user(user_fixture())
+        |> live(~p"/users/settings")
+
+      assert has_element?(lv, "#visual-style-toggle")
+      assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="default"]|)
+      assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="signal"]|)
+      assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="bossa"]|)
+      assert has_element?(lv, "#visual-style-toggle .visual-style-description")
+      assert has_element?(lv, "#visual-style-toggle .visual-style-preview")
+    end
+
     test "redirects if user is not logged in", %{conn: conn} do
       assert {:error, redirect} = live(conn, ~p"/users/settings")
 

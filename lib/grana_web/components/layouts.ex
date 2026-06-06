@@ -24,8 +24,8 @@ defmodule GranaWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <div class="min-h-screen flex flex-col">
-      <header class="navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-3 sm:px-6 lg:px-8 min-h-12">
+    <div class="grana-app-shell min-h-screen flex flex-col">
+      <header class="grana-app-header navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-3 sm:px-6 lg:px-8 min-h-12">
         <div class="flex-1">
           <.link
             navigate={if @current_scope, do: ~p"/dashboard", else: ~p"/"}
@@ -168,7 +168,7 @@ defmodule GranaWeb.Layouts do
         </div>
       </header>
 
-      <main class="flex-1 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <main class="grana-app-main flex-1 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
         {render_slot(@inner_block)}
       </main>
     </div>
@@ -217,7 +217,7 @@ defmodule GranaWeb.Layouts do
 
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
+    <div class="theme-toggle card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
       <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
 
       <button
@@ -242,6 +242,81 @@ defmodule GranaWeb.Layouts do
         data-phx-theme="dark"
       >
         <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+      </button>
+    </div>
+    """
+  end
+
+  def visual_style_toggle(assigns) do
+    ~H"""
+    <div id="visual-style-toggle" class="visual-style-toggle" role="group" aria-label="Estilo visual">
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="default"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-squares-2x2-micro" class="size-4" /> Default
+          </span>
+          <span class="visual-style-description">
+            Neutro, limpo e próximo do visual original do app.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-default" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="signal"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-command-line-micro" class="size-4" /> Signal
+          </span>
+          <span class="visual-style-description">
+            Técnico, preciso e com contraste de painel operacional.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-signal" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="bossa"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-bolt-micro" class="size-4" /> Bossa
+          </span>
+          <span class="visual-style-description">
+            Editorial, gráfico e com personalidade mais marcada.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-bossa" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
       </button>
     </div>
     """

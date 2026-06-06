@@ -23,6 +23,7 @@
     {Application.get_env(:live_debugger, :live_debugger_tags)}
     <script>
       (() => {
+        const visualStyles = new Set(["default", "signal", "bossa"]);
         const setTheme = (theme) => {
           if (theme === "system") {
             localStorage.removeItem("phx:theme");
@@ -32,12 +33,25 @@
             document.documentElement.setAttribute("data-theme", theme);
           }
         };
+        const setVisualStyle = (style) => {
+          const visualStyle = visualStyles.has(style) ? style : "default";
+          if (visualStyle === "default") {
+            localStorage.removeItem("phx:visual-style");
+            document.documentElement.removeAttribute("data-visual-style");
+          } else {
+            localStorage.setItem("phx:visual-style", visualStyle);
+            document.documentElement.setAttribute("data-visual-style", visualStyle);
+          }
+        };
         if (!document.documentElement.hasAttribute("data-theme")) {
           setTheme(localStorage.getItem("phx:theme") || "system");
         }
+        setVisualStyle(localStorage.getItem("phx:visual-style") || "default");
         window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
+        window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default"));
 
         window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+        window.addEventListener("phx:set-visual-style", (e) => setVisualStyle(e.target.dataset.phxVisualStyle));
       })();
     </script>
   </head>
