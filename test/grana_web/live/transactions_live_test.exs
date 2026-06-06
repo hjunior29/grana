@@ -50,11 +50,11 @@ defmodule GranaWeb.TransactionsLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/transactions")
 
-    assert has_element?(view, "#transaction-recurring-chip-#{txn.id}", "Variável")
-
-    view
-    |> element("#transaction-recurring-chip-#{txn.id}")
-    |> render_click()
+    # Select de recorrência já vem visível (sem troca/clique); 1 ocorrência → variável.
+    assert has_element?(
+             view,
+             ~s(#transaction-recurring-form-#{txn.id} option[value="variable"][selected])
+           )
 
     view
     |> form("#transaction-recurring-form-#{txn.id}", %{
@@ -66,7 +66,11 @@ defmodule GranaWeb.TransactionsLiveTest do
     assert [rule] = Banking.list_recurring_rules(user.id)
     assert rule.pattern == "spotify"
     assert rule.mode == "fixed"
-    assert has_element?(view, "#transaction-recurring-chip-#{txn.id}", "Fixa")
+
+    assert has_element?(
+             view,
+             ~s(#transaction-recurring-form-#{txn.id} option[value="fixed"][selected])
+           )
   end
 
   test "marks an inferred fixed transaction as variable", %{conn: conn, user: user} do
@@ -83,11 +87,11 @@ defmodule GranaWeb.TransactionsLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/transactions")
 
-    assert has_element?(view, "#transaction-recurring-chip-#{txn.id}", "Fixa")
-
-    view
-    |> element("#transaction-recurring-chip-#{txn.id}")
-    |> render_click()
+    # 5 ocorrências → inferida como fixa; o select já vem visível e selecionado.
+    assert has_element?(
+             view,
+             ~s(#transaction-recurring-form-#{txn.id} option[value="fixed"][selected])
+           )
 
     view
     |> form("#transaction-recurring-form-#{txn.id}", %{
@@ -99,7 +103,11 @@ defmodule GranaWeb.TransactionsLiveTest do
     assert [rule] = Banking.list_recurring_rules(user.id)
     assert rule.pattern == "netflix com"
     assert rule.mode == "variable"
-    assert has_element?(view, "#transaction-recurring-chip-#{txn.id}", "Variável")
+
+    assert has_element?(
+             view,
+             ~s(#transaction-recurring-form-#{txn.id} option[value="variable"][selected])
+           )
   end
 
   test "redirects unauthenticated users", %{conn: _conn} do
