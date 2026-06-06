@@ -782,11 +782,15 @@ defmodule GranaWeb.TransactionsLive do
                 <select
                   name="category_id"
                   aria-label="Categoria"
-                  class={[
-                    "select select-xs select-bordered rounded-full text-xs font-medium",
-                    "h-6 min-h-0 py-0 pl-3 pr-7 max-w-40 cursor-pointer",
-                    !txn.category && "border-warning text-warning"
-                  ]}
+                  title="Alterar categoria"
+                  class={
+                    [
+                      # Mesmo visual do badge antigo (pílula colorida, sem setinha nem
+                      # caixa de select): appearance-none remove a seta nativa.
+                      "badge badge-sm font-medium appearance-none cursor-pointer max-w-40",
+                      !txn.category && "badge-warning"
+                    ]
+                  }
                   style={
                     txn.category &&
                       "background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"
@@ -1134,11 +1138,14 @@ defmodule GranaWeb.TransactionsLive do
         <select
           name="mode"
           aria-label="Recorrência da despesa"
-          class={[
-            "select select-xs select-bordered rounded-full text-xs font-medium",
-            "h-6 min-h-0 py-0 pl-3 pr-7 cursor-pointer",
-            recurring_select_class(@recurring.status)
-          ]}
+          title="Alterar recorrência"
+          class={
+            [
+              # Mesmo visual do chip antigo (badge), sem setinha nem caixa de select.
+              "badge badge-sm font-medium appearance-none cursor-pointer",
+              recurring_select_class(@recurring.status)
+            ]
+          }
         >
           <option value="fixed" selected={@recurring.status == "fixed"}>Fixa</option>
           <option value="variable" selected={@recurring.status == "variable"}>Variável</option>
@@ -1155,7 +1162,7 @@ defmodule GranaWeb.TransactionsLive do
   defp recurring_select_class("fixed"), do: "border-primary/40 bg-primary/10 text-primary"
 
   defp recurring_select_class(_),
-    do: "border-base-content/20 bg-base-content/5 text-base-content/70"
+    do: "border-base-content/20 bg-base-content/5 text-base-content/60"
 
   defp sort_url(filters, field) do
     next_dir =
