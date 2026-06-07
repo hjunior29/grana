@@ -314,7 +314,7 @@ defmodule GranaWeb.TransactionsLive do
         </div>
 
         <div :if={@statement_info} class="mb-4">
-          <div class="badge badge-lg gap-2">
+          <div class="badge badge-lg badge-outline gap-2">
             <img
               :if={@statement_info.logo}
               src={@statement_info.logo}
@@ -344,8 +344,8 @@ defmodule GranaWeb.TransactionsLive do
               value={@filters.statement_source}
             />
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div class="md:col-span-2">
+            <div class="transactions-filter-grid">
+              <div class="transactions-filter-search">
                 <input
                   type="search"
                   name="search"
@@ -355,7 +355,8 @@ defmodule GranaWeb.TransactionsLive do
                   phx-debounce="300"
                 />
               </div>
-              <div>
+
+              <div class="transactions-filter-source">
                 <select name="source" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.source == "all"}>Todas as fontes</option>
                   <option value="banking" selected={@filters.source == "banking"}>Bancário</option>
@@ -364,7 +365,8 @@ defmodule GranaWeb.TransactionsLive do
                   </option>
                 </select>
               </div>
-              <div>
+
+              <div class="transactions-filter-movement">
                 <select name="movement" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.movement == "all"}>Todos movimentos</option>
                   <optgroup label="Bancário">
@@ -388,10 +390,8 @@ defmodule GranaWeb.TransactionsLive do
                   </optgroup>
                 </select>
               </div>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mt-3">
-              <div>
+              <div class="transactions-filter-origin">
                 <label class="text-xs opacity-50 mb-1 block">Origem</label>
                 <select name="origin" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.origin == "all"}>Todas origens</option>
@@ -416,7 +416,7 @@ defmodule GranaWeb.TransactionsLive do
                 </select>
               </div>
 
-              <div>
+              <div class="transactions-filter-kind">
                 <label class="text-xs opacity-50 mb-1 block">Classificação</label>
                 <select name="kind" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.kind == "all"}>Todos os tipos</option>
@@ -447,7 +447,7 @@ defmodule GranaWeb.TransactionsLive do
                 </select>
               </div>
 
-              <div>
+              <div class="transactions-filter-date-from">
                 <label class="text-xs opacity-50 mb-1 block">Data início</label>
                 <input
                   type="date"
@@ -456,7 +456,8 @@ defmodule GranaWeb.TransactionsLive do
                   class="input input-bordered input-sm w-full"
                 />
               </div>
-              <div>
+
+              <div class="transactions-filter-date-to">
                 <label class="text-xs opacity-50 mb-1 block">Data fim</label>
                 <input
                   type="date"
@@ -465,7 +466,8 @@ defmodule GranaWeb.TransactionsLive do
                   class="input input-bordered input-sm w-full"
                 />
               </div>
-              <div>
+
+              <div class="transactions-filter-min">
                 <label class="text-xs opacity-50 mb-1 block">Valor mínimo</label>
                 <input
                   type="number"
@@ -476,7 +478,8 @@ defmodule GranaWeb.TransactionsLive do
                   class="input input-bordered input-sm w-full"
                 />
               </div>
-              <div>
+
+              <div class="transactions-filter-max">
                 <label class="text-xs opacity-50 mb-1 block">Valor máximo</label>
                 <input
                   type="number"
@@ -487,10 +490,8 @@ defmodule GranaWeb.TransactionsLive do
                   class="input input-bordered input-sm w-full"
                 />
               </div>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mt-3">
-              <div>
+              <div class="transactions-filter-internal">
                 <label class="text-xs opacity-50 mb-1 block">Transferências internas</label>
                 <select name="internal" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.internal == "all"}>Todas</option>
@@ -500,7 +501,8 @@ defmodule GranaWeb.TransactionsLive do
                   <option value="only" selected={@filters.internal == "only"}>Apenas internas</option>
                 </select>
               </div>
-              <div class="sm:col-span-1 lg:col-span-5 flex items-end justify-end">
+
+              <div class="transactions-filter-clear flex items-end justify-end">
                 <button type="button" phx-click="clear_filters" class="btn btn-error btn-xs">
                   Limpar filtros
                 </button>
@@ -530,24 +532,6 @@ defmodule GranaWeb.TransactionsLive do
             class="text-success font-medium"
           >
             Receitas: R$ {format_br_number(@summary.bank_income)}
-          </span>
-          <span
-            :if={Decimal.compare(@summary.bank_investments, 0) == :gt}
-            class="text-info font-medium"
-          >
-            Invest. bancário: R$ {format_br_number(@summary.bank_investments)}
-          </span>
-          <span
-            :if={Decimal.compare(@summary.inv_purchases, 0) == :gt}
-            class="text-info font-medium"
-          >
-            Compras: R$ {format_br_number(@summary.inv_purchases)}
-          </span>
-          <span
-            :if={Decimal.compare(@summary.inv_sales, 0) == :gt}
-            class="text-warning font-medium"
-          >
-            Vendas: R$ {format_br_number(@summary.inv_sales)}
           </span>
           <span
             :if={Decimal.compare(@summary.inv_dividends, 0) == :gt}
@@ -617,7 +601,10 @@ defmodule GranaWeb.TransactionsLive do
           </.link>
         </div>
 
-        <div :if={@transactions != []} class="overflow-x-auto">
+        <div
+          :if={@transactions != []}
+          class="transactions-table-shell card bg-base-200 overflow-x-auto"
+        >
           <table id="transactions-table" class="table">
             <thead>
               <tr>
@@ -632,8 +619,13 @@ defmodule GranaWeb.TransactionsLive do
                 <.sortable_header filters={@filters} field="date" label="Data" />
                 <.sortable_header filters={@filters} field="description" label="Transação" />
                 <.sortable_header filters={@filters} field="source" label="Origem" />
-                <.sortable_header filters={@filters} field="kind" label="Classificação" />
-                <th>Movimento</th>
+                <.sortable_header
+                  filters={@filters}
+                  field="kind"
+                  label="Classificação"
+                  class="text-center"
+                />
+                <th class="text-center">Recorrência</th>
                 <.sortable_header filters={@filters} field="amount" label="Valor" class="text-right" />
               </tr>
             </thead>
@@ -660,8 +652,8 @@ defmodule GranaWeb.TransactionsLive do
                 <td class="text-sm whitespace-nowrap">{Calendar.strftime(row.date, "%d/%m/%Y")}</td>
                 <td class="text-sm max-w-xs">{render_title_cell(assigns, row)}</td>
                 <td>{render_origin_cell(row)}</td>
-                <td>{render_kind_cell(assigns, row)}</td>
-                <td>{render_movement_cell(assigns, row)}</td>
+                <td class="text-center">{render_kind_cell(assigns, row)}</td>
+                <td class="text-center">{render_recurring_column(assigns, row)}</td>
                 <td class={["text-right text-sm font-medium whitespace-nowrap", amount_class(row)]}>
                   {format_row_amount(row)}
                 </td>
@@ -754,7 +746,7 @@ defmodule GranaWeb.TransactionsLive do
     assigns = %{txn: txn}
 
     ~H"""
-    <span :if={@txn.bank_statement} class="badge badge-sm badge-ghost gap-1">
+    <span :if={@txn.bank_statement} class="badge badge-outline gap-1 h-auto whitespace-nowrap">
       <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
         <img src={bank_logo(@txn.bank_statement.bank)} alt="" />
       </div>
@@ -768,9 +760,12 @@ defmodule GranaWeb.TransactionsLive do
     assigns = %{txn: txn}
 
     ~H"""
-    <span :if={@txn.institution} class="badge badge-sm badge-ghost gap-1">
+    <span :if={@txn.institution} class="badge badge-outline gap-1 h-auto whitespace-nowrap">
       <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
-        <img src={Grana.Investments.Institution.logo_url(@txn.institution)} alt="" />
+        <img
+          src={Grana.Investments.Institution.logo_url(@txn.institution) || ~p"/images/logo-32.png"}
+          alt=""
+        />
       </div>
       {@txn.institution.name}
     </span>
@@ -781,20 +776,25 @@ defmodule GranaWeb.TransactionsLive do
     assigns = assign(assigns, :row, row)
 
     ~H"""
-    <form id={"transaction-category-form-#{@row.raw_id}"} phx-change="save-category">
+    <form
+      id={"transaction-category-form-#{@row.raw_id}"}
+      phx-change="save-category"
+      class="flex items-center justify-center gap-2"
+    >
       <input type="hidden" name="txn_id" value={@row.raw_id} />
+      <span
+        class={["size-3 rounded-full shrink-0", !@row.raw.category && "bg-base-content/20"]}
+        style={@row.raw.category && "background-color: #{@row.raw.category.color}"}
+      >
+      </span>
       <select
         name="category_id"
         aria-label="Categoria"
         title="Alterar categoria"
         class={[
-          "badge badge-sm font-medium appearance-none cursor-pointer max-w-40",
-          !@row.raw.category && "badge-warning"
+          "select select-bordered select-sm w-full max-w-44",
+          !@row.raw.category && "select-warning"
         ]}
-        style={
-          @row.raw.category &&
-            "background-color: #{@row.raw.category.color}20; color: #{@row.raw.category.color}; border-color: #{@row.raw.category.color}40"
-        }
       >
         <option
           :for={cat <- @categories}
@@ -812,32 +812,26 @@ defmodule GranaWeb.TransactionsLive do
     assigns = assign(assigns, :row, row)
 
     ~H"""
-    <span class="badge badge-sm badge-outline whitespace-nowrap">
-      {asset_type_label(@row.raw.asset_type)}
-    </span>
-    """
-  end
-
-  defp render_movement_cell(assigns, %{source: :banking} = row) do
-    assigns = assign(assigns, :row, row)
-
-    ~H"""
-    <div class="flex flex-wrap items-center gap-2">
-      <span class={["badge badge-sm", banking_type_badge(@row.raw)]}>
-        {banking_type_label(@row.raw)}
-      </span>
-      {render_recurring_cell(assigns, @row.raw)}
+    <div class="flex items-center justify-center gap-2">
+      <span class="size-3 rounded-full shrink-0 bg-base-content/20"></span>
+      <select
+        class="select select-bordered select-sm w-full max-w-44"
+        aria-label="Tipo de ativo"
+        disabled
+      >
+        <option selected>{asset_type_label(@row.raw.asset_type)}</option>
+      </select>
     </div>
     """
   end
 
-  defp render_movement_cell(assigns, %{source: :investment} = row) do
-    assigns = assign(assigns, :row, row)
+  defp render_recurring_column(assigns, %{source: :banking} = row) do
+    render_recurring_cell(assigns, row.raw)
+  end
 
+  defp render_recurring_column(assigns, %{source: :investment}) do
     ~H"""
-    <span class={["badge badge-sm", operation_badge_class(@row.raw.operation)]}>
-      {operation_label(@row.raw.operation)}
-    </span>
+    <span class="inline-flex w-full justify-center text-xs opacity-30">—</span>
     """
   end
 
@@ -848,28 +842,28 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:recurring, recurring_status(assigns.recurring_statuses, txn.id))
 
     ~H"""
-    <div class="min-w-24">
+    <div class="flex min-w-28 justify-center">
       <form
         :if={@recurring.editable}
         id={"transaction-recurring-form-#{@txn.id}"}
         phx-change="save-recurring"
+        class="flex w-full justify-center"
       >
         <input type="hidden" name="txn_id" value={@txn.id} />
         <select
           name="mode"
           aria-label="Recorrência da despesa"
           title="Alterar recorrência"
-          class={[
-            "badge badge-sm font-medium appearance-none cursor-pointer",
-            recurring_select_class(@recurring.status)
-          ]}
+          class="select select-bordered select-sm w-full"
         >
           <option value="fixed" selected={@recurring.status == "fixed"}>Fixa</option>
           <option value="variable" selected={@recurring.status == "variable"}>Variável</option>
         </select>
       </form>
 
-      <span :if={!@recurring.editable} class="text-xs opacity-30">—</span>
+      <span :if={!@recurring.editable} class="inline-flex w-full justify-center text-xs opacity-30">
+        —
+      </span>
     </div>
     """
   end
@@ -883,7 +877,8 @@ defmodule GranaWeb.TransactionsLive do
         patch={sort_url(@filters, @field)}
         class={[
           "inline-flex items-center gap-1 rounded-md transition hover:text-primary",
-          @class == "text-right" && "justify-end w-full"
+          @class == "text-right" && "justify-end w-full",
+          @class == "text-center" && "justify-center w-full"
         ]}
       >
         <span>{@label}</span>
@@ -1278,14 +1273,6 @@ defmodule GranaWeb.TransactionsLive do
   defp statement_type_label("extrato"), do: "Extrato"
   defp statement_type_label(_type), do: "Bancário"
 
-  defp banking_type_label(%{type: "credit"}), do: "Receita"
-  defp banking_type_label(%{category: %{kind: "investment"}}), do: "Investimento"
-  defp banking_type_label(_txn), do: "Despesa"
-
-  defp banking_type_badge(%{type: "credit"}), do: "badge-success"
-  defp banking_type_badge(%{category: %{kind: "investment"}}), do: "badge-info"
-  defp banking_type_badge(_txn), do: "badge-error"
-
   defp format_row_amount(%{source: :banking, raw: txn}), do: format_amount(txn)
   defp format_row_amount(%{source: :investment, raw: txn}), do: format_inv_amount(txn)
 
@@ -1311,20 +1298,7 @@ defmodule GranaWeb.TransactionsLive do
   defp inv_amount_color(operation) when operation in @income_ops, do: "text-success"
   defp inv_amount_color(_), do: "text-error"
 
-  defp operation_label(op), do: Constants.operation_label(op)
-
-  defp operation_badge_class(op) when op in @dividend_ops, do: "badge-success"
-  defp operation_badge_class("compra"), do: "badge-info"
-  defp operation_badge_class("venda"), do: "badge-warning"
-  defp operation_badge_class("taxa"), do: "badge-error"
-  defp operation_badge_class(_), do: "badge-ghost"
-
   defp asset_type_label(type), do: Constants.asset_type_label(type)
-
-  defp recurring_select_class("fixed"), do: "border-primary/40 bg-primary/10 text-primary"
-
-  defp recurring_select_class(_),
-    do: "border-base-content/20 bg-base-content/5 text-base-content/60"
 
   defp recurring_status(statuses, id) do
     Map.get(statuses, id, %{status: "none", pattern: "", editable: false})

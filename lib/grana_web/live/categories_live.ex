@@ -154,13 +154,19 @@ defmodule GranaWeb.CategoriesLive do
         phx-window-keydown="cancel_form"
         phx-key="Escape"
       >
-        <div class="modal-box max-w-lg">
-          <h3 class="text-lg font-bold mb-4">
+        <div class="modal-box category-modal-box max-w-2xl">
+          <h3 class="text-lg font-bold">
             {if @form_mode == :new, do: "Nova Categoria", else: "Editar Categoria"}
           </h3>
-          <.form for={@form} phx-submit="save_category" novalidate>
-            <div class="form-control mb-4">
-              <label class="label"><span class="label-text">Nome</span></label>
+          <.form
+            for={@form}
+            id="category-form"
+            phx-submit="save_category"
+            class="category-form"
+            novalidate
+          >
+            <div class="form-control">
+              <label class="label category-field-label"><span class="label-text">Nome</span></label>
               <input
                 type="text"
                 name="category[name]"
@@ -179,9 +185,9 @@ defmodule GranaWeb.CategoriesLive do
             <input type="hidden" name="category[color]" value={@form_color} />
             <input type="hidden" name="category[kind]" value={@form_kind} />
 
-            <div class="form-control mb-4">
-              <label class="label"><span class="label-text">Ícone</span></label>
-              <div class="flex flex-wrap gap-2">
+            <div class="form-control">
+              <label class="label category-field-label"><span class="label-text">Ícone</span></label>
+              <div class="category-icon-grid">
                 <button
                   :for={icon <- available_icons()}
                   type="button"
@@ -197,16 +203,16 @@ defmodule GranaWeb.CategoriesLive do
               </div>
             </div>
 
-            <div class="form-control mb-4">
-              <label class="label"><span class="label-text">Cor</span></label>
-              <div class="flex flex-wrap gap-2">
+            <div class="form-control">
+              <label class="label category-field-label"><span class="label-text">Cor</span></label>
+              <div class="category-color-grid">
                 <button
                   :for={color <- available_colors()}
                   type="button"
                   phx-click="select_color"
                   phx-value-color={color}
                   class={[
-                    "w-8 h-8 rounded-full cursor-pointer border-2 transition-all",
+                    "category-color-swatch rounded-full cursor-pointer border-2 transition-all",
                     if(@form_color == color,
                       do: "border-base-content scale-110",
                       else: "border-transparent"
@@ -218,9 +224,9 @@ defmodule GranaWeb.CategoriesLive do
               </div>
             </div>
 
-            <div class="form-control mb-4">
-              <label class="label"><span class="label-text">Tipo</span></label>
-              <div class="flex gap-2">
+            <div class="form-control">
+              <label class="label category-field-label"><span class="label-text">Tipo</span></label>
+              <div class="category-kind-grid">
                 <button
                   :for={
                     {value, label} <- [
@@ -256,7 +262,7 @@ defmodule GranaWeb.CategoriesLive do
               </label>
             </div>
 
-            <div class="flex items-center gap-3 p-3 bg-base-300 rounded-lg mb-4">
+            <div class="category-preview-panel flex items-center gap-3 bg-base-300 rounded-lg">
               <div
                 class="w-10 h-10 rounded-full flex items-center justify-center"
                 style={"background-color: #{@form_color}20"}

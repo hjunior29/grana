@@ -5,9 +5,139 @@ import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 
 // --- Theme ---
-const visualStyles = new Set(["default", "signal", "bossa"])
+const visualStyles = new Set(["default", "signal", "bossa", "cyber"])
+let cyberLightNoticeTimer
+let cyberGlitchTimer
 
-const setTheme = (theme) => {
+function showCyberLightNotice() {
+  let notice = document.getElementById("cyber-light-notice")
+
+  if (!notice) {
+    notice = document.createElement("div")
+    notice.id = "cyber-light-notice"
+    notice.className = "cyber-light-notice"
+    document.body.appendChild(notice)
+  }
+
+  notice.textContent = "Só permitimos o modo escuro, e sabe o por que? Porque a luz atrai bugs."
+  notice.classList.add("is-visible")
+
+  clearTimeout(cyberLightNoticeTimer)
+  cyberLightNoticeTimer = setTimeout(() => {
+    notice.classList.remove("is-visible")
+  }, 4200)
+}
+
+function triggerCyberGlitch() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return
+  }
+
+  let overlay = document.getElementById("cyber-glitch-overlay")
+
+  if (!overlay) {
+    overlay = document.createElement("div")
+    overlay.id = "cyber-glitch-overlay"
+    overlay.className = "cyber-glitch-overlay"
+    document.body.appendChild(overlay)
+  }
+
+  document.documentElement.classList.remove("cyber-glitching")
+  overlay.classList.remove("is-active")
+
+  window.requestAnimationFrame(() => {
+    document.documentElement.classList.add("cyber-glitching")
+    overlay.classList.add("is-active")
+  })
+
+  clearTimeout(cyberGlitchTimer)
+  cyberGlitchTimer = setTimeout(() => {
+    document.documentElement.classList.remove("cyber-glitching")
+    overlay.classList.remove("is-active")
+  }, 780)
+}
+
+function cyberStyleActive() {
+  return document.documentElement.dataset.visualStyle === "cyber"
+}
+
+function lightThemeActive() {
+  return document.documentElement.dataset.theme === "light"
+}
+
+function activeThemeMode() {
+  const theme = document.documentElement.dataset.theme
+
+  if (theme) {
+    return theme
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+}
+
+function topbarPalette() {
+  const style = document.documentElement.dataset.visualStyle || "default"
+  const dark = activeThemeMode() === "dark"
+
+  if (style === "signal") {
+    return dark
+      ? {
+          barColors: {0: "#42ff75", ".45": "#17c8ff", "1.0": "#ffb84a"},
+          shadowColor: "rgba(66, 255, 117, .35)",
+        }
+      : {
+          barColors: {0: "#128a42", ".55": "#1d6f96", "1.0": "#a66b00"},
+          shadowColor: "rgba(18, 138, 66, .24)",
+        }
+  }
+
+  if (style === "bossa") {
+    return dark
+      ? {
+          barColors: {0: "#ffd23f", ".45": "#35d98d", "1.0": "#ff6b57"},
+          shadowColor: "rgba(239, 63, 47, .34)",
+        }
+      : {
+          barColors: {0: "#2f65d9", ".5": "#35b779", "1.0": "#ef3f2f"},
+          shadowColor: "rgba(32, 33, 36, .28)",
+        }
+  }
+
+  if (style === "cyber") {
+    return {
+      barColors: {0: "#ff0033", ".52": "#ff00cc", "1.0": "#d7ff00"},
+      shadowColor: "rgba(255, 0, 51, .58)",
+      barThickness: 4,
+    }
+  }
+
+  return dark
+    ? {
+        barColors: {0: "oklch(58% 0.233 277.117)", ".55": "oklch(60% 0.25 292.717)", "1.0": "oklch(66% 0.179 58.318)"},
+        shadowColor: "rgba(0, 0, 0, .32)",
+      }
+    : {
+        barColors: {0: "oklch(70% 0.213 47.604)", ".55": "oklch(62% 0.214 259.815)", "1.0": "oklch(58% 0.253 17.585)"},
+        shadowColor: "rgba(0, 0, 0, .18)",
+      }
+}
+
+function updateTopbarConfig() {
+  topbar.config({
+    barThickness: 3,
+    shadowBlur: 10,
+    ...topbarPalette(),
+  })
+}
+
+const setTheme = (theme, opts = {}) => {
+  const notify = opts.notify !== false
+  const requestedTheme = theme
+
+  if (theme === "light" && cyberStyleActive()) {
+    theme = "dark"
+  }
+
   if (theme === "system") {
     localStorage.removeItem("phx:theme")
     document.documentElement.removeAttribute("data-theme")
@@ -15,9 +145,16 @@ const setTheme = (theme) => {
     localStorage.setItem("phx:theme", theme)
     document.documentElement.setAttribute("data-theme", theme)
   }
+
+  updateTopbarConfig()
+
+  if (notify && requestedTheme === "light" && cyberStyleActive()) {
+    showCyberLightNotice()
+  }
 }
 
-const setVisualStyle = (style) => {
+const setVisualStyle = (style, opts = {}) => {
+  const notify = opts.notify !== false
   const visualStyle = visualStyles.has(style) ? style : "default"
 
   if (visualStyle === "default") {
@@ -27,14 +164,33 @@ const setVisualStyle = (style) => {
     localStorage.setItem("phx:visual-style", visualStyle)
     document.documentElement.setAttribute("data-visual-style", visualStyle)
   }
+
+  updateTopbarConfig()
+
+  if (visualStyle === "cyber" && lightThemeActive()) {
+    setTheme("dark", {notify: false})
+
+    if (notify) {
+      showCyberLightNotice()
+    }
+  }
+
+  if (notify && visualStyle === "cyber") {
+    triggerCyberGlitch()
+  }
 }
 
-setTheme(localStorage.getItem("phx:theme") || "system")
-setVisualStyle(localStorage.getItem("phx:visual-style") || "default")
-window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"))
-window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default"))
+setTheme(localStorage.getItem("phx:theme") || "system", {notify: false})
+setVisualStyle(localStorage.getItem("phx:visual-style") || "default", {notify: false})
+window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system", {notify: false}))
+window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default", {notify: false}))
 window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme))
 window.addEventListener("phx:set-visual-style", (e) => setVisualStyle(e.target.dataset.phxVisualStyle))
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (!document.documentElement.dataset.theme) {
+    updateTopbarConfig()
+  }
+})
 
 // --- Tooltip Utility ---
 const tooltipStyle = "position:absolute;z-index:50;padding:8px 12px;border-radius:8px;background:color-mix(in oklch, var(--color-base-300) 88%, transparent);backdrop-filter:blur(12px);color:var(--color-base-content);box-shadow:0 14px 36px color-mix(in oklch, var(--color-base-content) 20%, transparent);font-size:13px;pointer-events:none;white-space:nowrap;display:none;border:1px solid var(--grana-border)"
@@ -720,7 +876,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: Hooks,
 })
 
-topbar.config({barColors: {0: "oklch(68% 0.16 166)"}, shadowColor: "rgba(0, 0, 0, .18)"})
+updateTopbarConfig()
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
