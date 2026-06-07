@@ -19,18 +19,23 @@ defmodule Grana.Investments.Institution do
   @doc """
   Derives logo path from institution slug, checking for a static file.
   Falls back to the logo_path stored in the database.
-  """
-  def logo_url(%__MODULE__{slug: slug, logo_path: db_path}) do
-    static_path = "/images/#{slug}-logo.png"
 
-    if File.exists?(Path.join(:code.priv_dir(:grana), "static#{static_path}")) do
-      static_path
-    else
-      db_path
-    end
+  Instituições vindas de extrato bancário usam slug `ext-<banco>` (ex.: `ext-nubank`):
+  nesse caso o logo é o do próprio banco (`/images/<banco>-logo.png`).
+  """
+  def logo_url(%__MODULE__{slug: "ext-" <> bank, logo_path: db_path}) do
+    static_file("/images/#{bank}-logo.png") || db_path
+  end
+
+  def logo_url(%__MODULE__{slug: slug, logo_path: db_path}) do
+    static_file("/images/#{slug}-logo.png") || db_path
   end
 
   def logo_url(_), do: nil
+
+  defp static_file(path) do
+    if File.exists?(Path.join(:code.priv_dir(:grana), "static#{path}")), do: path
+  end
 
   def changeset(institution, attrs) do
     institution

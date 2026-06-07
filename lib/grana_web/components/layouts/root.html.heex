@@ -23,8 +23,14 @@
     {Application.get_env(:live_debugger, :live_debugger_tags)}
     <script>
       (() => {
-        const visualStyles = new Set(["default", "signal", "bossa"]);
+        const visualStyles = new Set(["default", "signal", "bossa", "cyber"]);
+        const cyberStyleActive = () => document.documentElement.dataset.visualStyle === "cyber";
+        const lightThemeActive = () => document.documentElement.dataset.theme === "light";
         const setTheme = (theme) => {
+          if (theme === "light" && cyberStyleActive()) {
+            theme = "dark";
+          }
+
           if (theme === "system") {
             localStorage.removeItem("phx:theme");
             document.documentElement.removeAttribute("data-theme");
@@ -41,6 +47,10 @@
           } else {
             localStorage.setItem("phx:visual-style", visualStyle);
             document.documentElement.setAttribute("data-visual-style", visualStyle);
+          }
+
+          if (visualStyle === "cyber" && lightThemeActive()) {
+            setTheme("dark");
           }
         };
         if (!document.documentElement.hasAttribute("data-theme")) {

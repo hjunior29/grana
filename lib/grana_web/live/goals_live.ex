@@ -179,7 +179,7 @@ defmodule GranaWeb.GoalsLive do
         </div>
 
         <div :if={@goals_progress != []} class="flex items-center justify-center mb-6">
-          <span class="badge badge-ghost text-xs">
+          <span class="badge badge-xs badge-ghost">
             Referência: {month_name(@month)} {@year}
           </span>
         </div>

@@ -60,7 +60,7 @@ defmodule GranaWeb.Layouts do
             </li>
             <li>
               <details class="dropdown dropdown-end">
-                <summary class="btn-md btn-ghost">
+                <summary class="btn btn-md btn-ghost list-none">
                   <.icon name="hero-user-circle" class="size-5" />
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
@@ -171,9 +171,9 @@ defmodule GranaWeb.Layouts do
       <main class="grana-app-main flex-1 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
         {render_slot(@inner_block)}
       </main>
-    </div>
 
-    <.flash_group flash={@flash} />
+      <.flash_group flash={@flash} />
+    </div>
     """
   end
 
@@ -311,6 +311,29 @@ defmodule GranaWeb.Layouts do
           </span>
         </span>
         <span class="visual-style-preview visual-style-preview-bossa" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="cyber"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-command-line-micro" class="size-4" /> Cyber Dev
+          </span>
+          <span class="visual-style-description">
+            Escuro, neon e feito para quem vive no terminal.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-cyber" aria-hidden="true">
           <span class="visual-preview-header"></span>
           <span class="visual-preview-body">
             <span></span>

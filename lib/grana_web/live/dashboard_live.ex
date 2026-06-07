@@ -917,8 +917,11 @@ defmodule GranaWeb.DashboardLive do
     assigns = assign(assigns, :cat, category)
 
     ~H"""
-    <span :if={@cat} class="badge badge-sm badge-ghost gap-1.5">
-      <span class="size-2 rounded-full" style={"background-color: #{@cat.color}"}></span>
+    <span
+      :if={@cat}
+      class="badge badge-sm"
+      style={"background-color: #{@cat.color}20; color: #{@cat.color}; border-color: #{@cat.color}40"}
+    >
       {@cat.name}
     </span>
     <span :if={!@cat} class="text-xs opacity-40">—</span>
