@@ -197,21 +197,18 @@ defmodule Grana.Workers.WorkersPerformTest do
 
       stub(Grana.AI.Provider, :finish_reason, fn _body -> "STOP" end)
 
-      stub(Req, :get, fn _url, _opts ->
-        {:ok,
-         %Req.Response{
-           status: 200,
-           body: %{
-             "results" => [
-               %{
-                 "symbol" => "PETR4",
-                 "regularMarketPrice" => 35.0,
-                 "regularMarketChangePercent" => 2.0,
-                 "logourl" => nil
-               }
-             ]
-           }
-         }}
+      stub(Grana.Investments, :portfolio_with_market_data, fn _user_id, _opts ->
+        %{
+          holdings: [],
+          market_value: Decimal.new(0),
+          has_quotes: false,
+          net_position: Decimal.new(0),
+          by_asset_type: [],
+          by_asset_individual: [],
+          total_gain_loss_pct: Decimal.new(0),
+          total_gain_loss: Decimal.new(0),
+          cost_basis_total: Decimal.new(0)
+        }
       end)
 
       %{user: user, topic: topic}
