@@ -244,13 +244,11 @@ defmodule GranaWeb.GoalsLive do
                   <span class="font-semibold text-sm sm:text-base">
                     {FinancialGoal.type_label(gp.goal.type)}
                   </span>
-                  <span
+                  <.category_icon
                     :if={gp.goal.category}
-                    class="badge badge-sm ml-2"
-                    style={"background-color: #{gp.goal.category.color}20; color: #{gp.goal.category.color}; border-color: #{gp.goal.category.color}40"}
-                  >
-                    {gp.goal.category.name}
-                  </span>
+                    category={gp.goal.category}
+                    class="size-5 ml-2"
+                  />
                 </div>
               </div>
               <div class="flex items-center gap-1">
