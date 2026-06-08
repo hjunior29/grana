@@ -188,7 +188,7 @@ defmodule GranaWeb.TransactionsExportControllerTest do
   end
 
   defp setup_conn_with_user(conn) do
-    user = Grana.AccountsFixtures.user_fixture()
+    user = user_fixture()
     log_in_user(conn, user)
   end
 end

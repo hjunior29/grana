@@ -85,7 +85,7 @@ defmodule Grana.Investments.ParsersTest do
       csv = "data,ativo,valor\n10/01/2026,PETR4,-1000.00\n"
 
       assert {transactions, _warnings} = GenericCsv.parse(csv)
-      assert length(transactions) >= 1
+      assert transactions != []
     end
 
     test "parseia CSV com coluna de operação explícita" do
@@ -106,7 +106,7 @@ defmodule Grana.Investments.ParsersTest do
       """
 
       assert {transactions, _warnings} = GenericCsv.parse(csv)
-      assert length(transactions) >= 1
+      assert transactions != []
     end
 
     test "pula linhas em branco e cabeçalho" do
@@ -137,7 +137,7 @@ defmodule Grana.Investments.ParsersTest do
       csv = "data\tativo\tvalor\n10/01/2026\tPETR4\t-100.00\n"
 
       assert {transactions, _warnings} = GenericCsv.parse(csv)
-      assert length(transactions) >= 1
+      assert transactions != []
     end
 
     test "parseia CSV usando quantidade e preço sem coluna valor" do
@@ -147,7 +147,7 @@ defmodule Grana.Investments.ParsersTest do
       """
 
       assert {transactions, _warnings} = GenericCsv.parse(csv)
-      assert length(transactions) >= 1
+      assert transactions != []
       t = hd(transactions)
       assert Decimal.equal?(t.total_amount, Decimal.new("305.00"))
     end
@@ -374,7 +374,7 @@ defmodule Grana.Investments.ParsersTest do
 
       {txns, warnings} = GcbCsv.parse(csv)
       assert txns == []
-      assert length(warnings) >= 1
+      assert warnings != []
     end
 
     test "parse_date retorna :error para formato inválido" do

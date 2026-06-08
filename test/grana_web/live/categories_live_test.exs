@@ -2,7 +2,6 @@ defmodule GranaWeb.CategoriesLiveTest do
   use GranaWeb.ConnCase
 
   import Phoenix.LiveViewTest
-  import Grana.AccountsFixtures
   import Grana.BankingFixtures
 
   alias Grana.Banking

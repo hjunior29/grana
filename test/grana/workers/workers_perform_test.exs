@@ -76,7 +76,7 @@ defmodule Grana.Workers.WorkersPerformTest do
       assert_receive {:analysis_complete, :ok}, 5_000
 
       analyses = Banking.list_ai_analyses(user.id)
-      assert length(analyses) >= 1
+      assert analyses != []
     end
 
     test "banking analysis with all-months filter (month nil)", %{user: user, topic: topic} do
@@ -196,6 +196,23 @@ defmodule Grana.Workers.WorkersPerformTest do
       end)
 
       stub(Grana.AI.Provider, :finish_reason, fn _body -> "STOP" end)
+
+      stub(Req, :get, fn _url, _opts ->
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{
+             "results" => [
+               %{
+                 "symbol" => "PETR4",
+                 "regularMarketPrice" => 35.0,
+                 "regularMarketChangePercent" => 2.0,
+                 "logourl" => nil
+               }
+             ]
+           }
+         }}
+      end)
 
       %{user: user, topic: topic}
     end
