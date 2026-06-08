@@ -164,6 +164,34 @@ defmodule GranaWeb.UserLive.Settings do
         </div>
 
         <div class="card bg-base-200 p-6 mb-6">
+          <div class="flex items-center gap-3 mb-1">
+            <.icon name="hero-identification" class="size-5 opacity-60" />
+            <h3 class="text-lg font-semibold">Identidade</h3>
+          </div>
+          <p class="text-sm opacity-50 mb-4 ml-8">
+            Usados para reconhecer transferências entre suas próprias contas (quando a contraparte é você). O CPF é guardado criptografado.
+          </p>
+          <.form for={@identity_form} id="identity_form" phx-submit="update_identity">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <.input
+                field={@identity_form[:name]}
+                type="text"
+                label="Nome completo"
+                placeholder="Como aparece nas suas transferências"
+              />
+              <.input
+                field={@identity_form[:cpf]}
+                type="text"
+                label="CPF"
+                placeholder="000.000.000-00"
+                inputmode="numeric"
+              />
+            </div>
+            <.button class="btn btn-primary btn-sm" phx-disable-with="Salvando...">Salvar</.button>
+          </.form>
+        </div>
+
+        <div class="card bg-base-200 p-6 mb-6">
           <div class="flex items-center gap-3 mb-4">
             <.icon name="hero-paint-brush" class="size-5 opacity-60" />
             <h3 class="text-lg font-semibold">Preferências</h3>
@@ -247,6 +275,7 @@ defmodule GranaWeb.UserLive.Settings do
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
     ai_changeset = Accounts.change_user_ai_settings(user)
+    identity_changeset = Accounts.change_user_identity(user)
 
     socket =
       socket
@@ -254,6 +283,7 @@ defmodule GranaWeb.UserLive.Settings do
       |> assign(:email_form, to_form(email_changeset))
       |> assign(:password_form, to_form(password_changeset))
       |> assign(:ai_form, to_form(ai_changeset))
+      |> assign(:identity_form, to_form(identity_changeset))
       |> assign(:trigger_submit, false)
       |> assign(:show_delete_modal, false)
       |> assign(:show_api_key, false)
@@ -359,6 +389,29 @@ defmodule GranaWeb.UserLive.Settings do
 
       {:error, changeset} ->
         {:noreply, assign(socket, ai_form: to_form(changeset, action: :insert))}
+    end
+  end
+
+  def handle_event("update_identity", %{"user" => params}, socket) do
+    user = socket.assigns.current_scope.user
+
+    case Accounts.update_user_identity(user, params) do
+      {:ok, updated_user} ->
+        # Reavalia as transferências já importadas com a nova identidade.
+        Grana.Banking.detect_internal_transfers(updated_user.id)
+
+        socket =
+          socket
+          |> assign(:identity_form, to_form(Accounts.change_user_identity(updated_user)))
+          |> put_flash(
+            :info,
+            "Identidade salva — reavaliamos suas transferências internas."
+          )
+
+        {:noreply, socket}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, identity_form: to_form(changeset, action: :insert))}
     end
   end
 

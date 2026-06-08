@@ -323,6 +323,29 @@ defmodule GranaWeb.Layouts do
         type="button"
         class="visual-style-option"
         phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="papel"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-newspaper-micro" class="size-4" /> Papel
+          </span>
+          <span class="visual-style-description">
+            Tipográfico, claro e com o rigor de grelha de uma revista suíça.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-papel" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
         data-phx-visual-style="cyber"
       >
         <span class="visual-style-copy">

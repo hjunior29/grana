@@ -137,6 +137,23 @@ defmodule GranaWeb.TransactionsLive do
     end
   end
 
+  def handle_event("toggle-internal", %{"id" => id, "internal" => internal}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    internal? = internal == "true"
+
+    {:ok, scope} = Banking.set_transaction_internal(user_id, parse_int(id, -1), internal?)
+
+    base = if internal?, do: "Marcada como transferência interna", else: "Marcada como externa"
+    msg = if scope == :rule, do: base <> " (regra salva pra essa contraparte)", else: base
+
+    socket =
+      socket
+      |> put_flash(:info, msg)
+      |> push_patch(to: transactions_url(socket.assigns.filters, socket.assigns.page))
+
+    {:noreply, socket}
+  end
+
   def handle_event("toggle-select", %{"id" => id}, socket) do
     id = parse_int(id, -1)
     selected = socket.assigns.selected_ids
@@ -714,13 +731,28 @@ defmodule GranaWeb.TransactionsLive do
       >
         {@row.raw.description}
       </span>
-      <span
+      <button
         :if={@row.raw.is_internal_transfer}
-        class="badge badge-xs badge-ghost shrink-0 opacity-60"
-        title="Transferência interna — excluída dos totais"
+        type="button"
+        phx-click="toggle-internal"
+        phx-value-id={@row.raw_id}
+        phx-value-internal="false"
+        class="badge badge-xs badge-ghost shrink-0 opacity-60 cursor-pointer hover:opacity-100"
+        title="Transferência interna (fora dos totais). Clique para marcar como externa."
       >
         interna
-      </span>
+      </button>
+      <button
+        :if={not @row.raw.is_internal_transfer and transfer_like?(@row.raw.description)}
+        type="button"
+        phx-click="toggle-internal"
+        phx-value-id={@row.raw_id}
+        phx-value-internal="true"
+        class="badge badge-xs badge-ghost shrink-0 opacity-30 cursor-pointer hover:opacity-100"
+        title="Marcar como transferência interna (entre suas contas)"
+      >
+        marcar interna
+      </button>
     </div>
     """
   end
@@ -1299,6 +1331,8 @@ defmodule GranaWeb.TransactionsLive do
   defp inv_amount_color(_), do: "text-error"
 
   defp asset_type_label(type), do: Constants.asset_type_label(type)
+
+  defp transfer_like?(description), do: Grana.Banking.TransferIdentity.transfer?(description)
 
   defp recurring_status(statuses, id) do
     Map.get(statuses, id, %{status: "none", pattern: "", editable: false})

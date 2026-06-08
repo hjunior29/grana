@@ -16,6 +16,7 @@ defmodule GranaWeb.CategoriesLive do
     "hero-arrows-right-left",
     "hero-chart-bar",
     "hero-credit-card",
+    "hero-receipt-percent",
     "hero-banknotes",
     "hero-arrow-path",
     "hero-question-mark-circle",
@@ -101,7 +102,7 @@ defmodule GranaWeb.CategoriesLive do
                 class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                 style={"background-color: #{cat.color || "#9CA3AF"}20"}
               >
-                <span style={"color: #{cat.color || "#9CA3AF"}"}>
+                <span class="flex" style={"color: #{cat.color || "#9CA3AF"}"}>
                   <.icon name={cat.icon || "hero-tag"} class="size-5" />
                 </span>
               </div>
@@ -251,15 +252,6 @@ defmodule GranaWeb.CategoriesLive do
                   {label}
                 </button>
               </div>
-              <label class="label">
-                <span class="label-text-alt opacity-50">
-                  {case @form_kind do
-                    "investment" -> "Excluída dos gastos no dashboard"
-                    "income" -> "Contabilizada como receita"
-                    _ -> "Contabilizada como gasto"
-                  end}
-                </span>
-              </label>
             </div>
 
             <div class="category-preview-panel flex items-center gap-3 bg-base-300 rounded-lg">
@@ -267,7 +259,7 @@ defmodule GranaWeb.CategoriesLive do
                 class="w-10 h-10 rounded-full flex items-center justify-center"
                 style={"background-color: #{@form_color}20"}
               >
-                <span style={"color: #{@form_color}"}>
+                <span class="flex" style={"color: #{@form_color}"}>
                   <.icon name={@form_icon} class="size-5" />
                 </span>
               </div>

@@ -13,6 +13,10 @@ defmodule GranaWeb.DashboardLive do
     user_id = socket.assigns.current_scope.user.id
     Banking.ensure_default_categories(user_id)
 
+    # Recategoriza impostos/taxas já importados (IOF, DAS, multa…). Só conectado,
+    # conservador e idempotente — após a 1ª vez não há nada a mover.
+    if connected?(socket), do: Banking.reclassify_taxes(user_id)
+
     # Banking base data (default tab)
     available_years = Banking.available_years(user_id)
     months = Banking.available_months(user_id)
@@ -1424,43 +1428,6 @@ defmodule GranaWeb.DashboardLive do
 
       <%!-- Top Expenses / Top Income --%>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
-        <%= if @selected_txn_type == "credit" or @summary.expense_count == 0 do %>
-          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Top Despesas</h3>
-              <p class="text-xs opacity-70">
-                {if @selected_txn_type == "credit",
-                  do: "Sem dados para o filtro selecionado",
-                  else: "Sem despesas no período"}
-              </p>
-            </div>
-          </div>
-        <% else %>
-          <div class="card bg-base-200 p-4 sm:p-6">
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
-            <div class="space-y-1">
-              <.link
-                :for={txn <- Enum.take(@summary.top_expenses, 10)}
-                navigate={txn_url(assigns, txn)}
-                class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
-              >
-                <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
-                <span
-                  :if={txn.category}
-                  class="badge badge-sm shrink-0"
-                  style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-                >
-                  {txn.category.name}
-                </span>
-                <span class="text-sm font-medium text-error whitespace-nowrap">
-                  {format_currency(Decimal.abs(txn.amount))}
-                </span>
-              </.link>
-            </div>
-          </div>
-        <% end %>
-
         <%= if @selected_txn_type == "debit" or @summary.income_count == 0 do %>
           <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
             <div class="text-center">
@@ -1491,6 +1458,43 @@ defmodule GranaWeb.DashboardLive do
                   {txn.category.name}
                 </span>
                 <span class="text-sm font-medium text-success whitespace-nowrap">
+                  {format_currency(Decimal.abs(txn.amount))}
+                </span>
+              </.link>
+            </div>
+          </div>
+        <% end %>
+
+        <%= if @selected_txn_type == "credit" or @summary.expense_count == 0 do %>
+          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
+            <div class="text-center">
+              <h3 class="font-semibold text-sm sm:text-base mb-2">Top Despesas</h3>
+              <p class="text-xs opacity-70">
+                {if @selected_txn_type == "credit",
+                  do: "Sem dados para o filtro selecionado",
+                  else: "Sem despesas no período"}
+              </p>
+            </div>
+          </div>
+        <% else %>
+          <div class="card bg-base-200 p-4 sm:p-6">
+            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
+            <div class="space-y-1">
+              <.link
+                :for={txn <- Enum.take(@summary.top_expenses, 10)}
+                navigate={txn_url(assigns, txn)}
+                class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
+              >
+                <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
+                <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
+                <span
+                  :if={txn.category}
+                  class="badge badge-sm shrink-0"
+                  style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
+                >
+                  {txn.category.name}
+                </span>
+                <span class="text-sm font-medium text-error whitespace-nowrap">
                   {format_currency(Decimal.abs(txn.amount))}
                 </span>
               </.link>

@@ -8,6 +8,9 @@ defmodule Grana.Banking do
     Category,
     CategoryRule,
     RecurringRule,
+    InternalTransferRule,
+    TransferIdentity,
+    KeywordCategorizer,
     AIAnalysis,
     FinancialGoal
   }
@@ -82,6 +85,12 @@ defmodule Grana.Banking do
       %{name: "Investimentos", icon: "hero-chart-bar", color: "#10B981", kind: "investment"},
       %{name: "Rendimentos", icon: "hero-sparkles", color: "#14B8A6", kind: "income"},
       %{name: "Pagamentos", icon: "hero-credit-card", color: "#64748B", kind: "expense"},
+      %{
+        name: "Impostos e Taxas",
+        icon: "hero-receipt-percent",
+        color: "#DC2626",
+        kind: "expense"
+      },
       %{name: "Salário", icon: "hero-banknotes", color: "#22C55E", kind: "income"},
       %{name: "Assinaturas", icon: "hero-arrow-path", color: "#A855F7", kind: "expense"},
       %{
@@ -107,6 +116,56 @@ defmodule Grana.Banking do
     Category
     |> where([c], c.name == "Sem Categoria" and c.user_id == ^user_id)
     |> Repo.one()
+  end
+
+  @doc """
+  Recategoriza para "Impostos e Taxas" os lançamentos já importados que batem no
+  reconhecedor determinístico estrito (IOF, DAS/DAS MEI, IRRF, IPTU/IPVA, INSS,
+  multa, imposto/tributo…). Conservador: só termos inequívocos e idempotente
+  (ignora o que já está na categoria). Devolve `{:ok, qtd}`.
+  """
+  def reclassify_taxes(user_id) do
+    taxes_id =
+      Repo.one(
+        from(c in Category,
+          where: c.name == "Impostos e Taxas" and c.user_id == ^user_id,
+          select: c.id
+        )
+      )
+
+    ids =
+      if taxes_id do
+        # Pré-filtra candidatos no banco (substring ILIKE — superset do casamento
+        # estrito) e refina com clear_tax?/1 no Elixir, evitando varrer a tabela.
+        from(t in Transaction,
+          where: t.user_id == ^user_id and (is_nil(t.category_id) or t.category_id != ^taxes_id),
+          where: ^tax_keyword_filter(),
+          select: %{id: t.id, description: t.description}
+        )
+        |> Repo.all()
+        |> Enum.filter(&KeywordCategorizer.clear_tax?(&1.description))
+        |> Enum.map(& &1.id)
+      else
+        []
+      end
+
+    if ids != [] do
+      {count, _} =
+        from(t in Transaction, where: t.id in ^ids)
+        |> Repo.update_all(set: [category_id: taxes_id, updated_at: DateTime.utc_now(:second)])
+
+      Grana.Cache.invalidate_user(user_id)
+      {:ok, count}
+    else
+      {:ok, 0}
+    end
+  end
+
+  # OR de ILIKE com os termos de imposto, empurrado para o WHERE do banco.
+  defp tax_keyword_filter do
+    Enum.reduce(KeywordCategorizer.strict_db_keywords(), dynamic([t], false), fn kw, acc ->
+      dynamic([t], ^acc or ilike(t.description, ^("%" <> kw <> "%")))
+    end)
   end
 
   # Statements
@@ -686,9 +745,17 @@ defmodule Grana.Banking do
       # 3) Mark matching inter-account transfers
       mark_inter_account_transfers(user_id)
 
+      # 3b) Mark transfers whose counterparty is the account holder (own name/CPF).
+      #     Cobre o caso de só uma conta importada (a outra ponta não existe).
+      mark_identity_transfers(user_id)
+
       # 4) Mark investment income that already landed as a B3 provento (avoids
       #    counting the same rendimento twice: bank credit + B3 provento).
       mark_investment_income_settlements(user_id)
+
+      # 5) Apply learned per-counterparty rules LAST: "internal" força interna e
+      #    "external" sobrepõe a heurística (correção manual do usuário vence).
+      apply_internal_transfer_rules(user_id)
     end)
     |> case do
       {:ok, _} ->
@@ -700,6 +767,47 @@ defmodule Grana.Banking do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc """
+  Marca/desmarca manualmente uma transação como transferência interna e aprende
+  uma regra por contraparte (igual ao padrão das regras de recorrência): a regra
+  vale para as próximas importações e re-aplica a detecção.
+
+  Quando a descrição não tem contraparte extraível, marca só aquela transação.
+  Devolve `{:ok, :rule}` ou `{:ok, :single}`.
+  """
+  def set_transaction_internal(user_id, transaction_id, internal?) when is_boolean(internal?) do
+    transaction = get_transaction!(transaction_id, user_id)
+    kind = if internal?, do: "internal", else: "external"
+
+    case TransferIdentity.rule_key(transaction.description) do
+      nil ->
+        mark_ids([transaction.id], internal?)
+        Grana.Cache.invalidate_user(user_id)
+        {:ok, :single}
+
+      pattern ->
+        upsert_internal_transfer_rule(user_id, pattern, kind)
+        detect_internal_transfers(user_id)
+        {:ok, :rule}
+    end
+  end
+
+  def list_internal_transfer_rules(user_id) do
+    InternalTransferRule
+    |> where([r], r.user_id == ^user_id)
+    |> order_by([r], asc: r.pattern)
+    |> Repo.all()
+  end
+
+  defp upsert_internal_transfer_rule(user_id, pattern, kind) do
+    %InternalTransferRule{}
+    |> InternalTransferRule.changeset(%{user_id: user_id, pattern: pattern, kind: kind})
+    |> Repo.insert(
+      on_conflict: [set: [kind: kind, updated_at: DateTime.utc_now(:second)]],
+      conflict_target: [:user_id, :pattern]
+    )
   end
 
   defp mark_cc_bill_payments(user_id) do
@@ -795,6 +903,72 @@ defmodule Grana.Banking do
   defp transfer_amount_key(amount) do
     amount |> Decimal.abs() |> Decimal.mult(100) |> Decimal.round() |> Decimal.to_integer()
   end
+
+  # Marca como internas as transferências cuja contraparte é o próprio titular
+  # (nome ou CPF do meio batem). Pega o caso de só uma conta importada.
+  defp mark_identity_transfers(user_id) do
+    user = Repo.get(Grana.Accounts.User, user_id)
+
+    if user && (present?(user.name) || present?(user.cpf)) do
+      ids =
+        Transaction
+        |> where([t], t.user_id == ^user_id and t.is_internal_transfer == false)
+        |> select([t], {t.id, t.description})
+        |> Repo.all()
+        |> Enum.filter(fn {_id, desc} ->
+          TransferIdentity.transfer?(desc) and
+            TransferIdentity.own_identity?(desc, user.name, user.cpf)
+        end)
+        |> Enum.map(&elem(&1, 0))
+
+      mark_ids(ids, true)
+    end
+  end
+
+  # Aplica as regras aprendidas por contraparte. "internal" força interna;
+  # "external" sobrepõe tudo (vence a heurística). Roda por último.
+  defp apply_internal_transfer_rules(user_id) do
+    rules =
+      InternalTransferRule
+      |> where([r], r.user_id == ^user_id)
+      |> Repo.all()
+
+    if rules != [] do
+      by_kind = Enum.group_by(rules, & &1.kind, & &1.pattern)
+      internal = MapSet.new(by_kind["internal"] || [])
+      external = MapSet.new(by_kind["external"] || [])
+
+      {to_internal, to_external} =
+        Transaction
+        |> where([t], t.user_id == ^user_id)
+        |> select([t], {t.id, t.description})
+        |> Repo.all()
+        |> Enum.reduce({[], []}, fn {id, desc}, {ti, te} ->
+          keys = desc |> TransferIdentity.rule_keys() |> MapSet.new()
+
+          cond do
+            not MapSet.disjoint?(keys, external) -> {ti, [id | te]}
+            not MapSet.disjoint?(keys, internal) -> {[id | ti], te}
+            true -> {ti, te}
+          end
+        end)
+
+      mark_ids(to_internal, true)
+      mark_ids(to_external, false)
+    end
+  end
+
+  defp mark_ids([], _value), do: :ok
+
+  defp mark_ids(ids, value) do
+    Transaction
+    |> where([t], t.id in ^ids)
+    |> Repo.update_all(set: [is_internal_transfer: value, updated_at: DateTime.utc_now(:second)])
+
+    :ok
+  end
+
+  defp present?(value), do: is_binary(value) and String.trim(value) != ""
 
   # Marca créditos de rendimento no extrato que correspondem a um provento já
   # registrado na B3 (mesmo valor, mesmo dia). Reusa is_internal_transfer: o
