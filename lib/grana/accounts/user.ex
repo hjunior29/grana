@@ -13,6 +13,10 @@ defmodule Grana.Accounts.User do
     field :ai_model, :string, default: "gemini-2.0-flash"
     field :ai_api_key, Grana.Encrypted.Binary, redact: true
 
+    # Identidade do titular, para reconhecer transferências entre contas próprias.
+    field :name, :string
+    field :cpf, Grana.Encrypted.Binary, redact: true
+
     timestamps(type: :utc_datetime)
   end
 
@@ -140,4 +144,20 @@ defmodule Grana.Accounts.User do
     |> validate_inclusion(:ai_provider, ["gemini"])
     |> validate_inclusion(:ai_model, ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"])
   end
+
+  @doc """
+  Changeset da identidade do titular (nome + CPF). O CPF é normalizado para só
+  dígitos antes de ser criptografado, e exige 11 dígitos quando informado.
+  """
+  def identity_changeset(user, attrs \\ %{}) do
+    user
+    |> cast(attrs, [:name, :cpf])
+    |> update_change(:cpf, &normalize_cpf/1)
+    |> validate_length(:name, max: 160)
+    |> validate_format(:cpf, ~r/^\d{11}$/, message: "deve ter 11 dígitos")
+  end
+
+  defp normalize_cpf(nil), do: nil
+  defp normalize_cpf(""), do: nil
+  defp normalize_cpf(cpf), do: String.replace(cpf, ~r/\D/, "")
 end

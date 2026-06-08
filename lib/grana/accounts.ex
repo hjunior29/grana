@@ -325,6 +325,18 @@ defmodule Grana.Accounts do
     |> Repo.update()
   end
 
+  ## Identity (nome/CPF do titular)
+
+  def change_user_identity(user, attrs \\ %{}) do
+    User.identity_changeset(user, attrs)
+  end
+
+  def update_user_identity(user, attrs) do
+    user
+    |> User.identity_changeset(attrs)
+    |> Repo.update()
+  end
+
   def get_user_ai_config(user_id) do
     user = get_user!(user_id)
     api_key = user.ai_api_key

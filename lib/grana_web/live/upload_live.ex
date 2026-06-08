@@ -1633,7 +1633,10 @@ defmodule GranaWeb.UploadLive do
                 <div class="grana-calendar-score flex flex-col items-center text-center gap-1 shrink-0 lg:w-64 lg:border-l lg:border-base-content/10 lg:pl-8">
                   <h3 class="text-sm font-semibold opacity-70">Cobertura de importações</h3>
                   <div class="relative">
-                    <svg viewBox="0 0 120 120" class="w-44 h-44 sm:w-52 sm:h-52 -rotate-90">
+                    <svg
+                      viewBox="0 0 120 120"
+                      class="w-44 h-44 sm:w-52 sm:h-52 -rotate-90 overflow-visible"
+                    >
                       <circle
                         cx="60"
                         cy="60"

@@ -13,6 +13,7 @@ defmodule Grana.Banking.StatementProcessor do
 
   require Logger
   alias Grana.Banking.AICategorizer
+  alias Grana.Banking.KeywordCategorizer
 
   def process(file_content, bank, statement_type, user_id, filename) do
     categories = Banking.ensure_default_categories(user_id)
@@ -210,16 +211,31 @@ defmodule Grana.Banking.StatementProcessor do
 
     uncategorized_cat = Banking.get_uncategorized_category(user_id)
     uncategorized_id = if uncategorized_cat, do: uncategorized_cat.id
+    cat_by_name = Map.new(categories, &{&1.name, &1.id})
+
+    # Camada determinística (palavra-chave) antes da IA: preenche o que as regras
+    # do usuário não cobriram (ex.: Impostos e Taxas para IOF/DAS/multa).
+    base_categorized =
+      Enum.map(rule_categorized, fn txn ->
+        if is_nil(txn.category_id) or txn.category_id == uncategorized_id do
+          case KeywordCategorizer.categorize(txn.description) do
+            nil -> txn
+            name -> Map.put(txn, :category_id, cat_by_name[name] || txn.category_id)
+          end
+        else
+          txn
+        end
+      end)
 
     uncategorized =
-      rule_categorized
+      base_categorized
       |> Enum.filter(fn txn ->
         txn.category_id == uncategorized_id || is_nil(txn.category_id)
       end)
 
     case uncategorized do
       [] ->
-        rule_categorized
+        base_categorized
 
       items ->
         descriptions = Enum.map(items, & &1.description)
@@ -232,7 +248,7 @@ defmodule Grana.Banking.StatementProcessor do
               Enum.zip(descriptions, ai_category_ids)
               |> Map.new()
 
-            Enum.map(rule_categorized, fn txn ->
+            Enum.map(base_categorized, fn txn ->
               case Map.get(ai_map, txn.description) do
                 nil ->
                   txn
@@ -252,10 +268,10 @@ defmodule Grana.Banking.StatementProcessor do
               "AICategorizer: contagem divergente (#{length(descriptions)} descrições); mantendo categorização por regras"
             )
 
-            rule_categorized
+            base_categorized
 
           {:error, _} ->
-            rule_categorized
+            base_categorized
         end
     end
   end
