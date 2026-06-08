@@ -180,8 +180,10 @@ jobs:
       PHX_HOST: "localhost"
       PORT: "4002"
       PHX_SERVER: "true"
-      # CLOAK_KEY: Base64 de 32 bytes aleatórios — não é a chave real, só para o smoke.
+      # Variáveis obrigatórias em prod (causam raise se ausentes). Valores dummy
+      # suficientes para o app bootar no smoke — nenhum secret real aqui.
       CLOAK_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      SMTP_HOST: "localhost"
       # REDIS_URL ausente → cache desabilitado (degrada para no-op, ver Grana.Cache).
     steps:
       - uses: actions/checkout@v4
