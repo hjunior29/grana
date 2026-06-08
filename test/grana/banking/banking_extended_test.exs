@@ -273,7 +273,7 @@ defmodule Grana.Banking.ExtendedTest do
     test "daily_spending returns day-by-day breakdown", %{user: user} do
       result = Banking.daily_spending(user.id, 2026, 1)
       assert is_list(result)
-      assert length(result) >= 1
+      assert result != []
     end
 
     test "monthly_income_expenses returns monthly breakdown", %{user: user} do

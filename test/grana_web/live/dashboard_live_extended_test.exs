@@ -4,7 +4,6 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
   use Mimic
 
   import Phoenix.LiveViewTest
-  import Grana.AccountsFixtures
 
   alias Grana.BankingFixtures
   alias Grana.InvestmentsFixtures

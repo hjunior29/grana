@@ -45,7 +45,7 @@ defmodule Grana.Investments.ContextTest do
       ])
 
       months = Investments.available_months(user.id)
-      assert length(months) >= 1
+      assert months != []
       assert {2026, 1} in months
     end
   end
@@ -276,7 +276,7 @@ defmodule Grana.Investments.ContextTest do
 
       result = Investments.period_activity(user.id, "total", nil, nil)
       assert is_list(result)
-      assert length(result) >= 1
+      assert result != []
 
       [entry | _] = result
       assert Map.has_key?(entry, :key)
@@ -329,7 +329,7 @@ defmodule Grana.Investments.ContextTest do
 
       result = Investments.period_activity(user.id, "month", 2026, 1)
       assert is_list(result)
-      assert length(result) >= 1
+      assert result != []
     end
   end
 
@@ -358,7 +358,7 @@ defmodule Grana.Investments.ContextTest do
       assert is_map(result)
 
       active = Enum.filter(result.holdings, & &1.is_active)
-      assert length(active) >= 1
+      assert active != []
 
       holding = Enum.find(active, &(&1.ticker == "PETR4"))
       assert holding
@@ -410,7 +410,7 @@ defmodule Grana.Investments.ContextTest do
 
       result = Investments.monthly_investments(user.id, 2026)
       assert is_list(result)
-      assert length(result) >= 1
+      assert result != []
 
       jan_entry = Enum.find(result, &(&1.month == 1))
       assert jan_entry
@@ -436,7 +436,7 @@ defmodule Grana.Investments.ContextTest do
       ])
 
       result = Investments.list_proventos(user.id)
-      assert length(result) >= 1
+      assert result != []
     end
   end
 
@@ -680,10 +680,10 @@ defmodule Grana.Investments.ContextTest do
       assert Enum.all?(before_range, fn t -> Date.compare(t.date, ~D[2026-01-01]) != :lt end)
 
       after_date = Investments.list_transactions(user.id, date_from: ~D[2025-01-01])
-      assert length(after_date) >= 1
+      assert after_date != []
 
       before_date = Investments.list_transactions(user.id, date_to: ~D[2025-12-31])
-      assert length(before_date) >= 1
+      assert before_date != []
     end
 
     test "filter by ticker search", %{user: user, base_txn: base} do
@@ -716,7 +716,7 @@ defmodule Grana.Investments.ContextTest do
       Investments.bulk_insert_transactions([full])
       result = Investments.list_transactions(user.id, institution_id: "all")
       assert is_list(result)
-      assert length(result) >= 1
+      assert result != []
     end
 
     test "filter by asset_type=all returns all", %{user: user, base_txn: base} do
@@ -762,7 +762,7 @@ defmodule Grana.Investments.ContextTest do
       Investments.bulk_insert_transactions([full])
       result = Investments.list_transactions(user.id, search: "")
       assert is_list(result)
-      assert length(result) >= 1
+      assert result != []
     end
 
     test "filter by ticker=all returns all", %{user: user, base_txn: base} do

@@ -992,7 +992,7 @@ defmodule Grana.Banking.BankingContextTest do
     test "kinds/0 returns valid kind list" do
       kinds = Grana.Banking.InternalTransferRule.kinds()
       assert is_list(kinds)
-      assert length(kinds) > 0
+      assert kinds != []
     end
   end
 end

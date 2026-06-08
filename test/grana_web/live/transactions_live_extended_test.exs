@@ -2,7 +2,6 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
   use GranaWeb.ConnCase
 
   import Phoenix.LiveViewTest
-  import Grana.AccountsFixtures
 
   alias Grana.BankingFixtures
   alias Grana.InvestmentsFixtures

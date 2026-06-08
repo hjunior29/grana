@@ -4,7 +4,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
   use Mimic
 
   import Phoenix.LiveViewTest
-  import Grana.AccountsFixtures
   import Grana.BankingFixtures
 
   alias Grana.Banking
@@ -638,7 +637,10 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
       Banking.delete_ai_analysis(analysis)
     end
 
-    test "investment analysis with asset_type filter renders type label", %{conn: conn, user: user} do
+    test "investment analysis with asset_type filter renders type label", %{
+      conn: conn,
+      user: user
+    } do
       {:ok, analysis} =
         Banking.create_ai_analysis(%{
           user_id: user.id,

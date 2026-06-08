@@ -8,12 +8,6 @@ defmodule Grana.Banking.AICategorizerTest do
   alias Grana.Banking.AICategorizer
   alias Grana.Accounts
 
-  @ai_config %{
-    provider: "gemini",
-    api_key: "key",
-    model: "gemini-1.5-flash"
-  }
-
   defp ai_response(text) do
     %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text}]}}]}
   end
