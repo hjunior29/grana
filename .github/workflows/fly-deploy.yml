@@ -231,7 +231,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: superfly/flyctl-actions/setup-flyctl@v0.5.0
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
       # Guarda a imagem atual antes de fazer o deploy para poder reverter se o
       # smoke pós-deploy falhar.
