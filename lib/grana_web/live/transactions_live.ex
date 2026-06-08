@@ -814,11 +814,7 @@ defmodule GranaWeb.TransactionsLive do
       class="flex items-center justify-center gap-2"
     >
       <input type="hidden" name="txn_id" value={@row.raw_id} />
-      <span
-        class={["size-3 rounded-full shrink-0", !@row.raw.category && "bg-base-content/20"]}
-        style={@row.raw.category && "background-color: #{@row.raw.category.color}"}
-      >
-      </span>
+      <.category_icon category={@row.raw.category} />
       <select
         name="category_id"
         aria-label="Categoria"
@@ -845,7 +841,7 @@ defmodule GranaWeb.TransactionsLive do
 
     ~H"""
     <div class="flex items-center justify-center gap-2">
-      <span class="size-3 rounded-full shrink-0 bg-base-content/20"></span>
+      <span class="size-5 shrink-0"></span>
       <select
         class="select select-bordered select-sm w-full max-w-44"
         aria-label="Tipo de ativo"

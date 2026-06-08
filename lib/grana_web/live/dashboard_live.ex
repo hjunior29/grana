@@ -921,13 +921,7 @@ defmodule GranaWeb.DashboardLive do
     assigns = assign(assigns, :cat, category)
 
     ~H"""
-    <span
-      :if={@cat}
-      class="badge badge-sm"
-      style={"background-color: #{@cat.color}20; color: #{@cat.color}; border-color: #{@cat.color}40"}
-    >
-      {@cat.name}
-    </span>
+    <.category_icon :if={@cat} category={@cat} />
     <span :if={!@cat} class="text-xs opacity-40">—</span>
     """
   end
@@ -1450,13 +1444,7 @@ defmodule GranaWeb.DashboardLive do
               >
                 <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
                 <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
-                <span
-                  :if={txn.category}
-                  class="badge badge-sm shrink-0"
-                  style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-                >
-                  {txn.category.name}
-                </span>
+                <.category_icon :if={txn.category} category={txn.category} />
                 <span class="text-sm font-medium text-success whitespace-nowrap">
                   {format_currency(Decimal.abs(txn.amount))}
                 </span>
@@ -1487,13 +1475,7 @@ defmodule GranaWeb.DashboardLive do
               >
                 <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
                 <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
-                <span
-                  :if={txn.category}
-                  class="badge badge-sm shrink-0"
-                  style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-                >
-                  {txn.category.name}
-                </span>
+                <.category_icon :if={txn.category} category={txn.category} />
                 <span class="text-sm font-medium text-error whitespace-nowrap">
                   {format_currency(Decimal.abs(txn.amount))}
                 </span>
@@ -1597,13 +1579,7 @@ defmodule GranaWeb.DashboardLive do
                     </.link>
                   </td>
                   <td>
-                    <span
-                      :if={txn.category}
-                      class="badge badge-sm"
-                      style={"background-color: #{txn.category.color}20; color: #{txn.category.color}; border-color: #{txn.category.color}40"}
-                    >
-                      {txn.category.name}
-                    </span>
+                    <.category_icon :if={txn.category} category={txn.category} />
                   </td>
                   <td class="text-sm font-medium">
                     {format_currency(Decimal.abs(txn.amount))}

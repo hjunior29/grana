@@ -445,6 +445,37 @@ defmodule GranaWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Ícone de uma categoria, na cor da categoria (substitui a bolinha/pílula de cor).
+  Aceita um %Category{} (ou map com :name/:color/:icon) ou nil. O nome vai no
+  `title` (tooltip), já que normalmente exibimos só o ícone.
+  """
+  attr :category, :any, required: true
+  attr :class, :any, default: "size-5"
+  attr :rest, :global
+
+  def category_icon(assigns) do
+    ~H"""
+    <span
+      class="flex shrink-0"
+      style={"color: #{category_color(@category)}"}
+      title={category_name(@category)}
+      {@rest}
+    >
+      <.icon name={category_icon_name(@category)} class={@class} />
+    </span>
+    """
+  end
+
+  defp category_color(%{color: c}) when is_binary(c) and c != "", do: c
+  defp category_color(_), do: "#9CA3AF"
+
+  defp category_icon_name(%{icon: i}) when is_binary(i) and i != "", do: i
+  defp category_icon_name(_), do: "hero-tag"
+
+  defp category_name(%{name: n}) when is_binary(n), do: n
+  defp category_name(_), do: nil
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do
