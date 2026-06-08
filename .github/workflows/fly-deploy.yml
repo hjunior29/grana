@@ -180,6 +180,8 @@ jobs:
       PHX_HOST: "localhost"
       PORT: "4002"
       PHX_SERVER: "true"
+      # CLOAK_KEY: Base64 de 32 bytes aleatórios — não é a chave real, só para o smoke.
+      CLOAK_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
       # REDIS_URL ausente → cache desabilitado (degrada para no-op, ver Grana.Cache).
     steps:
       - uses: actions/checkout@v4
