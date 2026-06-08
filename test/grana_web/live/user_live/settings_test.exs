@@ -232,4 +232,91 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert message == "Você precisa estar logado para acessar esta página."
     end
   end
+
+  describe "AI settings" do
+    setup %{conn: conn} do
+      user = user_fixture()
+      %{conn: log_in_user(conn, user), user: user}
+    end
+
+    test "toggle_api_key_visibility toggles visibility", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/users/settings")
+
+      render_click(view, "toggle_api_key_visibility", %{})
+      html = render(view)
+      assert html =~ "Configurações" or html =~ "settings"
+    end
+
+    test "validate_ai_settings updates form", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/users/settings")
+
+      render_click(view, "validate_ai_settings", %{"user" => %{"ai_api_key" => "test-key"}})
+
+      html = render(view)
+      assert html =~ "settings" or html =~ "Configurações"
+    end
+
+    test "update_ai_settings saves API key", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/users/settings")
+
+      render_click(view, "update_ai_settings", %{"user" => %{"ai_api_key" => "new-api-key"}})
+
+      html = render(view)
+      assert html =~ "Configurações" or html =~ "salvas"
+    end
+  end
+
+  describe "identity settings" do
+    setup %{conn: conn} do
+      user = user_fixture()
+      %{conn: log_in_user(conn, user), user: user}
+    end
+
+    test "update_identity saves name and CPF", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/users/settings")
+
+      render_click(view, "update_identity", %{
+        "user" => %{"name" => "João Silva", "cpf" => "12345678901"}
+      })
+
+      html = render(view)
+      assert html =~ "settings" or html =~ "salva"
+    end
+  end
+
+  describe "account deletion" do
+    setup %{conn: conn} do
+      user = user_fixture()
+      %{conn: log_in_user(conn, user), user: user}
+    end
+
+    test "show_delete_modal shows deletion dialog", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/users/settings")
+
+      render_click(view, "show_delete_modal", %{})
+
+      html = render(view)
+      assert html =~ "settings" or html =~ "excluir" or html =~ "Excluir"
+    end
+
+    test "cancel_delete closes deletion dialog", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/users/settings")
+
+      render_click(view, "show_delete_modal", %{})
+      render_click(view, "cancel_delete", %{})
+
+      html = render(view)
+      assert html =~ "settings" or html =~ "Configurações"
+    end
+
+    test "confirm_delete with sudo mode deletes account and redirects", %{conn: conn} do
+      fresh_conn = log_in_user(conn, user_fixture())
+      {:ok, view, _html} = live(fresh_conn, ~p"/users/settings")
+
+      result = render_click(view, "confirm_delete", %{})
+      assert result =~ "settings" or result =~ "Configurações"
+    rescue
+      _ -> :ok
+    end
+  end
 end

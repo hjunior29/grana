@@ -157,6 +157,79 @@ defmodule Grana.PlatformImportTest do
     end
   end
 
+  describe "parse/1 error paths" do
+    test "returns error for empty content" do
+      assert {:error, "Arquivo vazio."} = PlatformImport.parse("")
+    end
+
+    test "returns error for unrecognized header" do
+      csv = "col_a;col_b\nval1;val2\n"
+      assert {:error, msg} = PlatformImport.parse(csv)
+      assert msg =~ "Cabeçalho" or msg =~ "CSV"
+    end
+  end
+
+  describe "process/3 error paths" do
+    test "returns error for empty file" do
+      dest = user_fixture()
+      assert {:error, _} = PlatformImport.process("", dest.id, "empty.csv")
+    end
+
+    test "returns error for banking CSV with no valid rows" do
+      csv = "Data;Descrição;Valor;Tipo;Categoria\n"
+      dest = user_fixture()
+      assert {:error, msg} = PlatformImport.process(csv, dest.id, "empty_banking.csv")
+      assert msg =~ "transação" or msg =~ "vazio"
+    end
+
+    test "re-importing investments does not duplicate" do
+      source = user_fixture()
+
+      {:ok, inst} =
+        Investments.create_institution(%{
+          name: "GCB",
+          slug: "gcb_dedup_#{System.unique_integer()}",
+          user_id: source.id
+        })
+
+      {:ok, stmt} =
+        Investments.create_statement(%{
+          filename: "inv2.csv",
+          user_id: source.id,
+          institution_id: inst.id
+        })
+
+      Investments.bulk_insert_transactions([
+        %{
+          date: ~D[2026-04-01],
+          asset_name: "VALE ON",
+          asset_ticker: "VALE3",
+          asset_type: "acao",
+          operation: "compra",
+          quantity: Decimal.new("50"),
+          unit_price: Decimal.new("70.00"),
+          total_amount: Decimal.new("3500.00"),
+          fees: Decimal.new("0.00"),
+          user_id: source.id,
+          statement_id: stmt.id,
+          institution_id: inst.id
+        }
+      ])
+
+      csv = source.id |> Investments.list_transactions() |> InvCsvExporter.generate()
+
+      dest = user_fixture()
+
+      assert {:ok, %{transaction_count: 1}} =
+               PlatformImport.process(csv, dest.id, "inv-export.csv")
+
+      assert {:ok, %{transaction_count: 0}} =
+               PlatformImport.process(csv, dest.id, "inv-export.csv")
+
+      assert length(Investments.list_transactions(dest.id)) == 1
+    end
+  end
+
   defp find_category(user_id, name) do
     Banking.list_categories(user_id) |> Enum.find(&(&1.name == name))
   end

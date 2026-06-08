@@ -34,6 +34,36 @@ defmodule Grana.Encrypted.BinaryTest do
     end
   end
 
+  describe "dump/1 with non-binary" do
+    test "dump with non-binary value returns error" do
+      assert Binary.dump(123) == :error
+      assert Binary.dump(%{}) == :error
+    end
+  end
+
+  describe "load/1 with non-binary" do
+    test "load with non-binary value returns error" do
+      assert Binary.load(123) == :error
+    end
+  end
+
+  describe "equal?/2" do
+    test "returns true for equal values" do
+      assert Binary.equal?("abc", "abc") == true
+      assert Binary.equal?(nil, nil) == true
+    end
+
+    test "returns false for different values" do
+      assert Binary.equal?("abc", "def") == false
+    end
+  end
+
+  describe "embed_as/1" do
+    test "returns :dump" do
+      assert Binary.embed_as(:json) == :dump
+    end
+  end
+
   describe "load/1 falha com entrada inválida/adulterada" do
     test "base64 inválido ou curto demais" do
       assert Binary.load("não é base64 @@@") == :error

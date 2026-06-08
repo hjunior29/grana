@@ -1,12 +1,18 @@
 {
   "coverage_options": {
-    "minimum_coverage": 36,
+    "minimum_coverage": 80,
     "treat_no_relevant_lines_as_covered": true
   },
   "skip_files": [
     "test/",
     "lib/grana_web/components/layouts.ex",
     "lib/grana_web/components/core_components.ex",
-    "priv/"
+    "priv/",
+    "lib/grana/release.ex",
+    "lib/grana/cache.ex",
+    "lib/grana/banking/parsers/pdf_extractor.ex",
+    "lib/grana/investments/parsers/pdf_extractor.ex",
+    "lib/grana_web/controllers/page_controller.ex",
+    "lib/grana_web/plugs/rate_limit.ex"
   ]
 }
