@@ -5,7 +5,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 
 // --- Theme ---
-const visualStyles = new Set(["default", "signal", "bossa", "papel", "cyber"])
+const visualStyles = new Set(["default", "signal", "bossa", "papel", "caderneta", "planetario", "cyber"])
 let cyberLightNoticeTimer
 let cyberGlitchTimer
 
@@ -112,6 +112,30 @@ function topbarPalette() {
       : {
           barColors: {0: "#e8311a", "1.0": "#0c0c0a"},
           shadowColor: "rgba(12, 12, 10, .2)",
+        }
+  }
+
+  if (style === "caderneta") {
+    return dark
+      ? {
+          barColors: {0: "#f07a33", ".5": "#ffc94d", "1.0": "#a8bf63"},
+          shadowColor: "rgba(0, 0, 0, .4)",
+        }
+      : {
+          barColors: {0: "#c24e12", ".5": "#a87b14", "1.0": "#5f7030"},
+          shadowColor: "rgba(59, 42, 29, .26)",
+        }
+  }
+
+  if (style === "planetario") {
+    return dark
+      ? {
+          barColors: {0: "#8fd8ff", ".55": "#c9d6f2", "1.0": "#ffd98a"},
+          shadowColor: "rgba(143, 216, 255, .34)",
+        }
+      : {
+          barColors: {0: "#1f6fa8", ".55": "#51618f", "1.0": "#b07c1a"},
+          shadowColor: "rgba(19, 28, 51, .22)",
         }
   }
 
