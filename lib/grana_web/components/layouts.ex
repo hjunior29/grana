@@ -346,6 +346,52 @@ defmodule GranaWeb.Layouts do
         type="button"
         class="visual-style-option"
         phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="caderneta"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-book-open-micro" class="size-4" /> Caderneta
+          </span>
+          <span class="visual-style-description">
+            Retrô, caloroso e com o charme de uma caderneta de poupança.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-caderneta" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
+        data-phx-visual-style="planetario"
+      >
+        <span class="visual-style-copy">
+          <span class="visual-style-name">
+            <.icon name="hero-sparkles-micro" class="size-4" /> Planetário
+          </span>
+          <span class="visual-style-description">
+            Noturno, sereno e contemplativo como uma carta celeste.
+          </span>
+        </span>
+        <span class="visual-style-preview visual-style-preview-planetario" aria-hidden="true">
+          <span class="visual-preview-header"></span>
+          <span class="visual-preview-body">
+            <span></span>
+            <span></span>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="visual-style-option"
+        phx-click={JS.dispatch("phx:set-visual-style")}
         data-phx-visual-style="cyber"
       >
         <span class="visual-style-copy">

@@ -23,7 +23,7 @@
     {Application.get_env(:live_debugger, :live_debugger_tags)}
     <script>
       (() => {
-        const visualStyles = new Set(["default", "signal", "bossa", "papel", "cyber"]);
+        const visualStyles = new Set(["default", "signal", "bossa", "papel", "caderneta", "planetario", "cyber"]);
         const cyberStyleActive = () => document.documentElement.dataset.visualStyle === "cyber";
         const lightThemeActive = () => document.documentElement.dataset.theme === "light";
         const setTheme = (theme) => {

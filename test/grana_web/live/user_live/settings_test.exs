@@ -27,6 +27,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="signal"]|)
       assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="bossa"]|)
       assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="papel"]|)
+      assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="caderneta"]|)
+      assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="planetario"]|)
       assert has_element?(lv, ~s|#visual-style-toggle [data-phx-visual-style="cyber"]|)
       assert has_element?(lv, "#visual-style-toggle .visual-style-description")
       assert has_element?(lv, "#visual-style-toggle .visual-style-preview")
