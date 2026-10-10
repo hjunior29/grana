@@ -157,11 +157,13 @@ defmodule GranaWeb.AiComponents do
           label="Tipo"
           options={AI.kinds() |> Enum.map(fn {kind, label} -> {label, kind} end)}
         />
+        <%!-- Só os compatíveis têm nome livre; nos demais, o nome é o do próprio provedor. --%>
         <.input
+          :if={@form[:kind].value == "openai_compatible"}
           field={@form[:name]}
           type="text"
           label="Nome"
-          placeholder={AI.label(@form[:kind].value) || "Nome do provedor"}
+          placeholder="Ex.: OpenRouter, Ollama"
         />
         <div :if={@form[:kind].value == "openai_compatible"} class="md:col-span-2">
           <.input

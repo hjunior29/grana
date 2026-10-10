@@ -30,8 +30,21 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     lv |> element("#ai-add-provider") |> render_click()
 
     lv
-    |> form("#ai-provider-form", provider: %{kind: "openai", name: "", api_key: key})
+    |> form("#ai-provider-form", provider: %{kind: "openai", api_key: key})
     |> render_submit()
+  end
+
+  test "o nome só aparece para provedores compatíveis", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+    lv |> element("#ai-add-provider") |> render_click()
+
+    for kind <- ~w(gemini openai anthropic) do
+      lv |> form("#ai-provider-form", provider: %{kind: kind}) |> render_change()
+      refute has_element?(lv, "#provider_name")
+    end
+
+    lv |> form("#ai-provider-form", provider: %{kind: "openai_compatible"}) |> render_change()
+    assert has_element?(lv, "#provider_name")
   end
 
   test "sem provedores explica como cadastrar", %{conn: conn} do
@@ -123,7 +136,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
     html = add_openai(lv)
 
-    assert html =~ "já existe um provedor com esse nome"
+    assert html =~ "OpenAI já está cadastrado"
   end
 
   test "o padrão mostra os modelos vindos da API e salva a escolha", %{conn: conn, user: user} do

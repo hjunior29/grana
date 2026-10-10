@@ -74,7 +74,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       lv |> element("#ai-add-provider") |> render_click()
 
       lv
-      |> form("#ai-provider-form", provider: %{kind: "anthropic", name: "", api_key: "sk-ant"})
+      |> form("#ai-provider-form", provider: %{kind: "anthropic", api_key: "sk-ant"})
       |> render_submit()
 
       refute has_element?(lv, "button#onboarding-next[disabled]")
