@@ -72,6 +72,9 @@ defmodule GranaWeb.OnboardingLiveTest do
     advance(lv, 2)
 
     assert has_element?(lv, "#ai-api-key-env")
+    assert has_element?(lv, "#ai-api-key-env-input[disabled][value=GEMINI_API_KEY]")
+    assert has_element?(lv, "#ai-api-key-env label span", ".env")
+    refute render(lv) =~ "env-key"
     assert has_element?(lv, "#onboarding h1", "LLM")
     refute has_element?(lv, "#ai_form button", "Salvar")
 

@@ -2,27 +2,34 @@ defmodule GranaWeb.AccountComponents do
   @moduledoc "Blocos de formulário de conta compartilhados por Configurações e Onboarding."
   use GranaWeb, :html
 
-  @doc "Campo desabilitado para um valor que vem do `.env` (segredos nunca são exibidos)."
+  @doc """
+  Campo desabilitado para um valor que vem do `.env`: mostra só o nome da variável
+  (nunca o valor), com a tag `.env` e um ícone (chave para segredos).
+  """
   attr :id, :string, required: true
   attr :label, :string, required: true
-  attr :value, :any, default: nil
-  attr :secret, :boolean, default: false
   attr :var, :string, required: true, doc: "nome da variável de ambiente"
+  attr :secret, :boolean, default: false
 
   def env_field(assigns) do
     ~H"""
     <div class="mb-2">
       <label class="mb-1 flex items-center gap-2 text-sm font-medium" for={@id}>
-        {@label} <span class="badge badge-ghost badge-xs">do .env</span>
+        {@label} <span class="badge badge-ghost badge-xs">.env</span>
       </label>
-      <input
-        id={@id}
-        type="text"
-        disabled
-        value={if @secret, do: nil, else: @value}
-        placeholder={if @secret, do: "•••••••• definido em #{@var}", else: @var}
-        class="input input-bordered w-full"
-      />
+      <div class="relative">
+        <.icon
+          name={if @secret, do: "hero-key", else: "hero-variable"}
+          class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 opacity-50"
+        />
+        <input
+          id={@id}
+          type="text"
+          disabled
+          value={@var}
+          class="input input-bordered w-full pl-9 font-mono text-sm"
+        />
+      </div>
     </div>
     """
   end
@@ -196,37 +203,20 @@ defmodule GranaWeb.AccountComponents do
           </div>
         <% :env -> %>
           <div id="smtp-env" class="mt-1">
-            <p class="mb-3 flex items-center gap-2 text-xs opacity-70">
-              <.icon name="hero-server" class="size-4" /> Configurado pelas variáveis
-              <code>SMTP_*</code>
-              do ambiente. Para desligar o 2FA,
-              remova-as e reinicie.
-              <span class="badge badge-success badge-soft badge-xs">2FA ativo</span>
-            </p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-              <.env_field id="smtp-env-host" label="Servidor" value={@config.host} var="SMTP_HOST" />
-              <.env_field id="smtp-env-port" label="Porta" value={@config.port} var="SMTP_PORT" />
-              <.env_field id="smtp-env-tls" label="Segurança" value={@config.tls} var="SMTP_TLS" />
-              <.env_field
-                id="smtp-env-username"
-                label="Usuário"
-                value={@config.username}
-                var="SMTP_USERNAME"
-              />
+              <.env_field id="smtp-env-host" label="Servidor" var="SMTP_HOST" />
+              <.env_field id="smtp-env-port" label="Porta" var="SMTP_PORT" />
+              <.env_field id="smtp-env-tls" label="Segurança" var="SMTP_TLS" />
+              <.env_field id="smtp-env-username" label="Usuário" var="SMTP_USERNAME" />
               <.env_field id="smtp-env-password" label="Senha" secret var="SMTP_PASSWORD" />
-              <.env_field
-                id="smtp-env-from-name"
-                label="Nome do remetente"
-                value={@config.from_name}
-                var="MAIL_FROM_NAME"
-              />
+              <.env_field id="smtp-env-from-name" label="Nome do remetente" var="MAIL_FROM_NAME" />
               <.env_field
                 id="smtp-env-from-address"
                 label="Email do remetente"
-                value={@config.from_address}
                 var="MAIL_FROM_ADDRESS"
               />
             </div>
+            <span class="badge badge-success badge-soft badge-sm mt-1">2FA ativo</span>
           </div>
         <% nil -> %>
           <p id="smtp-none" class="text-xs opacity-60">

@@ -150,10 +150,12 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
       {:ok, lv, html} = live(conn, ~p"/users/settings")
 
       assert has_element?(lv, "#credentials-env")
-      assert has_element?(lv, "#credentials-env-client-id[disabled][value=env-id]")
+      assert has_element?(lv, "#credentials-env-client-id[disabled][value=PLUGGY_CLIENT_ID]")
       assert has_element?(lv, "#credentials-env-client-secret[disabled]")
       assert has_element?(lv, "#connect-meu-pluggy")
       refute html =~ "env-secret"
+      refute html =~ "Usando"
+      refute html =~ "env-id"
       refute has_element?(lv, "#credentials-saved")
       refute has_element?(lv, "#replace-credentials")
       refute has_element?(lv, "#pluggy-credentials-form")

@@ -8,7 +8,6 @@ defmodule Grana.Diagnostics do
 
   def summary(%Accounts.User{} = user) do
     %{
-      version: to_string(Application.spec(:grana, :vsn)),
       data_dir: DataDir.path(),
       database_size: database_size(),
       public_url: Accounts.public_base_url(user),
