@@ -2,43 +2,45 @@ defmodule Grana.AccountsFixtures do
   @moduledoc """
   This module defines test helpers for creating
   entities via the `Grana.Accounts` context.
+
+  Usuários são inseridos direto pelo `Repo`: em produção só existe um caminho de
+  criação (`Accounts.register_owner/1`, que recusa um segundo usuário), mas os
+  testes de isolamento entre usuários precisam de vários.
   """
 
   import Ecto.Query
 
   alias Grana.Accounts
-  alias Grana.Accounts.Scope
+  alias Grana.Accounts.{Scope, User}
 
   def unique_user_email, do: "user#{System.unique_integer()}@example.com"
   def valid_user_password, do: "hello world!"
 
   def valid_user_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
-      email: unique_user_email()
+      email: unique_user_email(),
+      name: "Dono de Teste",
+      password: valid_user_password()
     })
   end
 
-  def unconfirmed_user_fixture(attrs \\ %{}) do
-    {:ok, user} =
-      attrs
-      |> valid_user_attributes()
-      |> Accounts.register_user()
+  def user_fixture(attrs \\ %{}) do
+    attrs = valid_user_attributes(attrs)
+    now = DateTime.utc_now(:second)
 
-    user
+    %User{
+      email: attrs.email,
+      name: attrs.name,
+      hashed_password: Bcrypt.hash_pwd_salt(attrs.password),
+      confirmed_at: now,
+      onboarded_at: now
+    }
+    |> Grana.Repo.insert!()
   end
 
-  def user_fixture(attrs \\ %{}) do
-    user = unconfirmed_user_fixture(attrs)
-
-    token =
-      extract_user_token(fn url ->
-        Accounts.deliver_login_instructions(user, url)
-      end)
-
-    {:ok, {user, _expired_tokens}} =
-      Accounts.login_user_by_magic_link(token)
-
-    user
+  def unconfirmed_user_fixture(attrs \\ %{}) do
+    user = user_fixture(attrs)
+    user |> Ecto.Changeset.change(confirmed_at: nil, hashed_password: nil) |> Grana.Repo.update!()
   end
 
   def user_scope_fixture do

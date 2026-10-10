@@ -6,8 +6,11 @@ defmodule GranaWeb.UserLive.Settings do
   # (alterar email/senha, excluir conta) é que exigem sudo mode, com redirect
   # gracioso para reautenticar — em vez de derrubar/quebrar a sessão.
   alias Grana.Accounts
-  alias Grana.OpenFinance
+  alias GranaWeb.AccountComponents
   alias GranaWeb.OpenFinanceComponents
+
+  on_mount GranaWeb.AiSettingsHooks
+  on_mount GranaWeb.OpenFinanceHooks
 
   @impl true
   def render(assigns) do
@@ -96,104 +99,12 @@ defmodule GranaWeb.UserLive.Settings do
           <p class="text-sm opacity-50 mb-4 ml-8">
             Provider de IA usado para análises, categorização e extração de PDFs
           </p>
-          <.form
-            for={@ai_form}
-            id="ai_form"
-            phx-submit="update_ai_settings"
-            phx-change="validate_ai_settings"
-            autocomplete="off"
-            data-form-type="other"
-            novalidate
-          >
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label class="text-sm font-medium block mb-1">Provider</label>
-                <select name="user[ai_provider]" class="select select-bordered w-full">
-                  <option value="gemini" selected={@ai_form[:ai_provider].value == "gemini"}>
-                    Google Gemini
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="text-sm font-medium block mb-1">Modelo</label>
-                <select name="user[ai_model]" class="select select-bordered w-full">
-                  <option
-                    value="gemini-2.0-flash"
-                    selected={@ai_form[:ai_model].value == "gemini-2.0-flash"}
-                  >
-                    Gemini 2.0 Flash
-                  </option>
-                  <option
-                    value="gemini-2.5-flash"
-                    selected={@ai_form[:ai_model].value == "gemini-2.5-flash"}
-                  >
-                    Gemini 2.5 Flash
-                  </option>
-                  <option
-                    value="gemini-2.5-pro"
-                    selected={@ai_form[:ai_model].value == "gemini-2.5-pro"}
-                  >
-                    Gemini 2.5 Pro
-                  </option>
-                </select>
-              </div>
-            </div>
-            <%= if @ai_env_key do %>
-              <div
-                id="ai-api-key-env"
-                class="mb-4 flex items-center gap-2 rounded-xl bg-base-100/60 px-3 py-2 text-xs"
-              >
-                <.icon name="hero-key" class="size-4 opacity-60" />
-                <span class="opacity-70">
-                  API key: usando <code>GEMINI_API_KEY</code> do <code>.env</code>.
-                </span>
-              </div>
-            <% else %>
-              <div class="mb-4">
-                <div class="flex items-center justify-between mb-1">
-                  <label class="text-sm font-medium">API Key</label>
-                  <button
-                    :if={@has_ai_api_key}
-                    id="remove-ai-api-key"
-                    type="button"
-                    phx-click="remove_ai_api_key"
-                    data-confirm="Remover a API key salva?"
-                    class="link link-hover text-xs text-error/80"
-                  >
-                    Remover chave salva
-                  </button>
-                </div>
-                <div class="relative">
-                  <%!-- Só de escrita: o valor salvo nunca é enviado de volta ao navegador. --%>
-                  <input
-                    id="ai-api-key-input"
-                    type={if @show_api_key, do: "text", else: "password"}
-                    name="user[ai_api_key]"
-                    value={@ai_form[:ai_api_key].value}
-                    placeholder={
-                      if @has_ai_api_key,
-                        do: "•••••••• salva — digite para substituir",
-                        else: "Cole sua API key"
-                    }
-                    class="input input-bordered w-full pr-12"
-                    autocomplete="one-time-code"
-                    data-1p-ignore="true"
-                    data-lpignore="true"
-                    data-form-type="other"
-                  />
-                  <button
-                    type="button"
-                    phx-click="toggle_api_key_visibility"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-70 transition-opacity"
-                  >
-                    <.icon :if={!@show_api_key} name="hero-eye" class="size-5 cursor-pointer" />
-                    <.icon :if={@show_api_key} name="hero-eye-slash" class="size-5 cursor-pointer" />
-                  </button>
-                </div>
-              </div>
-            <% end %>
-            <.button class="btn btn-primary btn-sm" phx-disable-with="Salvando...">Salvar</.button>
-          </.form>
+          <AccountComponents.ai_form
+            form={@ai_form}
+            env_key={@ai_env_key}
+            has_api_key={@has_ai_api_key}
+            show_api_key={@show_api_key}
+          />
         </div>
 
         <OpenFinanceComponents.settings_card
@@ -321,7 +232,6 @@ defmodule GranaWeb.UserLive.Settings do
     user = socket.assigns.current_scope.user
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
-    ai_changeset = Accounts.change_user_ai_settings(user)
     identity_changeset = Accounts.change_user_identity(user)
 
     socket =
@@ -329,49 +239,11 @@ defmodule GranaWeb.UserLive.Settings do
       |> assign(:current_email, user.email)
       |> assign(:email_form, to_form(email_changeset))
       |> assign(:password_form, to_form(password_changeset))
-      |> assign(:ai_form, to_form(ai_changeset))
       |> assign(:identity_form, to_form(identity_changeset))
       |> assign(:trigger_submit, false)
       |> assign(:show_delete_modal, false)
-      |> assign(:show_api_key, false)
-      |> assign(:has_ai_api_key, user.ai_api_key != nil)
-      |> assign(:ai_env_key, Accounts.env_ai_api_key() != nil)
-      |> assign(:open_finance_connecting, false)
-      |> assign(:open_finance_syncing, MapSet.new())
-      |> assign(:open_finance_show_item_form, false)
-      |> assign(:open_finance_item_form, to_form(%{"item_id" => ""}, as: :open_finance))
-      |> assign(:open_finance_private_key, Grana.Encrypted.Binary.private_key?())
-      |> assign_open_finance()
-
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Grana.PubSub, OpenFinance.topic(user.id))
-    end
 
     {:ok, socket}
-  end
-
-  # Tudo que depende das credenciais da Pluggy; refeito quando elas mudam.
-  defp assign_open_finance(socket) do
-    scope = socket.assigns.current_scope
-    configured = OpenFinance.configured?(scope)
-
-    socket
-    |> assign(:open_finance_configured, configured)
-    |> assign(:open_finance_credentials_source, OpenFinance.credentials_source(scope))
-    |> assign(:open_finance_credentials_form, to_form(OpenFinance.change_credentials(scope)))
-    |> assign(:open_finance_show_credentials_form, false)
-    |> assign(:open_finance_connections, open_finance_connections(scope, configured))
-  end
-
-  defp open_finance_connections(scope, true), do: OpenFinance.list_connections(scope)
-  defp open_finance_connections(_scope, false), do: []
-
-  defp reload_connections(socket) do
-    assign(
-      socket,
-      :open_finance_connections,
-      OpenFinance.list_connections(socket.assigns.current_scope)
-    )
   end
 
   @impl true
@@ -442,49 +314,6 @@ defmodule GranaWeb.UserLive.Settings do
     end
   end
 
-  def handle_event("toggle_api_key_visibility", _params, socket) do
-    {:noreply, assign(socket, :show_api_key, !socket.assigns.show_api_key)}
-  end
-
-  def handle_event("validate_ai_settings", %{"user" => params}, socket) do
-    ai_form =
-      socket.assigns.current_scope.user
-      |> Accounts.change_user_ai_settings(params)
-      |> Map.put(:action, :validate)
-      |> to_form()
-
-    {:noreply, assign(socket, ai_form: ai_form)}
-  end
-
-  def handle_event("update_ai_settings", %{"user" => params}, socket) do
-    user = socket.assigns.current_scope.user
-
-    case Accounts.update_user_ai_settings(user, params) do
-      {:ok, updated_user} ->
-        ai_changeset = Accounts.change_user_ai_settings(updated_user)
-
-        socket =
-          socket
-          |> assign(:ai_form, to_form(ai_changeset))
-          |> assign(:has_ai_api_key, updated_user.ai_api_key != nil)
-          |> put_flash(:info, "Configurações de LLM salvas com sucesso!")
-
-        {:noreply, socket}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, ai_form: to_form(changeset, action: :insert))}
-    end
-  end
-
-  def handle_event("remove_ai_api_key", _params, socket) do
-    {:ok, _user} = Accounts.remove_user_ai_api_key(socket.assigns.current_scope.user)
-
-    {:noreply,
-     socket
-     |> assign(:has_ai_api_key, false)
-     |> put_flash(:info, "API key removida.")}
-  end
-
   def handle_event("update_identity", %{"user" => params}, socket) do
     user = socket.assigns.current_scope.user
 
@@ -505,133 +334,6 @@ defmodule GranaWeb.UserLive.Settings do
 
       {:error, changeset} ->
         {:noreply, assign(socket, identity_form: to_form(changeset, action: :insert))}
-    end
-  end
-
-  def handle_event("open_finance_toggle_credentials_form", _params, socket) do
-    {:noreply,
-     assign(
-       socket,
-       :open_finance_show_credentials_form,
-       !socket.assigns.open_finance_show_credentials_form
-     )}
-  end
-
-  def handle_event("open_finance_save_credentials", %{"user" => params}, socket) do
-    scope = socket.assigns.current_scope
-
-    cond do
-      # Credenciais do .env têm prioridade; salvar outras no banco não teria efeito.
-      socket.assigns.open_finance_credentials_source == :env ->
-        {:noreply, put_flash(socket, :error, "As credenciais da Pluggy já vêm do .env.")}
-
-      !Accounts.sudo_mode?(scope.user) ->
-        {:noreply, redirect_for_reauth(socket)}
-
-      # Sem CLOAK_KEY própria o secret seria cifrado com a chave pública de dev.
-      !socket.assigns.open_finance_private_key ->
-        {:noreply, put_flash(socket, :error, "Defina CLOAK_KEY no .env e reinicie o servidor.")}
-
-      true ->
-        case OpenFinance.save_credentials(scope, params) do
-          {:ok, user} ->
-            {:noreply,
-             socket
-             |> update_scope_user(user)
-             |> put_flash(:info, "Credenciais da Pluggy verificadas e salvas (cifradas).")}
-
-          {:error, changeset} ->
-            # O changeset do erro carrega o usuário real (com o secret salvo); os erros
-            # são reexibidos num changeset sem nenhum secret, nem o salvo nem o digitado.
-            form =
-              scope
-              |> OpenFinance.change_credentials(Map.put(params, "pluggy_client_secret", ""))
-              |> Map.merge(%{errors: changeset.errors, action: :update})
-              |> to_form()
-
-            {:noreply,
-             socket
-             |> assign(:open_finance_credentials_form, form)
-             |> assign(:open_finance_show_credentials_form, true)}
-        end
-    end
-  end
-
-  def handle_event("open_finance_remove_credentials", _params, socket) do
-    scope = socket.assigns.current_scope
-
-    if Accounts.sudo_mode?(scope.user) do
-      {:ok, user} = OpenFinance.remove_credentials(scope)
-
-      {:noreply,
-       socket
-       |> update_scope_user(user)
-       |> put_flash(:info, "Credenciais da Pluggy removidas do Grana.")}
-    else
-      {:noreply, redirect_for_reauth(socket)}
-    end
-  end
-
-  def handle_event("open_finance_connect", _params, socket) do
-    case OpenFinance.create_connect_token(socket.assigns.current_scope) do
-      {:ok, token} ->
-        {:noreply,
-         socket
-         |> assign(:open_finance_connecting, true)
-         |> push_event("pluggy:open", %{
-           connect_token: token,
-           connector_id: OpenFinance.meu_pluggy_connector_id()
-         })}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, OpenFinance.error_message(reason))}
-    end
-  end
-
-  def handle_event("pluggy_connected", %{"item_id" => item_id}, socket) do
-    socket = assign(socket, :open_finance_connecting, false)
-    {:noreply, add_open_finance_item(socket, item_id)}
-  end
-
-  def handle_event("pluggy_error", params, socket) do
-    message =
-      case params["message"] do
-        message when is_binary(message) and message != "" -> "Pluggy: #{message}"
-        _ -> "A conexão pelo widget da Pluggy não foi concluída."
-      end
-
-    {:noreply,
-     socket
-     |> assign(:open_finance_connecting, false)
-     |> put_flash(:error, message)}
-  end
-
-  def handle_event("pluggy_closed", _params, socket) do
-    {:noreply, assign(socket, :open_finance_connecting, false)}
-  end
-
-  def handle_event("open_finance_toggle_item_form", _params, socket) do
-    {:noreply,
-     assign(socket, :open_finance_show_item_form, !socket.assigns.open_finance_show_item_form)}
-  end
-
-  def handle_event("open_finance_add_item", %{"open_finance" => %{"item_id" => item_id}}, socket) do
-    {:noreply, add_open_finance_item(socket, item_id)}
-  end
-
-  def handle_event("open_finance_remove", %{"id" => id}, socket) do
-    scope = socket.assigns.current_scope
-    connection = OpenFinance.get_connection!(scope, id)
-
-    case OpenFinance.delete_connection(scope, connection) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> reload_connections()
-         |> put_flash(:info, "Conexão removida.")}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, OpenFinance.error_message(reason))}
     end
   end
 
@@ -668,51 +370,5 @@ defmodule GranaWeb.UserLive.Settings do
     end
   end
 
-  @impl true
-  def handle_info({:open_finance_synced, connection_id}, socket) do
-    {:noreply,
-     socket
-     |> assign(
-       :open_finance_syncing,
-       MapSet.delete(socket.assigns.open_finance_syncing, connection_id)
-     )
-     |> reload_connections()}
-  end
-
-  # O usuário do scope fica desatualizado após mudar as credenciais; o struct novo
-  # preserva os campos virtuais (ex.: authenticated_at, usado pelo sudo mode).
-  defp update_scope_user(socket, user) do
-    socket
-    |> assign(:current_scope, Grana.Accounts.Scope.for_user(user))
-    |> assign_open_finance()
-  end
-
-  defp add_open_finance_item(socket, item_id) do
-    case OpenFinance.add_connection(socket.assigns.current_scope, item_id) do
-      {:ok, connection} ->
-        socket
-        |> reload_connections()
-        |> assign(:open_finance_show_item_form, false)
-        |> assign(:open_finance_item_form, to_form(%{"item_id" => ""}, as: :open_finance))
-        |> assign(
-          :open_finance_syncing,
-          MapSet.put(socket.assigns.open_finance_syncing, connection.id)
-        )
-        |> put_flash(:info, "Conexão adicionada! Importando contas e transações...")
-
-      {:error, reason} ->
-        put_flash(socket, :error, OpenFinance.error_message(reason))
-    end
-  end
-
-  # Ação sensível sem sudo mode (autenticação recente): manda reautenticar com uma
-  # mensagem clara, em vez de quebrar com `true = sudo_mode?` ou parecer um logout.
-  defp redirect_for_reauth(socket) do
-    socket
-    |> put_flash(
-      :error,
-      "Por segurança, confirme seu login para alterar dados sensíveis da conta."
-    )
-    |> redirect(to: ~p"/users/log-in")
-  end
+  defp redirect_for_reauth(socket), do: GranaWeb.UserAuth.redirect_for_reauth(socket)
 end

@@ -37,6 +37,15 @@ defmodule GranaWeb.ConnCase do
   end
 
   @doc """
+  Garante que a instância tenha dono, para os testes de páginas públicas passarem
+  pelo portão do setup. Uso: `setup :ensure_owner`.
+  """
+  def ensure_owner(_context) do
+    unless Grana.Repo.exists?(Grana.Accounts.User), do: Grana.AccountsFixtures.user_fixture()
+    :ok
+  end
+
+  @doc """
   Setup helper that registers and logs in users.
 
       setup :register_and_log_in_user

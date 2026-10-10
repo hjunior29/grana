@@ -80,6 +80,65 @@ defmodule Grana.Accounts do
     |> Repo.insert()
   end
 
+  ## Setup (dono da instância)
+
+  @setup_cache_key {__MODULE__, :setup_required}
+
+  @doc """
+  Verdadeiro enquanto a instância não tem dono. Consultado em toda requisição,
+  então o resultado fica em `:persistent_term` (ver `invalidate_setup_cache/0`).
+  """
+  def setup_required? do
+    if Application.get_env(:grana, :cache_setup_state, true) do
+      case :persistent_term.get(@setup_cache_key, :unknown) do
+        :unknown ->
+          required? = not Repo.exists?(User)
+          :persistent_term.put(@setup_cache_key, required?)
+          required?
+
+        required? ->
+          required?
+      end
+    else
+      not Repo.exists?(User)
+    end
+  end
+
+  @doc "Descarta o resultado em cache de `setup_required?/0` (criar dono, restaurar, apagar tudo)."
+  def invalidate_setup_cache do
+    :persistent_term.erase(@setup_cache_key)
+    :ok
+  end
+
+  @doc """
+  Cria o único usuário da instância. Falha com `{:error, :already_set_up}` se já
+  existir um; é o único caminho de criação de usuário.
+  """
+  def register_owner(attrs) do
+    result =
+      Repo.transact(fn ->
+        if Repo.exists?(User) do
+          {:error, :already_set_up}
+        else
+          %User{} |> User.owner_changeset(attrs) |> Repo.insert()
+        end
+      end)
+
+    with {:ok, user} <- result do
+      invalidate_setup_cache()
+      Grana.Setup.clear_code()
+      {:ok, user}
+    end
+  end
+
+  def change_owner(attrs \\ %{}, opts \\ []), do: User.owner_changeset(%User{}, attrs, opts)
+
+  def complete_onboarding(%User{onboarded_at: nil} = user) do
+    user |> User.onboarded_changeset() |> Repo.update()
+  end
+
+  def complete_onboarding(%User{} = user), do: {:ok, user}
+
   ## Settings
 
   @doc """

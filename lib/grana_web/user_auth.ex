@@ -37,7 +37,7 @@ defmodule GranaWeb.UserAuth do
 
     conn
     |> create_or_extend_session(user, params)
-    |> redirect(to: user_return_to || signed_in_path(conn))
+    |> redirect(to: user_return_to || post_login_path(user))
   end
 
   @doc """
@@ -248,6 +248,17 @@ defmodule GranaWeb.UserAuth do
     end
   end
 
+  # Ação sensível sem sudo mode (autenticação recente): manda reautenticar com uma
+  # mensagem clara, em vez de parecer um logout.
+  def redirect_for_reauth(socket) do
+    socket
+    |> Phoenix.LiveView.put_flash(
+      :error,
+      "Por segurança, confirme seu login para alterar dados sensíveis da conta."
+    )
+    |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
+  end
+
   defp mount_current_scope(socket, session) do
     Phoenix.Component.assign_new(socket, :current_scope, fn ->
       {user, _} =
@@ -258,6 +269,9 @@ defmodule GranaWeb.UserAuth do
       Scope.for_user(user)
     end)
   end
+
+  defp post_login_path(%{onboarded_at: nil}), do: ~p"/onboarding"
+  defp post_login_path(_user), do: ~p"/dashboard"
 
   @doc "Returns the path to redirect to after log in."
   # the user was already logged in, redirect to settings

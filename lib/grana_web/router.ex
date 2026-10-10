@@ -35,6 +35,14 @@ defmodule GranaWeb.Router do
     plug :fetch_current_scope_for_user
   end
 
+  pipeline :setup_complete do
+    plug GranaWeb.SetupGate, :complete
+  end
+
+  pipeline :setup_pending do
+    plug GranaWeb.SetupGate, :pending
+  end
+
   pipeline :csp do
     plug :put_secure_browser_headers, %{"content-security-policy" => @content_security_policy}
   end
@@ -54,9 +62,18 @@ defmodule GranaWeb.Router do
   end
 
   scope "/", GranaWeb do
-    pipe_through [:browser, :csp]
+    pipe_through [:browser, :setup_pending, :csp]
 
-    live_session :public, on_mount: [{GranaWeb.UserAuth, :mount_current_scope}] do
+    live_session :setup, on_mount: [{GranaWeb.SetupGate, :setup_pending}] do
+      live "/setup", SetupLive, :index
+    end
+  end
+
+  scope "/", GranaWeb do
+    pipe_through [:browser, :setup_complete, :csp]
+
+    live_session :public,
+      on_mount: [{GranaWeb.SetupGate, :setup_complete}, {GranaWeb.UserAuth, :mount_current_scope}] do
       live "/", LandingLive, :index
       live "/terms", TermsLive, :index
     end
@@ -67,7 +84,7 @@ defmodule GranaWeb.Router do
   import Oban.Web.Router
 
   scope "/admin" do
-    pipe_through [:browser, :require_authenticated_user, :require_admin_user]
+    pipe_through [:browser, :setup_complete, :require_authenticated_user, :require_admin_user]
 
     error_tracker_dashboard("/errors")
     oban_dashboard("/oban")
@@ -88,10 +105,14 @@ defmodule GranaWeb.Router do
   ## Authentication routes
 
   scope "/", GranaWeb do
-    pipe_through [:browser, :csp, :require_authenticated_user]
+    pipe_through [:browser, :setup_complete, :csp, :require_authenticated_user]
 
     live_session :require_authenticated_user,
-      on_mount: [{GranaWeb.UserAuth, :require_authenticated}] do
+      on_mount: [
+        {GranaWeb.SetupGate, :setup_complete},
+        {GranaWeb.UserAuth, :require_authenticated}
+      ] do
+      live "/onboarding", OnboardingLive, :index
       live "/dashboard", DashboardLive, :index
       live "/upload", UploadLive, :index
       live "/transactions", TransactionsLive, :index
@@ -107,10 +128,10 @@ defmodule GranaWeb.Router do
   end
 
   scope "/", GranaWeb do
-    pipe_through [:browser, :csp]
+    pipe_through [:browser, :setup_complete, :csp]
 
     live_session :current_user,
-      on_mount: [{GranaWeb.UserAuth, :mount_current_scope}] do
+      on_mount: [{GranaWeb.SetupGate, :setup_complete}, {GranaWeb.UserAuth, :mount_current_scope}] do
       live "/users/register", UserLive.Registration, :new
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new

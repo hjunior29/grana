@@ -394,4 +394,15 @@ defmodule Grana.AccountsTest do
       refute inspect(%User{password: "123456"}) =~ "password: \"123456\""
     end
   end
+
+  describe "complete_onboarding/1" do
+    test "marca uma vez e é idempotente" do
+      user = user_fixture() |> Ecto.Changeset.change(onboarded_at: nil) |> Grana.Repo.update!()
+
+      assert {:ok, %{onboarded_at: %DateTime{} = at}} = Accounts.complete_onboarding(user)
+
+      assert {:ok, %{onboarded_at: ^at}} =
+               Accounts.complete_onboarding(%{user | onboarded_at: at})
+    end
+  end
 end
