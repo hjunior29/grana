@@ -128,6 +128,53 @@ defmodule Grana.AI.ModelsTest do
     end
   end
 
+  describe "cache" do
+    setup do
+      start_supervised!({Cachex, name: Grana.Cache.cache_name()})
+      Application.put_env(:grana, Grana.Cache, enabled: true, ttl_seconds: 300)
+      on_exit(fn -> Application.put_env(:grana, Grana.Cache, enabled: false) end)
+    end
+
+    @config %{provider: "openai", api_key: "sk-cache"}
+    @body %{"data" => [%{"id" => "gpt-5", "created" => 1}]}
+
+    test "a segunda consulta não chama a API" do
+      expect(Req, :get, 1, fn _url, _opts -> ok(@body) end)
+
+      assert {:ok, [%{id: "gpt-5"}]} = Models.list(@config)
+      assert {:ok, [%{id: "gpt-5"}]} = Models.list(@config)
+    end
+
+    test "erros não são guardados: a próxima consulta tenta de novo" do
+      expect(Req, :get, fn _url, _opts ->
+        {:ok, %Req.Response{status: 401, body: %{"error" => %{"message" => "x"}}}}
+      end)
+
+      expect(Req, :get, fn _url, _opts -> ok(@body) end)
+
+      assert {:error, _} = Models.list(@config)
+      assert {:ok, _} = Models.list(@config)
+      assert {:ok, _} = Models.list(@config)
+    end
+
+    test "chave ou endereço diferentes têm cache próprio" do
+      expect(Req, :get, 3, fn _url, _opts -> ok(@body) end)
+
+      Models.list(@config)
+      Models.list(%{@config | api_key: "sk-outra"})
+      Models.list(%{provider: "openai_compatible", api_key: "sk-cache", base_url: "http://x/v1"})
+      Models.list(@config)
+    end
+
+    test "não é apagado quando os dados do usuário mudam (invalidate_user)" do
+      expect(Req, :get, 1, fn _url, _opts -> ok(@body) end)
+
+      Models.list(@config)
+      Grana.Cache.invalidate_user(1)
+      Models.list(@config)
+    end
+  end
+
   describe "suggest/2" do
     test "prefere a família rápida de cada provedor, senão o primeiro" do
       gemini = [%{id: "gemini-3-pro"}, %{id: "gemini-3-flash-lite"}, %{id: "gemini-3-flash"}]

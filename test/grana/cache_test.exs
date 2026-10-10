@@ -35,6 +35,36 @@ defmodule Grana.CacheTest do
       refute_received :computed
     end
 
+    test "cache_if decide o que entra no cache" do
+      test_pid = self()
+
+      fun = fn ->
+        send(test_pid, :computed)
+        {:error, :falhou}
+      end
+
+      only_ok = [cache_if: &match?({:ok, _}, &1)]
+      assert {:error, :falhou} = Cache.get_or_store("ns:ok", 1, :f, fun, only_ok)
+      assert {:error, :falhou} = Cache.get_or_store("ns:ok", 1, :f, fun, only_ok)
+      assert_received :computed
+      assert_received :computed
+    end
+
+    test "ttl_seconds próprio vale para a entrada, em vez do padrão" do
+      Cache.get_or_store("ns:ttl", 1, :f, fn -> :valor end, ttl_seconds: 60)
+      Cache.get_or_store("ns:padrao", 1, :f, fn -> :valor end)
+
+      ttl_of = fn namespace ->
+        {:ok, keys} = Cachex.keys(Cache.cache_name())
+        key = Enum.find(keys, &String.contains?(&1, namespace))
+        {:ok, ttl} = Cachex.ttl(Cache.cache_name(), key)
+        ttl
+      end
+
+      assert ttl_of.(":ns:ttl:") <= 60_000
+      assert ttl_of.(":ns:padrao:") > 60_000
+    end
+
     test "isolates different users and different filter options" do
       compute_1 = fn -> "user1_filterA" end
       compute_2 = fn -> "user1_filterB" end

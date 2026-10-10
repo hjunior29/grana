@@ -7,6 +7,7 @@ defmodule Grana.AI.Models do
   """
 
   alias Grana.AI.HTTP
+  alias Grana.Cache
   alias Grana.AI.Providers.OpenAI
 
   @type model :: %{id: String.t(), name: String.t()}
@@ -17,9 +18,31 @@ defmodule Grana.AI.Models do
   @gemini_url "https://generativelanguage.googleapis.com/v1beta/models"
   @anthropic_url "https://api.anthropic.com/v1/models"
 
-  @doc "Modelos disponíveis para a configuração do provedor (`kind`, `api_key`, `base_url`)."
+  # A lista de modelos muda raramente: uma hora de cache, só para respostas bem-sucedidas.
+  @cache_ttl_seconds 3600
+
+  @doc """
+  Modelos disponíveis para a configuração do provedor (`provider`, `api_key`, `base_url`).
+
+  O resultado fica em cache por provedor + endereço + chave (a chave só entra como
+  hash), então trocar a chave consulta de novo. Erros nunca são guardados.
+  """
   @spec list(map()) :: {:ok, [model()]} | {:error, String.t()}
-  def list(%{provider: "gemini"} = config) do
+  def list(config) do
+    # Usuário 0 = compartilhado: a lista não depende dos dados do usuário, então não deve
+    # ser apagada por `Cache.invalidate_user/1` a cada upload.
+    Cache.get_or_store("ai_models", 0, cache_key(config), fn -> fetch(config) end,
+      ttl_seconds: @cache_ttl_seconds,
+      cache_if: &match?({:ok, _}, &1)
+    )
+  end
+
+  defp cache_key(config) do
+    key_hash = :crypto.hash(:sha256, config[:api_key] || "")
+    {config.provider, config[:base_url], key_hash}
+  end
+
+  defp fetch(%{provider: "gemini"} = config) do
     with {:ok, body} <-
            fetch(@gemini_url, [{"x-goog-api-key", config.api_key}], [pageSize: 1000], config) do
       models =
@@ -33,7 +56,7 @@ defmodule Grana.AI.Models do
     end
   end
 
-  def list(%{provider: "anthropic"} = config) do
+  defp fetch(%{provider: "anthropic"} = config) do
     headers = [
       {"x-api-key", config.api_key},
       {"anthropic-version", Grana.AI.Providers.Anthropic.version()}
@@ -46,7 +69,7 @@ defmodule Grana.AI.Models do
     end
   end
 
-  def list(%{provider: kind} = config) when kind in ["openai", "openai_compatible"] do
+  defp fetch(%{provider: kind} = config) when kind in ["openai", "openai_compatible"] do
     url = String.trim_trailing(OpenAI.base_url(config), "/") <> "/models"
 
     headers =
