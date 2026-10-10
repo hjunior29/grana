@@ -125,6 +125,9 @@ defmodule Grana.AI do
   @doc "Modelos do provedor, direto da API dele."
   def list_models(%ProviderConfig{} = provider), do: Models.list(config_for(provider))
 
+  @doc "Modelos do provedor já em cache (sem rede): `{:ok, modelos}` ou `:miss`."
+  def cached_models(%ProviderConfig{} = provider), do: Models.cached(config_for(provider))
+
   ## Padrão
 
   def set_default(%User{} = user, ref, model) do

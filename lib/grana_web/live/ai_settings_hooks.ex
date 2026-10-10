@@ -47,13 +47,25 @@ defmodule GranaWeb.AiSettingsHooks do
   defp default_form(ref, model),
     do: to_form(%{"provider" => ref, "model" => model}, as: :default)
 
+  # Usa o cache quando há (também na primeira renderização, sem piscar "carregando");
+  # senão busca na API em segundo plano.
   defp load_models(socket) do
     ref = socket.assigns.ai_selected_ref
 
-    if (connected?(socket) and ref) && not Map.has_key?(socket.assigns.ai_models, ref) do
-      user = socket.assigns.current_scope.user
-      provider = AI.get_provider(user, ref)
+    if ref && not Map.has_key?(socket.assigns.ai_models, ref) do
+      provider = AI.get_provider(socket.assigns.current_scope.user, ref)
 
+      case AI.cached_models(provider) do
+        {:ok, models} -> put_models(socket, ref, {:ok, models})
+        :miss -> fetch_models(socket, ref, provider)
+      end
+    else
+      socket
+    end
+  end
+
+  defp fetch_models(socket, ref, provider) do
+    if connected?(socket) do
       socket
       |> update(:ai_models, &Map.put(&1, ref, :loading))
       |> start_async(:ai_models, fn -> {ref, AI.list_models(provider)} end)
@@ -62,9 +74,13 @@ defmodule GranaWeb.AiSettingsHooks do
     end
   end
 
-  defp handle_async(:ai_models, {:ok, {ref, result}}, socket) do
+  defp put_models(socket, ref, result) do
     socket = update(socket, :ai_models, &Map.put(&1, ref, result))
-    {:halt, ensure_default(socket, ref, result)}
+    ensure_default(socket, ref, result)
+  end
+
+  defp handle_async(:ai_models, {:ok, {ref, result}}, socket) do
+    {:halt, put_models(socket, ref, result)}
   end
 
   defp handle_async(:ai_models, {:exit, _reason}, socket) do

@@ -156,6 +156,42 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     assert Accounts.get_user!(user.id).ai_model == "gpt-4.1"
   end
 
+  describe "com a lista de modelos em cache" do
+    setup do
+      start_supervised!({Cachex, name: Grana.Cache.cache_name()})
+      Application.put_env(:grana, Grana.Cache, enabled: true, ttl_seconds: 300)
+      on_exit(fn -> Application.put_env(:grana, Grana.Cache, enabled: false) end)
+    end
+
+    test "recarregar a página mostra os modelos na hora, sem 'carregando' e sem chamar a API", %{
+      conn: conn,
+      user: user
+    } do
+      ai_fixture(user, %{kind: "openai", name: "OpenAI", api_key: "sk-cache", model: "gpt-5"})
+
+      # Primeira visita: busca na API e guarda no cache.
+      expect(Req, :get, 1, fn _url, _opts ->
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{
+             "data" => [%{"id" => "gpt-5", "created" => 2}, %{"id" => "gpt-4.1", "created" => 1}]
+           }
+         }}
+      end)
+
+      {:ok, first, html} = live(conn, ~p"/users/settings")
+      assert html =~ "ai-models-loading"
+      render_async(first)
+      assert has_element?(first, "#ai-default-model option", "gpt-4.1")
+
+      # Recarregar: nem a renderização estática mostra o spinner.
+      {:ok, second, html} = live(conn, ~p"/users/settings")
+      refute html =~ "ai-models-loading"
+      assert has_element?(second, "#ai-default-model option", "gpt-4.1")
+    end
+  end
+
   test "um modelo salvo que saiu da lista continua selecionável", %{conn: conn, user: user} do
     ai_fixture(user, %{kind: "openai", name: "OpenAI", model: "gpt-antigo"})
     stub(AI.Models, :list, fn _ -> {:ok, @models} end)

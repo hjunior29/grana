@@ -37,6 +37,15 @@ defmodule Grana.AI.Models do
     )
   end
 
+  @doc "Só o que já está em cache (sem tocar a rede): `{:ok, modelos}` ou `:miss`."
+  @spec cached(map()) :: {:ok, [model()]} | :miss
+  def cached(config) do
+    case Cache.peek("ai_models", 0, cache_key(config)) do
+      {:ok, {:ok, models}} -> {:ok, models}
+      _ -> :miss
+    end
+  end
+
   defp cache_key(config) do
     key_hash = :crypto.hash(:sha256, config[:api_key] || "")
     {config.provider, config[:base_url], key_hash}

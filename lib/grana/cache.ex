@@ -83,6 +83,19 @@ defmodule Grana.Cache do
     end
   end
 
+  @doc "Só consulta: `{:ok, valor}` se a entrada existe, `:miss` caso contrário (ou cache desligado)."
+  @spec peek(String.t(), integer(), term()) :: {:ok, term()} | :miss
+  def peek(namespace, user_id, filters) do
+    if enabled?() do
+      case do_get(build_key(namespace, user_id, filters)) do
+        {:ok, value} -> {:ok, value}
+        _ -> :miss
+      end
+    else
+      :miss
+    end
+  end
+
   @doc """
   Apaga todas as entradas de cache do usuário. Chamado em toda escrita/upload que
   afete os dados cacheados.
