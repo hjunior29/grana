@@ -1,7 +1,7 @@
 import Config
 
 # Carrega .env apenas em dev/test. Em produção a config vem de variáveis de
-# ambiente reais (fly secrets); ler um .env solto no release sobrescreveria isso.
+# ambiente reais (systemd, Docker, etc.); ler um .env solto no release sobrescreveria isso.
 if config_env() in [:dev, :test] and File.exists?(".env") do
   ".env"
   |> File.read!()
@@ -38,6 +38,19 @@ end
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
+# URL pública da instância (opcional), usada nos links enviados por email e como
+# base do webhook da Pluggy. PHX_HOST continua valendo como alias (https).
+public_url =
+  case System.get_env("PUBLIC_URL") ||
+         (System.get_env("PHX_HOST") && "https://#{System.get_env("PHX_HOST")}") do
+    nil -> nil
+    "" -> nil
+    url -> String.trim_trailing(url, "/")
+  end
+
+config :grana, :public_url, public_url
+config :grana, :trust_proxy_headers, System.get_env("TRUST_PROXY_HEADERS") == "true"
+
 config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
 config :grana, :roadmap_url, System.get_env("ROADMAP_URL")
 
@@ -66,7 +79,8 @@ if config_env() != :test do
   config :grana, :pluggy,
     client_id: System.get_env("PLUGGY_CLIENT_ID"),
     client_secret: System.get_env("PLUGGY_CLIENT_SECRET"),
-    webhook_url: System.get_env("PLUGGY_WEBHOOK_URL")
+    webhook_url:
+      System.get_env("PLUGGY_WEBHOOK_URL") || (public_url && "#{public_url}/webhooks/pluggy")
 end
 
 # Encryption key for sensitive fields (API keys).
@@ -112,45 +126,41 @@ if config_env() == :dev and System.get_env("SMTP_IN_DEV") == "true" do
 end
 
 if config_env() == :prod do
-  database_path =
-    System.get_env("DATABASE_PATH") ||
-      raise """
-      environment variable DATABASE_PATH is missing.
-      For example: /data/grana.db
-      """
+  data_dir = System.get_env("DATA_DIR") || "/var/lib/grana"
+  File.mkdir_p!(data_dir)
+
+  database_path = System.get_env("DATABASE_PATH") || Path.join(data_dir, "grana.db")
 
   config :grana, Grana.Repo,
     database: database_path,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5")
 
-  # The secret key base is used to sign/encrypt cookies and other secrets.
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
+  # Gerados no primeiro boot e guardados em $DATA_DIR/secrets; o ambiente sobrescreve.
+  secrets_dir = Path.join(data_dir, "secrets")
+
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+      Grana.Release.Secrets.load_or_generate(secrets_dir, :secret_key_base)
 
-  # Chave de cifragem das API keys de IA (Grana.Encrypted.Binary). EXIGIDA em
-  # produção — sem ela, a cifragem-at-rest cairia para a chave de dev pública.
+  # Chave de cifragem das credenciais (Grana.Encrypted.Binary). Guarde-a junto dos
+  # backups para poder levar as credenciais cifradas para outra instância.
   config :grana,
          :cloak_key,
          System.get_env("CLOAK_KEY") ||
-           raise("""
-           environment variable CLOAK_KEY is missing.
-           Generate one with: mix phx.gen.secret 32
-           """)
+           Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  public_uri = public_url && URI.parse(public_url)
 
-  config :grana, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  endpoint_url =
+    if public_uri && public_uri.host do
+      [host: public_uri.host, port: public_uri.port, scheme: public_uri.scheme]
+    else
+      [host: "localhost"]
+    end
 
   config :grana, GranaWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: endpoint_url,
+    check_origin: :conn,
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
@@ -160,63 +170,29 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :grana, GranaWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :grana, GranaWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
   # ## Configuring the mailer (SMTP)
-  smtp_host =
-    System.get_env("SMTP_HOST") ||
-      raise "environment variable SMTP_HOST is missing."
+  if smtp_host = System.get_env("SMTP_HOST") do
+    config :grana, Grana.Mailer,
+      adapter: Swoosh.Adapters.SMTP,
+      relay: smtp_host,
+      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+      username: System.get_env("SMTP_USERNAME"),
+      password: System.get_env("SMTP_PASSWORD"),
+      tls: :always,
+      tls_options: [
+        verify: :verify_peer,
+        cacerts: :public_key.cacerts_get(),
+        server_name_indication: String.to_charlist(smtp_host),
+        depth: 3,
+        customize_hostname_check: [
+          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
+      ],
+      auth: :always,
+      ssl: false
 
-  config :grana, Grana.Mailer,
-    adapter: Swoosh.Adapters.SMTP,
-    relay: smtp_host,
-    port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
-    username: System.get_env("SMTP_USERNAME"),
-    password: System.get_env("SMTP_PASSWORD"),
-    tls: :always,
-    tls_options: [
-      verify: :verify_peer,
-      cacerts: :public_key.cacerts_get(),
-      server_name_indication: String.to_charlist(smtp_host),
-      depth: 3,
-      customize_hostname_check: [
-        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-      ]
-    ],
-    auth: :always,
-    ssl: false
-
-  config :grana, :mail_from,
-    name: System.get_env("MAIL_FROM_NAME") || "Grana",
-    address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
+    config :grana, :mail_from,
+      name: System.get_env("MAIL_FROM_NAME") || "Grana",
+      address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
+  end
 end
