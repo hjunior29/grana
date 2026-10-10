@@ -2,6 +2,31 @@ defmodule GranaWeb.AccountComponents do
   @moduledoc "Blocos de formulário de conta compartilhados por Configurações e Onboarding."
   use GranaWeb, :html
 
+  @doc "Campo desabilitado para um valor que vem do `.env` (segredos nunca são exibidos)."
+  attr :id, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :any, default: nil
+  attr :secret, :boolean, default: false
+  attr :var, :string, required: true, doc: "nome da variável de ambiente"
+
+  def env_field(assigns) do
+    ~H"""
+    <div class="mb-2">
+      <label class="mb-1 flex items-center gap-2 text-sm font-medium" for={@id}>
+        {@label} <span class="badge badge-ghost badge-xs">do .env</span>
+      </label>
+      <input
+        id={@id}
+        type="text"
+        disabled
+        value={if @secret, do: nil, else: @value}
+        placeholder={if @secret, do: "•••••••• definido em #{@var}", else: @var}
+        class="input input-bordered w-full"
+      />
+    </div>
+    """
+  end
+
   attr :form, :any, required: true
   attr :env_key, :boolean, required: true, doc: "GEMINI_API_KEY definida no ambiente"
   attr :has_api_key, :boolean, required: true
@@ -56,14 +81,8 @@ defmodule GranaWeb.AccountComponents do
         </div>
       </div>
       <%= if @env_key do %>
-        <div
-          id="ai-api-key-env"
-          class="mb-4 flex items-center gap-2 rounded-xl bg-base-100/60 px-3 py-2 text-xs"
-        >
-          <.icon name="hero-key" class="size-4 opacity-60" />
-          <span class="opacity-70">
-            API key: usando <code>GEMINI_API_KEY</code> do <code>.env</code>.
-          </span>
+        <div id="ai-api-key-env" class="mb-4">
+          <.env_field id="ai-api-key-env-input" label="API Key" secret var="GEMINI_API_KEY" />
         </div>
       <% else %>
         <div class="mb-4">
@@ -80,6 +99,13 @@ defmodule GranaWeb.AccountComponents do
               Remover chave salva
             </button>
           </div>
+          <p
+            :for={{msg, _} <- @form[:ai_api_key].errors}
+            id="ai-api-key-error"
+            class="mb-1 text-sm text-error"
+          >
+            {msg}
+          </p>
           <div class="relative">
             <%!-- Só de escrita: o valor salvo nunca é enviado de volta ao navegador. --%>
             <input
@@ -121,6 +147,10 @@ defmodule GranaWeb.AccountComponents do
   attr :form, :any, required: true
   attr :show_form, :boolean, required: true
   attr :private_key, :boolean, required: true, doc: "CLOAK_KEY própria definida"
+
+  attr :embedded, :boolean,
+    default: false,
+    doc: "no onboarding: botão só envia o teste; o Continuar da etapa salva (form smtp-form)"
 
   def smtp_card(assigns) do
     ~H"""
@@ -165,17 +195,38 @@ defmodule GranaWeb.AccountComponents do
             </div>
           </div>
         <% :env -> %>
-          <div
-            id="smtp-env"
-            class="flex flex-wrap items-center gap-2 rounded-xl bg-base-100/60 px-3 py-2 text-xs"
-          >
-            <.icon name="hero-server" class="size-4 opacity-60" />
-            <span class="opacity-70">
-              Usando <code>SMTP_HOST</code> e variáveis <code>SMTP_*</code> do ambiente
-              (<code>{@config.host}:{@config.port}</code>). Para desligar o 2FA, remova-as do
-              ambiente e reinicie.
-            </span>
-            <span class="badge badge-success badge-soft badge-xs">2FA ativo</span>
+          <div id="smtp-env" class="mt-1">
+            <p class="mb-3 flex items-center gap-2 text-xs opacity-70">
+              <.icon name="hero-server" class="size-4" /> Configurado pelas variáveis
+              <code>SMTP_*</code>
+              do ambiente. Para desligar o 2FA,
+              remova-as e reinicie.
+              <span class="badge badge-success badge-soft badge-xs">2FA ativo</span>
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+              <.env_field id="smtp-env-host" label="Servidor" value={@config.host} var="SMTP_HOST" />
+              <.env_field id="smtp-env-port" label="Porta" value={@config.port} var="SMTP_PORT" />
+              <.env_field id="smtp-env-tls" label="Segurança" value={@config.tls} var="SMTP_TLS" />
+              <.env_field
+                id="smtp-env-username"
+                label="Usuário"
+                value={@config.username}
+                var="SMTP_USERNAME"
+              />
+              <.env_field id="smtp-env-password" label="Senha" secret var="SMTP_PASSWORD" />
+              <.env_field
+                id="smtp-env-from-name"
+                label="Nome do remetente"
+                value={@config.from_name}
+                var="MAIL_FROM_NAME"
+              />
+              <.env_field
+                id="smtp-env-from-address"
+                label="Email do remetente"
+                value={@config.from_address}
+                var="MAIL_FROM_ADDRESS"
+              />
+            </div>
           </div>
         <% nil -> %>
           <p id="smtp-none" class="text-xs opacity-60">
@@ -247,12 +298,28 @@ defmodule GranaWeb.AccountComponents do
             placeholder="grana@exemplo.com"
           />
           <div class="sm:col-span-2 flex flex-wrap items-center gap-3">
-            <.button class="btn btn-primary btn-sm" phx-disable-with="Enviando teste...">
-              Enviar teste e salvar
-            </.button>
-            <p class="text-xs opacity-50">
-              Enviamos um email de teste para você; só salvamos se ele chegar. A senha é guardada cifrada.
-            </p>
+            <%= if @embedded do %>
+              <.button
+                id="smtp-test"
+                name="intent"
+                value="test"
+                class="btn btn-outline btn-sm"
+                phx-disable-with="Enviando teste..."
+              >
+                Enviar teste
+              </.button>
+              <p class="text-xs opacity-50">
+                O teste vai para o seu email e não salva nada. Ao clicar em Continuar, o SMTP é
+                testado e salvo (senha cifrada).
+              </p>
+            <% else %>
+              <.button class="btn btn-primary btn-sm" phx-disable-with="Enviando teste...">
+                Enviar teste e salvar
+              </.button>
+              <p class="text-xs opacity-50">
+                Enviamos um email de teste para você; só salvamos se ele chegar. A senha é guardada cifrada.
+              </p>
+            <% end %>
           </div>
         </.form>
       </div>

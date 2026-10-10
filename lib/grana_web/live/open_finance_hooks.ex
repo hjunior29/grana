@@ -45,6 +45,10 @@ defmodule GranaWeb.OpenFinanceHooks do
     socket
     |> assign(:open_finance_configured, configured)
     |> assign(:open_finance_credentials_source, OpenFinance.credentials_source(scope))
+    |> assign(
+      :open_finance_client_id,
+      (credentials = OpenFinance.credentials(scope)) && credentials.client_id
+    )
     |> assign(:open_finance_credentials_form, to_form(OpenFinance.change_credentials(scope)))
     |> assign(:open_finance_show_credentials_form, false)
     |> assign(:open_finance_connections, open_finance_connections(scope, configured))

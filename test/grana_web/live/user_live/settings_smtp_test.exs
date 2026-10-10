@@ -90,6 +90,8 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
     assert has_element?(lv, "#smtp-env")
+    assert has_element?(lv, "#smtp-env-host[disabled][value='env.example.com']")
+    assert has_element?(lv, "#smtp-env-password[disabled]")
     refute has_element?(lv, "#smtp-form")
     refute has_element?(lv, "#smtp-remove")
 

@@ -60,6 +60,7 @@ defmodule GranaWeb.OnboardingLive do
               form={@smtp_form}
               show_form={@smtp_show_form}
               private_key={@smtp_private_key}
+              embedded
             />
           <% :ai -> %>
             <.step_card
@@ -78,7 +79,7 @@ defmodule GranaWeb.OnboardingLive do
             <OpenFinanceComponents.settings_card
               configured={@open_finance_configured}
               credentials_source={@open_finance_credentials_source}
-              client_id={@current_scope.user.pluggy_client_id}
+              client_id={@open_finance_client_id}
               credentials_form={@open_finance_credentials_form}
               show_credentials_form={@open_finance_show_credentials_form}
               private_key={@open_finance_private_key}
@@ -142,20 +143,21 @@ defmodule GranaWeb.OnboardingLive do
             <button id="onboarding-skip" phx-click="next" class="btn btn-ghost btn-sm">
               Pular
             </button>
-            <%!-- Na etapa de LLM, o Continuar envia o form e salva antes de avançar. --%>
+            <%!-- Etapas com formulário: o Continuar envia o form (salva) antes de avançar. --%>
             <button
-              :if={@step == :ai}
+              :if={continue_mode(assigns) == :submit}
               id="onboarding-next"
               type="submit"
-              form="ai_form"
+              form={submit_form_id(@step)}
               class="btn btn-primary btn-sm"
             >
               Continuar
             </button>
             <button
-              :if={@step != :ai}
+              :if={continue_mode(assigns) != :submit}
               id="onboarding-next"
               phx-click="next"
+              disabled={continue_mode(assigns) == :blocked}
               class="btn btn-primary btn-sm"
             >
               Continuar
@@ -201,16 +203,18 @@ defmodule GranaWeb.OnboardingLive do
   end
 
   def handle_event("ai_continue", %{"user" => params}, socket) do
-    case Accounts.update_user_ai_settings(socket.assigns.current_scope.user, params) do
-      {:ok, user} ->
-        {:noreply,
-         socket
-         |> assign(:ai_form, to_form(Accounts.change_user_ai_settings(user)))
-         |> assign(:has_ai_api_key, user.ai_api_key != nil)
-         |> assign(:step, next_step(:ai))}
+    user = socket.assigns.current_scope.user
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, :ai_form, to_form(changeset, action: :insert))}
+    if key_missing?(socket, params) do
+      form =
+        user
+        |> Accounts.change_user_ai_settings(params)
+        |> Ecto.Changeset.add_error(:ai_api_key, "informe a chave do Gemini ou use Pular")
+        |> to_form(action: :insert)
+
+      {:noreply, assign(socket, :ai_form, form)}
+    else
+      save_ai(socket, user, params)
     end
   end
 
@@ -234,12 +238,57 @@ defmodule GranaWeb.OnboardingLive do
     {:noreply, assign(socket, :imported, true)}
   end
 
+  @impl true
+  def handle_info(:smtp_saved, socket) do
+    {:noreply, assign(socket, :step, next_step(:smtp))}
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  defp key_missing?(socket, params) do
+    String.trim(params["ai_api_key"] || "") == "" and not socket.assigns.has_ai_api_key and
+      not socket.assigns.ai_env_key
+  end
+
+  defp save_ai(socket, user, params) do
+    case Accounts.update_user_ai_settings(user, params) do
+      {:ok, user} ->
+        {:noreply,
+         socket
+         |> assign(:ai_form, to_form(Accounts.change_user_ai_settings(user)))
+         |> assign(:has_ai_api_key, user.ai_api_key != nil)
+         |> assign(:step, next_step(:ai))}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :ai_form, to_form(changeset, action: :insert))}
+    end
+  end
+
   defp finish(socket) do
     {:ok, _user} = Accounts.complete_onboarding(socket.assigns.current_scope.user)
     {:noreply, push_navigate(socket, to: ~p"/dashboard")}
   end
 
   defp step_index(id), do: Enum.find_index(@steps, &(&1.id == id))
+
+  # :submit = o form da etapa salva e avança; :blocked = falta preencher (use Pular).
+  defp continue_mode(%{step: :ai}), do: :submit
+
+  defp continue_mode(%{step: :smtp} = assigns) do
+    cond do
+      assigns.smtp_source == :env -> :next
+      assigns.smtp_source == :database and not assigns.smtp_show_form -> :next
+      assigns.smtp_private_key -> :submit
+      true -> :blocked
+    end
+  end
+
+  defp continue_mode(%{step: :open_finance, open_finance_configured: false}), do: :blocked
+  defp continue_mode(%{step: :import, imported: false}), do: :blocked
+  defp continue_mode(_assigns), do: :next
+
+  defp submit_form_id(:ai), do: "ai_form"
+  defp submit_form_id(:smtp), do: "smtp-form"
 
   defp previous_step(id) do
     @steps |> Enum.at(max(step_index(id) - 1, 0)) |> Map.fetch!(:id)
