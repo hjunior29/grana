@@ -4,10 +4,10 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
   use Mimic
 
   import Phoenix.LiveViewTest
+  import Grana.AccountsFixtures, only: [ai_fixture: 1]
   import Grana.BankingFixtures
 
   alias Grana.Banking
-  alias Grana.Accounts
 
   setup :register_and_log_in_user
 
@@ -117,7 +117,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
     end
 
     test "triggers analysis when API key is set and there is data", %{conn: conn, user: user} do
-      {:ok, _user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       Banking.ensure_default_categories(user.id)
       transaction_fixture(user, %{description: "SUPERMERCADO", amount: "-100.00"})
@@ -155,7 +155,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
   describe "analysis management" do
     setup %{user: user} do
-      {:ok, _user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
       :ok
     end
 
@@ -247,7 +247,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
   describe "analyze duplicate detection" do
     test "analyze shows warning when recent duplicate exists", %{conn: conn, user: user} do
-      {:ok, _user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       Banking.ensure_default_categories(user.id)
       transaction_fixture(user, %{description: "MERCADO", amount: "-200.00"})
@@ -340,7 +340,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
   describe "analysis filter label rendering" do
     setup %{user: user} do
-      {:ok, _user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       Banking.create_ai_analysis(%{
         user_id: user.id,
@@ -376,7 +376,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
   describe "analysis rendering with score colors" do
     setup %{user: user} do
-      {:ok, _user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
       :ok
     end
 
@@ -479,7 +479,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
   describe "old format analysis rendering" do
     setup %{user: user} do
-      {:ok, _user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
       :ok
     end
 

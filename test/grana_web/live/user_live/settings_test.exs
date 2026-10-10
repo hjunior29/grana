@@ -269,95 +269,6 @@ defmodule GranaWeb.UserLive.SettingsTest do
     end
   end
 
-  describe "AI settings" do
-    setup %{conn: conn} do
-      user = user_fixture()
-      %{conn: log_in_user(conn, user), user: user}
-    end
-
-    test "toggle_api_key_visibility toggles visibility", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
-
-      render_click(view, "toggle_api_key_visibility", %{})
-      html = render(view)
-      assert html =~ "Configurações" or html =~ "settings"
-    end
-
-    test "validate_ai_settings updates form", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
-
-      render_click(view, "validate_ai_settings", %{"user" => %{"ai_api_key" => "test-key"}})
-
-      html = render(view)
-      assert html =~ "settings" or html =~ "Configurações"
-    end
-
-    test "update_ai_settings saves API key", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
-
-      render_click(view, "update_ai_settings", %{"user" => %{"ai_api_key" => "new-api-key"}})
-
-      html = render(view)
-      assert html =~ "Configurações" or html =~ "salvas"
-    end
-
-    test "never sends the saved API key back to the browser", %{conn: conn, user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{"ai_api_key" => "AIza-chave-salva"})
-
-      {:ok, view, html} = live(conn, ~p"/users/settings")
-
-      refute html =~ "AIza-chave-salva"
-      assert has_element?(view, "#ai-api-key-input[placeholder*='salva']")
-      assert has_element?(view, "#remove-ai-api-key")
-
-      html =
-        view
-        |> form("#ai_form", user: %{ai_model: "gemini-2.5-pro"})
-        |> render_change()
-
-      refute html =~ "AIza-chave-salva"
-    end
-
-    test "submitting a blank key keeps the saved one", %{conn: conn, user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{"ai_api_key" => "AIza-chave-salva"})
-
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
-
-      view
-      |> form("#ai_form", user: %{ai_model: "gemini-2.5-pro", ai_api_key: ""})
-      |> render_submit()
-
-      saved = Accounts.get_user!(user.id)
-      assert saved.ai_model == "gemini-2.5-pro"
-      assert saved.ai_api_key == "AIza-chave-salva"
-    end
-
-    test "with GEMINI_API_KEY in the environment there is no key to save", %{
-      conn: conn,
-      user: user
-    } do
-      Application.put_env(:grana, :gemini_api_key, "AIza-do-env")
-      on_exit(fn -> Application.delete_env(:grana, :gemini_api_key) end)
-
-      {:ok, view, html} = live(conn, ~p"/users/settings")
-
-      assert has_element?(view, "#ai-api-key-env")
-      refute has_element?(view, "#ai-api-key-input")
-      refute html =~ "AIza-do-env"
-      assert {:ok, %{api_key: "AIza-do-env"}} = Accounts.get_user_ai_config(user.id)
-    end
-
-    test "removes the saved key", %{conn: conn, user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{"ai_api_key" => "AIza-chave-salva"})
-
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
-
-      assert view |> element("#remove-ai-api-key") |> render_click() =~ "API key removida"
-      refute has_element?(view, "#remove-ai-api-key")
-      assert Accounts.get_user!(user.id).ai_api_key == nil
-    end
-  end
-
   describe "identity settings" do
     setup %{conn: conn} do
       user = user_fixture()
@@ -487,7 +398,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert has_element?(lv, "#diagnostics h3", "Sistema")
       assert has_element?(lv, "#diagnostics-uptime")
       assert has_element?(lv, "#diagnostics-transactions")
-      assert has_element?(lv, "#diagnostics-integrations li", "Chave do Gemini")
+      assert has_element?(lv, "#diagnostics-integrations li", "Provedores de IA")
       assert has_element?(lv, "#diagnostics-runtime", "Elixir")
       assert has_element?(lv, "#diagnostics-public-url")
       assert has_element?(lv, "#diagnostics-oban")

@@ -284,7 +284,8 @@ defmodule GranaWeb.SetupLive do
       %{
         icon: "hero-sparkles",
         title: "IA categoriza e analisa",
-        text: "Com a sua própria chave do Gemini, para classificar gastos e gerar análises."
+        text:
+          "Com a sua própria chave (Gemini, OpenAI, Claude ou outro), para classificar gastos e gerar análises."
       },
       %{
         icon: "hero-server",

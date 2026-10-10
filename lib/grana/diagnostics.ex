@@ -20,10 +20,10 @@ defmodule Grana.Diagnostics do
       data: data_counts(user),
       jobs: job_counts(),
       unresolved_errors: unresolved_errors(),
-      ai_model: user.ai_model,
+      ai_default: ai_default(user),
       open_finance_connections: connection_count(user),
       credentials: [
-        {"Chave do Gemini", ai_source(user)},
+        {"Provedores de IA", ai_source(user)},
         {"Pluggy (Open Finance)", OpenFinance.credentials_source(Scope.for_user(user))},
         {"Email (SMTP)", Accounts.smtp_source()}
       ]
@@ -80,10 +80,22 @@ defmodule Grana.Diagnostics do
   def format_uptime(seconds), do: "#{div(seconds, 86_400)} d #{div(rem(seconds, 86_400), 3600)} h"
 
   defp ai_source(user) do
+    providers = Grana.AI.list_providers(user)
+
     cond do
-      Accounts.env_ai_api_key() -> :env
-      user.ai_api_key -> :database
-      true -> nil
+      providers == [] -> nil
+      Enum.all?(providers, &(&1.source == :env)) -> :env
+      true -> :database
+    end
+  end
+
+  # "Provedor · modelo" do padrão, ou quantos provedores há quando ainda não há padrão.
+  defp ai_default(user) do
+    providers = Grana.AI.list_providers(user)
+
+    case Grana.AI.get_provider(user, user.ai_provider) do
+      %{name: name} when is_binary(user.ai_model) -> "#{name} · #{user.ai_model}"
+      _ -> "#{length(providers)} provedor(es), sem padrão definido"
     end
   end
 

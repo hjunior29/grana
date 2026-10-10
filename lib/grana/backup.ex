@@ -15,7 +15,7 @@ defmodule Grana.Backup do
   alias Grana.Accounts.UserToken
 
   @sqlite_header "SQLite format 3\0"
-  @secret_columns ~w(ai_api_key cpf pluggy_client_secret pluggy_webhook_secret smtp_password)
+  @secret_columns ~w(cpf pluggy_client_secret pluggy_webhook_secret smtp_password)
   @stale_after_seconds 3600
   @retryable [
     {:error, :wrong_cloak_key},
@@ -184,29 +184,48 @@ defmodule Grana.Backup do
     end)
   end
 
+  # Segredos cifrados: colunas do usuário e a chave de cada provedor de IA.
   defp handle_secrets(user_id, old_key) do
-    %{rows: [values]} =
-      Repo.query!("SELECT #{Enum.join(@secret_columns, ", ")} FROM users WHERE id = ?", [user_id])
-
-    present =
-      for {column, value} <- Enum.zip(@secret_columns, values), value != nil, do: {column, value}
+    secrets = user_secrets(user_id) ++ provider_secrets(user_id)
 
     if old_key in [nil, ""] do
-      Enum.each(present, fn {column, _} ->
-        Repo.query!("UPDATE users SET #{column} = NULL WHERE id = ?", [user_id])
+      Enum.each(secrets, fn {table, column, id, _value} ->
+        Repo.query!("UPDATE #{table} SET #{column} = NULL WHERE id = ?", [id])
       end)
 
-      {:ok, Enum.map(present, &elem(&1, 0))}
+      {:ok, secrets |> Enum.map(&cleared_label/1) |> Enum.uniq()}
     else
-      reencrypt_secrets(present, user_id, String.trim(old_key))
+      reencrypt_secrets(secrets, String.trim(old_key))
     end
   end
 
-  defp reencrypt_secrets(present, user_id, old_key) do
-    Enum.reduce_while(present, {:ok, []}, fn {column, value}, acc ->
+  defp user_secrets(user_id) do
+    %{rows: [values]} =
+      Repo.query!("SELECT #{Enum.join(@secret_columns, ", ")} FROM users WHERE id = ?", [user_id])
+
+    for {column, value} <- Enum.zip(@secret_columns, values),
+        value != nil,
+        do: {"users", column, user_id, value}
+  end
+
+  defp provider_secrets(user_id) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT id, api_key FROM ai_providers WHERE user_id = ? AND api_key IS NOT NULL",
+        [user_id]
+      )
+
+    for [id, value] <- rows, do: {"ai_providers", "api_key", id, value}
+  end
+
+  defp cleared_label({"users", column, _id, _value}), do: column
+  defp cleared_label({"ai_providers", _column, _id, _value}), do: "ai_providers"
+
+  defp reencrypt_secrets(secrets, old_key) do
+    Enum.reduce_while(secrets, {:ok, []}, fn {table, column, id, value}, acc ->
       case Grana.Encrypted.Binary.reencrypt(value, old_key) do
         {:ok, new_value} ->
-          Repo.query!("UPDATE users SET #{column} = ? WHERE id = ?", [new_value, user_id])
+          Repo.query!("UPDATE #{table} SET #{column} = ? WHERE id = ?", [new_value, id])
           {:cont, acc}
 
         :error ->

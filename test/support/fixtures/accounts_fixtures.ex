@@ -59,6 +59,23 @@ defmodule Grana.AccountsFixtures do
     user |> Ecto.Changeset.change(attrs) |> Grana.Repo.update!()
   end
 
+  @doc """
+  Cadastra um provedor de IA (Gemini por padrão) para o usuário e o define como padrão,
+  gravando direto no banco (sem chamar a API). Devolve o usuário atualizado.
+  """
+  def ai_fixture(user, attrs \\ %{}) do
+    attrs = Enum.into(attrs, %{kind: "gemini", name: "Google Gemini", api_key: "fake-key"})
+    model = Map.get(attrs, :model, "gemini-test-model")
+
+    provider =
+      %Grana.AI.ProviderConfig{user_id: user.id}
+      |> Map.merge(Map.take(attrs, [:kind, :name, :base_url, :api_key]))
+      |> Grana.Repo.insert!()
+
+    {:ok, user} = Grana.AI.set_default(user, Grana.AI.ProviderConfig.ref(provider), model)
+    user
+  end
+
   def user_scope_fixture do
     user = user_fixture()
     user_scope_fixture(user)

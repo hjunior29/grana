@@ -12,7 +12,7 @@ defmodule Grana.DiagnosticsTest do
     assert summary.data_dir == Application.fetch_env!(:grana, :data_dir)
     assert is_integer(summary.database_size)
 
-    assert [{"Chave do Gemini", nil}, {"Pluggy (Open Finance)", nil}, {"Email (SMTP)", nil}] =
+    assert [{"Provedores de IA", nil}, {"Pluggy (Open Finance)", nil}, {"Email (SMTP)", nil}] =
              summary.credentials
   end
 
@@ -44,10 +44,10 @@ defmodule Grana.DiagnosticsTest do
 
   test "reconhece credenciais salvas no banco" do
     user = user_fixture() |> smtp_fixture()
-    user = user |> Ecto.Changeset.change(ai_api_key: "k") |> Grana.Repo.update!()
+    user = ai_fixture(user)
 
     credentials = Map.new(Diagnostics.summary(user).credentials)
-    assert credentials["Chave do Gemini"] == :database
+    assert credentials["Provedores de IA"] == :database
     assert credentials["Email (SMTP)"] == :database
   end
 

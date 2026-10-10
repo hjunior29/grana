@@ -49,51 +49,62 @@ defmodule GranaWeb.OnboardingLiveTest do
     refute has_element?(lv, "#onboarding-skip-all")
   end
 
+  describe "etapa LLM" do
+    use Mimic
+
+    setup :set_mimic_global
+
+    test "sem provedor, o Continuar fica bloqueado (só Pular)", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 2)
+
+      assert has_element?(lv, "#onboarding h1", "LLM")
+      assert has_element?(lv, "#ai-no-providers")
+      assert has_element?(lv, "button#onboarding-next[disabled]")
+
+      advance(lv, 1)
+      assert has_element?(lv, "#open-finance-settings")
+    end
+
+    test "cadastrar um provedor libera o Continuar", %{conn: conn, user: user} do
+      stub(Grana.AI.Models, :list, fn _ -> {:ok, [%{id: "claude-x", name: "Claude X"}]} end)
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 2)
+
+      lv |> element("#ai-add-provider") |> render_click()
+
+      lv
+      |> form("#ai-provider-form", provider: %{kind: "anthropic", name: "", api_key: "sk-ant"})
+      |> render_submit()
+
+      refute has_element?(lv, "button#onboarding-next[disabled]")
+      assert Accounts.get_user!(user.id).ai_model == "claude-x"
+
+      lv |> element("#onboarding-next") |> render_click()
+      assert has_element?(lv, "#open-finance-settings")
+    end
+
+    test "provedor do .env aparece, com a tag, sem expor a chave", %{conn: conn} do
+      Application.put_env(:grana, :ai_env_keys, %{"openai" => "sk-do-env"})
+      on_exit(fn -> Application.delete_env(:grana, :ai_env_keys) end)
+      stub(Grana.AI.Models, :list, fn _ -> {:ok, [%{id: "gpt-5-mini", name: "gpt-5-mini"}]} end)
+
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 2)
+      html = render_async(lv)
+
+      refute html =~ "sk-do-env"
+      assert has_element?(lv, "#ai-provider-env\\:openai .badge", ".env")
+      refute has_element?(lv, "button#onboarding-next[disabled]")
+    end
+  end
+
   test "etapa de email mostra o card de SMTP", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/onboarding")
     lv |> element("#onboarding-skip") |> render_click()
 
     assert has_element?(lv, "#smtp-settings")
   end
-
-  test "etapa de IA salva a chave", %{conn: conn, user: user} do
-    {:ok, lv, _html} = live(conn, ~p"/onboarding")
-    advance(lv, 2)
-
-    assert has_element?(lv, "#ai_form")
-    assert has_element?(lv, ~s|button#onboarding-next[form="ai_form"]|)
-    refute has_element?(lv, "#ai_form button", "Salvar")
-
-    lv
-    |> form("#ai_form", user: %{ai_model: "gemini-2.5-flash", ai_api_key: "chave-secreta"})
-    |> render_submit()
-
-    user = Accounts.get_user!(user.id)
-    assert user.ai_api_key == "chave-secreta"
-    assert user.ai_model == "gemini-2.5-flash"
-    assert has_element?(lv, "#open-finance-settings")
-  end
-
-  test "etapa LLM com chave do .env não oferece salvar e o Continuar avança", %{conn: conn} do
-    Application.put_env(:grana, :gemini_api_key, "env-key")
-    on_exit(fn -> Application.delete_env(:grana, :gemini_api_key) end)
-
-    {:ok, lv, _html} = live(conn, ~p"/onboarding")
-    advance(lv, 2)
-
-    assert has_element?(lv, "#ai-api-key-env")
-    assert has_element?(lv, "#ai-api-key-env-input[disabled][value=GEMINI_API_KEY]")
-    assert has_element?(lv, "#ai-api-key-env label span", ".env")
-    refute render(lv) =~ "env-key"
-    assert has_element?(lv, "#onboarding h1", "LLM")
-    refute has_element?(lv, "#ai_form button", "Salvar")
-
-    lv |> form("#ai_form", user: %{ai_model: "gemini-2.5-pro"}) |> render_submit()
-    assert has_element?(lv, "#open-finance-settings")
-    assert Accounts.get_user!(socket_user_id(lv)).ai_model == "gemini-2.5-pro"
-  end
-
-  defp socket_user_id(_lv), do: Grana.Repo.one!(Grana.Accounts.User).id
 
   test "etapa Open Finance mostra o card de credenciais", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/onboarding")
@@ -169,7 +180,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       lv |> form("#smtp-form", user: @smtp) |> render_submit()
 
       assert Accounts.smtp_configured?()
-      assert has_element?(lv, "#ai_form")
+      assert has_element?(lv, "#ai-providers")
     end
 
     test "SMTP: sem preencher não avança (só com Pular)", %{conn: conn} do
@@ -181,7 +192,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       assert has_element?(lv, "#smtp-form")
       refute Accounts.smtp_configured?()
       advance(lv, 1)
-      assert has_element?(lv, "#ai_form")
+      assert has_element?(lv, "#ai-providers")
     end
 
     test "SMTP falhando no teste não salva nem avança", %{conn: conn} do
@@ -193,16 +204,6 @@ defmodule GranaWeb.OnboardingLiveTest do
 
       assert html =~ "nada foi salvo"
       assert has_element?(lv, "#smtp-form")
-    end
-
-    test "LLM: sem chave não avança e mostra o erro", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/onboarding")
-      advance(lv, 2)
-
-      lv |> form("#ai_form", user: %{ai_model: "gemini-2.5-flash"}) |> render_submit()
-
-      assert has_element?(lv, "#ai-api-key-error", "informe a chave")
-      assert has_element?(lv, "#ai_form")
     end
 
     test "Open Finance: Continuar fica bloqueado até ter credenciais", %{conn: conn, user: user} do

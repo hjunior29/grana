@@ -828,19 +828,34 @@ defmodule GranaWeb.AnalysisLive do
           phx-key="Escape"
         >
           <div class="modal-box">
-            <h3 class="text-lg font-bold">API Key não configurada</h3>
+            <h3 class="text-lg font-bold">Provedor de IA não configurado</h3>
             <p class="py-4 opacity-70">
-              Para usar funcionalidades de IA, você precisa configurar uma API Key do Google Gemini.
+              Para usar funcionalidades de IA, você precisa cadastrar um provedor de IA (Gemini, OpenAI, Claude ou compatível).
             </p>
             <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
               <li>
-                Acesse
+                Crie uma chave no provedor que preferir:
                 <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">
-                  Google AI Studio
+                  Google Gemini
+                </a>
+                ·
+                <a
+                  href="https://platform.openai.com/api-keys"
+                  target="_blank"
+                  class="link link-primary"
+                >
+                  OpenAI
+                </a>
+                ·
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  class="link link-primary"
+                >
+                  Claude
                 </a>
               </li>
-              <li>Crie uma API Key gratuita</li>
-              <li>Cole a chave nas Configurações</li>
+              <li>Cadastre o provedor em Configurações → LLM</li>
             </ol>
             <div class="modal-action">
               <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>

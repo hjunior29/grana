@@ -5,7 +5,6 @@ defmodule Grana.Banking.AIAnalyzerTest do
 
   import Grana.AccountsFixtures
 
-  alias Grana.Accounts
   alias Grana.Banking.AIAnalyzer
   alias Grana.BankingFixtures
 
@@ -49,16 +48,7 @@ defmodule Grana.Banking.AIAnalyzerTest do
     })
   end
 
-  defp set_api_key(user) do
-    {:ok, updated} =
-      Accounts.update_user_ai_settings(user, %{
-        ai_api_key: "test-key",
-        ai_provider: "gemini",
-        ai_model: "gemini-2.0-flash"
-      })
-
-    updated
-  end
+  defp set_api_key(user), do: ai_fixture(user, %{model: "gemini-2.0-flash"})
 
   defp stub_provider_success(json_text \\ nil) do
     body = ai_response(json_text || valid_analysis_json())

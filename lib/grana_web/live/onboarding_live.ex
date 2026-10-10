@@ -3,6 +3,7 @@ defmodule GranaWeb.OnboardingLive do
 
   alias Grana.Accounts
   alias GranaWeb.AccountComponents
+  alias GranaWeb.AiComponents
   alias GranaWeb.OpenFinanceComponents
 
   on_mount GranaWeb.AiSettingsHooks
@@ -64,14 +65,16 @@ defmodule GranaWeb.OnboardingLive do
           <% :ai -> %>
             <.step_card
               title="LLM"
-              subtitle="Cole sua chave do Gemini para categorizar gastos e gerar análises."
+              subtitle="Cadastre um provedor (Gemini, OpenAI, Claude ou compatível) para categorizar gastos e gerar análises."
             >
-              <AccountComponents.ai_form
+              <AiComponents.providers_panel
+                providers={@ai_providers}
+                selected_ref={@ai_selected_ref}
+                default_form={@ai_default_form}
+                default_model={@ai_default_model}
+                models={@ai_models}
                 form={@ai_form}
-                env_key={@ai_env_key}
-                has_api_key={@has_ai_api_key}
-                show_api_key={@show_api_key}
-                embedded
+                show_form={@ai_show_form}
               />
             </.step_card>
           <% :open_finance -> %>
@@ -170,22 +173,6 @@ defmodule GranaWeb.OnboardingLive do
     {:noreply, assign(socket, :step, previous_step(socket.assigns.step))}
   end
 
-  def handle_event("ai_continue", %{"user" => params}, socket) do
-    user = socket.assigns.current_scope.user
-
-    if key_missing?(socket, params) do
-      form =
-        user
-        |> Accounts.change_user_ai_settings(params)
-        |> Ecto.Changeset.add_error(:ai_api_key, "informe a chave do Gemini ou use Pular")
-        |> to_form(action: :insert)
-
-      {:noreply, assign(socket, :ai_form, form)}
-    else
-      save_ai(socket, user, params)
-    end
-  end
-
   def handle_event("finish", _params, socket), do: finish(socket)
 
   @impl true
@@ -195,25 +182,6 @@ defmodule GranaWeb.OnboardingLive do
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
-  defp key_missing?(socket, params) do
-    String.trim(params["ai_api_key"] || "") == "" and not socket.assigns.has_ai_api_key and
-      not socket.assigns.ai_env_key
-  end
-
-  defp save_ai(socket, user, params) do
-    case Accounts.update_user_ai_settings(user, params) do
-      {:ok, user} ->
-        {:noreply,
-         socket
-         |> assign(:ai_form, to_form(Accounts.change_user_ai_settings(user)))
-         |> assign(:has_ai_api_key, user.ai_api_key != nil)
-         |> assign(:step, next_step(:ai))}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, :ai_form, to_form(changeset, action: :insert))}
-    end
-  end
-
   defp finish(socket) do
     {:ok, _user} = Accounts.complete_onboarding(socket.assigns.current_scope.user)
     {:noreply, push_navigate(socket, to: ~p"/dashboard")}
@@ -222,7 +190,7 @@ defmodule GranaWeb.OnboardingLive do
   defp step_index(id), do: Enum.find_index(@steps, &(&1.id == id))
 
   # :submit = o form da etapa salva e avança; :blocked = falta preencher (use Pular).
-  defp continue_mode(%{step: :ai}), do: :submit
+  defp continue_mode(%{step: :ai, ai_providers: []}), do: :blocked
 
   defp continue_mode(%{step: :smtp} = assigns) do
     cond do
@@ -236,7 +204,6 @@ defmodule GranaWeb.OnboardingLive do
   defp continue_mode(%{step: :open_finance, open_finance_configured: false}), do: :blocked
   defp continue_mode(_assigns), do: :next
 
-  defp submit_form_id(:ai), do: "ai_form"
   defp submit_form_id(:smtp), do: "smtp-form"
 
   defp previous_step(id) do

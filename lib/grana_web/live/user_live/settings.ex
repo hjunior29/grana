@@ -8,6 +8,7 @@ defmodule GranaWeb.UserLive.Settings do
   alias Grana.Accounts
   alias Grana.Diagnostics
   alias GranaWeb.AccountComponents
+  alias GranaWeb.AiComponents
   alias GranaWeb.BackupComponents
   alias GranaWeb.OpenFinanceComponents
 
@@ -101,13 +102,16 @@ defmodule GranaWeb.UserLive.Settings do
             <h3 class="text-lg font-semibold">LLM</h3>
           </div>
           <p class="text-sm opacity-50 mb-4 ml-8">
-            Provider de IA usado para análises, categorização e extração de PDFs
+            Provedores de IA para análises, categorização e leitura de PDFs. Os modelos vêm direto da API de cada provedor.
           </p>
-          <AccountComponents.ai_form
+          <AiComponents.providers_panel
+            providers={@ai_providers}
+            selected_ref={@ai_selected_ref}
+            default_form={@ai_default_form}
+            default_model={@ai_default_model}
+            models={@ai_models}
             form={@ai_form}
-            env_key={@ai_env_key}
-            has_api_key={@has_ai_api_key}
-            show_api_key={@show_api_key}
+            show_form={@ai_show_form}
           />
         </div>
 
@@ -572,7 +576,7 @@ defmodule GranaWeb.UserLive.Settings do
   defp source_badge(:database), do: "badge-success badge-soft"
   defp source_badge(nil), do: "badge-ghost"
 
-  defp integration_detail("Chave do Gemini", d), do: "Modelo #{d.ai_model}"
+  defp integration_detail("Provedores de IA", d), do: d.ai_default
 
   defp integration_detail("Pluggy (Open Finance)", d),
     do: "#{d.open_finance_connections} conexão(ões) com bancos"
