@@ -2355,6 +2355,11 @@ html {
   visibility: visible;
 }
 
+.logo-story-panel-left {
+  right: auto;
+  left: max(5vw, 1.5rem);
+}
+
 .logo-story-panel h2 {
   margin-bottom: 0.75rem;
   font-size: clamp(1.75rem, 2.6vw, 2.5rem);
@@ -2426,8 +2431,8 @@ html {
 
 .logo-story-donut {
   position: relative;
-  width: 9rem;
-  height: 9rem;
+  width: 10rem;
+  height: 10rem;
   margin: 1rem auto;
 }
 
@@ -2587,9 +2592,17 @@ html {
   }
 
   .logo-story-donut {
-    width: 6rem;
-    height: 6rem;
+    width: 8rem;
+    height: 8rem;
     margin: 0.6rem auto;
+  }
+
+  .logo-story-donut-total span {
+    font-size: 0.6rem;
+  }
+
+  .logo-story-donut-total strong {
+    font-size: 0.72rem;
   }
 
   .logo-story-category-list {
