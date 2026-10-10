@@ -1,6 +1,8 @@
 defmodule GranaWeb.UserLive.RegistrationTest do
   use GranaWeb.ConnCase
 
+  setup :ensure_owner
+
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
 
@@ -42,7 +44,7 @@ defmodule GranaWeb.UserLive.RegistrationTest do
       lv |> element("#terms_checkbox") |> render_click()
 
       email = unique_user_email()
-      form = form(lv, "#registration_form", user: valid_user_attributes(email: email))
+      form = form(lv, "#registration_form", user: %{email: email})
 
       {:ok, _lv, html} =
         render_submit(form)

@@ -19,13 +19,22 @@ defmodule Grana.Application do
         [
           {Phoenix.PubSub, name: Grana.PubSub},
           {Oban, Application.fetch_env!(:grana, Oban)},
+          Grana.Setup,
           GranaWeb.Endpoint
-        ]
+        ] ++ announce_setup()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Grana.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp announce_setup do
+    if Application.get_env(:grana, :announce_setup_code, true) do
+      [{Task, &Grana.Setup.announce_if_setup_required/0}]
+    else
+      []
+    end
   end
 
   # Só em release (RELEASE_NAME); em dev/test as migrations rodam via mix.

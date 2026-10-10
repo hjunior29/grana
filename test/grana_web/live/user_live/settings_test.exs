@@ -1,6 +1,8 @@
 defmodule GranaWeb.UserLive.SettingsTest do
   use GranaWeb.ConnCase
 
+  setup :ensure_owner
+
   alias Grana.Accounts
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures

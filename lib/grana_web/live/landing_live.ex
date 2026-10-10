@@ -2,6 +2,10 @@ defmodule GranaWeb.LandingLive do
   use GranaWeb, :live_view
 
   @impl true
+  def mount(_params, _session, %{assigns: %{current_scope: %{user: %{}}}} = socket) do
+    {:ok, push_navigate(socket, to: ~p"/dashboard")}
+  end
+
   def mount(_params, _session, socket) do
     {:ok,
      socket

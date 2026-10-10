@@ -23,8 +23,30 @@ defmodule Grana.Accounts.User do
     field :pluggy_client_secret, Grana.Encrypted.Binary, redact: true
     field :pluggy_webhook_secret, Grana.Encrypted.Binary, redact: true
 
+    # Preenchido ao concluir (ou pular) o onboarding; base_url é a origem usada
+    # nos links enviados por email quando não há PUBLIC_URL.
+    field :onboarded_at, :utc_datetime
+    field :base_url, :string
+
     timestamps(type: :utc_datetime)
   end
+
+  @doc """
+  Changeset do dono da instância, criado pelo assistente de setup: já nasce
+  confirmado e com senha (confirmação obrigatória).
+  """
+  def owner_changeset(user, attrs, opts \\ []) do
+    user
+    |> cast(attrs, [:email, :name, :password, :base_url])
+    |> validate_email(validate_unique: false)
+    |> validate_required([:name])
+    |> validate_length(:name, max: 160)
+    |> validate_confirmation(:password, required: true, message: "does not match password")
+    |> validate_password(opts)
+    |> put_change(:confirmed_at, DateTime.utc_now(:second))
+  end
+
+  def onboarded_changeset(user), do: change(user, onboarded_at: DateTime.utc_now(:second))
 
   @doc """
   A user changeset for registering or changing the email.

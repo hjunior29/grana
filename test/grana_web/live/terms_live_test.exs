@@ -1,6 +1,8 @@
 defmodule GranaWeb.TermsLiveTest do
   use GranaWeb.ConnCase
 
+  setup :ensure_owner
+
   import Phoenix.LiveViewTest
 
   test "renders terms page" do

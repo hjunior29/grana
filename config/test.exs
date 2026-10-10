@@ -58,3 +58,7 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Sem cache do estado de setup e sem código no log: o banco muda a cada teste.
+config :grana, :cache_setup_state, false
+config :grana, :announce_setup_code, false
