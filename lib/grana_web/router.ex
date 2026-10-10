@@ -6,7 +6,7 @@ defmodule GranaWeb.Router do
   # CSP aplicada só às rotas do app (não aos dashboards admin/dev, que usam
   # inline scripts/styles). script-src 'self' bloqueia JS injetado (defesa extra
   # de XSS); style-src/img-src/connect-src liberam o necessário p/ charts, logos
-  # externos (brapi) e o websocket do LiveView. frame-src libera só o iframe do
+  # externos e o websocket do LiveView. frame-src libera só o iframe do
   # widget Pluggy Connect (Open Finance).
   @content_security_policy Enum.join(
                              [
