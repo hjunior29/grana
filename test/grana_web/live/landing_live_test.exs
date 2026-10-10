@@ -25,6 +25,35 @@ defmodule GranaWeb.LandingLiveTest do
     assert has_element?(lv, ~s|#hero img[src^="/images/logo"]|)
   end
 
+  test "a história da logo passa pela moeda, pelas categorias do sistema e pelos meses", %{
+    conn: conn
+  } do
+    {:ok, lv, _html} = live(conn, ~p"/")
+
+    assert has_element?(lv, "#logo-story[phx-hook][data-geometry]")
+
+    # Ordem da história: moeda, categorias, meses e o fechamento.
+    for {id, step} <- [
+          {"logo-story-coin", 0},
+          {"logo-story-categories", 1},
+          {"logo-story-months", 2},
+          {"logo-story-final", 3}
+        ] do
+      assert has_element?(lv, ~s|##{id}[data-panel="#{step}"]|)
+    end
+
+    assert has_element?(lv, "#logo-story-categories", "R$ 6.400,00")
+    assert has_element?(lv, "#logo-story-months", "Receitas vs Despesas")
+    assert has_element?(lv, "#logo-story-months", "+R$ 16.600,00")
+    assert has_element?(lv, "#logo-story-months", "economizou 18,4%")
+
+    for cat <- GranaWeb.BrandComponents.geometry().categories do
+      assert has_element?(lv, "#logo-story-categories li", cat.name)
+    end
+
+    assert has_element?(lv, ~s|#logo-story-final svg[aria-label="Grana"]|)
+  end
+
   test "tem as seções de como funciona, Open Finance, segurança e instalação", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/")
 

@@ -445,8 +445,29 @@ defmodule GranaWeb.UserLive.SettingsTest do
     test "mostra o card de backup com download e restauração", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      assert has_element?(lv, ~s|#download-backup[href="/users/settings/backup"]|)
-      assert has_element?(lv, "#restore-upload-form")
+      assert has_element?(
+               lv,
+               ~s|#backup-download #download-backup[href="/users/settings/backup"]|
+             )
+
+      assert has_element?(lv, "#backup-restore #restore-upload-form")
+      assert has_element?(lv, "#restore-dropzone")
+      assert has_element?(lv, "button#restore-verify[disabled]")
+    end
+
+    test "escolher o arquivo mostra o nome e habilita Verificar", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      file =
+        file_input(lv, "#restore-upload-form", :backup, [
+          %{name: "meu-backup.db", content: String.duplicate("x", 2048)}
+        ])
+
+      render_upload(file, "meu-backup.db")
+
+      assert has_element?(lv, "#restore-dropzone", "meu-backup.db")
+      assert has_element?(lv, "#restore-dropzone", "2.0 KB")
+      refute has_element?(lv, "button#restore-verify[disabled]")
     end
 
     test "mostra jobs pendentes e com falha no atalho da fila", %{conn: conn} do
