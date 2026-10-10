@@ -53,6 +53,7 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
 
     test "shows today's position, cards and alerts above the history", %{
       conn: conn,
+      connection: connection,
       checking: checking,
       card: card
     } do
@@ -67,7 +68,9 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
       # Uso do limite = comprometido (limite - disponível), não só a fatura atual.
       assert has_element?(lv, "#today-card-#{card.id} progress[value='25.0']")
       assert has_element?(lv, "#today-card-#{card.id}", "25% do limite usado")
-      assert has_element?(lv, "#open-finance-today-alerts", "vence em 2 dia(s)")
+      refute has_element?(lv, "#today-card-#{card.id}-custom-limit")
+      # O alerta fica no pé do grupo do próprio banco.
+      assert has_element?(lv, "#today-alerts-#{connection.id}", "Ultravioleta vence em 2 dia(s)")
     end
 
     test "labels business accounts and leaves zero-balance due dates out of the alerts", %{
@@ -76,21 +79,64 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
     } do
       business = connection_fixture(user, %{bank: "nubank", holder_type: "PJ"})
 
-      account_fixture(business, %{
-        type: "CREDIT",
-        subtype: "CREDIT_CARD",
-        name: "company",
-        balance: Decimal.new("0"),
-        credit_limit: Decimal.new("9800"),
-        available_credit_limit: Decimal.new("2800"),
-        balance_due_date: Date.utc_today()
-      })
+      # Limite aprovado 9.800, reduzido pelo cliente para 2.800 no app: nada usado.
+      card =
+        account_fixture(business, %{
+          type: "CREDIT",
+          subtype: "CREDIT_CARD",
+          name: "company",
+          balance: Decimal.new("0"),
+          credit_limit: Decimal.new("9800"),
+          custom_credit_limit: Decimal.new("2800"),
+          available_credit_limit: Decimal.new("2800"),
+          balance_due_date: Date.utc_today()
+        })
 
       {:ok, lv, _html} = live(conn, ~p"/dashboard")
 
       assert has_element?(lv, "#today-bank-#{business.id}", "PJ")
-      assert has_element?(lv, "#today-bank-#{business.id}", "71% do limite usado")
-      refute has_element?(lv, "#open-finance-today-alerts", "Company")
+      assert has_element?(lv, "#today-card-#{card.id} progress[value='0.0']")
+      assert has_element?(lv, "#today-card-#{card.id}", "disponível R$ 2.800,00 de R$ 2.800,00")
+      assert has_element?(lv, "#today-card-#{card.id}-custom-limit", "aprovado R$ 9.800,00")
+      refute has_element?(lv, "#today-alerts-#{business.id}")
+    end
+
+    test "warns about a negative balance inside the bank's group", %{
+      conn: conn,
+      connection: connection,
+      checking: checking
+    } do
+      Grana.Repo.update!(Ecto.Changeset.change(checking, balance: Decimal.new("-10.00")))
+
+      {:ok, lv, _html} = live(conn, ~p"/dashboard")
+
+      assert has_element?(
+               lv,
+               "#today-alerts-#{connection.id}",
+               "Saldo negativo na conta corrente"
+             )
+    end
+
+    test "dates the snapshot by Pluggy's last collection at the bank, not by our read", %{
+      conn: conn,
+      connection: connection
+    } do
+      collected_at = DateTime.add(DateTime.utc_now(:second), -2, :hour)
+
+      Grana.Repo.update!(
+        Ecto.Changeset.change(connection,
+          last_synced_at: DateTime.utc_now(:second),
+          pluggy_updated_at: collected_at
+        )
+      )
+
+      {:ok, lv, _html} = live(conn, ~p"/dashboard")
+
+      expected_title =
+        collected_at |> DateTime.add(-3, :hour) |> Calendar.strftime("%d/%m às %H:%M")
+
+      assert has_element?(lv, "#open-finance-today-collected-at", "atualizado há 2 h")
+      assert has_element?(lv, "#open-finance-today-collected-at[title*='#{expected_title}']")
     end
 
     test "is only shown on the Resumo tab", %{conn: conn} do

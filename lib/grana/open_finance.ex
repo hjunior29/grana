@@ -713,6 +713,7 @@ defmodule Grana.OpenFinance do
       automatically_invested_balance: to_decimal(bank["automaticallyInvestedBalance"]),
       credit_limit: to_decimal(credit["creditLimit"]),
       available_credit_limit: to_decimal(credit["availableCreditLimit"]),
+      custom_credit_limit: custom_credit_limit(credit),
       minimum_payment: to_decimal(credit["minimumPayment"]),
       balance_close_date: to_date(credit["balanceCloseDate"]),
       balance_due_date: to_date(credit["balanceDueDate"]),
@@ -724,6 +725,16 @@ defmodule Grana.OpenFinance do
       inserted_at: now,
       updated_at: now
     }
+  end
+
+  # O Nubank, por exemplo, devolve creditLimit 9800 (aprovado) e availableCreditLimit
+  # 2800 quando o cliente reduziu o limite para 2800 — sem nada usado.
+  defp custom_credit_limit(credit) do
+    (credit["disaggregatedCreditLimits"] || [])
+    |> Enum.filter(&(&1["creditLineLimitType"] == "LIMITE_CREDITO_TOTAL"))
+    |> Enum.map(& &1["customizedLimitAmount"])
+    |> Enum.find(&is_number/1)
+    |> to_decimal()
   end
 
   defp to_decimal(nil), do: nil
@@ -771,14 +782,15 @@ defmodule Grana.OpenFinance do
       bank_count: length(banks),
       card_used: sum(cards, :balance),
       card_available: sum(cards, :available_credit_limit),
-      card_limit: sum(cards, :credit_limit),
+      card_limit: cards |> Enum.map(&Account.effective_credit_limit/1) |> sum_values(),
       card_count: length(cards)
     }
   end
 
-  defp sum(accounts, field) do
-    accounts
-    |> Enum.map(&Map.fetch!(&1, field))
+  defp sum(accounts, field), do: accounts |> Enum.map(&Map.fetch!(&1, field)) |> sum_values()
+
+  defp sum_values(values) do
+    values
     |> Enum.reject(&is_nil/1)
     |> Enum.reduce(Decimal.new(0), &Decimal.add/2)
   end
@@ -827,9 +839,14 @@ defmodule Grana.OpenFinance do
     |> Map.new(fn {month, sources} -> {month, sources |> Enum.uniq() |> Enum.sort()} end)
   end
 
-  @doc "Momento da leitura mais antiga entre as conexões do usuário (idade do retrato)."
-  def last_refreshed_at(%Scope{user: user}) do
-    Repo.one(from(c in Connection, where: c.user_id == ^user.id, select: min(c.last_synced_at)))
+  @doc """
+  Idade do retrato: a coleta mais antiga que a Pluggy fez nos bancos do usuário
+  (`lastUpdatedAt` do item). A nossa leitura da Pluggy é só cache e não conta.
+  """
+  def last_collected_at(%Scope{user: user}) do
+    Repo.one(
+      from(c in Connection, where: c.user_id == ^user.id, select: min(c.pluggy_updated_at))
+    )
   end
 
   ## Webhooks

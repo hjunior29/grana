@@ -219,7 +219,7 @@ defmodule GranaWeb.DashboardLive do
       accounts: accounts,
       totals: OpenFinance.totals(accounts),
       calendar: OpenFinance.coverage_calendar(scope),
-      refreshed_at: OpenFinance.last_refreshed_at(scope)
+      collected_at: OpenFinance.last_collected_at(scope)
     })
   end
 
@@ -535,7 +535,7 @@ defmodule GranaWeb.DashboardLive do
               accounts={@today.accounts}
               totals={@today.totals}
               calendar={@today.calendar}
-              refreshed_at={@today.refreshed_at}
+              collected_at={@today.collected_at}
             />
             {render_banking_tab(assigns)}
         <% end %>
