@@ -167,7 +167,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       html = lv |> form("#smtp-form", user: @smtp) |> render_submit(%{"intent" => "test"})
 
       assert html =~ "Email de teste enviado"
-      assert_email_sent(subject: "Teste de email — Grana")
+      assert_email_sent(subject: "Seu email no Grana está funcionando")
       refute Accounts.smtp_configured?()
       assert has_element?(lv, "#smtp-form")
     end

@@ -45,7 +45,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
 
     assert html =~ "SMTP salvo"
     assert has_element?(lv, "#smtp-saved")
-    assert_email_sent(subject: "Teste de email — Grana")
+    assert_email_sent(subject: "Seu email no Grana está funcionando")
     assert Accounts.smtp_configured?()
     assert Accounts.get_user!(user.id).smtp_host == "smtp.exemplo.com"
   end
