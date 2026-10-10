@@ -3,6 +3,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
+import {PluggyConnect} from "../vendor/pluggy-connect"
 
 // --- Theme ---
 const visualStyles = new Set(["default", "signal", "bossa", "papel", "caderneta", "planetario", "cyber"])
@@ -889,6 +890,45 @@ const CurrencyInput = {
   }
 }
 
+// --- Open Finance (Pluggy Connect) ---
+// O servidor gera um connect token (30 min, escopo restrito) e o envia via
+// push_event; o widget roda num iframe de connect.pluggy.ai. Devolvemos só o id do
+// Item criado — o servidor confere esse id na API da Pluggy antes de gravar.
+const PluggyConnectWidget = {
+  mounted() {
+    this.handleEvent("pluggy:open", ({connect_token, connector_id, sandbox}) => {
+      this.destroyWidget()
+
+      this.widget = new PluggyConnect({
+        connectToken: connect_token,
+        connectorIds: [connector_id],
+        selectedConnectorId: connector_id,
+        includeSandbox: sandbox,
+        language: "pt",
+        theme: activeThemeMode() === "dark" ? "dark" : "light",
+        onSuccess: ({item}) => this.pushEvent("pluggy_connected", {item_id: item.id}),
+        onError: ({message}) => this.pushEvent("pluggy_error", {message}),
+        onClose: () => this.pushEvent("pluggy_closed", {}),
+      })
+
+      this.widget.init().catch(error => {
+        this.pushEvent("pluggy_error", {message: error && error.message})
+      })
+    })
+  },
+
+  destroyed() {
+    this.destroyWidget()
+  },
+
+  destroyWidget() {
+    if (this.widget) {
+      this.widget.destroy().catch(() => {})
+      this.widget = null
+    }
+  },
+}
+
 const Hooks = {
   ...colocatedHooks,
   CategoryChart,
@@ -903,6 +943,7 @@ const Hooks = {
   ActiveNav,
   LandingAIDemo,
   CurrencyInput,
+  PluggyConnectWidget,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

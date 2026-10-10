@@ -17,6 +17,12 @@ defmodule Grana.Accounts.User do
     field :name, :string
     field :cpf, Grana.Encrypted.Binary, redact: true
 
+    # Open Finance (Pluggy): credenciais da aplicação do usuário e o segredo que
+    # autentica os webhooks. Cifrados; nunca são devolvidos para o navegador.
+    field :pluggy_client_id, :string
+    field :pluggy_client_secret, Grana.Encrypted.Binary, redact: true
+    field :pluggy_webhook_secret, Grana.Encrypted.Binary, redact: true
+
     timestamps(type: :utc_datetime)
   end
 
@@ -141,8 +147,34 @@ defmodule Grana.Accounts.User do
   def ai_settings_changeset(user, attrs \\ %{}) do
     user
     |> cast(attrs, [:ai_provider, :ai_model, :ai_api_key])
+    |> keep_secret_when_blank(:ai_api_key)
     |> validate_inclusion(:ai_provider, ["gemini"])
     |> validate_inclusion(:ai_model, ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"])
+  end
+
+  # Campos de segredo são só de escrita: a tela nunca recebe o valor salvo, então
+  # deixar em branco significa "manter" (remover é uma ação explícita).
+  defp keep_secret_when_blank(changeset, field) do
+    if get_change(changeset, field, :unchanged) == nil,
+      do: delete_change(changeset, field),
+      else: changeset
+  end
+
+  @doc """
+  Changeset das credenciais da Pluggy. Os dois campos são exigidos juntos: trocar
+  o Client ID significa outra aplicação, com outro secret.
+  """
+  def pluggy_credentials_changeset(user, attrs \\ %{}) do
+    user
+    |> cast(attrs, [:pluggy_client_id, :pluggy_client_secret])
+    |> update_change(:pluggy_client_id, &trim/1)
+    |> update_change(:pluggy_client_secret, &trim/1)
+    |> validate_required([:pluggy_client_id, :pluggy_client_secret])
+    |> validate_format(
+      :pluggy_client_id,
+      ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      message: "deve ser o Client ID (UUID) da aplicação"
+    )
   end
 
   @doc """
@@ -156,6 +188,9 @@ defmodule Grana.Accounts.User do
     |> validate_length(:name, max: 160)
     |> validate_format(:cpf, ~r/^\d{11}$/, message: "deve ter 11 dígitos")
   end
+
+  defp trim(nil), do: nil
+  defp trim(value), do: String.trim(value)
 
   defp normalize_cpf(nil), do: nil
   defp normalize_cpf(""), do: nil
