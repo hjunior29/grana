@@ -220,36 +220,56 @@ defmodule Grana.Investments do
     |> exclude(:order_by)
     |> select([t], %{
       total_compras:
-        coalesce(
-          sum(
-            fragment("CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+        type(
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
           ),
-          0
+          :decimal
         ),
       total_vendas:
-        coalesce(
-          sum(
-            fragment("CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+        type(
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
           ),
-          0
+          :decimal
         ),
       total_proventos:
-        coalesce(
-          sum(
-            fragment(
-              "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
-              t.operation,
-              t.total_amount
-            )
+        type(
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
+                t.operation,
+                t.total_amount
+              )
+            ),
+            0
           ),
-          0
+          :decimal
         ),
       total_taxas:
-        coalesce(
-          sum(
-            fragment("CASE WHEN ? = 'taxa' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+        type(
+          coalesce(
+            sum(
+              fragment("CASE WHEN ? = 'taxa' THEN ABS(?) ELSE 0 END", t.operation, t.total_amount)
+            ),
+            0
           ),
-          0
+          :decimal
         )
     })
     |> Repo.one()
@@ -317,14 +337,23 @@ defmodule Grana.Investments do
   defp filter_by_search(query, ""), do: query
 
   defp filter_by_search(query, term) do
-    pattern = "%#{term}%"
-    where(query, [t], ilike(t.asset_name, ^pattern) or ilike(t.asset_ticker, ^pattern))
+    patterns =
+      [term, String.upcase(term), String.downcase(term)]
+      |> Enum.uniq()
+      |> Enum.map(&"%#{&1}%")
+
+    desc_filter =
+      Enum.reduce(patterns, dynamic(false), fn p, acc ->
+        dynamic([t], ^acc or like(t.asset_name, ^p) or like(t.asset_ticker, ^p))
+      end)
+
+    where(query, ^desc_filter)
   end
 
   defp filter_by_amount_min(query, nil), do: query
 
   defp filter_by_amount_min(query, min),
-    do: where(query, [t], fragment("ABS(?)", t.total_amount) >= ^min)
+    do: where(query, [t], fragment("ABS(?)", t.total_amount) >= type(^min, :decimal))
 
   defp filter_by_statement(query, nil), do: query
   defp filter_by_statement(query, id), do: where(query, [t], t.statement_id == ^id)
@@ -332,7 +361,17 @@ defmodule Grana.Investments do
   defp filter_by_amount_max(query, nil), do: query
 
   defp filter_by_amount_max(query, max),
-    do: where(query, [t], fragment("ABS(?)", t.total_amount) <= ^max)
+    do: where(query, [t], fragment("ABS(?)", t.total_amount) <= type(^max, :decimal))
+
+  @transaction_defaults %{
+    asset_ticker: nil,
+    fees: Decimal.new(0),
+    identifier: nil,
+    institution_id: nil,
+    original_description: nil,
+    quantity: Decimal.new(0),
+    unit_price: Decimal.new(0)
+  }
 
   def bulk_insert_transactions(transactions_attrs) do
     now = DateTime.utc_now(:second)
@@ -355,12 +394,25 @@ defmodule Grana.Investments do
 
     entries =
       Enum.map(valid, fn attrs ->
-        attrs
+        @transaction_defaults
+        |> Map.merge(attrs)
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
       end)
 
-    result = Repo.insert_all(Transaction, entries)
+    all_keys =
+      Enum.reduce(entries, MapSet.new(), fn entry, acc ->
+        MapSet.union(acc, MapSet.new(Map.keys(entry)))
+      end)
+
+    normalized_entries =
+      Enum.map(entries, fn entry ->
+        Enum.reduce(all_keys, entry, fn key, acc ->
+          Map.put_new(acc, key, nil)
+        end)
+      end)
+
+    result = Repo.insert_all(Transaction, normalized_entries)
 
     case entries do
       [%{user_id: uid} | _] when is_integer(uid) -> Grana.Cache.invalidate_user(uid)
@@ -413,8 +465,8 @@ defmodule Grana.Investments do
   def available_months(user_id) do
     Transaction
     |> where([t], t.user_id == ^user_id)
-    |> select([t], fragment("DISTINCT date_trunc('month', ?)", t.date))
-    |> order_by([t], desc: fragment("date_trunc('month', ?)", t.date))
+    |> select([t], fragment("DISTINCT strftime('%Y-%m-01', ?)", t.date))
+    |> order_by([t], desc: fragment("strftime('%Y-%m-01', ?)", t.date))
     |> Repo.all()
     |> Enum.map(fn dt ->
       date =
@@ -422,6 +474,7 @@ defmodule Grana.Investments do
           %NaiveDateTime{} -> NaiveDateTime.to_date(dt)
           %DateTime{} -> DateTime.to_date(dt)
           %Date{} -> dt
+          str when is_binary(str) -> Date.from_iso8601!(str)
         end
 
       {date.year, date.month}
@@ -644,7 +697,7 @@ defmodule Grana.Investments do
 
         %{asset_type: type, total: total, count: length(items)}
       end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(fn %{total: t} -> to_float(t) end, :desc)
 
     Map.merge(summary, %{
       holdings: enriched_holdings,
@@ -678,39 +731,48 @@ defmodule Grana.Investments do
       base
       |> select([t], %{
         total_bought:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
         total_sold:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
         dividends:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
-        total_fees: coalesce(sum(t.fees), 0),
+        total_fees: type(coalesce(sum(t.fees), 0), :decimal),
         transaction_count: count(t.id)
       })
       |> Repo.one()
@@ -729,36 +791,48 @@ defmodule Grana.Investments do
         type: min(t.asset_type),
         institution_id: min(t.institution_id),
         bought_qty:
-          coalesce(
-            sum(fragment("CASE WHEN ? = 'compra' THEN ? ELSE 0 END", t.operation, t.quantity)),
-            0
+          type(
+            coalesce(
+              sum(fragment("CASE WHEN ? = 'compra' THEN ? ELSE 0 END", t.operation, t.quantity)),
+              0
+            ),
+            :decimal
           ),
         sold_qty:
-          coalesce(
-            sum(fragment("CASE WHEN ? = 'venda' THEN ? ELSE 0 END", t.operation, t.quantity)),
-            0
+          type(
+            coalesce(
+              sum(fragment("CASE WHEN ? = 'venda' THEN ? ELSE 0 END", t.operation, t.quantity)),
+              0
+            ),
+            :decimal
           ),
         bought_total:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
         sold_total:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           )
       })
       |> Repo.all()
@@ -814,7 +888,7 @@ defmodule Grana.Investments do
           is_active: is_active
         }
       end)
-      |> Enum.sort_by(fn %{net_total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(fn %{net_total: t} -> to_float(t) end, :desc)
 
     # Net position only from active holdings
     net_position =
@@ -838,7 +912,7 @@ defmodule Grana.Investments do
         total = Enum.reduce(items, Decimal.new(0), fn h, acc -> Decimal.add(acc, h.net_total) end)
         %{asset_type: type, total: total, count: length(items)}
       end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(fn %{total: t} -> to_float(t) end, :desc)
 
     # 3. By institution (SQL)
     by_institution_raw =
@@ -847,7 +921,7 @@ defmodule Grana.Investments do
       |> group_by([t], t.institution_id)
       |> select([t], %{
         institution_id: t.institution_id,
-        total: coalesce(sum(fragment("ABS(?)", t.total_amount)), 0),
+        total: type(coalesce(sum(fragment("ABS(?)", t.total_amount)), 0), :decimal),
         count: count(t.id)
       })
       |> Repo.all()
@@ -858,7 +932,7 @@ defmodule Grana.Investments do
         inst = Map.get(institutions_map, row.institution_id)
         %{institution: inst, total: row.total, count: row.count}
       end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(fn %{total: t} -> to_float(t) end, :desc)
 
     # 4. Dividends by asset (SQL)
     dividend_by_asset_raw =
@@ -873,7 +947,7 @@ defmodule Grana.Investments do
         name: min(t.asset_name),
         type: min(t.asset_type),
         institution_id: min(t.institution_id),
-        total: coalesce(sum(fragment("ABS(?)", t.total_amount)), 0),
+        total: type(coalesce(sum(fragment("ABS(?)", t.total_amount)), 0), :decimal),
         count: count(t.id)
       })
       |> Repo.all()
@@ -893,7 +967,7 @@ defmodule Grana.Investments do
           count: d.count
         }
       end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(fn %{total: t} -> to_float(t) end, :desc)
 
     # 5. Proventos by asset (SQL): dividends + max(vendas - compras, 0)
     proventos_by_asset_raw =
@@ -909,37 +983,46 @@ defmodule Grana.Investments do
         type: min(t.asset_type),
         institution_id: min(t.institution_id),
         sold:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? = 'venda' THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
         bought:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? = 'compra' THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
         divs:
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
-                t.operation,
-                t.total_amount
-              )
+          type(
+            coalesce(
+              sum(
+                fragment(
+                  "CASE WHEN ? IN ('dividendo', 'jcp', 'rendimento', 'amortizacao') THEN ABS(?) ELSE 0 END",
+                  t.operation,
+                  t.total_amount
+                )
+              ),
+              0
             ),
-            0
+            :decimal
           ),
         count: count(t.id)
       })
@@ -969,7 +1052,7 @@ defmodule Grana.Investments do
         }
       end)
       |> Enum.filter(fn %{total: t} -> Decimal.compare(t, 0) == :gt end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(fn %{total: t} -> to_float(t) end, :desc)
 
     proventos =
       proventos_by_asset
@@ -1143,4 +1226,8 @@ defmodule Grana.Investments do
   end
 
   defp invalidate_cache(result), do: result
+
+  defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp to_float(n) when is_number(n), do: n * 1.0
+  defp to_float(nil), do: 0.0
 end

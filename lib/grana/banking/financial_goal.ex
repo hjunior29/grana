@@ -31,8 +31,16 @@ defmodule Grana.Banking.FinancialGoal do
       name: :financial_goals_user_type_active_idx,
       message: "Já existe uma meta ativa desse tipo"
     )
+    |> unique_constraint([:user_id, :type],
+      name: :financial_goals_user_id_type_index,
+      message: "Já existe uma meta ativa desse tipo"
+    )
     |> unique_constraint([:user_id, :type, :category_id],
       name: :financial_goals_user_type_category_active_idx,
+      message: "Já existe uma meta ativa para essa categoria"
+    )
+    |> unique_constraint([:user_id, :type, :category_id],
+      name: :financial_goals_user_id_type_category_id_index,
       message: "Já existe uma meta ativa para essa categoria"
     )
   end

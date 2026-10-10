@@ -287,8 +287,8 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         label: Banking.month_name_short(month),
-        income: Decimal.to_float(m.fixed),
-        expenses: Decimal.to_float(m.variable)
+        income: to_float(m.fixed),
+        expenses: to_float(m.variable)
       }
     end)
     |> Jason.encode!()
@@ -2445,7 +2445,7 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         name: if(item.category, do: item.category.name, else: "Sem Categoria"),
-        value: Decimal.to_float(item.total),
+        value: to_float(item.total),
         color: category_color(item.category),
         url: transactions_url(assigns, Map.put(url_extra, :type, "debit"))
       }
@@ -2458,7 +2458,7 @@ defmodule GranaWeb.DashboardLive do
     |> Enum.map(fn day ->
       %{
         date: Calendar.strftime(day.date, "%d/%m"),
-        value: Decimal.to_float(day.total),
+        value: to_float(day.total),
         url: transactions_url(assigns, %{date_from: day.date, date_to: day.date, type: "debit"})
       }
     end)
@@ -2470,7 +2470,7 @@ defmodule GranaWeb.DashboardLive do
     |> Enum.map(fn item ->
       %{
         date: to_string(item.year),
-        value: Decimal.to_float(item.expenses),
+        value: to_float(item.expenses),
         url:
           transactions_url(assigns, %{
             date_from: Date.new!(item.year, 1, 1),
@@ -2490,7 +2490,7 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         date: Banking.month_name_short(item.month),
-        value: Decimal.to_float(item.expenses),
+        value: to_float(item.expenses),
         url: transactions_url(assigns, %{date_from: date_from, date_to: date_to, type: "debit"})
       }
     end)
@@ -2508,8 +2508,8 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         label: to_string(year),
-        income: Decimal.to_float(income),
-        expenses: Decimal.to_float(expenses),
+        income: to_float(income),
+        expenses: to_float(expenses),
         income_url: transactions_url(assigns, Map.put(base, :type, "credit")),
         expenses_url: transactions_url(assigns, Map.put(base, :type, "debit"))
       }
@@ -2526,8 +2526,8 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         label: Banking.month_name_short(item.month),
-        income: Decimal.to_float(item.income),
-        expenses: Decimal.to_float(item.expenses),
+        income: to_float(item.income),
+        expenses: to_float(item.expenses),
         income_url: transactions_url(assigns, Map.put(base, :type, "credit")),
         expenses_url: transactions_url(assigns, Map.put(base, :type, "debit"))
       }
@@ -2540,7 +2540,7 @@ defmodule GranaWeb.DashboardLive do
     |> Enum.map(fn item ->
       %{
         label: item.label,
-        value: Decimal.to_float(item.total)
+        value: to_float(item.total)
       }
     end)
     |> Jason.encode!()
@@ -2556,7 +2556,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   defp format_quantity(qty) do
-    float = Decimal.to_float(qty)
+    float = to_float(qty)
 
     if float == Float.round(float),
       do: "#{trunc(float)}",
@@ -2679,7 +2679,7 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         date: format_activity_label(a.key, assigns.inv_view_mode, assigns.inv_selected_month),
-        value: Decimal.to_float(a.proventos),
+        value: to_float(a.proventos),
         url:
           inv_transactions_url(
             assigns,
@@ -2697,7 +2697,7 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         date: format_activity_label(a.key, assigns.inv_view_mode, assigns.inv_selected_month),
-        value: Decimal.to_float(a.aportes),
+        value: to_float(a.aportes),
         url: inv_transactions_url(assigns, Map.put(range, :operation, "compra"))
       }
     end)
@@ -2706,7 +2706,7 @@ defmodule GranaWeb.DashboardLive do
 
   defp inv_individual_asset_chart_data(assigns) do
     excluded = assigns[:inv_excluded_assets] || MapSet.new()
-    total = Decimal.to_float(assigns.inv_summary.market_value)
+    total = to_float(assigns.inv_summary.market_value)
 
     assigns.inv_summary.by_asset_individual
     |> Enum.reject(fn h -> MapSet.member?(excluded, h.ticker || h.name) end)
@@ -2716,7 +2716,7 @@ defmodule GranaWeb.DashboardLive do
 
       %{
         name: h.ticker || h.name,
-        value: Decimal.to_float(h.current_value),
+        value: to_float(h.current_value),
         color: individual_color(idx),
         url: inv_transactions_url(assigns, %{search: search, skip_dates: true})
       }
@@ -2726,13 +2726,13 @@ defmodule GranaWeb.DashboardLive do
   end
 
   defp inv_asset_type_chart_data(assigns) do
-    total = Decimal.to_float(assigns.inv_summary.market_value)
+    total = to_float(assigns.inv_summary.market_value)
 
     assigns.inv_summary.by_asset_type
     |> Enum.map(fn item ->
       %{
         name: asset_type_label(item.asset_type),
-        value: Decimal.to_float(item.total),
+        value: to_float(item.total),
         color: asset_type_color(item.asset_type),
         url: inv_transactions_url(assigns, %{asset_type: item.asset_type, skip_dates: true})
       }
@@ -2759,4 +2759,15 @@ defmodule GranaWeb.DashboardLive do
   defp goal_text_color(:exceeded), do: "text-error"
   defp goal_text_color(:behind), do: "text-error"
   defp goal_text_color(_), do: ""
+
+  defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp to_float(n) when is_number(n), do: n * 1.0
+  defp to_float(nil), do: 0.0
+
+  defp to_float(s) when is_binary(s) do
+    case Float.parse(s) do
+      {f, _} -> f
+      :error -> 0.0
+    end
+  end
 end

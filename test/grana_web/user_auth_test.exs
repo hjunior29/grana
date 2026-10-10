@@ -1,5 +1,5 @@
 defmodule GranaWeb.UserAuthTest do
-  use GranaWeb.ConnCase, async: true
+  use GranaWeb.ConnCase
 
   alias Phoenix.LiveView
   alias Grana.Accounts

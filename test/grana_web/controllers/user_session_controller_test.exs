@@ -1,5 +1,5 @@
 defmodule GranaWeb.UserSessionControllerTest do
-  use GranaWeb.ConnCase, async: true
+  use GranaWeb.ConnCase
 
   import Grana.AccountsFixtures
   alias Grana.Accounts

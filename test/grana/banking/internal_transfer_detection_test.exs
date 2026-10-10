@@ -1,5 +1,5 @@
 defmodule Grana.Banking.InternalTransferDetectionTest do
-  use Grana.DataCase, async: true
+  use Grana.DataCase
 
   import Grana.AccountsFixtures
 

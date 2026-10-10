@@ -161,10 +161,10 @@ defmodule Grana.Banking do
     end
   end
 
-  # OR de ILIKE com os termos de imposto, empurrado para o WHERE do banco.
+  # OR de LIKE com os termos de imposto, empurrado para o WHERE do banco.
   defp tax_keyword_filter do
     Enum.reduce(KeywordCategorizer.strict_db_keywords(), dynamic([t], false), fn kw, acc ->
-      dynamic([t], ^acc or ilike(t.description, ^("%" <> kw <> "%")))
+      dynamic([t], ^acc or like(t.description, ^("%" <> kw <> "%")))
     end)
   end
 
@@ -577,14 +577,30 @@ defmodule Grana.Banking do
   defp filter_by_search(query, ""), do: query
 
   defp filter_by_search(query, term) do
-    pattern = "%#{term}%"
+    patterns =
+      [term, String.upcase(term), String.downcase(term)]
+      |> Enum.uniq()
+      |> Enum.map(&"%#{&1}%")
+
+    cat_filter =
+      Enum.reduce(patterns, dynamic(false), fn p, acc ->
+        dynamic([c], ^acc or like(c.name, ^p))
+      end)
 
     cat_ids =
       Category
-      |> where([c], ilike(c.name, ^pattern))
+      |> where(^cat_filter)
       |> select([c], c.id)
 
-    where(query, [t], ilike(t.description, ^pattern) or t.category_id in subquery(cat_ids))
+    txn_filter =
+      Enum.reduce(patterns, dynamic(false), fn p, acc ->
+        dynamic([t], ^acc or like(t.description, ^p))
+      end)
+
+    where_filter =
+      dynamic([t], ^txn_filter or t.category_id in subquery(cat_ids))
+
+    where(query, ^where_filter)
   end
 
   defp filter_by_bank(query, nil, _user_id), do: query
@@ -630,13 +646,13 @@ defmodule Grana.Banking do
   defp filter_by_amount_min(query, nil), do: query
 
   defp filter_by_amount_min(query, min) do
-    where(query, [t], fragment("ABS(?)", t.amount) >= ^min)
+    where(query, [t], fragment("ABS(?)", t.amount) >= type(^min, :decimal))
   end
 
   defp filter_by_amount_max(query, nil), do: query
 
   defp filter_by_amount_max(query, max) do
-    where(query, [t], fragment("ABS(?)", t.amount) <= ^max)
+    where(query, [t], fragment("ABS(?)", t.amount) <= type(^max, :decimal))
   end
 
   defp filter_by_internal(query, nil), do: query
@@ -669,17 +685,40 @@ defmodule Grana.Banking do
     result
   end
 
+  @transaction_defaults %{
+    category_id: nil,
+    identifier: nil,
+    installment_current: nil,
+    installment_group_id: nil,
+    installment_total: nil,
+    is_internal_transfer: false,
+    original_description: nil
+  }
+
   def bulk_insert_transactions(transactions_attrs) do
     now = DateTime.utc_now(:second)
 
     entries =
       Enum.map(transactions_attrs, fn attrs ->
-        attrs
+        @transaction_defaults
+        |> Map.merge(attrs)
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
       end)
 
-    result = Repo.insert_all(Transaction, entries)
+    all_keys =
+      Enum.reduce(entries, MapSet.new(), fn entry, acc ->
+        MapSet.union(acc, MapSet.new(Map.keys(entry)))
+      end)
+
+    normalized_entries =
+      Enum.map(entries, fn entry ->
+        Enum.reduce(all_keys, entry, fn key, acc ->
+          Map.put_new(acc, key, nil)
+        end)
+      end)
+
+    result = Repo.insert_all(Transaction, normalized_entries)
 
     case transactions_attrs do
       [%{user_id: uid} | _] when is_integer(uid) -> Grana.Cache.invalidate_user(uid)
@@ -1436,8 +1475,8 @@ defmodule Grana.Banking do
   def available_months(user_id) do
     Transaction
     |> where([t], t.user_id == ^user_id)
-    |> select([t], fragment("DISTINCT date_trunc('month', ?)", t.date))
-    |> order_by([t], desc: fragment("date_trunc('month', ?)", t.date))
+    |> select([t], fragment("DISTINCT strftime('%Y-%m-01', ?)", t.date))
+    |> order_by([t], desc: fragment("strftime('%Y-%m-01', ?)", t.date))
     |> Repo.all()
     |> Enum.map(fn dt ->
       date =
@@ -1445,6 +1484,7 @@ defmodule Grana.Banking do
           %NaiveDateTime{} -> NaiveDateTime.to_date(dt)
           %DateTime{} -> DateTime.to_date(dt)
           %Date{} -> dt
+          str when is_binary(str) -> Date.from_iso8601!(str)
         end
 
       {date.year, date.month}
@@ -1506,7 +1546,7 @@ defmodule Grana.Banking do
     query
     |> where([t], t.category_id not in subquery(investment_cat_ids) or is_nil(t.category_id))
     |> group_by([t], t.date)
-    |> select([t], %{date: t.date, total: sum(fragment("ABS(?)", t.amount))})
+    |> select([t], %{date: t.date, total: type(sum(fragment("ABS(?)", t.amount)), :decimal)})
     |> order_by([t], asc: t.date)
     |> Repo.all()
   end
@@ -1615,34 +1655,43 @@ defmodule Grana.Banking do
     |> join(:left, [t], c in Category, on: t.category_id == c.id)
     |> select([t, c], %{
       total_income:
-        coalesce(
-          sum(fragment("CASE WHEN ? = 'credit' THEN ABS(?) ELSE 0 END", t.type, t.amount)),
-          0
+        type(
+          coalesce(
+            sum(fragment("CASE WHEN ? = 'credit' THEN ABS(?) ELSE 0 END", t.type, t.amount)),
+            0
+          ),
+          :decimal
         ),
       total_expenses:
-        coalesce(
-          sum(
-            fragment(
-              "CASE WHEN ? = 'debit' AND (? IS NULL OR ? != 'investment') THEN ABS(?) ELSE 0 END",
-              t.type,
-              c.kind,
-              c.kind,
-              t.amount
-            )
+        type(
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'debit' AND (? IS NULL OR ? != 'investment') THEN ABS(?) ELSE 0 END",
+                t.type,
+                c.kind,
+                c.kind,
+                t.amount
+              )
+            ),
+            0
           ),
-          0
+          :decimal
         ),
       total_investments:
-        coalesce(
-          sum(
-            fragment(
-              "CASE WHEN ? = 'debit' AND ? = 'investment' THEN ABS(?) ELSE 0 END",
-              t.type,
-              c.kind,
-              t.amount
-            )
+        type(
+          coalesce(
+            sum(
+              fragment(
+                "CASE WHEN ? = 'debit' AND ? = 'investment' THEN ABS(?) ELSE 0 END",
+                t.type,
+                c.kind,
+                t.amount
+              )
+            ),
+            0
           ),
-          0
+          :decimal
         )
     })
     |> Repo.one()

@@ -1,5 +1,5 @@
 defmodule Grana.Banking.ExtendedTest do
-  use Grana.DataCase, async: true
+  use Grana.DataCase
 
   alias Grana.Banking
 

@@ -2,10 +2,21 @@ defmodule Grana.Repo.Migrations.CreateUsersAuthTables do
   use Ecto.Migration
 
   def change do
-    execute "CREATE EXTENSION IF NOT EXISTS citext", ""
+    email_type = if repo().__adapter__() == Ecto.Adapters.Postgres, do: :citext, else: :string
+
+    if repo().__adapter__() == Ecto.Adapters.Postgres do
+      execute "CREATE EXTENSION IF NOT EXISTS citext", ""
+    end
+
+    email_opts =
+      if repo().__adapter__() == Ecto.Adapters.Postgres do
+        [null: false]
+      else
+        [null: false, collate: :nocase]
+      end
 
     create table(:users) do
-      add :email, :citext, null: false
+      add :email, email_type, email_opts
       add :hashed_password, :string
       add :confirmed_at, :utc_datetime
 
