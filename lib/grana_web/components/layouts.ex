@@ -26,12 +26,13 @@ defmodule GranaWeb.Layouts do
         <div class="flex-1">
           <.link
             navigate={if @current_scope, do: ~p"/dashboard", else: ~p"/"}
-            class="flex items-center gap-2 text-xl font-bold tracking-tight"
+            id="header-brand"
+            class="flex items-center"
           >
-            <img src={~p"/images/logo-32.png"} alt="" class="w-6 h-6 sm:w-7 sm:h-7" />
-            <span style="font-family: 'Grand Hotel', cursive" class="text-xl sm:text-2xl">
-              Grana
-            </span>
+            <GranaWeb.BrandComponents.brand
+              logo_class="size-6 sm:size-7"
+              wordmark_class="h-4 sm:h-5 w-auto"
+            />
           </.link>
         </div>
         <div :if={@show_appearance} id="header-appearance" class="flex flex-none items-center gap-2">
