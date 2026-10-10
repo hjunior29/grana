@@ -14,7 +14,6 @@ defmodule GranaWeb.OnboardingLive do
     %{id: :smtp, title: "Email", icon: "hero-envelope"},
     %{id: :ai, title: "LLM", icon: "hero-sparkles"},
     %{id: :open_finance, title: "Open Finance", icon: "hero-link"},
-    %{id: :import, title: "Importar", icon: "hero-arrow-up-tray"},
     %{id: :done, title: "Pronto", icon: "hero-check-circle"}
   ]
 
@@ -89,35 +88,6 @@ defmodule GranaWeb.OnboardingLive do
               show_item_form={@open_finance_show_item_form}
               item_form={@open_finance_item_form}
             />
-          <% :import -> %>
-            <.step_card
-              title="Importar dados"
-              subtitle="Já tem um CSV exportado do Grana? Envie aqui para trazer seu histórico."
-            >
-              <form id="import-form" phx-submit="import" phx-change="validate_import">
-                <.live_file_input
-                  upload={@uploads.import}
-                  class="file-input file-input-bordered w-full mb-3"
-                />
-                <p
-                  :for={entry <- @uploads.import.entries}
-                  id={"import-entry-#{entry.ref}"}
-                  class="text-sm opacity-70"
-                >
-                  {entry.client_name}
-                </p>
-                <.button
-                  :if={@uploads.import.entries != []}
-                  class="btn btn-primary btn-sm mt-3"
-                  phx-disable-with="Enviando..."
-                >
-                  Importar
-                </.button>
-              </form>
-              <p :if={@imported} id="import-result" class="mt-3 text-sm text-success">
-                Importação iniciada — os dados aparecem no painel em instantes.
-              </p>
-            </.step_card>
           <% :done -> %>
             <.step_card title="Tudo pronto!" subtitle="Seu Grana está configurado.">
               <p class="mb-4 text-sm opacity-70">
@@ -188,9 +158,7 @@ defmodule GranaWeb.OnboardingLive do
     {:ok,
      socket
      |> assign(:steps, @steps)
-     |> assign(:step, :appearance)
-     |> assign(:imported, false)
-     |> allow_upload(:import, accept: ~w(.csv), max_entries: 5, max_file_size: 5_000_000)}
+     |> assign(:step, :appearance)}
   end
 
   @impl true
@@ -219,24 +187,6 @@ defmodule GranaWeb.OnboardingLive do
   end
 
   def handle_event("finish", _params, socket), do: finish(socket)
-
-  def handle_event("validate_import", _params, socket), do: {:noreply, socket}
-
-  def handle_event("import", _params, socket) do
-    user_id = socket.assigns.current_scope.user.id
-
-    files =
-      consume_uploaded_entries(socket, :import, fn %{path: path}, entry ->
-        {:ok,
-         %{"filename" => entry.client_name, "content_b64" => Base.encode64(File.read!(path))}}
-      end)
-
-    %{files: files, user_id: user_id, topic: "onboarding:#{user_id}"}
-    |> Grana.Workers.PlatformImportWorker.new()
-    |> Oban.insert()
-
-    {:noreply, assign(socket, :imported, true)}
-  end
 
   @impl true
   def handle_info(:smtp_saved, socket) do
@@ -284,7 +234,6 @@ defmodule GranaWeb.OnboardingLive do
   end
 
   defp continue_mode(%{step: :open_finance, open_finance_configured: false}), do: :blocked
-  defp continue_mode(%{step: :import, imported: false}), do: :blocked
   defp continue_mode(_assigns), do: :next
 
   defp submit_form_id(:ai), do: "ai_form"
