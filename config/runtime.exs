@@ -123,9 +123,12 @@ if config_env() == :prod do
 
   database_path = System.get_env("DATABASE_PATH") || Path.join(data_dir, "grana.db")
 
+  # busy_timeout: as conexões do pool disputam o lock de escrita do SQLite durante
+  # as migrations do boot; esperar evita erros de "database is locked" na subida.
   config :grana, Grana.Repo,
     database: database_path,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5")
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+    busy_timeout: 5_000
 
   # Gerados no primeiro boot e guardados em $DATA_DIR/secrets; o ambiente sobrescreve.
   secrets_dir = Path.join(data_dir, "secrets")
