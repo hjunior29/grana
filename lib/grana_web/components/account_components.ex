@@ -15,12 +15,12 @@ defmodule GranaWeb.AccountComponents do
     ~H"""
     <div class="mb-2">
       <label class="mb-1 flex items-center gap-2 text-sm font-medium" for={@id}>
-        {@label} <span class="badge badge-ghost badge-xs">.env</span>
+        {@label} <span class="badge badge-info badge-soft badge-sm">.env</span>
       </label>
       <div class="relative">
         <.icon
           name={if @secret, do: "hero-key", else: "hero-variable"}
-          class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 opacity-50"
+          class="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 opacity-60"
         />
         <input
           id={@id}
