@@ -449,12 +449,28 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert has_element?(lv, "#restore-upload-form")
     end
 
+    test "mostra jobs pendentes e com falha no atalho da fila", %{conn: conn} do
+      Grana.Repo.insert!(Oban.Job.new(%{}, worker: "X"))
+      Grana.Repo.insert!(Oban.Job.new(%{}, worker: "Y", state: "discarded"))
+
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      assert has_element?(lv, "#diagnostics-jobs-pending", "1")
+      assert has_element?(lv, "#diagnostics-jobs-failed", "1 com falha")
+    end
+
     test "mostra o diagnóstico da instância", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
       assert has_element?(lv, "#diagnostics-version")
       assert has_element?(lv, "#diagnostics-data-dir")
       assert has_element?(lv, "#diagnostics-db-size")
+      assert has_element?(lv, "#diagnostics h3", "Sistema")
+      assert has_element?(lv, "#diagnostics-uptime")
+      assert has_element?(lv, "#diagnostics-transactions")
+      assert has_element?(lv, "#diagnostics-integrations li", "Chave do Gemini")
+      assert has_element?(lv, "#diagnostics-runtime", "Elixir")
+      assert has_element?(lv, "#diagnostics-public-url")
       assert has_element?(lv, "#diagnostics-oban")
       assert has_element?(lv, "#diagnostics-errors")
     end
