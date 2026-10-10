@@ -6,17 +6,12 @@ defmodule GranaWeb.BackupComponents do
   attr :uploads, :any, required: true
   attr :analysis, :map, default: nil
   attr :form, :any, required: true
-  attr :error, :string, default: nil
 
   def restore_panel(assigns) do
     assigns = assign(assigns, :selected, selected_user(assigns.analysis, assigns.form))
 
     ~H"""
     <div id="restore-panel">
-      <p :if={@error} id="restore-error" class="alert alert-error alert-soft mb-4 text-sm">
-        {@error}
-      </p>
-
       <form
         :if={@stage == :idle}
         id="restore-upload-form"

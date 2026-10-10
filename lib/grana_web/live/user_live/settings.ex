@@ -202,7 +202,6 @@ defmodule GranaWeb.UserLive.Settings do
               uploads={@uploads}
               analysis={@restore_analysis}
               form={@restore_form}
-              error={@restore_error}
             />
           </div>
 

@@ -16,7 +16,6 @@ defmodule GranaWeb.BackupHooks do
       |> assign(:restore_context, context)
       |> assign(:restore_stage, :idle)
       |> assign(:restore_analysis, nil)
-      |> assign(:restore_error, nil)
       |> assign(:restore_form, restore_form(%{}))
       |> allow_upload(:backup,
         accept: :any,
@@ -48,14 +47,16 @@ defmodule GranaWeb.BackupHooks do
          socket
          |> assign(:restore_stage, :options)
          |> assign(:restore_analysis, analysis)
-         |> assign(:restore_error, nil)
          |> assign(:restore_form, restore_form(%{"user_id" => to_string(first.id)}))}
 
       [{:error, reason}] ->
-        {:halt, assign(socket, restore_stage: :idle, restore_error: error_message(reason))}
+        {:halt,
+         socket
+         |> assign(:restore_stage, :idle)
+         |> put_flash(:error, error_message(reason))}
 
       [] ->
-        {:halt, assign(socket, :restore_error, "Escolha o arquivo de backup (.db) primeiro.")}
+        {:halt, put_flash(socket, :error, "Escolha o arquivo de backup (.db) primeiro.")}
     end
   end
 
@@ -69,8 +70,7 @@ defmodule GranaWeb.BackupHooks do
     {:halt,
      socket
      |> assign(:restore_stage, :idle)
-     |> assign(:restore_analysis, nil)
-     |> assign(:restore_error, nil)}
+     |> assign(:restore_analysis, nil)}
   end
 
   defp handle_event("restore_apply", %{"restore" => params}, socket) do
@@ -104,16 +104,14 @@ defmodule GranaWeb.BackupHooks do
       {:error, reason} when reason in [:wrong_cloak_key, :password_required, :password_invalid] ->
         {:halt,
          socket
-         |> assign(:restore_error, error_message(reason))
+         |> put_flash(:error, error_message(reason))
          |> assign(:restore_form, restore_form(Map.put(params, "new_password", "")))}
 
       {:error, reason} ->
         {:halt,
-         assign(socket,
-           restore_stage: :idle,
-           restore_analysis: nil,
-           restore_error: error_message(reason)
-         )}
+         socket
+         |> assign(restore_stage: :idle, restore_analysis: nil)
+         |> put_flash(:error, error_message(reason))}
     end
   end
 
@@ -127,7 +125,7 @@ defmodule GranaWeb.BackupHooks do
     do: GranaWeb.UserAuth.redirect_for_reauth(socket)
 
   defp unauthorized(socket) do
-    assign(socket, :restore_error, "O código do setup expirou. Reinicie o assistente.")
+    put_flash(socket, :error, "O código do setup expirou. Reinicie o assistente.")
   end
 
   defp discard(nil), do: :ok
