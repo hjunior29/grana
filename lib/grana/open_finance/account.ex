@@ -19,6 +19,7 @@ defmodule Grana.OpenFinance.Account do
     field :automatically_invested_balance, :decimal
     field :credit_limit, :decimal
     field :available_credit_limit, :decimal
+    field :custom_credit_limit, :decimal
     field :minimum_payment, :decimal
     field :balance_close_date, :date
     field :balance_due_date, :date
@@ -33,4 +34,15 @@ defmodule Grana.OpenFinance.Account do
   end
 
   def credit_card?(%__MODULE__{type: type}), do: type == "CREDIT"
+
+  @doc """
+  Teto real do cartão: o limite definido pelo cliente no app do banco quando é
+  menor que o aprovado (o disponível é calculado sobre ele), senão o aprovado.
+  """
+  def effective_credit_limit(%__MODULE__{credit_limit: limit, custom_credit_limit: custom})
+      when is_struct(limit, Decimal) and is_struct(custom, Decimal) do
+    if Decimal.lt?(custom, limit), do: custom, else: limit
+  end
+
+  def effective_credit_limit(%__MODULE__{credit_limit: limit}), do: limit
 end

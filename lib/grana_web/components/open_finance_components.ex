@@ -344,15 +344,16 @@ defmodule GranaWeb.OpenFinanceComponents do
   end
 
   @doc """
-  Bloco "Hoje" do Resumo: o estado atual pelo Open Finance. Totais e alertas no
-  topo; contas e cartões agrupados por banco; num bloco recolhível, um calendário
-  em miniatura (o mesmo da aba de uploads) mostra os meses em que o Open Finance
-  supre a falta de upload. Não obedece aos filtros de período do histórico.
+  Bloco "Hoje" do Resumo: o estado atual pelo Open Finance. Totais no topo;
+  contas e cartões agrupados por banco, cada grupo com os seus alertas no pé; num
+  bloco recolhível, um calendário em miniatura (o mesmo da aba de uploads) mostra
+  os meses em que o Open Finance supre a falta de upload. Não obedece aos filtros
+  de período do histórico.
   """
   attr :accounts, :list, required: true, doc: "contas com a conexão pré-carregada"
   attr :totals, :map, required: true
   attr :calendar, :list, required: true, doc: "linhas de `OpenFinance.coverage_calendar/1`"
-  attr :refreshed_at, :any, required: true
+  attr :collected_at, :any, required: true, doc: "última coleta da Pluggy nos bancos"
 
   def today(assigns) do
     of_months =
@@ -361,7 +362,6 @@ defmodule GranaWeb.OpenFinanceComponents do
     assigns =
       assign(assigns,
         groups: Enum.chunk_by(assigns.accounts, & &1.connection_id),
-        alerts: alerts(assigns.accounts),
         of_month_count: length(of_months)
       )
 
@@ -374,7 +374,13 @@ defmodule GranaWeb.OpenFinanceComponents do
         <h2 class="text-sm font-semibold uppercase tracking-wide">Hoje</h2>
         <span class="text-xs opacity-50 flex items-center gap-1">
           <.open_finance_logo class="size-3.5" /> Open Finance
-          <span :if={@refreshed_at}>· atualizado {time_ago(@refreshed_at)}</span>
+          <span
+            :if={@collected_at}
+            id="open-finance-today-collected-at"
+            title={"Última coleta da Pluggy nos bancos: #{format_brt(@collected_at)}"}
+          >
+            · atualizado {time_ago(@collected_at)}
+          </span>
         </span>
       </div>
 
@@ -399,12 +405,6 @@ defmodule GranaWeb.OpenFinanceComponents do
           <p class="text-[11px] opacity-50">de {format_money(@totals.card_limit)} de limite total</p>
         </div>
       </div>
-
-      <ul :if={@alerts != []} id="open-finance-today-alerts" class="mb-4 space-y-1 text-xs">
-        <li :for={alert <- @alerts} class="flex items-start gap-1.5 text-warning">
-          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert}
-        </li>
-      </ul>
 
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <.bank_group :for={accounts <- @groups} accounts={accounts} />
@@ -526,10 +526,16 @@ defmodule GranaWeb.OpenFinanceComponents do
     connection = hd(assigns.accounts).connection
     {cards, banks} = Enum.split_with(assigns.accounts, &Account.credit_card?/1)
 
-    assigns = assign(assigns, connection: connection, cards: cards, banks: banks)
+    assigns =
+      assign(assigns,
+        connection: connection,
+        cards: cards,
+        banks: banks,
+        alerts: alerts(assigns.accounts)
+      )
 
     ~H"""
-    <div id={"today-bank-#{@connection.id}"} class="rounded-xl bg-base-100/60 p-3">
+    <div id={"today-bank-#{@connection.id}"} class="rounded-xl bg-base-100/60 p-3 flex flex-col">
       <div class="flex items-center gap-2 mb-2">
         <img src={bank_logo(@connection.bank)} alt="" class="size-6 rounded-full shrink-0" />
         <span class="font-medium">{bank_name(@connection.bank)}</span>
@@ -585,7 +591,17 @@ defmodule GranaWeb.OpenFinanceComponents do
               {round(limit_usage(card))}% do limite usado · disponível {format_money(
                 card.available_credit_limit,
                 card.currency_code
-              )} de {format_money(card.credit_limit, card.currency_code)}
+              )} de {format_money(Account.effective_credit_limit(card), card.currency_code)}
+            </p>
+            <p
+              :if={custom_limit?(card)}
+              id={"today-card-#{card.id}-custom-limit"}
+              class="text-[11px] opacity-50"
+            >
+              limite ajustado por você no app · aprovado {format_money(
+                card.credit_limit,
+                card.currency_code
+              )}
             </p>
           </div>
           <p :if={card.balance_due_date} class="text-[11px] opacity-60">
@@ -593,6 +609,16 @@ defmodule GranaWeb.OpenFinanceComponents do
           </p>
         </div>
       </div>
+
+      <ul
+        :if={@alerts != []}
+        id={"today-alerts-#{@connection.id}"}
+        class="mt-auto pt-2 border-t border-base-content/5 space-y-1 text-xs"
+      >
+        <li :for={alert <- @alerts} class="flex items-start gap-1.5 text-warning">
+          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert}
+        </li>
+      </ul>
     </div>
     """
   end
@@ -609,13 +635,11 @@ defmodule GranaWeb.OpenFinanceComponents do
           days = Date.diff(account.balance_due_date, today)
           when_text = if days == 0, do: "vence hoje", else: "vence em #{days} dia(s)"
 
-          [
-            "Fatura #{bank_name(account.connection.bank)} #{card_name(account)} #{when_text}: #{format_money(account.balance)}"
-          ]
+          ["Fatura #{card_name(account)} #{when_text}: #{format_money(account.balance)}"]
 
         (not Account.credit_card?(account) and account.balance) &&
             Decimal.negative?(account.balance) ->
-          ["Saldo negativo: #{bank_name(account.connection.bank)} #{account_kind(account)}"]
+          ["Saldo negativo na #{String.downcase(account_kind(account))}"]
 
         true ->
           []
@@ -624,12 +648,10 @@ defmodule GranaWeb.OpenFinanceComponents do
   end
 
   # Uso real do limite: o que já está comprometido (fatura aberta, fechada a pagar,
-  # parcelas futuras), e não só a fatura atual.
-  defp limit_usage(%Account{
-         credit_limit: limit,
-         available_credit_limit: available,
-         balance: balance
-       }) do
+  # parcelas futuras), e não só a fatura atual — medido sobre o teto efetivo, já
+  # que o disponível do banco desconta o limite que o cliente reduziu no app.
+  defp limit_usage(%Account{available_credit_limit: available, balance: balance} = card) do
+    limit = Account.effective_credit_limit(card)
     used = if available, do: Decimal.sub(limit, available), else: balance
 
     if used do
@@ -643,6 +665,8 @@ defmodule GranaWeb.OpenFinanceComponents do
       0.0
     end
   end
+
+  defp custom_limit?(card), do: Account.effective_credit_limit(card) != card.credit_limit
 
   defp positive?(%Decimal{} = value), do: Decimal.positive?(value)
   defp positive?(_value), do: false
@@ -679,6 +703,10 @@ defmodule GranaWeb.OpenFinanceComponents do
   defp bank_name(bank), do: String.capitalize(bank || "")
 
   defp format_short_date(%Date{} = date), do: Calendar.strftime(date, "%d/%m")
+
+  defp format_brt(%DateTime{} = datetime) do
+    datetime |> DateTime.add(-3, :hour) |> Calendar.strftime("%d/%m às %H:%M")
+  end
 
   @doc """
   Símbolo oficial do Open Finance Brasil (manual de identidade da marca). O arco

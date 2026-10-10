@@ -285,6 +285,46 @@ defmodule Grana.OpenFinanceTest do
       assert padaria.bank_statement.external_id == "#{card["id"]}:aberta"
     end
 
+    test "keeps the limit the customer lowered in the bank app", %{connection: connection} do
+      line = fn type, custom ->
+        %{
+          "creditLineLimitType" => type,
+          "limitAmount" => 9800,
+          "usedAmount" => 0,
+          "availableAmount" => 2800,
+          "customizedLimitAmount" => custom
+        }
+      end
+
+      lowered =
+        card_account_payload(%{
+          "balance" => 0,
+          "creditData" => %{
+            "creditLimit" => 9800,
+            "availableCreditLimit" => 2800,
+            "disaggregatedCreditLimits" => [
+              line.("LIMITE_CREDITO_MODALIDADE_OPERACAO", 5000),
+              line.("LIMITE_CREDITO_TOTAL", nil),
+              line.("LIMITE_CREDITO_TOTAL", 2800)
+            ]
+          }
+        })
+
+      untouched = card_account_payload()
+
+      stub_pluggy(item_payload(%{"id" => connection.item_id}), [lowered, untouched], %{})
+
+      assert {:ok, _synced} = OpenFinance.sync_connection(connection)
+
+      card = Repo.get_by!(Account, pluggy_id: lowered["id"])
+      assert Decimal.equal?(card.custom_credit_limit, 2800)
+      assert Decimal.equal?(Account.effective_credit_limit(card), 2800)
+
+      card = Repo.get_by!(Account, pluggy_id: untouched["id"])
+      assert card.custom_credit_limit == nil
+      assert Decimal.equal?(Account.effective_credit_limit(card), 3000)
+    end
+
     test "uploads win: covered periods and boundary matches stay out", %{
       connection: connection,
       user: user
@@ -512,6 +552,8 @@ defmodule Grana.OpenFinanceTest do
         type: "CREDIT",
         subtype: "CREDIT_CARD",
         balance: Decimal.new("40"),
+        credit_limit: Decimal.new("9800"),
+        custom_credit_limit: Decimal.new("1000"),
         available_credit_limit: Decimal.new("960")
       })
 
@@ -533,6 +575,8 @@ defmodule Grana.OpenFinanceTest do
       assert Decimal.equal?(totals.bank, "100.50")
       assert Decimal.equal?(totals.card_used, 40)
       assert Decimal.equal?(totals.card_available, 960)
+      # Limite total = o teto que o cliente definiu no app, não o aprovado.
+      assert Decimal.equal?(totals.card_limit, 1000)
       assert totals.bank_count == 1
       assert totals.card_count == 1
 
@@ -555,7 +599,12 @@ defmodule Grana.OpenFinanceTest do
         user_scope_fixture() |> OpenFinance.coverage_calendar() |> Enum.flat_map(& &1.cells)
 
       assert Enum.all?(other_cells, &(&1.open_finance == [] and &1.upload_types == []))
-      assert OpenFinance.last_refreshed_at(scope) == connection.last_synced_at
+      # Idade do retrato = coleta mais antiga da Pluggy nos bancos, não a nossa leitura.
+      Repo.update!(Ecto.Changeset.change(connection, pluggy_updated_at: ~U[2026-10-10 07:00:00Z]))
+      connection_fixture(user, %{pluggy_updated_at: ~U[2026-10-10 06:46:00Z]})
+      connection_fixture(user, %{pluggy_updated_at: nil})
+      assert OpenFinance.last_collected_at(scope) == ~U[2026-10-10 06:46:00Z]
+      assert OpenFinance.last_collected_at(user_scope_fixture()) == nil
     end
   end
 
