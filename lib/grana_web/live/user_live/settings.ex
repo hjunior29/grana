@@ -170,6 +170,24 @@ defmodule GranaWeb.UserLive.Settings do
           </div>
         </div>
 
+        <div id="diagnostics" class="card bg-base-200 p-6 mb-6">
+          <div class="flex items-center gap-3 mb-1">
+            <.icon name="hero-wrench-screwdriver" class="size-5 opacity-60" />
+            <h3 class="text-lg font-semibold">Diagnóstico</h3>
+          </div>
+          <p class="text-sm opacity-50 mb-4 ml-8">
+            Painéis técnicos da sua instância: filas de jobs e erros registrados.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <.link id="diagnostics-oban" href="/admin/oban" target="_blank" class="btn btn-sm">
+              <.icon name="hero-queue-list" class="size-4" /> Jobs (Oban)
+            </.link>
+            <.link id="diagnostics-errors" href="/admin/errors" target="_blank" class="btn btn-sm">
+              <.icon name="hero-bug-ant" class="size-4" /> Erros
+            </.link>
+          </div>
+        </div>
+
         <div class="card bg-base-200 border border-error/20 p-6 mb-6">
           <div class="flex items-center gap-3 mb-4">
             <.icon name="hero-exclamation-triangle" class="size-5 text-error" />

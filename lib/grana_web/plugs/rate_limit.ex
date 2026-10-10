@@ -7,8 +7,6 @@ defmodule GranaWeb.RateLimit do
 
   Rate limits:
   - `:login` - 5 requests per minute per IP
-  - `:magic_link` - 3 requests per minute per IP
-  - `:registration` - 3 requests per minute per IP
   - `:setup_code` - 5 requests per minute per IP
   """
 
@@ -17,8 +15,6 @@ defmodule GranaWeb.RateLimit do
 
   @rate_limits %{
     login: {5, 60_000},
-    magic_link: {3, 60_000},
-    registration: {3, 60_000},
     setup_code: {5, 60_000}
   }
 
@@ -53,7 +49,7 @@ defmodule GranaWeb.RateLimit do
 
   ## Example
 
-      case GranaWeb.RateLimit.check(:magic_link, ip) do
+      case GranaWeb.RateLimit.check(:setup_code, ip) do
         :allow -> # proceed
         :deny -> {:noreply, put_flash(socket, :error, "Too many attempts.")}
       end
@@ -116,7 +112,5 @@ defmodule GranaWeb.RateLimit do
   defp presence(s), do: s
 
   defp redirect_path(:login), do: "/users/log-in"
-  defp redirect_path(:magic_link), do: "/users/log-in"
-  defp redirect_path(:registration), do: "/users/register"
   defp redirect_path(:setup_code), do: "/setup"
 end

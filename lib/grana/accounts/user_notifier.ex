@@ -2,20 +2,8 @@ defmodule Grana.Accounts.UserNotifier do
   import Swoosh.Email
 
   alias Grana.Mailer
-  alias Grana.Accounts.User
 
   # --- Public API ---
-
-  @doc """
-  Deliver instructions to log in with a magic link.
-  Dispatches to confirmation or magic link based on user state.
-  """
-  def deliver_login_instructions(user, url) do
-    case user do
-      %User{confirmed_at: nil} -> deliver_confirmation_instructions(user, url)
-      _ -> deliver_magic_link_instructions(user, url)
-    end
-  end
 
   @doc """
   Deliver instructions to update a user email.
@@ -81,54 +69,6 @@ defmodule Grana.Accounts.UserNotifier do
   end
 
   # --- Private emails ---
-
-  defp deliver_magic_link_instructions(user, url) do
-    deliver(
-      user.email,
-      "Seu link de acesso — Grana",
-      email_html(
-        "Entrar na sua conta",
-        """
-        <p>Olá, <strong>#{user.email}</strong>!</p>
-        <p>Você solicitou um link para entrar na sua conta Grana.</p>
-        <p>Clique no botão abaixo para acessar:</p>
-        """,
-        url,
-        "Entrar na minha conta",
-        "Este link expira em 15 minutos. Se você não solicitou este acesso, ignore este email."
-      ),
-      email_text(
-        "Entrar na sua conta",
-        "Você solicitou um link para entrar na sua conta Grana.\n\nClique no link abaixo para acessar:",
-        url,
-        "Este link expira em 15 minutos. Se você não solicitou este acesso, ignore este email."
-      )
-    )
-  end
-
-  defp deliver_confirmation_instructions(user, url) do
-    deliver(
-      user.email,
-      "Confirme sua conta — Grana",
-      email_html(
-        "Bem-vindo ao Grana!",
-        """
-        <p>Olá, <strong>#{user.email}</strong>!</p>
-        <p>Obrigado por criar sua conta no <strong>Grana</strong>!</p>
-        <p>Para começar a organizar suas finanças, confirme seu email clicando no botão abaixo:</p>
-        """,
-        url,
-        "Confirmar minha conta",
-        "Se você não criou uma conta no Grana, ignore este email."
-      ),
-      email_text(
-        "Bem-vindo ao Grana!",
-        "Obrigado por criar sua conta no Grana!\n\nPara começar, confirme seu email clicando no link abaixo:",
-        url,
-        "Se você não criou uma conta no Grana, ignore este email."
-      )
-    )
-  end
 
   # --- Delivery ---
 

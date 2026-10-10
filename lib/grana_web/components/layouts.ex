@@ -1,13 +1,6 @@
 defmodule GranaWeb.Layouts do
   use GranaWeb, :html
 
-  defp admin_user?(scope) do
-    admin_email = Application.get_env(:grana, :admin_email)
-    scope && scope.user && admin_email && scope.user.email == admin_email
-  end
-
-  defp roadmap_url, do: Application.get_env(:grana, :roadmap_url)
-
   embed_templates "layouts/*"
 
   attr :flash, :map, required: true, doc: "the map of flash messages"
@@ -70,23 +63,6 @@ defmodule GranaWeb.Layouts do
                       <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
                     </.link>
                   </li>
-                  <%= if admin_user?(@current_scope) do %>
-                    <li>
-                      <.link href="/admin/oban" target="_blank">
-                        <.icon name="hero-queue-list" class="size-4" /> Oban Jobs
-                      </.link>
-                    </li>
-                    <li>
-                      <.link href="/admin/errors" target="_blank">
-                        <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
-                      </.link>
-                    </li>
-                  <% end %>
-                  <li :if={roadmap_url()}>
-                    <.link href={roadmap_url()} target="_blank">
-                      <.icon name="hero-light-bulb" class="size-4" /> Roadmap
-                    </.link>
-                  </li>
                   <li>
                     <.link href={~p"/users/log-out"} method="delete">
                       <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> Sair
@@ -141,23 +117,6 @@ defmodule GranaWeb.Layouts do
                   <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
                 </.link>
               </li>
-              <li :if={roadmap_url()}>
-                <.link href={roadmap_url()} target="_blank">
-                  <.icon name="hero-light-bulb" class="size-4" /> Roadmap
-                </.link>
-              </li>
-              <%= if admin_user?(@current_scope) do %>
-                <li>
-                  <.link href="/admin/oban" target="_blank">
-                    <.icon name="hero-queue-list" class="size-4" /> Oban Jobs
-                  </.link>
-                </li>
-                <li>
-                  <.link href="/admin/errors" target="_blank">
-                    <.icon name="hero-bug-ant" class="size-4" /> Error Tracker
-                  </.link>
-                </li>
-              <% end %>
               <li>
                 <.link href={~p"/users/log-out"} method="delete">
                   <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> Sair

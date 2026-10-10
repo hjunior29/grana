@@ -7,41 +7,14 @@ defmodule GranaWeb.UserLive.LoginTest do
   import Grana.AccountsFixtures
 
   describe "login page" do
-    test "renders login page", %{conn: conn} do
+    test "renders login page sem cadastro, magic link ou termos", %{conn: conn} do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
       assert html =~ "Entrar"
-      assert html =~ "Cadastre-se"
-      assert html =~ "Entrar com email"
-    end
-  end
-
-  describe "user login - magic link" do
-    test "sends magic link email when user exists", %{conn: conn} do
-      user = user_fixture()
-
-      {:ok, lv, _html} = live(conn, ~p"/users/log-in")
-
-      {:ok, _lv, html} =
-        form(lv, "#login_form_magic", user: %{email: user.email})
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/users/log-in")
-
-      assert html =~ "Se seu email estiver no nosso sistema"
-
-      assert Grana.Repo.get_by!(Grana.Accounts.UserToken, user_id: user.id).context ==
-               "login"
-    end
-
-    test "does not disclose if user is registered", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/log-in")
-
-      {:ok, _lv, html} =
-        form(lv, "#login_form_magic", user: %{email: "idonotexist@example.com"})
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/users/log-in")
-
-      assert html =~ "Se seu email estiver no nosso sistema"
+      refute html =~ "Cadastre-se"
+      refute html =~ "Entrar com email"
+      refute html =~ "/terms"
+      refute html =~ "/users/register"
     end
   end
 
@@ -77,20 +50,6 @@ defmodule GranaWeb.UserLive.LoginTest do
     end
   end
 
-  describe "login navigation" do
-    test "redirects to registration page when the Register button is clicked", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/log-in")
-
-      {:ok, _login_live, login_html} =
-        lv
-        |> element("main a", "Cadastre-se")
-        |> render_click()
-        |> follow_redirect(conn, ~p"/users/register")
-
-      assert login_html =~ "Registre uma nova conta"
-    end
-  end
-
   describe "re-authentication (sudo mode)" do
     setup %{conn: conn} do
       user = user_fixture()
@@ -100,12 +59,10 @@ defmodule GranaWeb.UserLive.LoginTest do
     test "shows login page with email filled in", %{conn: conn, user: user} do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
-      assert html =~ "reautenticar"
-      refute html =~ "Criar uma conta"
-      assert html =~ "Entrar com email"
+      assert html =~ "Confirme sua senha"
 
       assert html =~
-               ~s(<input type="email" name="user[email]" id="login_form_magic_email" value="#{user.email}")
+               ~s(<input type="email" name="user[email]" id="login_form_password_email" value="#{user.email}")
     end
   end
 end

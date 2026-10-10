@@ -9,8 +9,7 @@ defmodule GranaWeb.LandingLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(:page_title, "Controle suas finanças")
-     |> assign(:roadmap_url, Application.get_env(:grana, :roadmap_url))}
+     |> assign(:page_title, "Controle suas finanças")}
   end
 
   @impl true
@@ -27,11 +26,8 @@ defmodule GranaWeb.LandingLive do
         <div class="flex-none">
           <div class="flex items-center gap-3">
             <Layouts.theme_toggle :if={!@current_scope} />
-            <.link :if={!@current_scope} navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
+            <.link :if={!@current_scope} navigate={~p"/users/log-in"} class="btn btn-primary btn-sm">
               Entrar
-            </.link>
-            <.link :if={!@current_scope} navigate={~p"/users/register"} class="btn btn-primary btn-sm">
-              Criar Conta
             </.link>
             <.link :if={@current_scope} navigate={~p"/dashboard"} class="btn btn-primary btn-sm">
               Dashboard
@@ -63,7 +59,7 @@ defmodule GranaWeb.LandingLive do
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
             <.link navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
-              Começar Agora
+              Entrar
             </.link>
             <a href="#como-funciona" class="btn btn-ghost btn-lg">
               Ver como funciona
@@ -1323,16 +1319,6 @@ defmodule GranaWeb.LandingLive do
                 Nubank, Bradesco, Itaú e mais. Importação via extratos CSV com processamento instantâneo.
               </p>
             </div>
-
-            <div :if={@roadmap_url} class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
-              <div class="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center mb-4">
-                <.icon name="hero-light-bulb" class="size-6 text-warning" />
-              </div>
-              <h3 class="font-semibold text-lg mb-2">Roadmap Público</h3>
-              <p class="opacity-60 text-sm">
-                Vote e sugira funcionalidades. O futuro do Grana é construído junto com a comunidade.
-              </p>
-            </div>
           </div>
         </div>
       </section>
@@ -1508,62 +1494,6 @@ defmodule GranaWeb.LandingLive do
         </div>
       </section>
 
-      <%!-- Roadmap / Community --%>
-      <section :if={@roadmap_url} class="py-24 px-4 bg-base-200/50">
-        <style>
-          .vote-btn {
-            animation: votePulse 3s ease-in-out infinite;
-          }
-          @keyframes votePulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-          }
-        </style>
-
-        <div class="max-w-4xl mx-auto text-center">
-          <p
-            style="font-family: 'Grand Hotel', cursive"
-            class="text-primary text-5xl mb-3"
-          >
-            Comunidade
-          </p>
-          <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-            Construído com você
-          </h2>
-          <p class="text-lg opacity-60 max-w-xl mx-auto mb-12">
-            Nosso roadmap é público. Vote nas funcionalidades que importam para você
-            e sugira novos bancos e recursos.
-          </p>
-
-          <div class="max-w-lg mx-auto space-y-3 mb-10">
-            <div
-              :for={
-                {votes, title, tag, tag_color} <- [
-                  {"47", "Suporte ao Banco Inter", "Novo banco", "badge-info"},
-                  {"32", "App mobile (iOS / Android)", "Feature", "badge-primary"},
-                  {"28", "Exportação avançada em relatórios PDF", "Relatórios", "badge-success"},
-                  {"19", "Orçamento mensal por categoria", "Feature", "badge-primary"}
-                ]
-              }
-              class="flex items-center gap-4 p-3 rounded-xl bg-base-200/50 border border-base-content/5 text-left"
-            >
-              <div class="vote-btn flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-                <.icon name="hero-chevron-up" class="size-4 text-primary -mb-1" />
-                <span class="text-sm font-bold text-primary">{votes}</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium truncate">{title}</p>
-                <span class={"badge badge-xs #{tag_color} mt-1"}>{tag}</span>
-              </div>
-            </div>
-          </div>
-
-          <a href={@roadmap_url} target="_blank" class="btn btn-primary btn-lg gap-2">
-            <.icon name="hero-light-bulb" class="size-5" /> Acessar Roadmap
-          </a>
-        </div>
-      </section>
-
       <%!-- CTA --%>
       <section class="py-24 px-4">
         <div class="max-w-2xl mx-auto text-center">
@@ -1577,14 +1507,11 @@ defmodule GranaWeb.LandingLive do
             Pronto para organizar suas finanças?
           </h2>
           <p class="text-lg opacity-60 mb-8">
-            Crie sua conta gratuitamente e tenha controle total dos seus gastos
+            Entre na sua instância e tenha controle total dos seus gastos
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <.link navigate={~p"/users/register"} class="btn btn-primary btn-lg">
-              Criar Conta
-            </.link>
-            <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-lg">
-              Já tenho conta
+            <.link navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
+              Entrar
             </.link>
           </div>
         </div>
@@ -1598,9 +1525,6 @@ defmodule GranaWeb.LandingLive do
             <span style="font-family: 'Grand Hotel', cursive">Grana</span>
           </a>
           <div class="flex items-center gap-6 text-sm">
-            <.link navigate={~p"/terms"} class="opacity-50 hover:opacity-80 transition-opacity">
-              Termos de Uso e Privacidade
-            </.link>
             <span>
               Feito com Phoenix LiveView por
               <a href="https://github.com/hjunior29" class="text-primary hover:text-primary/80">

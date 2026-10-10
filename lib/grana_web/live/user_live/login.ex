@@ -1,8 +1,6 @@
 defmodule GranaWeb.UserLive.Login do
   use GranaWeb, :live_view
 
-  alias Grana.Accounts
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -13,51 +11,13 @@ defmodule GranaWeb.UserLive.Login do
             <p>Entrar</p>
             <:subtitle>
               <%= if @current_scope do %>
-                Você precisa reautenticar para realizar ações sensíveis na sua conta.
+                Confirme sua senha para realizar ações sensíveis na sua conta.
               <% else %>
-                Não tem uma conta? <.link
-                  navigate={~p"/users/register"}
-                  class="font-semibold text-primary hover:underline"
-                  phx-no-format
-                >Cadastre-se</.link> agora.
+                Entre na sua instância do Grana.
               <% end %>
             </:subtitle>
           </.header>
         </div>
-
-        <div :if={local_mail_adapter?()} class="alert alert-info">
-          <.icon name="hero-information-circle" class="size-6 shrink-0" />
-          <div>
-            <p>You are running the local mail adapter.</p>
-            <p>
-              To see sent emails, visit <.link href="/dev/mailbox" class="underline">the mailbox page</.link>.
-            </p>
-          </div>
-        </div>
-
-        <.form
-          for={@form}
-          id="login_form_magic"
-          action={~p"/users/log-in"}
-          phx-submit="submit_magic"
-          novalidate
-        >
-          <.input
-            readonly={!!@current_scope}
-            id="login_form_magic_email"
-            field={@form[:email]}
-            type="email"
-            label="Email"
-            autocomplete="email"
-            required
-            phx-mounted={JS.focus()}
-          />
-          <.button class="btn btn-primary w-full" phx-disable-with="Enviando...">
-            Entrar com email
-          </.button>
-        </.form>
-
-        <div class="divider">ou</div>
 
         <.form
           for={@form}
@@ -75,6 +35,7 @@ defmodule GranaWeb.UserLive.Login do
             label="Email"
             autocomplete="email"
             required
+            phx-mounted={JS.focus()}
           />
           <.input
             field={@form[:password]}
@@ -96,25 +57,6 @@ defmodule GranaWeb.UserLive.Login do
             Entrar
           </.button>
         </.form>
-
-        <div :if={!@current_scope} class="divider">ou</div>
-
-        <.link
-          :if={!@current_scope}
-          navigate={~p"/users/register"}
-          class="btn btn-outline btn-primary w-full"
-        >
-          Criar uma conta
-        </.link>
-
-        <div :if={!@current_scope} class="text-center mt-4">
-          <.link
-            navigate={~p"/terms"}
-            class="text-xs opacity-50 hover:opacity-80 hover:underline transition-opacity"
-          >
-            Termos de Uso e Política de Privacidade
-          </.link>
-        </div>
       </div>
     </Layouts.app>
     """
@@ -128,47 +70,11 @@ defmodule GranaWeb.UserLive.Login do
 
     form = to_form(%{"email" => email}, as: "user")
 
-    {:ok,
-     assign(socket,
-       form: form,
-       trigger_submit: false,
-       client_ip: GranaWeb.RateLimit.get_ip(socket)
-     )}
+    {:ok, assign(socket, form: form, trigger_submit: false)}
   end
 
   @impl true
   def handle_event("submit_password", _params, socket) do
     {:noreply, assign(socket, :trigger_submit, true)}
-  end
-
-  def handle_event("submit_magic", %{"user" => %{"email" => email}}, socket) do
-    case GranaWeb.RateLimit.check(:magic_link, socket.assigns.client_ip) do
-      :deny ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
-         |> push_navigate(to: ~p"/users/log-in")}
-
-      :allow ->
-        if user = Accounts.get_user_by_email(email) do
-          Accounts.deliver_login_instructions(
-            user,
-            &url(~p"/users/log-in/#{&1}")
-          )
-        end
-
-        info =
-          "Se seu email estiver no nosso sistema, você receberá instruções para entrar em breve."
-
-        {:noreply,
-         socket
-         |> put_flash(:info, info)
-         |> push_navigate(to: ~p"/users/log-in")}
-    end
-  end
-
-  defp local_mail_adapter? do
-    Application.get_env(:grana, Grana.Mailer)[:adapter] == Swoosh.Adapters.Local and
-      not Application.get_env(:grana, :smtp_available, false)
   end
 end
