@@ -6,7 +6,8 @@ defmodule GranaWeb.Router do
   # CSP aplicada só às rotas do app (não aos dashboards admin/dev, que usam
   # inline scripts/styles). script-src 'self' bloqueia JS injetado (defesa extra
   # de XSS); style-src/img-src/connect-src liberam o necessário p/ charts, logos
-  # externos (brapi) e o websocket do LiveView.
+  # externos (brapi) e o websocket do LiveView. frame-src libera só o iframe do
+  # widget Pluggy Connect (Open Finance).
   @content_security_policy Enum.join(
                              [
                                "default-src 'self'",
@@ -15,6 +16,7 @@ defmodule GranaWeb.Router do
                                "img-src 'self' data: https:",
                                "font-src 'self' data:",
                                "connect-src 'self' ws: wss:",
+                               "frame-src https://connect.pluggy.ai",
                                "frame-ancestors 'none'",
                                "base-uri 'self'",
                                "form-action 'self'",
@@ -39,6 +41,14 @@ defmodule GranaWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+  end
+
+  # Webhooks da Pluggy (Open Finance). Fora do pipeline :browser: sem sessão/CSRF;
+  # a autenticação é o header secreto conferido no controller.
+  scope "/webhooks", GranaWeb do
+    pipe_through :api
+
+    post "/pluggy", PluggyWebhookController, :create
   end
 
   scope "/", GranaWeb do

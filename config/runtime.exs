@@ -55,6 +55,20 @@ if config_env() != :test do
     ttl_seconds: cache_ttl
 end
 
+# Chaves de integrações por ambiente. Quando definidas no .env têm prioridade e a
+# tela não oferece salvar outras; sem elas, cada usuário salva as suas pela tela
+# (cifradas). PLUGGY_WEBHOOK_URL (HTTPS público, ex.: túnel ngrok) habilita o
+# webhook. Em test nada disso é lido, para nunca usar credenciais reais.
+if config_env() != :test do
+  # Chave do Gemini por ambiente: quando definida, a tela não oferece salvar outra.
+  config :grana, :gemini_api_key, System.get_env("GEMINI_API_KEY")
+
+  config :grana, :pluggy,
+    client_id: System.get_env("PLUGGY_CLIENT_ID"),
+    client_secret: System.get_env("PLUGGY_CLIENT_SECRET"),
+    webhook_url: System.get_env("PLUGGY_WEBHOOK_URL")
+end
+
 # Encryption key for sensitive fields (API keys).
 # Generate with: :crypto.strong_rand_bytes(32) |> Base.encode64()
 if cloak_key = System.get_env("CLOAK_KEY") do

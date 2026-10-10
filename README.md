@@ -7,6 +7,48 @@ To start your Phoenix server:
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
+## Open Finance (Pluggy) — opcional
+
+O Grana pode ler saldos, cartões e transações direto dos seus bancos pelo
+[Open Finance Brasil](https://openfinancebrasil.org.br), via [Pluggy](https://pluggy.ai).
+O caminho é o de **uso pessoal** da Pluggy (gratuito, até 5 conexões, sem uso comercial):
+você autoriza seus bancos no **Meu Pluggy** e o Grana lê esses dados pelo conector MeuPluggy.
+Por enquanto os dados aparecem na aba **Open Finance** do Dashboard, separados das faturas e
+extratos importados.
+
+1. Defina uma chave própria de criptografia no `.env` **antes** de salvar qualquer segredo
+   (sem ela o Grana usa a chave de desenvolvimento, que é pública neste repositório):
+
+   ```bash
+   CLOAK_KEY=   # gere com: openssl rand -base64 32
+   ```
+
+   Não troque essa chave depois de salvar dados cifrados — eles deixariam de ser legíveis.
+2. Crie uma conta em [meu.pluggy.ai](https://meu.pluggy.ai) e conecte seus bancos lá
+   (cada banco é autorizado no app do próprio banco).
+3. Entre no [dashboard da Pluggy](https://dashboard.pluggy.ai) com a **mesma conta** e copie
+   o Client ID e o Client Secret da sua aplicação em *Aplicações*.
+4. Defina `PLUGGY_CLIENT_ID`/`PLUGGY_CLIENT_SECRET` no `.env` **ou**, se preferir, cole as
+   credenciais em **Configurações → Open Finance** (a tela só oferece isso quando não há nada
+   no `.env`). Pela tela elas são conferidas na Pluggy e o secret é guardado cifrado
+   (AES-256-GCM); ele nunca volta para a tela. A chave do Gemini segue a mesma regra
+   (`GEMINI_API_KEY`).
+5. Clique em *Conectar via Meu Pluggy*, entre com sua conta do Meu Pluggy e escolha um banco.
+   Repita para cada banco. (Também dá para colar o `itemId` de um item criado na página *Demo*
+   do dashboard, ou testar com o *Sandbox*.)
+
+O Meu Pluggy atualiza os dados uma vez por dia; o Grana sincroniza a cada 6h e no botão
+*Sincronizar*. Para receber as atualizações na hora, exponha o Grana em uma URL HTTPS
+pública (ex.: `ngrok http 4000`) e defina `PLUGGY_WEBHOOK_URL=https://seu-dominio/webhooks/pluggy`
+no `.env`. Não cadastre o webhook pelo dashboard da Pluggy: ele não aceita o header secreto que
+autentica as chamadas. O próprio Grana registra o webhook pela API na próxima sincronização
+(gera o segredo, guarda cifrado e o confere a cada sincronização).
+
+Segurança: credenciais e segredos ficam só no servidor (o navegador recebe apenas um connect
+token de 30 minutos para abrir o widget); salvar ou remover credenciais exige login recente; o
+webhook só aceita chamadas com o header secreto, e o conteúdo dele nunca é usado — ele só
+dispara uma nova leitura na API com as suas credenciais.
+
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
 ## Learn more

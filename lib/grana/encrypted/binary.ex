@@ -57,6 +57,12 @@ defmodule Grana.Encrypted.Binary do
 
   def equal?(a, b), do: a == b
 
+  @doc """
+  Verdadeiro quando a chave vem de `CLOAK_KEY`. Sem ela, dev/test usam a chave
+  fixa de `config/*.exs` — pública no repositório, então não protege nada.
+  """
+  def private_key?, do: System.get_env("CLOAK_KEY") not in [nil, ""]
+
   def embed_as(_), do: :dump
 
   defp get_key! do
