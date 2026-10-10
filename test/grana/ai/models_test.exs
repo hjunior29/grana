@@ -145,6 +145,16 @@ defmodule Grana.AI.ModelsTest do
       assert {:ok, [%{id: "gpt-5"}]} = Models.list(@config)
     end
 
+    test "cached/1 só consulta o cache, sem rede" do
+      assert Models.cached(@config) == :miss
+
+      expect(Req, :get, 1, fn _url, _opts -> ok(@body) end)
+      Models.list(@config)
+
+      assert {:ok, [%{id: "gpt-5"}]} = Models.cached(@config)
+      assert Models.cached(%{@config | api_key: "outra"}) == :miss
+    end
+
     test "erros não são guardados: a próxima consulta tenta de novo" do
       expect(Req, :get, fn _url, _opts ->
         {:ok, %Req.Response{status: 401, body: %{"error" => %{"message" => "x"}}}}
