@@ -39,7 +39,7 @@ defmodule GranaWeb.UserLive.Settings do
                 <.input
                   field={@email_form[:email]}
                   type="email"
-                  label=""
+                  label="Endereço"
                   autocomplete="username"
                   required
                 />
