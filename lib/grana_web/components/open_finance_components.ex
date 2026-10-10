@@ -56,17 +56,10 @@ defmodule GranaWeb.OpenFinanceComponents do
         </div>
 
         <div id="open-finance-connections" class="flex flex-col gap-2 mb-5">
-          <div
-            :if={@connections == []}
-            id="open-finance-empty"
-            class="rounded-xl border border-dashed border-base-content/15 px-4 py-6 text-center"
-          >
-            <.icon name="hero-link" class="size-6 opacity-30 mx-auto mb-2" />
-            <p class="text-sm opacity-70">Nenhum banco conectado ainda.</p>
-            <p class="text-xs opacity-50 mt-1">
-              Conecte pelo Meu Pluggy abaixo — cada banco autorizado lá vira uma conexão aqui.
-            </p>
-          </div>
+          <p :if={@connections == []} id="open-finance-empty" class="text-sm opacity-60">
+            Nenhum banco conectado ainda. Conecte pelo Meu Pluggy abaixo — cada banco autorizado
+            lá vira uma conexão aqui.
+          </p>
 
           <.connection_row
             :for={connection <- @connections}
