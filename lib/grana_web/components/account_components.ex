@@ -4,12 +4,12 @@ defmodule GranaWeb.AccountComponents do
 
   @doc """
   Campo desabilitado para um valor que vem do `.env`: mostra só o nome da variável
-  (nunca o valor), com a tag `.env` e o ícone de chave.
+  (nunca o valor), com a tag `.env` e um ícone (chave para segredos, documento para o resto).
   """
   attr :id, :string, required: true
   attr :label, :string, required: true
   attr :var, :string, required: true, doc: "nome da variável de ambiente"
-  attr :secret, :boolean, default: false, doc: "só semântico; todos usam o ícone de chave"
+  attr :secret, :boolean, default: false, doc: "escolhe o ícone: chave para segredos"
 
   def env_field(assigns) do
     ~H"""
@@ -19,7 +19,7 @@ defmodule GranaWeb.AccountComponents do
       </label>
       <div class="relative">
         <.icon
-          name="hero-key"
+          name={if @secret, do: "hero-key", else: "hero-document-text"}
           class="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 opacity-60"
         />
         <input
