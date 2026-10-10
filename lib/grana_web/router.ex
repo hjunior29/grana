@@ -70,10 +70,10 @@ defmodule GranaWeb.Router do
   end
 
   scope "/", GranaWeb do
-    pipe_through [:browser, :setup_complete, :csp]
+    pipe_through [:browser, :csp]
 
-    live_session :public,
-      on_mount: [{GranaWeb.SetupGate, :setup_complete}, {GranaWeb.UserAuth, :mount_current_scope}] do
+    # A landing é pública mesmo antes do setup (só /setup e o app ficam atrás do portão).
+    live_session :public, on_mount: [{GranaWeb.UserAuth, :mount_current_scope}] do
       live "/", LandingLive, :index
     end
   end

@@ -7,12 +7,16 @@ defmodule GranaWeb.AccountComponents do
   attr :has_api_key, :boolean, required: true
   attr :show_api_key, :boolean, required: true
 
+  attr :embedded, :boolean,
+    default: false,
+    doc: "dentro do onboarding: sem botão Salvar; o Continuar da etapa envia o form (id ai_form)"
+
   def ai_form(assigns) do
     ~H"""
     <.form
       for={@form}
       id="ai_form"
-      phx-submit="update_ai_settings"
+      phx-submit={if @embedded, do: "ai_continue", else: "update_ai_settings"}
       phx-change="validate_ai_settings"
       autocomplete="off"
       data-form-type="other"
@@ -105,7 +109,9 @@ defmodule GranaWeb.AccountComponents do
           </div>
         </div>
       <% end %>
-      <.button class="btn btn-primary btn-sm" phx-disable-with="Salvando...">Salvar</.button>
+      <.button :if={!@embedded} class="btn btn-primary btn-sm" phx-disable-with="Salvando...">
+        Salvar
+      </.button>
     </.form>
     """
   end

@@ -388,6 +388,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
       refute has_element?(lv, "#reset-modal")
       lv |> element("#show-reset-modal") |> render_click()
       assert has_element?(lv, "#reset-form")
+      assert has_element?(lv, "#reset-progress", "Apagando todos os dados")
+      assert has_element?(lv, ~s|#confirm-reset[phx-disable-with="Apagando..."]|)
 
       render_click(lv, "cancel_reset", %{})
       refute has_element?(lv, "#reset-modal")

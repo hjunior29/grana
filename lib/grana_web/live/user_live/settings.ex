@@ -282,7 +282,21 @@ defmodule GranaWeb.UserLive.Settings do
                 <button type="button" phx-click="cancel_reset" class="btn btn-ghost">
                   Cancelar
                 </button>
-                <button id="confirm-reset" class="btn btn-error">Apagar tudo</button>
+                <button
+                  id="confirm-reset"
+                  class="btn btn-error"
+                  phx-disable-with="Apagando..."
+                >
+                  Apagar tudo
+                </button>
+              </div>
+              <%!-- Aparece enquanto o form está sendo enviado (classe phx-submit-loading). --%>
+              <div
+                id="reset-progress"
+                class="mt-4 hidden items-center gap-3 rounded-lg bg-error/10 p-3 text-sm phx-submit-loading:flex"
+              >
+                <span class="loading loading-spinner loading-sm text-error"></span>
+                Apagando todos os dados… não feche esta página.
               </div>
             </.form>
           </div>

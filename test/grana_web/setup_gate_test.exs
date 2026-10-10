@@ -3,7 +3,7 @@ defmodule GranaWeb.SetupGateTest do
 
   describe "com a instância sem dono" do
     test "redireciona toda rota do app para /setup", %{conn: conn} do
-      for path <- ["/", "/users/log-in", "/dashboard", "/onboarding", "/admin/oban"] do
+      for path <- ["/users/log-in", "/dashboard", "/onboarding", "/admin/oban"] do
         assert redirected_to(get(conn, path)) == "/setup"
       end
     end
@@ -13,6 +13,10 @@ defmodule GranaWeb.SetupGateTest do
 
       conn = post(conn, "/webhooks/pluggy", %{})
       refute conn.status in [301, 302]
+    end
+
+    test "a landing continua acessível", %{conn: conn} do
+      assert html_response(get(conn, "/"), 200) =~ "hero-install"
     end
 
     test "/setup responde", %{conn: conn} do

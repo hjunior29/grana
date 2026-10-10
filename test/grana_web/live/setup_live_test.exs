@@ -19,6 +19,13 @@ defmodule GranaWeb.SetupLiveTest do
     lv
   end
 
+  test "o header do setup permite trocar tema e estilo", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/setup")
+
+    assert has_element?(lv, "#header-appearance .theme-toggle")
+    assert has_element?(lv, "#header-appearance #visual-style-toggle")
+  end
+
   test "começa pelo código e não avança com código errado", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/setup")
     assert has_element?(lv, "#setup-code-form")
