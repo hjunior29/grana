@@ -1,4 +1,4 @@
-# Pipeline de CI/CD do Grana.
+# Pipeline de CI do Grana.
 #
 # Cada verificação do quality gate é um JOB separado (📦 deps, 🎨 format,
 # 🔨 compile, 🔎 credo, 🛡️ audit, 🧪 test) para ficar visível no GitHub Actions
@@ -6,14 +6,11 @@
 #
 # `✅ Quality gate` agrega todas as verificações num único status (bom para exigir
 # como check obrigatório em branch protection). `🔥 Release smoke` constrói a
-# release de produção, sobe o app no CI e confirma que ele responde antes de
-# fazer o deploy real. `🚀 Deploy` só roda fora de PR e inclui smoke pós-deploy
-# com rollback automático se o health check falhar.
+# release de produção e confirma que ela sobe SEM nenhuma variável de ambiente.
+# A publicação (tarball e imagem Docker) é do workflow release.yml, em tags v*.
 #
-#   push/dispatch (main):  deps → [format, compile, credo, audit, test] → gate → smoke → deploy (+ rollback se smoke pós-deploy falhar)
-#   pull_request (main):   deps → [format, compile, credo, audit, test] → gate   (sem smoke, sem deploy)
-#
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+#   push/dispatch (main):  deps → [format, compile, credo, audit, test] → gate → smoke
+#   pull_request (main):   deps → [format, compile, credo, audit, test] → gate   (sem smoke)
 
 name: CI
 
@@ -128,10 +125,10 @@ jobs:
         run: echo "✅ format + compile + credo + audit + test — quality gate verde."
 
   # ── 🔥 Release smoke ──────────────────────────────────────────────────────────
-  # Constrói a release de PRODUÇÃO no CI e confirma que o app sobe e responde
-  # antes de qualquer deploy chegar ao Fly. Captura erros de compilação em modo
-  # prod (ex.: variáveis de ambiente ausentes em config/runtime.exs, warnings
-  # que só aparecem em prod) e falhas de migração sem tocar em produção real.
+  # Constrói a release de PRODUÇÃO e a sobe sem nenhuma variável de ambiente (só o
+  # DATA_DIR, num diretório temporário): confirma que o boot gera os segredos, migra
+  # o banco, responde em /health, imprime o código do setup no log e que a
+  # instância sem dono redireciona tudo para /setup.
   #
   # Só roda fora de PR para não consumir minutos desnecessariamente em branches.
   release-smoke:
@@ -141,17 +138,7 @@ jobs:
     if: github.event_name != 'pull_request'
     env:
       MIX_ENV: prod
-      # Variáveis mínimas para a release de prod subir no CI.
-      # SECRET_KEY_BASE: 64 bytes hex (não é o segredo real — só para o smoke).
-      SECRET_KEY_BASE: "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a"
-      DATABASE_PATH: "/tmp/grana_smoke.db"
-      PHX_HOST: "localhost"
       PORT: "4002"
-      PHX_SERVER: "true"
-      # Variáveis obrigatórias em prod (causam raise se ausentes). Valores dummy
-      # suficientes para o app bootar no smoke — nenhum secret real aqui.
-      CLOAK_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-      SMTP_HOST: "localhost"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/elixir-setup
@@ -159,90 +146,45 @@ jobs:
           elixir-version: ${{ env.ELIXIR_VERSION }}
           otp-version: ${{ env.OTP_VERSION }}
 
-      - name: Compilar release de produção
-        run: mix release --overwrite
+      - name: Compilar assets e release de produção
+        run: |
+          mix assets.deploy
+          mix release --overwrite
 
-      - name: Rodar migrations no banco de smoke
-        run: _build/prod/rel/grana/bin/grana eval "Grana.Release.migrate()"
+      - name: Subir app em background (sem variáveis, só DATA_DIR)
+        run: |
+          mkdir -p "$RUNNER_TEMP/grana-smoke"
+          DATA_DIR="$RUNNER_TEMP/grana-smoke" PHX_SERVER=true \
+            _build/prod/rel/grana/bin/grana start > "$RUNNER_TEMP/grana.log" 2>&1 &
 
-      - name: Subir app em background
-        run: _build/prod/rel/grana/bin/grana start &
-
-      # force_ssl usa rewrite_on: [:x_forwarded_proto]; sem esse header o
-      # Phoenix não redireciona para HTTPS, então o curl direto em HTTP funciona.
-      - name: Aguardar app responder (até 40 s)
+      - name: Aguardar /health (até 40 s)
         run: |
           for i in $(seq 1 20); do
             echo "Tentativa $i/20..."
-            if curl -sf --max-time 3 http://localhost:4002/ > /dev/null; then
-              echo "✅ App respondeu com sucesso."
+            if curl -sf --max-time 3 http://localhost:4002/health | grep -q '"status":"ok"'; then
+              echo "✅ /health respondeu."
               exit 0
             fi
             sleep 2
           done
           echo "❌ App não subiu no prazo de 40 s."
-          _build/prod/rel/grana/bin/grana remote || true
+          cat "$RUNNER_TEMP/grana.log" || true
           exit 1
+
+      - name: O log tem o código do setup
+        run: |
+          grep -E "Código: [A-Z0-9]{4}-[A-Z0-9]{4}" "$RUNNER_TEMP/grana.log"
+
+      - name: Segredos gerados e banco migrado
+        run: |
+          test -s "$RUNNER_TEMP/grana-smoke/secrets/secret_key_base"
+          test -s "$RUNNER_TEMP/grana-smoke/secrets/cloak_key"
+          test -s "$RUNNER_TEMP/grana-smoke/grana.db"
+
+      - name: Sem dono, / redireciona para /setup
+        run: |
+          curl -si --max-time 5 http://localhost:4002/ | tr -d '\r' | grep -iE '^location: .*/setup$'
 
       - name: Parar app
         if: always()
         run: _build/prod/rel/grana/bin/grana stop || true
-
-  # ── 🚀 Deploy (somente fora de PR) ────────────────────────────────────────────
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: release-smoke
-    if: github.event_name != 'pull_request'
-    concurrency: deploy-group
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      # Guarda a imagem atual antes de fazer o deploy para poder reverter se o
-      # smoke pós-deploy falhar.
-      - name: Capturar imagem anterior (para rollback)
-        id: prev
-        run: |
-          PREV=$(flyctl releases --app gra-na --json 2>/dev/null \
-            | jq -r 'map(select(.status == "complete")) | .[0].imageRef // ""' 2>/dev/null \
-            || echo "")
-          echo "image=${PREV:-}" >> "$GITHUB_OUTPUT"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Deploy para Fly.io
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      # Smoke pós-deploy: confirma que a URL de produção responde 200 depois
-      # do deploy. Tenta por até 60 s para dar tempo ao Fly de rotear o tráfego.
-      - name: Smoke pós-deploy
-        id: smoke
-        run: |
-          URL="https://gra-na.fly.dev"
-          for i in $(seq 1 12); do
-            echo "Tentativa $i/12 → ${URL}"
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL")
-            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-              echo "✅ Smoke pós-deploy OK (HTTP ${STATUS})."
-              exit 0
-            fi
-            echo "HTTP ${STATUS} — aguardando..."
-            sleep 5
-          done
-          echo "❌ Smoke pós-deploy falhou."
-          exit 1
-
-      # Se o smoke falhar, reverte automaticamente para a imagem anterior.
-      # Só executa se a etapa anterior falhou E existe uma imagem anterior.
-      - name: Rollback automático
-        if: failure() && steps.smoke.conclusion == 'failure' && steps.prev.outputs.image != ''
-        run: |
-          echo "⏪ Revertendo para ${{ steps.prev.outputs.image }}..."
-          flyctl deploy --image "${{ steps.prev.outputs.image }}"
-          echo "✅ Rollback concluído. Verifique os logs antes do próximo deploy."
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

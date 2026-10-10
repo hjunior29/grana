@@ -37,7 +37,7 @@ defmodule GranaWeb.LandingLive do
       </nav>
 
       <%!-- Hero --%>
-      <section class="py-24 px-4">
+      <section id="hero" class="py-24 px-4">
         <div class="max-w-4xl mx-auto text-center">
           <img
             src={~p"/images/logo-animated.gif"}
@@ -45,24 +45,24 @@ defmodule GranaWeb.LandingLive do
             class="w-40 h-40 mx-auto mb-8 drop-shadow-xl"
           />
           <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-tight mb-6">
-            Controle total das <br />
+            Suas finanças, <br />
             <span
               style="font-family: 'Grand Hotel', cursive"
               class="text-primary text-6xl md:text-8xl font-normal"
             >
-              suas finanças
+              no seu servidor
             </span>
           </h1>
           <p class="text-lg md:text-xl opacity-60 max-w-2xl mx-auto mb-10">
-            Importe extratos bancários e faturas de cartão em um só lugar.
-            Categorização automática, gráficos intuitivos, gestão de despesas fixas e análises com IA.
+            O Grana é open source e self-hosted, feito para uma pessoa só. Importe extratos e faturas,
+            categorize com IA e acompanhe o Open Finance — seus dados nunca saem da sua máquina.
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <.link navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
+            <.link id="hero-login" navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
               Entrar
             </.link>
-            <a href="#como-funciona" class="btn btn-ghost btn-lg">
-              Ver como funciona
+            <a id="hero-install" href="#instalacao" class="btn btn-ghost btn-lg">
+              Instalar no seu servidor
             </a>
           </div>
         </div>
@@ -80,7 +80,9 @@ defmodule GranaWeb.LandingLive do
           <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
             Como funciona
           </h2>
-          <p class="text-lg opacity-60 mb-12">Três passos simples</p>
+          <p class="text-lg opacity-60 mb-12">
+            Seus uploads são o histórico oficial; o resto complementa.
+          </p>
 
           <div class="relative">
             <div class="steps-line hidden md:block">
@@ -94,9 +96,9 @@ defmodule GranaWeb.LandingLive do
                 <div class="step-circle step-circle-1 w-16 h-16 rounded-full bg-base-200 border border-primary/20 flex items-center justify-center mb-4 text-2xl font-bold text-primary relative z-10">
                   1
                 </div>
-                <h3 class="font-semibold mb-2">Faça Upload</h3>
+                <h3 class="font-semibold mb-2">Envie seus extratos</h3>
                 <p class="text-sm opacity-60">
-                  Importe extratos bancários e faturas de cartão. Suporte a CSV e PDF.
+                  Faturas e extratos em CSV ou PDF são a fonte da verdade: o que você importa sempre vale.
                 </p>
               </div>
 
@@ -104,9 +106,9 @@ defmodule GranaWeb.LandingLive do
                 <div class="step-circle step-circle-2 w-16 h-16 rounded-full bg-base-200 border border-primary/20 flex items-center justify-center mb-4 text-2xl font-bold text-primary relative z-10">
                   2
                 </div>
-                <h3 class="font-semibold mb-2">Processamento Automático</h3>
+                <h3 class="font-semibold mb-2">A IA categoriza</h3>
                 <p class="text-sm opacity-60">
-                  A IA categoriza suas transações automaticamente com base em padrões e regras personalizadas.
+                  Com a sua própria chave do Gemini, cada transação ganha categoria por padrões e regras suas.
                 </p>
               </div>
 
@@ -114,9 +116,9 @@ defmodule GranaWeb.LandingLive do
                 <div class="step-circle step-circle-3 w-16 h-16 rounded-full bg-base-200 border border-primary/20 flex items-center justify-center mb-4 text-2xl font-bold text-primary relative z-10">
                   3
                 </div>
-                <h3 class="font-semibold mb-2">Analise e Economize</h3>
+                <h3 class="font-semibold mb-2">Analise e economize</h3>
                 <p class="text-sm opacity-60">
-                  Visualize gráficos, receba insights da IA e descubra onde economizar.
+                  Veja gráficos, receba análises da IA e, se quiser, o retrato de hoje pelo Open Finance.
                 </p>
               </div>
             </div>
@@ -205,6 +207,87 @@ defmodule GranaWeb.LandingLive do
               100%     { box-shadow: 0 0 0 0 oklch(58% 0.233 277.117 / 0); }
             }
           </style>
+        </div>
+      </section>
+
+      <%!-- Open Finance --%>
+      <section id="open-finance" class="py-24 px-4 bg-base-200/50">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <p style="font-family: 'Grand Hotel', cursive" class="text-primary text-5xl mb-3">
+              Opcional
+            </p>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              O retrato de hoje, pelo Open Finance
+            </h2>
+            <p class="text-lg opacity-60 mb-8">
+              Conecte seus bancos pelo Meu Pluggy (uso pessoal, gratuito) e veja o estado atual
+              das contas sem esperar o extrato do mês.
+            </p>
+            <ul class="space-y-4">
+              <li
+                :for={
+                  {icon, title, text} <- [
+                    {"hero-banknotes", "Hoje",
+                     "Saldos, faturas abertas, limites e vencimentos num bloco só, no topo do Resumo."},
+                    {"hero-calendar-days", "Preenche os meses sem upload",
+                     "O que nenhum extrato cobre entra como extrato do banco, marcado como Open Finance."},
+                    {"hero-shield-check", "O upload sempre vence",
+                     "Quando você importa o arquivo do período, os dados do Open Finance saem do caminho."}
+                  ]
+                }
+                class="flex items-start gap-4"
+              >
+                <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <.icon name={icon} class="size-5 text-primary" />
+                </div>
+                <div>
+                  <p class="font-semibold text-sm mb-1">{title}</p>
+                  <p class="text-sm opacity-60">{text}</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div
+            id="open-finance-preview"
+            class="rounded-2xl border border-base-content/10 bg-base-200/30 p-4 md:p-6 shadow-xl"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold">Hoje</h3>
+              <span class="badge badge-ghost badge-sm">Open Finance</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="rounded-xl bg-base-100/60 p-3">
+                <p class="text-[11px] opacity-50">Em conta</p>
+                <p class="text-xl font-semibold tabular-nums">R$ 4.250,00</p>
+              </div>
+              <div class="rounded-xl bg-base-100/60 p-3">
+                <p class="text-[11px] opacity-50">Faturas abertas</p>
+                <p class="text-xl font-semibold tabular-nums">R$ 1.180,40</p>
+              </div>
+            </div>
+            <div class="rounded-xl bg-base-100/60 p-3 mb-3">
+              <div class="flex items-center gap-2 mb-2">
+                <img src={~p"/images/nubank-logo.png"} alt="" class="size-6 rounded-full" />
+                <p class="text-sm font-medium">Nubank</p>
+              </div>
+              <div class="flex justify-between text-sm mb-2">
+                <span class="opacity-60">Conta corrente</span>
+                <span class="tabular-nums">R$ 4.250,00</span>
+              </div>
+              <div class="flex justify-between text-sm mb-1">
+                <span class="opacity-60">Cartão Mastercard</span>
+                <span class="tabular-nums">R$ 1.180,40</span>
+              </div>
+              <progress class="progress progress-primary w-full" value="42" max="100"></progress>
+              <p class="text-[11px] opacity-50 mt-1">42% do limite usado</p>
+            </div>
+            <p class="flex items-start gap-1.5 text-xs text-warning">
+              <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
+              Fatura Mastercard vence em 3 dia(s): R$ 1.180,40
+            </p>
+          </div>
         </div>
       </section>
 
@@ -996,7 +1079,7 @@ defmodule GranaWeb.LandingLive do
                 Análise com IA
               </h2>
               <p class="text-lg opacity-60 mb-8">
-                Analise suas despesas e receitas com inteligência artificial.
+                Analise suas despesas e receitas com inteligência artificial, usando a sua própria chave do Gemini.
                 Receba insights personalizados, alertas e dicas para otimizar suas finanças.
               </p>
               <div class="space-y-4">
@@ -1319,200 +1402,181 @@ defmodule GranaWeb.LandingLive do
                 Nubank, Bradesco, Itaú e mais. Importação via extratos CSV com processamento instantâneo.
               </p>
             </div>
+            <div class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
+              <div class="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center mb-4">
+                <.icon name="hero-link" class="size-6 text-info" />
+              </div>
+              <h3 class="font-semibold text-lg mb-2">Open Finance</h3>
+              <p class="opacity-60 text-sm">
+                Saldos, faturas e limites de hoje direto dos bancos, via Meu Pluggy. Opcional.
+              </p>
+            </div>
+
+            <div class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
+              <div class="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center mb-4">
+                <.icon name="hero-archive-box" class="size-6 text-warning" />
+              </div>
+              <h3 class="font-semibold text-lg mb-2">Backup e restauração</h3>
+              <p class="opacity-60 text-sm">
+                Um arquivo com tudo. Baixe e restaure pela tela, inclusive ao instalar em outro servidor.
+              </p>
+            </div>
+
+            <div class="card bg-base-200/50 p-6 hover:shadow-lg transition-shadow">
+              <div class="w-12 h-12 rounded-xl bg-error/10 flex items-center justify-center mb-4">
+                <.icon name="hero-lock-closed" class="size-6 text-error" />
+              </div>
+              <h3 class="font-semibold text-lg mb-2">Login com 2FA</h3>
+              <p class="opacity-60 text-sm">
+                Com o email configurado, todo login pede um código de 6 dígitos enviado para você.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      <%!-- BYOK + Security --%>
-      <section class="py-24 px-4 overflow-hidden">
-        <style>
-          .shield-container { position: relative; width: 200px; height: 200px; margin: 0 auto; }
-
-          .shield-glow {
-            position: absolute; inset: -20px;
-            border-radius: 50%;
-            background: radial-gradient(circle, oklch(58% 0.233 277.117 / 0.15), transparent 70%);
-            animation: shieldGlow 4s ease-in-out infinite;
-          }
-          @keyframes shieldGlow {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50%      { transform: scale(1.15); opacity: 1; }
-          }
-
-          .shield-ring {
-            position: absolute; inset: 0;
-            border: 2px solid oklch(58% 0.233 277.117 / 0.2);
-            border-radius: 50%;
-            animation: shieldRing 6s linear infinite;
-          }
-          .shield-ring-2 {
-            position: absolute; inset: -15px;
-            border: 1px dashed oklch(58% 0.233 277.117 / 0.1);
-            border-radius: 50%;
-            animation: shieldRing 8s linear infinite reverse;
-          }
-          @keyframes shieldRing {
-            from { transform: rotate(0deg); }
-            to   { transform: rotate(360deg); }
-          }
-
-          .shield-pulse {
-            position: absolute; inset: 10px;
-            border-radius: 50%;
-            border: 2px solid oklch(58% 0.233 277.117 / 0);
-            animation: shieldPulse 3s ease-out infinite;
-          }
-          @keyframes shieldPulse {
-            0%   { transform: scale(0.8); border-color: oklch(58% 0.233 277.117 / 0.4); }
-            100% { transform: scale(1.5); border-color: oklch(58% 0.233 277.117 / 0); }
-          }
-
-          .data-particle {
-            position: absolute;
-            width: 4px; height: 4px;
-            border-radius: 50%;
-            background: oklch(58% 0.233 277.117 / 0.6);
-          }
-          .data-particle:nth-child(1) { animation: particle1 5s ease-in-out infinite; }
-          .data-particle:nth-child(2) { animation: particle2 5s ease-in-out 0.8s infinite; }
-          .data-particle:nth-child(3) { animation: particle3 5s ease-in-out 1.6s infinite; }
-          .data-particle:nth-child(4) { animation: particle4 5s ease-in-out 2.4s infinite; }
-
-          @keyframes particle1 {
-            0%   { top: 50%; left: -30px; opacity: 0; }
-            20%  { opacity: 1; }
-            50%  { top: 50%; left: 50%; opacity: 0; }
-            100% { top: 50%; left: 50%; opacity: 0; }
-          }
-          @keyframes particle2 {
-            0%   { top: -30px; left: 50%; opacity: 0; }
-            20%  { opacity: 1; }
-            50%  { top: 50%; left: 50%; opacity: 0; }
-            100% { top: 50%; left: 50%; opacity: 0; }
-          }
-          @keyframes particle3 {
-            0%   { top: 50%; right: -30px; left: auto; opacity: 0; }
-            20%  { opacity: 1; }
-            50%  { top: 50%; right: 50%; left: auto; opacity: 0; }
-            100% { top: 50%; right: 50%; left: auto; opacity: 0; }
-          }
-          @keyframes particle4 {
-            0%   { bottom: -30px; top: auto; left: 50%; opacity: 0; }
-            20%  { opacity: 1; }
-            50%  { bottom: 50%; top: auto; left: 50%; opacity: 0; }
-            100% { bottom: 50%; top: auto; left: 50%; opacity: 0; }
-          }
-        </style>
-
+      <%!-- Segurança e privacidade --%>
+      <section id="seguranca" class="py-24 px-4">
         <div class="max-w-6xl mx-auto">
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div class="order-2 lg:order-1 flex justify-center">
-              <div class="shield-container">
-                <div class="shield-glow"></div>
-                <div class="shield-ring"></div>
-                <div class="shield-ring-2"></div>
-                <div class="shield-pulse"></div>
-                <div class="data-particle"></div>
-                <div class="data-particle"></div>
-                <div class="data-particle"></div>
-                <div class="data-particle"></div>
-                <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="w-24 h-24 rounded-2xl bg-base-100 border border-primary/20 flex items-center justify-center shadow-xl">
-                    <.icon name="hero-shield-check" class="size-12 text-primary" />
-                  </div>
-                </div>
+          <div class="text-center mb-16">
+            <p style="font-family: 'Grand Hotel', cursive" class="text-primary text-5xl mb-3">
+              Segurança total
+            </p>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              Seus dados, no seu servidor
+            </h2>
+            <p class="text-lg opacity-60 max-w-xl mx-auto">
+              Nada de nuvem de terceiros: o Grana roda na sua máquina, com a sua chave de IA.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div
+              :for={
+                {icon, {bg, fg}, title, text} <- [
+                  {"hero-circle-stack", {"bg-success/10", "text-success"},
+                   "Tudo em um arquivo SQLite",
+                   "Extratos, transações e análises ficam no seu banco local. Sem serviços externos para manter."},
+                  {"hero-key", {"bg-warning/10", "text-warning"}, "Credenciais cifradas",
+                   "Chaves e senhas salvas usam AES-256-GCM, com uma chave gerada no seu servidor. O que está no .env tem prioridade."},
+                  {"hero-envelope", {"bg-info/10", "text-info"}, "2FA por email",
+                   "Com o SMTP configurado, todo login pede um código de 6 dígitos enviado para você. Sem SMTP, só a senha."},
+                  {"hero-archive-box", {"bg-error/10", "text-error"},
+                   "Backup e restauração em um arquivo",
+                   "Baixe o backup pela tela e restaure em qualquer instância. Quer recomeçar? Apague tudo e volte ao setup."}
+                ]
+              }
+              class="flex items-start gap-4 rounded-2xl bg-base-200/50 p-6"
+            >
+              <div class={["w-10 h-10 rounded-xl flex items-center justify-center shrink-0", bg]}>
+                <.icon name={icon} class={["size-5", fg]} />
               </div>
-            </div>
-
-            <div class="order-1 lg:order-2">
-              <p
-                style="font-family: 'Grand Hotel', cursive"
-                class="text-primary text-5xl mb-3"
-              >
-                Segurança total
-              </p>
-              <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-                Seus dados, sua chave
-              </h2>
-              <p class="text-lg opacity-60 mb-8">
-                O Grana funciona com a <strong class="text-base-content">sua própria API Key</strong>
-                do Google Gemini.
-                Isso significa que a plataforma não tem custo de infraestrutura de IA.
-              </p>
-
-              <div class="space-y-5">
-                <div class="flex items-start gap-4">
-                  <div class="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
-                    <.icon name="hero-key" class="size-5 text-success" />
-                  </div>
-                  <div>
-                    <p class="font-semibold text-sm mb-1">Traga sua própria API Key (BYOK)</p>
-                    <p class="text-sm opacity-60">
-                      Você usa sua chave. A IA roda diretamente na sua conta, sem intermediários.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="flex items-start gap-4">
-                  <div class="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center shrink-0">
-                    <.icon name="hero-currency-dollar" class="size-5 text-info" />
-                  </div>
-                  <div>
-                    <p class="font-semibold text-sm mb-1">Custo zero</p>
-                    <p class="text-sm opacity-60">
-                      Como você traz sua própria chave, não cobramos nada pelo uso da plataforma.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="flex items-start gap-4">
-                  <div class="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
-                    <.icon name="hero-lock-closed" class="size-5 text-warning" />
-                  </div>
-                  <div>
-                    <p class="font-semibold text-sm mb-1">100% dos dados sob seu controle</p>
-                    <p class="text-sm opacity-60">
-                      Seus extratos são processados localmente. As análises de IA são feitas diretamente entre você e sua LLM. Nenhum dado financeiro é armazenado em servidores terceiros.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="flex items-start gap-4">
-                  <div class="w-10 h-10 rounded-xl bg-error/10 flex items-center justify-center shrink-0">
-                    <.icon name="hero-trash" class="size-5 text-error" />
-                  </div>
-                  <div>
-                    <p class="font-semibold text-sm mb-1">Exclusão completa a qualquer momento</p>
-                    <p class="text-sm opacity-60">
-                      Você pode excluir sua conta e todos os dados associados a qualquer momento nas configurações. Sem burocracia.
-                    </p>
-                  </div>
-                </div>
+              <div>
+                <p class="font-semibold text-sm mb-1">{title}</p>
+                <p class="text-sm opacity-60">{text}</p>
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <%!-- Instalação --%>
+      <section id="instalacao" class="py-24 px-4 bg-base-200/50">
+        <div class="max-w-3xl mx-auto">
+          <div class="text-center mb-12">
+            <p style="font-family: 'Grand Hotel', cursive" class="text-primary text-5xl mb-3">
+              Em 3 passos
+            </p>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              Instale no seu servidor
+            </h2>
+            <p class="text-lg opacity-60">
+              Release Elixir com systemd (recomendado), tarball ou Docker Compose.
+            </p>
+          </div>
+
+          <ol class="space-y-8">
+            <li id="instalacao-passo-1" class="flex gap-4">
+              <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 font-bold text-primary">
+                1
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="font-semibold mb-2">Instale</h3>
+                <p class="text-sm opacity-60 mb-2">Em Debian 12+/Ubuntu 22.04+, com o script:</p>
+                <pre
+                  class="overflow-x-auto rounded-lg bg-base-300 p-3 text-xs mb-3"
+                  phx-no-curly-interpolation
+                >curl -fsSL https://raw.githubusercontent.com/hjunior29/grana/main/deploy/install.sh -o install.sh
+    bash install.sh</pre>
+                <p class="text-sm opacity-60 mb-2">Ou com Docker Compose:</p>
+                <pre
+                  class="overflow-x-auto rounded-lg bg-base-300 p-3 text-xs"
+                  phx-no-curly-interpolation
+                >curl -fsSLO https://raw.githubusercontent.com/hjunior29/grana/main/docker-compose.yml
+    docker compose up -d</pre>
+              </div>
+            </li>
+            <li id="instalacao-passo-2" class="flex gap-4">
+              <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 font-bold text-primary">
+                2
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="font-semibold mb-2">Pegue o código do primeiro acesso</h3>
+                <p class="text-sm opacity-60 mb-2">
+                  Abra a URL do servidor (porta 4000). O código de uso único aparece no log:
+                </p>
+                <pre
+                  class="overflow-x-auto rounded-lg bg-base-300 p-3 text-xs"
+                  phx-no-curly-interpolation
+                >sudo journalctl -u grana | grep -A3 "configuração inicial"
+    docker compose logs grana</pre>
+              </div>
+            </li>
+            <li id="instalacao-passo-3" class="flex gap-4">
+              <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 font-bold text-primary">
+                3
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="font-semibold mb-2">Configure sua instância</h3>
+                <p class="text-sm opacity-60">
+                  O assistente cria a conta e, se você quiser, configura email, IA e Open Finance — ou
+                  restaura um backup. HTTPS fica por conta do seu proxy reverso (Caddy, Nginx, Cloudflare Tunnel).
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <p class="text-center mt-10">
+            <a
+              id="instalacao-readme"
+              href="https://github.com/hjunior29/grana#readme"
+              target="_blank"
+              rel="noopener"
+              class="btn btn-ghost"
+            >
+              <.icon name="hero-book-open" class="size-5" /> Guia completo no README
+            </a>
+          </p>
         </div>
       </section>
 
       <%!-- CTA --%>
-      <section class="py-24 px-4">
+      <section id="cta" class="py-24 px-4">
         <div class="max-w-2xl mx-auto text-center">
-          <p
-            style="font-family: 'Grand Hotel', cursive"
-            class="text-primary text-5xl mb-4"
-          >
+          <p style="font-family: 'Grand Hotel', cursive" class="text-primary text-5xl mb-4">
             Comece hoje
           </p>
           <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">
             Pronto para organizar suas finanças?
           </h2>
           <p class="text-lg opacity-60 mb-8">
-            Entre na sua instância e tenha controle total dos seus gastos
+            Entre na sua instância ou instale o Grana no seu próprio servidor.
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <.link navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
+            <.link id="cta-login" navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
               Entrar
             </.link>
+            <a href="#instalacao" class="btn btn-ghost btn-lg">Instalar no seu servidor</a>
           </div>
         </div>
       </section>
@@ -1524,7 +1588,16 @@ defmodule GranaWeb.LandingLive do
             <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
             <span style="font-family: 'Grand Hotel', cursive">Grana</span>
           </a>
-          <div class="flex items-center gap-6 text-sm">
+          <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-6 text-sm">
+            <a
+              id="footer-github"
+              href="https://github.com/hjunior29/grana"
+              target="_blank"
+              rel="noopener"
+              class="opacity-60 hover:opacity-100 transition-opacity"
+            >
+              Código aberto no GitHub
+            </a>
             <span>
               Feito com Phoenix LiveView por
               <a href="https://github.com/hjunior29" class="text-primary hover:text-primary/80">

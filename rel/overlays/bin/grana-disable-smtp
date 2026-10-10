@@ -1,5 +1,14 @@
 #!/bin/sh
 set -eu
 
+# Carrega o mesmo ambiente do serviço (systemd) para achar o DATA_DIR, o
+# PUBLIC_URL e o SMTP. Rode como o usuário do app: sudo -u grana <este script>.
+ENV_FILE="${GRANA_ENV_FILE:-/etc/grana/grana.env}"
+if [ -r "$ENV_FILE" ]; then
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
 cd -P -- "$(dirname -- "$0")"
 exec ./grana eval Grana.Release.disable_smtp

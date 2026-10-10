@@ -1,0 +1,122 @@
+# Publicação do Grana, disparada por tags `vX.Y.Z` (a tag acompanha a versão do mix.exs).
+#
+#   verify  → confere que a tag bate com o mix.exs
+#   tarball → release Elixir (linux x86_64 e arm64) + sha256
+#   docker  → imagem multi-arch no GHCR
+#   release → GitHub Release com os tarballs e os sha256
+#
+# Compatibilidade dos tarballs: glibc >= 2.35 e OpenSSL 3 (Debian 12+, Ubuntu 22.04+).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  ELIXIR_VERSION: "1.18.4"
+  OTP_VERSION: "28.0.4"
+
+jobs:
+  verify:
+    name: Verificar versão
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: A tag bate com o mix.exs
+        run: |
+          MIX_VERSION=$(sed -n 's/^ *version: "\(.*\)",/\1/p' mix.exs | head -n1)
+          if [ "v${MIX_VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} não bate com a versão do mix.exs (${MIX_VERSION})."
+            exit 1
+          fi
+
+  tarball:
+    name: Tarball (${{ matrix.arch }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: x86_64
+          - os: ubuntu-22.04-arm
+            arch: arm64
+    env:
+      MIX_ENV: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - name: Compilar release
+        run: |
+          mix deps.get --only prod
+          mix assets.deploy
+          mix release --overwrite
+      - name: Empacotar
+        run: |
+          NAME="grana-${GITHUB_REF_NAME}-linux-${{ matrix.arch }}.tar.gz"
+          cp .env.example _build/prod/rel/grana/env.example
+          cp deploy/systemd/grana.service _build/prod/rel/grana/grana.service
+          tar -czf "$NAME" -C _build/prod/rel grana
+          sha256sum "$NAME" > "$NAME.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.arch }}
+          path: |
+            grana-*.tar.gz
+            grana-*.tar.gz.sha256
+
+  docker:
+    name: Imagem Docker
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: GitHub Release
+    needs: [tarball, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tarball-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            grana-*.tar.gz
+            grana-*.tar.gz.sha256

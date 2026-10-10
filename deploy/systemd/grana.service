@@ -1,0 +1,37 @@
+[Unit]
+Description=Grana (finanças pessoais self-hosted)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grana
+Group=grana
+WorkingDirectory=/opt/grana
+EnvironmentFile=-/etc/grana/grana.env
+Environment=PHX_SERVER=true
+Environment=HOME=/var/lib/grana
+Environment=LANG=C.UTF-8
+Environment=RELEASE_TMP=/var/lib/grana/release-tmp
+# /var/lib/grana (DATA_DIR): banco, segredos e temporários de backup.
+StateDirectory=grana
+StateDirectoryMode=0700
+ExecStartPre=/bin/mkdir -p /var/lib/grana/release-tmp
+ExecStart=/opt/grana/bin/grana start
+ExecStop=/opt/grana/bin/grana stop
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/grana
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

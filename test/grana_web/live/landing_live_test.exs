@@ -5,29 +5,56 @@ defmodule GranaWeb.LandingLiveTest do
 
   import Phoenix.LiveViewTest
 
-  test "renders landing page", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/")
-    assert html =~ "Controle total"
-    assert html =~ "suas finanças"
-    assert html =~ "Entrar"
-    refute html =~ "Criar Conta"
+  test "o hero explica o self-hosted e tem Entrar e Instalar", %{conn: conn} do
+    {:ok, lv, html} = live(conn, ~p"/")
+
+    assert has_element?(lv, "#hero")
+    assert has_element?(lv, ~s|#hero-login[href="/users/log-in"]|)
+    assert has_element?(lv, ~s|#hero-install[href="#instalacao"]|)
+    assert html =~ "no seu servidor"
+  end
+
+  test "tem as seções de como funciona, Open Finance, segurança e instalação", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/")
+
+    for id <- ~w(como-funciona open-finance open-finance-preview seguranca instalacao features) do
+      assert has_element?(lv, "##{id}"), "faltou ##{id}"
+    end
+
+    for n <- 1..3, do: assert(has_element?(lv, "#instalacao-passo-#{n}"))
+    assert has_element?(lv, "#instalacao-readme")
+  end
+
+  test "mantém as seções de produto", %{conn: conn} do
+    {:ok, _lv, html} = live(conn, ~p"/")
+
+    assert html =~ "Dashboard inteligente"
+    assert html =~ "Análise com IA"
+    assert html =~ "Cada transação no seu lugar"
+  end
+
+  test "as features incluem Open Finance, backup e 2FA e não o roadmap", %{conn: conn} do
+    {:ok, _lv, html} = live(conn, ~p"/")
+
+    assert html =~ "Open Finance"
+    assert html =~ "Backup e restauração"
+    assert html =~ "Login com 2FA"
+    refute html =~ "Roadmap"
+  end
+
+  test "o CTA Entrar aponta para o login e nada leva a cadastro ou termos", %{conn: conn} do
+    {:ok, lv, html} = live(conn, ~p"/")
+
+    assert has_element?(lv, ~s|#cta-login[href="/users/log-in"]|)
     refute html =~ "/users/register"
     refute html =~ "/terms"
-    refute html =~ "oadmap"
+    refute html =~ "Criar Conta"
+    refute html =~ "Crie sua conta"
   end
 
-  test "shows features section", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/")
-    assert html =~ "Upload Simples"
-    assert html =~ "Categorização Inteligente"
-    assert html =~ "Gráficos Detalhados"
-  end
-
-  test "shows how it works section", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/")
-    assert html =~ "Como funciona"
-    assert html =~ "Faça Upload"
-    assert html =~ "Processamento Automático"
+  test "o footer aponta para o repositório", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/")
+    assert has_element?(lv, ~s|#footer-github[href="https://github.com/hjunior29/grana"]|)
   end
 
   test "dono logado é levado direto ao painel", %{conn: conn} do
