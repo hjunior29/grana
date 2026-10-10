@@ -45,4 +45,15 @@ defmodule Grana.OpenFinance.Account do
   end
 
   def effective_credit_limit(%__MODULE__{credit_limit: limit}), do: limit
+
+  def kind_label(%__MODULE__{subtype: "SAVINGS_ACCOUNT"}), do: "Poupança"
+  def kind_label(%__MODULE__{}), do: "Conta corrente"
+
+  # "VISA INFINITE PRIME" → "Visa Infinite Prime"; "platinum" → "Platinum".
+  def card_name(%__MODULE__{} = card) do
+    (card.marketing_name || card.name || "Cartão")
+    |> String.downcase()
+    |> String.split()
+    |> Enum.map_join(" ", &String.capitalize/1)
+  end
 end

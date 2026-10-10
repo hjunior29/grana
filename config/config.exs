@@ -91,7 +91,9 @@ config :grana, Oban,
     Oban.Plugins.Lifeline,
     {Oban.Plugins.Cron,
      crontab: [
-       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications}
+       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications},
+       # 09:00 em Brasília (UTC-3).
+       {"0 12 * * *", Grana.Workers.FinancialAlertsWorker, queue: :notifications}
      ]}
   ]
 

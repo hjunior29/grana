@@ -10,6 +10,7 @@ defmodule GranaWeb.UserLive.Settings do
   alias GranaWeb.OpenFinanceComponents
 
   on_mount GranaWeb.AiSettingsHooks
+  on_mount GranaWeb.SmtpHooks
   on_mount GranaWeb.OpenFinanceHooks
 
   @impl true
@@ -106,6 +107,14 @@ defmodule GranaWeb.UserLive.Settings do
             show_api_key={@show_api_key}
           />
         </div>
+
+        <AccountComponents.smtp_card
+          source={@smtp_source}
+          config={@smtp_config}
+          form={@smtp_form}
+          show_form={@smtp_show_form}
+          private_key={@smtp_private_key}
+        />
 
         <OpenFinanceComponents.settings_card
           configured={@open_finance_configured}
@@ -285,14 +294,7 @@ defmodule GranaWeb.UserLive.Settings do
 
       case Accounts.change_user_email(user, user_params) do
         %{valid?: true} = changeset ->
-          Accounts.deliver_user_update_email_instructions(
-            Ecto.Changeset.apply_action!(changeset, :insert),
-            user.email,
-            &url(~p"/users/settings/confirm-email/#{&1}")
-          )
-
-          info = "Um link de confirmação foi enviado para o novo endereço de email."
-          {:noreply, socket |> put_flash(:info, info)}
+          update_email(socket, user, changeset)
 
         changeset ->
           {:noreply, assign(socket, :email_form, to_form(changeset, action: :insert))}
@@ -385,6 +387,38 @@ defmodule GranaWeb.UserLive.Settings do
       end
     else
       {:noreply, redirect_for_reauth(socket)}
+    end
+  end
+
+  # Com SMTP, confirma o novo endereço por link; sem SMTP não há como enviar o
+  # link, então a troca é direta (a ação já exige sudo mode).
+  defp update_email(socket, user, changeset) do
+    if Accounts.smtp_configured?() do
+      Accounts.deliver_user_update_email_instructions(
+        Ecto.Changeset.apply_action!(changeset, :insert),
+        user.email,
+        &(Accounts.public_base_url(user) <> ~p"/users/settings/confirm-email/#{&1}")
+      )
+
+      {:noreply,
+       put_flash(
+         socket,
+         :info,
+         "Um link de confirmação foi enviado para o novo endereço de email."
+       )}
+    else
+      {:ok, updated} =
+        Accounts.update_user_email_directly(user, %{email: changeset.changes.email})
+
+      {:noreply,
+       socket
+       |> assign(:current_scope, Grana.Accounts.Scope.for_user(updated))
+       |> assign(:current_email, updated.email)
+       |> assign(
+         :email_form,
+         to_form(Accounts.change_user_email(updated, %{}, validate_unique: false))
+       )
+       |> put_flash(:info, "Email alterado com sucesso.")}
     end
   end
 

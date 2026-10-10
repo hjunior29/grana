@@ -43,6 +43,22 @@ defmodule Grana.AccountsFixtures do
     user |> Ecto.Changeset.change(confirmed_at: nil, hashed_password: nil) |> Grana.Repo.update!()
   end
 
+  @doc "Liga o SMTP (e, com ele, o 2FA) gravando direto no usuário; envia pelo adapter Test."
+  def smtp_fixture(user, attrs \\ %{}) do
+    attrs =
+      Enum.into(attrs, %{
+        smtp_host: "smtp.example.com",
+        smtp_port: 587,
+        smtp_username: "grana",
+        smtp_password: "segredo",
+        smtp_tls: "always",
+        smtp_from_name: "Grana",
+        smtp_from_address: "grana@example.com"
+      })
+
+    user |> Ecto.Changeset.change(attrs) |> Grana.Repo.update!()
+  end
+
   def user_scope_fixture do
     user = user_fixture()
     user_scope_fixture(user)

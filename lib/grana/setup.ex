@@ -51,7 +51,7 @@ defmodule Grana.Setup do
   end
 
   defp announce(code) do
-    url = (Application.get_env(:grana, :public_url) || local_url()) <> "/setup"
+    url = Grana.Accounts.public_base_url() <> "/setup"
 
     Logger.notice("""
 
@@ -63,9 +63,5 @@ defmodule Grana.Setup do
        ou docker logs grana)
     ============================================================
     """)
-  end
-
-  defp local_url do
-    "http://localhost:#{Application.get_env(:grana, GranaWeb.Endpoint)[:http][:port] || 4000}"
   end
 end

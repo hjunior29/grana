@@ -72,6 +72,9 @@ config :grana, GranaWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :grana, dev_routes: true
 
+# Sem SMTP configurado, emails vão para o adapter Local (/dev/mailbox).
+config :grana, :mailer_local_fallback, true
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

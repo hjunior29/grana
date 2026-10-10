@@ -57,6 +57,16 @@ defmodule GranaWeb.UserLive.Login do
             Entrar
           </.button>
         </.form>
+
+        <div :if={!@current_scope} class="text-center text-sm">
+          <.link
+            id="forgot-password-link"
+            navigate={~p"/users/reset-password"}
+            class="link link-hover opacity-70"
+          >
+            Esqueci a senha
+          </.link>
+        </div>
       </div>
     </Layouts.app>
     """

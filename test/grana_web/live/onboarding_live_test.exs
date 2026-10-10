@@ -23,6 +23,13 @@ defmodule GranaWeb.OnboardingLiveTest do
     assert has_element?(lv, "#onboarding-finish")
   end
 
+  test "etapa de email mostra o card de SMTP", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/onboarding")
+    lv |> element("#onboarding-skip") |> render_click()
+
+    assert has_element?(lv, "#smtp-settings")
+  end
+
   test "etapa de IA salva a chave", %{conn: conn, user: user} do
     {:ok, lv, _html} = live(conn, ~p"/onboarding")
     for _ <- 1..2, do: lv |> element("#onboarding-skip") |> render_click()

@@ -1,8 +1,6 @@
 defmodule GranaWeb.UserLive.SettingsTest do
   use GranaWeb.ConnCase
 
-  setup :ensure_owner
-
   alias Grana.Accounts
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
@@ -37,6 +35,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
     end
 
     test "redirects if user is not logged in", %{conn: conn} do
+      ensure_owner(%{})
       assert {:error, redirect} = live(conn, ~p"/users/settings")
 
       assert {:redirect, %{to: path, flash: flash}} = redirect
@@ -70,7 +69,38 @@ defmodule GranaWeb.UserLive.SettingsTest do
       %{conn: log_in_user(conn, user), user: user}
     end
 
+    test "sem SMTP troca o email direto", %{conn: conn, user: user} do
+      new_email = unique_user_email()
+
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      result =
+        lv
+        |> form("#email_form", %{"user" => %{"email" => new_email}})
+        |> render_submit()
+
+      assert result =~ "Email alterado com sucesso"
+      assert Accounts.get_user_by_email(new_email)
+      refute Accounts.get_user_by_email(user.email)
+    end
+
+    test "com SMTP envia o link de confirmação", %{conn: conn, user: user} do
+      smtp_fixture(user)
+      new_email = unique_user_email()
+
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      result =
+        lv
+        |> form("#email_form", %{"user" => %{"email" => new_email}})
+        |> render_submit()
+
+      assert result =~ "Um link de confirmação foi enviado"
+      assert Accounts.get_user_by_email(user.email)
+    end
+
     test "updates the user email", %{conn: conn, user: user} do
+      smtp_fixture(user)
       new_email = unique_user_email()
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
@@ -189,7 +219,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
 
   describe "confirm email" do
     setup %{conn: conn} do
-      user = user_fixture()
+      user = user_fixture() |> smtp_fixture()
       email = unique_user_email()
 
       token =
@@ -228,6 +258,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
     end
 
     test "redirects if user is not logged in", %{token: token} do
+      ensure_owner(%{})
       conn = build_conn()
       {:error, redirect} = live(conn, ~p"/users/settings/confirm-email/#{token}")
       assert {:redirect, %{to: path, flash: flash}} = redirect

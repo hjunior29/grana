@@ -6,6 +6,7 @@ defmodule GranaWeb.OnboardingLive do
   alias GranaWeb.OpenFinanceComponents
 
   on_mount GranaWeb.AiSettingsHooks
+  on_mount GranaWeb.SmtpHooks
   on_mount GranaWeb.OpenFinanceHooks
 
   @steps [
@@ -45,12 +46,13 @@ defmodule GranaWeb.OnboardingLive do
               <p class="text-sm opacity-60">Você pode mudar isso depois em Configurações.</p>
             </.step_card>
           <% :smtp -> %>
-            <.step_card
-              title="Email (SMTP)"
-              subtitle="Com um servidor de email, o login passa a exigir um código enviado para você e a recuperação de senha fica disponível."
-            >
-              <p class="text-sm opacity-60">Você pode configurar isso depois em Configurações.</p>
-            </.step_card>
+            <AccountComponents.smtp_card
+              source={@smtp_source}
+              config={@smtp_config}
+              form={@smtp_form}
+              show_form={@smtp_show_form}
+              private_key={@smtp_private_key}
+            />
           <% :ai -> %>
             <.step_card
               title="Inteligência artificial"

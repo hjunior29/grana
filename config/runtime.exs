@@ -92,33 +92,26 @@ end
 
 config :grana, GranaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
-# In dev, set SMTP_IN_DEV=true in .env to send real emails via SMTP
-# instead of the local mailbox at /dev/mailbox
-if config_env() == :dev and System.get_env("SMTP_IN_DEV") == "true" do
+# SMTP do ambiente: tem precedência sobre o salvo pela tela. Em dev só vale com
+# SMTP_IN_DEV=true (senão os emails vão para /dev/mailbox); em test nunca é lido.
+if config_env() != :test and (config_env() != :dev or System.get_env("SMTP_IN_DEV") == "true") do
   if smtp_host = System.get_env("SMTP_HOST") do
-    config :grana, :smtp_available, true
+    smtp_username = System.get_env("SMTP_USERNAME")
 
-    config :grana, :smtp_config,
-      relay: smtp_host,
+    config :grana, :smtp_env, %{
+      host: smtp_host,
       port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
-      username: System.get_env("SMTP_USERNAME"),
+      username: smtp_username,
       password: System.get_env("SMTP_PASSWORD"),
-      tls: :always,
-      tls_options: [
-        verify: :verify_peer,
-        cacerts: :public_key.cacerts_get(),
-        server_name_indication: String.to_charlist(smtp_host),
-        depth: 3,
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-        ]
-      ],
-      auth: :always,
-      ssl: false
-
-    config :grana, :mail_from,
-      name: System.get_env("MAIL_FROM_NAME") || "Grana",
-      address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
+      tls: String.to_existing_atom(System.get_env("SMTP_TLS") || "always"),
+      from_name: System.get_env("MAIL_FROM_NAME") || "Grana",
+      from_address:
+        System.get_env("MAIL_FROM_ADDRESS") ||
+          if(smtp_username && String.contains?(smtp_username, "@"),
+            do: smtp_username,
+            else: "noreply@example.com"
+          )
+    }
   end
 end
 
@@ -166,30 +159,4 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base
-
-  # ## Configuring the mailer (SMTP)
-  if smtp_host = System.get_env("SMTP_HOST") do
-    config :grana, Grana.Mailer,
-      adapter: Swoosh.Adapters.SMTP,
-      relay: smtp_host,
-      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
-      username: System.get_env("SMTP_USERNAME"),
-      password: System.get_env("SMTP_PASSWORD"),
-      tls: :always,
-      tls_options: [
-        verify: :verify_peer,
-        cacerts: :public_key.cacerts_get(),
-        server_name_indication: String.to_charlist(smtp_host),
-        depth: 3,
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-        ]
-      ],
-      auth: :always,
-      ssl: false
-
-    config :grana, :mail_from,
-      name: System.get_env("MAIL_FROM_NAME") || "Grana",
-      address: System.get_env("MAIL_FROM_ADDRESS") || "noreply@example.com"
-  end
 end

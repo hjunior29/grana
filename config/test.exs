@@ -62,3 +62,6 @@ config :phoenix,
 # Sem cache do estado de setup e sem código no log: o banco muda a cada teste.
 config :grana, :cache_setup_state, false
 config :grana, :announce_setup_code, false
+
+# O SMTP configurado nos testes envia pelo adapter Test, nunca pela rede.
+config :grana, :smtp_adapter, Swoosh.Adapters.Test
