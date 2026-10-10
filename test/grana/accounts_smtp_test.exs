@@ -51,7 +51,7 @@ defmodule Grana.AccountsSmtpTest do
     test "envia o teste e grava, com a senha cifrada no banco", %{user: user} do
       assert {:ok, saved} = Accounts.save_smtp_settings(user, @valid)
 
-      assert_email_sent(to: {nil, user.email}, subject: "Teste de email — Grana")
+      assert_email_sent(to: {nil, user.email}, subject: "Seu email no Grana está funcionando")
       assert saved.smtp_host == "smtp.exemplo.com"
 
       %{rows: [[raw]]} = Repo.query!("SELECT smtp_password FROM users WHERE id = ?", [user.id])

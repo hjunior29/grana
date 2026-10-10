@@ -35,7 +35,7 @@ defmodule GranaWeb.UserLive.PasswordResetTest do
         |> follow_redirect(conn, ~p"/users/log-in")
 
       assert html =~ "Se o email estiver cadastrado"
-      assert_email_sent(subject: "Recuperação de senha — Grana")
+      assert_email_sent(subject: "Redefinição de senha do Grana")
     end
 
     test "email desconhecido responde igual e não envia", %{conn: conn, user: user} do

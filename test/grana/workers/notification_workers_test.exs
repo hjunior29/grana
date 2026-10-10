@@ -120,7 +120,7 @@ defmodule Grana.Workers.NotificationWorkersTest do
       run(FinancialAlertsWorker)
 
       assert_email_sent(fn email ->
-        assert email.subject =~ "Alertas financeiros"
+        assert email.subject =~ "alertas financeiros"
         assert email.text_body =~ "Saldo negativo"
       end)
     end
