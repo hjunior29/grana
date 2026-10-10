@@ -520,6 +520,7 @@ And **never** do this:
   (cacheado em `:persistent_term`) alimenta o `GranaWeb.SetupGate`, que redireciona tudo para
   `/setup` enquanto não há dono. O código de uso único do setup (`Grana.Setup`) vive em memória
   e é impresso no log.
+- IA: vários provedores por usuário (`Grana.AI`: Gemini, OpenAI, Anthropic e compatíveis), com modelos lidos da API de cada um (`Grana.AI.Models`), nunca de lista no código. O padrão fica em `users.ai_provider` ("env:<kind>" ou "db:<id>") e `users.ai_model`; chamadas passam por `Grana.AI.Provider` com a config de `Grana.AI.resolve_config/1`.
 - Login por email + senha. Com SMTP efetivo (`Accounts.smtp_config/0`: ambiente > banco), todo
   login pede um código por email (2FA). `.env`/ambiente sempre tem precedência sobre o que a
   tela salva (SMTP, Gemini, Pluggy).
@@ -534,7 +535,7 @@ And **never** do this:
 
 - **Nunca modificar `lib/` para facilitar testes.** Os testes devem se adaptar ao código existente.
 - Proibido: adicionar parâmetros de DI, expor `defp → def`, branches `if Mix.env() == :test`, `@doc false` para testes.
-- Mocks via **Mimic** (`async: false` obrigatório). Módulos mockáveis: `Req`, `Grana.AI.Provider`, `Grana.AI.Providers.Gemini`, `Grana.Investments`, `Grana.Accounts.UserNotifier`, `Grana.PlatformImport`, `Grana.OpenFinance.Pluggy`, `Grana.Mailer`.
+- Mocks via **Mimic** (`async: false` obrigatório). Módulos mockáveis: `Req`, `Grana.AI.Provider`, `Grana.AI.Providers.Gemini`, `Grana.Investments`, `Grana.Accounts.UserNotifier`, `Grana.PlatformImport`, `Grana.OpenFinance.Pluggy`, `Grana.Mailer`, `Grana.AI.Models`, `Grana.AI.Providers.OpenAI`, `Grana.AI.Providers.Anthropic`.
 - Piso de cobertura atual: **80%** (definido em `coveralls.json`).
 
 ### Convenções de código

@@ -523,25 +523,6 @@ defmodule Grana.Accounts do
     end)
   end
 
-  ## AI Settings
-
-  @doc "Changeset do formulário de IA. A chave salva nunca volta para a tela."
-  def change_user_ai_settings(user, attrs \\ %{}) do
-    User.ai_settings_changeset(%{user | ai_api_key: nil}, attrs)
-  end
-
-  def update_user_ai_settings(user, attrs) do
-    user
-    |> User.ai_settings_changeset(attrs)
-    |> Repo.update()
-  end
-
-  def remove_user_ai_api_key(user) do
-    user
-    |> Ecto.Changeset.change(ai_api_key: nil)
-    |> Repo.update()
-  end
-
   ## Identity (nome/CPF do titular)
 
   def change_user_identity(user, attrs \\ %{}) do
@@ -554,30 +535,6 @@ defmodule Grana.Accounts do
     |> Repo.update()
   end
 
-  @doc "Chave do Gemini definida no ambiente (GEMINI_API_KEY), se houver."
-  def env_ai_api_key do
-    case Application.get_env(:grana, :gemini_api_key) do
-      key when is_binary(key) and key != "" -> key
-      _ -> nil
-    end
-  end
-
-  # A chave do ambiente (.env) tem prioridade sobre a salva pela tela.
-  def get_user_ai_config(user_id) do
-    user = get_user!(user_id)
-    api_key = env_ai_api_key() || user.ai_api_key
-
-    case api_key do
-      nil ->
-        {:error, :no_api_key}
-
-      key ->
-        {:ok,
-         %{
-           provider: user.ai_provider || "gemini",
-           model: user.ai_model || "gemini-2.0-flash",
-           api_key: key
-         }}
-    end
-  end
+  # Provedor e modelo padrão da IA (ver Grana.AI): ambiente e cadastrados.
+  def get_user_ai_config(user_id), do: Grana.AI.resolve_config(user_id)
 end

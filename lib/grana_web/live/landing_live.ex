@@ -405,7 +405,7 @@ defmodule GranaWeb.LandingLive do
                 </div>
                 <h3 class="font-semibold mb-2">A IA categoriza</h3>
                 <p class="text-sm opacity-60">
-                  Com a sua própria chave do Gemini, cada transação ganha categoria por padrões e regras suas.
+                  Com a sua própria chave (Gemini, OpenAI, Claude ou outro), cada transação ganha categoria por padrões e regras suas.
                 </p>
               </div>
 
@@ -1376,7 +1376,7 @@ defmodule GranaWeb.LandingLive do
                 Análise com IA
               </h2>
               <p class="text-lg opacity-60 mb-8">
-                Analise suas despesas e receitas com inteligência artificial, usando a sua própria chave do Gemini.
+                Analise suas despesas e receitas com inteligência artificial, usando o provedor de IA que você escolher (Gemini, OpenAI, Claude ou compatível).
                 Receba insights personalizados, alertas e dicas para otimizar suas finanças.
               </p>
               <div class="space-y-4">

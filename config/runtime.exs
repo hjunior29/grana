@@ -70,8 +70,12 @@ end
 # (cifradas). PLUGGY_WEBHOOK_URL (HTTPS público, ex.: túnel ngrok) habilita o
 # webhook. Em test nada disso é lido, para nunca usar credenciais reais.
 if config_env() != :test do
-  # Chave do Gemini por ambiente: quando definida, a tela não oferece salvar outra.
-  config :grana, :gemini_api_key, System.get_env("GEMINI_API_KEY")
+  # Provedores de IA por ambiente: aparecem na tela como "do .env", sem edição.
+  config :grana, :ai_env_keys, %{
+    "gemini" => System.get_env("GEMINI_API_KEY"),
+    "openai" => System.get_env("OPENAI_API_KEY"),
+    "anthropic" => System.get_env("ANTHROPIC_API_KEY")
+  }
 
   config :grana, :pluggy,
     client_id: System.get_env("PLUGGY_CLIENT_ID"),

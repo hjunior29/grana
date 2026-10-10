@@ -137,7 +137,7 @@ defmodule GranaWeb.BackupHooks do
     "Backup restaurado. Cadastre de novo: #{Enum.map_join(cleared, ", ", &secret_label/1)}."
   end
 
-  defp secret_label("ai_api_key"), do: "chave do Gemini"
+  defp secret_label("ai_providers"), do: "chaves dos provedores de IA"
   defp secret_label("cpf"), do: "CPF"
   defp secret_label("pluggy_client_secret"), do: "credenciais da Pluggy"
   defp secret_label("pluggy_webhook_secret"), do: "segredo do webhook da Pluggy"

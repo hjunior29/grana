@@ -79,7 +79,13 @@ defmodule GranaWeb.RestoreFlowTest do
           owner = user_fixture(%{email: "dono@gmail.com"})
           user_fixture(%{email: "outro@example.com"})
           transaction_fixture(owner)
-          owner |> Ecto.Changeset.change(ai_api_key: "gemini") |> Repo.update!()
+
+          Repo.insert!(%Grana.AI.ProviderConfig{
+            user_id: owner.id,
+            kind: "gemini",
+            name: "Google Gemini",
+            api_key: "gemini"
+          })
         end)
 
       %{conn: log_in_user(build_conn(), live_user), binary: binary}
@@ -99,9 +105,10 @@ defmodule GranaWeb.RestoreFlowTest do
 
       {path, flash} = assert_redirect(lv)
       assert path == "/users/log-in"
-      assert flash["info"] =~ "chave do Gemini"
+      assert flash["info"] =~ "chaves dos provedores de IA"
 
-      assert [%User{email: "dono@gmail.com", ai_api_key: nil}] = Repo.all(User)
+      assert [%User{email: "dono@gmail.com"}] = Repo.all(User)
+      assert Repo.one!(Grana.AI.ProviderConfig).api_key == nil
       assert Repo.aggregate("transactions", :count) == 1
     end
 

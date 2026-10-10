@@ -49,6 +49,15 @@ defmodule Grana.BackupTest do
     end
   end
 
+  defp ai_provider!(owner, api_key) do
+    Repo.insert!(%Grana.AI.ProviderConfig{
+      user_id: owner.id,
+      kind: "gemini",
+      name: "Google Gemini",
+      api_key: api_key
+    })
+  end
+
   describe "analyze/1" do
     test "valida, prepara e lista os usuários (o com mais dados primeiro)", %{tmp_dir: tmp} do
       {path, {owner_id, other_id}} = two_user_backup(tmp)
@@ -200,18 +209,17 @@ defmodule Grana.BackupTest do
       {path, {owner_id, _}} =
         two_user_backup(tmp,
           secrets: fn owner ->
-            owner
-            |> Ecto.Changeset.change(ai_api_key: "gemini-key", cpf: "12345678901")
-            |> Repo.update!()
+            owner |> Ecto.Changeset.change(cpf: "12345678901") |> Repo.update!()
+            ai_provider!(owner, "gemini-key")
           end
         )
 
       {:ok, analysis} = Backup.analyze(path)
       assert {:ok, %{cleared: cleared}} = Backup.restore(analysis, owner_id)
 
-      assert Enum.sort(cleared) == ["ai_api_key", "cpf"]
+      assert Enum.sort(cleared) == ["ai_providers", "cpf"]
       restored = Repo.one!(User)
-      assert restored.ai_api_key == nil
+      assert Repo.one!(Grana.AI.ProviderConfig).api_key == nil
       assert restored.cpf == nil
     end
 
@@ -223,9 +231,8 @@ defmodule Grana.BackupTest do
         try do
           two_user_backup(tmp,
             secrets: fn owner ->
-              owner
-              |> Ecto.Changeset.change(ai_api_key: "gemini-key", smtp_password: "smtp-pass")
-              |> Repo.update!()
+              owner |> Ecto.Changeset.change(smtp_password: "smtp-pass") |> Repo.update!()
+              ai_provider!(owner, "gemini-key")
             end
           )
         after
@@ -236,7 +243,7 @@ defmodule Grana.BackupTest do
       assert {:ok, %{cleared: []}} = Backup.restore(analysis, owner_id, old_cloak_key: @other_key)
 
       restored = Repo.one!(User)
-      assert restored.ai_api_key == "gemini-key"
+      assert Repo.one!(Grana.AI.ProviderConfig).api_key == "gemini-key"
       assert restored.smtp_password == "smtp-pass"
     end
 
@@ -250,7 +257,7 @@ defmodule Grana.BackupTest do
         try do
           two_user_backup(tmp,
             secrets: fn owner ->
-              owner |> Ecto.Changeset.change(ai_api_key: "k") |> Repo.update!()
+              ai_provider!(owner, "k")
             end
           )
         after

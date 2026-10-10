@@ -9,9 +9,11 @@ defmodule Grana.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
 
-    field :ai_provider, :string, default: "gemini"
-    field :ai_model, :string, default: "gemini-2.0-flash"
-    field :ai_api_key, Grana.Encrypted.Binary, redact: true
+    # Provedor e modelo padrão da IA: `ai_provider` é a referência do provedor
+    # ("env:gemini" ou "db:<id>", ver Grana.AI) e `ai_model` o id do modelo.
+    field :ai_provider, :string
+    field :ai_model, :string
+    has_many :ai_providers, Grana.AI.ProviderConfig
 
     # Identidade do titular, para reconhecer transferências entre contas próprias.
     field :name, :string
@@ -191,12 +193,8 @@ defmodule Grana.Accounts.User do
     false
   end
 
-  def ai_settings_changeset(user, attrs \\ %{}) do
-    user
-    |> cast(attrs, [:ai_provider, :ai_model, :ai_api_key])
-    |> keep_secret_when_blank(:ai_api_key)
-    |> validate_inclusion(:ai_provider, ["gemini"])
-    |> validate_inclusion(:ai_model, ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"])
+  def ai_default_changeset(user, provider_ref, model) do
+    change(user, ai_provider: provider_ref, ai_model: model)
   end
 
   # Campos de segredo são só de escrita: a tela nunca recebe o valor salvo, então

@@ -6,7 +6,6 @@ defmodule Grana.Banking.AICategorizerTest do
   import Grana.AccountsFixtures
 
   alias Grana.Banking.AICategorizer
-  alias Grana.Accounts
 
   defp ai_response(text) do
     %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text}]}}]}
@@ -23,7 +22,7 @@ defmodule Grana.Banking.AICategorizerTest do
     end
 
     test "returns mapped category ids on successful AI response", %{user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       categories = [
         %{id: 1, name: "Alimentação"},
@@ -44,7 +43,7 @@ defmodule Grana.Banking.AICategorizerTest do
     end
 
     test "returns category_id nil for unknown category names", %{user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       categories = [%{id: 1, name: "Alimentação"}]
 
@@ -61,7 +60,7 @@ defmodule Grana.Banking.AICategorizerTest do
     end
 
     test "returns error on AI provider failure", %{user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       stub(Grana.AI.Provider, :generate_content, fn _prompt, _config ->
         {:error, "API Key inválida"}
@@ -76,7 +75,7 @@ defmodule Grana.Banking.AICategorizerTest do
     end
 
     test "handles JSON wrapped in markdown code block", %{user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       categories = [%{id: 1, name: "Alimentação"}]
       markdown_response = "```json\n[\"Alimentação\"]\n```"
@@ -94,7 +93,7 @@ defmodule Grana.Banking.AICategorizerTest do
     end
 
     test "returns error on invalid JSON response", %{user: user} do
-      {:ok, _} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      ai_fixture(user)
 
       stub(Grana.AI.Provider, :generate_content, fn _prompt, _config ->
         {:ok, ai_response("not valid json at all")}

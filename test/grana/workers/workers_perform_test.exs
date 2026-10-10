@@ -5,7 +5,6 @@ defmodule Grana.Workers.WorkersPerformTest do
   import Grana.AccountsFixtures
   import Grana.BankingFixtures
 
-  alias Grana.Accounts
   alias Grana.Banking
   alias Grana.Workers.AIAnalysisWorker
   alias Grana.Workers.PlatformImportWorker
@@ -16,7 +15,7 @@ defmodule Grana.Workers.WorkersPerformTest do
   describe "AIAnalysisWorker.perform/1 banking" do
     setup do
       user = user_fixture()
-      {:ok, user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
+      user = ai_fixture(user)
       Banking.ensure_default_categories(user.id)
       transaction_fixture(user, %{description: "PADARIA", amount: "-50.00"})
 
