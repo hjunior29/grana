@@ -118,7 +118,6 @@ defmodule GranaWeb.SetupLive do
                 uploads={@uploads}
                 analysis={@restore_analysis}
                 form={@restore_form}
-                error={@restore_error}
               />
               <button
                 :if={@restore_stage == :idle}

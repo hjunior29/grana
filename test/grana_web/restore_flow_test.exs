@@ -150,7 +150,7 @@ defmodule GranaWeb.RestoreFlowTest do
 
       upload_backup(lv, "isso não é um banco")
 
-      assert has_element?(lv, "#restore-error")
+      assert has_element?(lv, "#flash-error", "não é um banco SQLite")
       assert render(lv) =~ "não é um banco SQLite"
       refute has_element?(lv, "#restore-options-form")
     end
