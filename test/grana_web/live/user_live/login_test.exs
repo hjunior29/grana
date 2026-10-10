@@ -1,5 +1,5 @@
 defmodule GranaWeb.UserLive.LoginTest do
-  use GranaWeb.ConnCase, async: true
+  use GranaWeb.ConnCase
 
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures

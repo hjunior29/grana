@@ -36,5 +36,9 @@ defmodule Grana.Banking.BankStatement do
       name: :bank_statements_unique_upload,
       message: "este extrato já foi importado anteriormente"
     )
+    |> unique_constraint([:user_id, :bank, :filename, :period_start, :period_end],
+      name: :bank_statements_user_id_bank_filename_period_start_period_end_index,
+      message: "este extrato já foi importado anteriormente"
+    )
   end
 end

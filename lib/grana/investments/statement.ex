@@ -34,5 +34,9 @@ defmodule Grana.Investments.Statement do
       name: :investment_statements_unique_upload,
       message: "este extrato já foi importado anteriormente"
     )
+    |> unique_constraint([:user_id, :institution_id, :filename, :period_start, :period_end],
+      name: :investment_statements_user_id_institution_id_filename_period_start_period_end_index,
+      message: "este extrato já foi importado anteriormente"
+    )
   end
 end

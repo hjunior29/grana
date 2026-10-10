@@ -1,5 +1,5 @@
 defmodule Grana.Banking.BankingContextTest do
-  use Grana.DataCase, async: true
+  use Grana.DataCase
 
   alias Grana.Banking
 
@@ -992,7 +992,7 @@ defmodule Grana.Banking.BankingContextTest do
     test "kinds/0 returns valid kind list" do
       kinds = Grana.Banking.InternalTransferRule.kinds()
       assert is_list(kinds)
-      assert kinds != []
+      refute Enum.empty?(kinds)
     end
   end
 end

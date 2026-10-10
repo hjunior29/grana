@@ -83,6 +83,7 @@ config :error_tracker,
 
 # Configure Oban
 config :grana, Oban,
+  engine: Oban.Engines.Lite,
   repo: Grana.Repo,
   queues: [uploads: 2, ai_analysis: 1, quotes: 1, notifications: 1],
   plugins: [

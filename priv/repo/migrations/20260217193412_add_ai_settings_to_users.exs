@@ -3,9 +3,9 @@ defmodule Grana.Repo.Migrations.AddAiSettingsToUsers do
 
   def change do
     alter table(:users) do
-      add_if_not_exists :ai_provider, :string, default: "gemini"
-      add_if_not_exists :ai_model, :string, default: "gemini-2.0-flash"
-      add_if_not_exists :ai_api_key, :string
+      add :ai_provider, :string, default: "gemini"
+      add :ai_model, :string, default: "gemini-2.0-flash"
+      add :ai_api_key, :string
     end
   end
 end

@@ -1,5 +1,5 @@
 defmodule Grana.Investments.ContextTest do
-  use Grana.DataCase, async: true
+  use Grana.DataCase
 
   alias Grana.Investments
 

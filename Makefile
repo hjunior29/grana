@@ -3,13 +3,11 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help setup deps server s console iex \
-        db.up db.down db.logs db.nuke db.setup db.migrate db.rollback db.reset \
+        db.nuke db.setup db.migrate db.rollback db.reset \
         redis.up redis.down redis.cli redis.flush \
         test cov coverage coverage.html format format.check credo audit gate precommit \
         assets clean
 
-# CVE do Decimal ignorada de propósito (fix exige decimal 3.0, bloqueado por postgrex ~> 2.0).
-AUDIT_IGNORE ?= GHSA-rhv4-8758-jx7v
 
 help: ## Mostra esta ajuda
 	@echo "Grana — comandos de dev:"
@@ -18,7 +16,7 @@ help: ## Mostra esta ajuda
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 # ── Setup ──────────────────────────────────────────────────────────────────
-setup: db.up redis.up deps ## Setup completo (Postgres + Redis + deps + banco + assets)
+setup: redis.up deps ## Setup completo (Redis + deps + banco SQLite + assets)
 	mix setup
 
 deps: ## Baixa as dependências Elixir
@@ -28,7 +26,7 @@ assets: ## Compila os assets (tailwind + esbuild)
 	mix assets.build
 
 # ── Rodar ──────────────────────────────────────────────────────────────────
-server: db.up redis.up ## Sobe o servidor Phoenix (http://localhost:4000)
+server: redis.up ## Sobe o servidor Phoenix (http://localhost:4000)
 	mix phx.server
 
 s: server ## Alias de `server`
@@ -39,18 +37,8 @@ console: ## Abre o console IEx com a aplicação carregada
 iex: console ## Alias de `console`
 
 # ── Banco de dados ───────────────────────────────────────────────────────────
-db.up: ## Sobe o Postgres de dev (docker compose, aguarda ficar saudável)
-	docker compose up -d --wait db
-	@echo "Postgres (grana-db) rodando em localhost:5432"
-
-db.down: ## Para o Postgres de dev (mantém os dados)
-	docker compose down
-
-db.logs: ## Mostra os logs do Postgres
-	docker compose logs -f db
-
-db.nuke: ## Remove o Postgres E os dados (volume) — destrutivo
-	docker compose down -v
+db.nuke: ## Remove o banco SQLite local (grana_dev.db*) — destrutivo
+	rm -f grana_dev.db*
 
 db.setup: ## Cria o banco, roda migrations e seeds
 	mix ecto.setup
@@ -100,12 +88,12 @@ credo: ## Análise estática (Credo, --strict)
 	mix credo --strict
 
 audit: ## Auditoria de vulnerabilidades nas dependências
-	mix deps.audit --ignore-advisory-ids $(AUDIT_IGNORE)
+	mix deps.audit
 
 gate: ## Roda o quality gate completo (igual ao CI, antes do deploy)
 	mix format --check-formatted
 	mix deps.unlock --check-unused
-	mix deps.audit --ignore-advisory-ids $(AUDIT_IGNORE)
+	mix deps.audit
 	mix compile --warnings-as-errors
 	mix credo --strict
 	MIX_ENV=test mix coveralls

@@ -6,13 +6,11 @@ config :grana, :cloak_key, "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
 
 # Configure your database
 config :grana, Grana.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "grana_dev",
+  database: Path.expand("../grana_dev.db", __DIR__),
+  pool_size: 5,
+  busy_timeout: 5000,
   stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  show_sensitive_data_on_connection_error: true
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
