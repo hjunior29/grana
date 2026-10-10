@@ -11,7 +11,13 @@ defmodule Grana.Banking.BankStatement do
     field :period_end, :date
     field :total_transactions, :integer, default: 0
 
+    # "upload" (arquivo importado) ou "open_finance" (extrato/fatura virtual que
+    # cobre um período sem upload; definido pelo Grana, nunca pelo usuário).
+    field :source, :string, default: "upload"
+    field :external_id, :string
+
     belongs_to :user, Grana.Accounts.User
+    belongs_to :open_finance_account, Grana.OpenFinance.Account
     has_many :transactions, Grana.Banking.Transaction
 
     timestamps(type: :utc_datetime)

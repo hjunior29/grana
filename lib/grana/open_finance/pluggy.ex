@@ -50,6 +50,9 @@ defmodule Grana.OpenFinance.Pluggy do
 
   def get_item(credentials, item_id), do: request(credentials, :get, "/items/#{item_id}")
 
+  def get_identity(credentials, item_id),
+    do: request(credentials, :get, "/identity", params: [itemId: item_id])
+
   def delete_item(credentials, item_id) do
     with {:ok, _} <- request(credentials, :delete, "/items/#{item_id}"), do: :ok
   end

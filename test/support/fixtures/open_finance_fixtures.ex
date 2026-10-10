@@ -4,7 +4,8 @@ defmodule Grana.OpenFinanceFixtures do
   e registros Open Finance prontos para os testes.
   """
 
-  alias Grana.OpenFinance.{Account, Connection, Transaction}
+  alias Grana.Banking.BankStatement
+  alias Grana.OpenFinance.{Account, Connection}
   alias Grana.Repo
 
   def item_payload(attrs \\ %{}) do
@@ -87,6 +88,7 @@ defmodule Grana.OpenFinanceFixtures do
         "type" => "CREDIT",
         "status" => "POSTED",
         "category" => "Salary",
+        "categoryId" => "01010000",
         "operationType" => nil,
         "creditCardMetadata" => nil,
         "providerId" => nil
@@ -138,17 +140,18 @@ defmodule Grana.OpenFinanceFixtures do
     |> Repo.insert!()
   end
 
-  def transaction_fixture(account, attrs \\ %{}) do
-    %Transaction{
-      pluggy_id: Ecto.UUID.generate(),
-      date: ~D[2026-10-05],
-      description: "PIX RECEBIDO",
-      amount: Decimal.new("100.00"),
-      currency_code: "BRL",
-      type: "CREDIT",
-      status: "POSTED",
-      synced_at: DateTime.utc_now(:second),
-      account_id: account.id,
+  @doc "Extrato/fatura virtual do Open Finance (período sem upload) de uma conta."
+  def open_finance_statement_fixture(account, attrs \\ %{}) do
+    %BankStatement{
+      source: "open_finance",
+      bank: "nubank",
+      filename: "Open Finance · fixture #{System.unique_integer([:positive])}",
+      statement_type: "extrato",
+      status: "completed",
+      period_start: ~D[2026-10-01],
+      period_end: ~D[2026-10-09],
+      external_id: "#{account.pluggy_id}:extrato",
+      open_finance_account_id: account.id,
       user_id: account.user_id
     }
     |> struct!(attrs)

@@ -11,6 +11,10 @@ defmodule Grana.OpenFinance.Connection do
     field :connector_id, :integer
     field :connector_name, :string
     field :connector_image_url, :string
+    # Banco no vocabulário dos uploads ("nubank", "bradesco"...), deduzido das contas.
+    field :bank, :string
+    # "PF" ou "PJ", pelo documento da identidade (CPF/CNPJ) na Pluggy.
+    field :holder_type, :string
     field :status, :string
     field :execution_status, :string
     field :error_message, :string
@@ -29,6 +33,8 @@ defmodule Grana.OpenFinance.Connection do
   def item_changeset(connection, attrs) do
     connection
     |> cast(attrs, [
+      :bank,
+      :holder_type,
       :connector_id,
       :connector_name,
       :connector_image_url,

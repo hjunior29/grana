@@ -572,21 +572,15 @@ defmodule GranaWeb.UserLive.Settings do
     end
   end
 
-  def handle_event("open_finance_connect", params, socket) do
+  def handle_event("open_finance_connect", _params, socket) do
     case OpenFinance.create_connect_token(socket.assigns.current_scope) do
       {:ok, token} ->
-        sandbox = params["sandbox"] == "true"
-
-        # Sandbox = banco fictício "Pluggy Bank" (id 2), para testar o fluxo sem dados reais.
-        connector_id = if sandbox, do: 2, else: OpenFinance.meu_pluggy_connector_id()
-
         {:noreply,
          socket
          |> assign(:open_finance_connecting, true)
          |> push_event("pluggy:open", %{
            connect_token: token,
-           connector_id: connector_id,
-           sandbox: sandbox
+           connector_id: OpenFinance.meu_pluggy_connector_id()
          })}
 
       {:error, reason} ->
@@ -623,18 +617,6 @@ defmodule GranaWeb.UserLive.Settings do
 
   def handle_event("open_finance_add_item", %{"open_finance" => %{"item_id" => item_id}}, socket) do
     {:noreply, add_open_finance_item(socket, item_id)}
-  end
-
-  def handle_event("open_finance_sync", %{"id" => id}, socket) do
-    connection = OpenFinance.get_connection!(socket.assigns.current_scope, id)
-    {:ok, _job} = OpenFinance.enqueue_sync(connection)
-
-    {:noreply,
-     assign(
-       socket,
-       :open_finance_syncing,
-       MapSet.put(socket.assigns.open_finance_syncing, connection.id)
-     )}
   end
 
   def handle_event("open_finance_remove", %{"id" => id}, socket) do

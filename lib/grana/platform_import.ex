@@ -105,6 +105,7 @@ defmodule Grana.PlatformImport do
       end)
       |> Enum.sum()
 
+    Grana.OpenFinance.uploads_changed(user_id)
     Banking.detect_internal_transfers(user_id)
     {:ok, %{transaction_count: count}}
   end
@@ -112,6 +113,9 @@ defmodule Grana.PlatformImport do
   defp import_banking_group(user_id, bank, stype, rows, filename, cat_map, uncategorized_id) do
     {period_start, period_end} = period(rows)
     stmt = get_or_create_bank_statement(user_id, bank, stype, filename, period_start, period_end)
+
+    # Como num upload comum: o período importado deixa de vir do Open Finance.
+    Grana.OpenFinance.release_period(user_id, bank, stype, period_start, period_end)
 
     entries =
       rows

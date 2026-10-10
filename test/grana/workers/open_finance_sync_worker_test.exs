@@ -11,6 +11,7 @@ defmodule Grana.Workers.OpenFinanceSyncWorkerTest do
   alias Grana.Workers.OpenFinanceSyncWorker
 
   setup do
+    stub(Pluggy, :get_identity, fn _, _ -> {:ok, %{"documentType" => "CPF"}} end)
     %{user: with_pluggy_credentials(user_fixture())}
   end
 
@@ -86,12 +87,5 @@ defmodule Grana.Workers.OpenFinanceSyncWorkerTest do
                  "item_id" => Ecto.UUID.generate()
                })
     end
-  end
-
-  test "the cron job schedules every connection", %{user: user} do
-    connection = connection_fixture(user)
-
-    assert :ok = perform_job(OpenFinanceSyncWorker, %{})
-    assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => connection.id})
   end
 end

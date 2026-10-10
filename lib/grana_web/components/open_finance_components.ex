@@ -1,7 +1,7 @@
 defmodule GranaWeb.OpenFinanceComponents do
   @moduledoc """
-  Componentes da integração Open Finance (Pluggy): o card de Configurações e a
-  aba Open Finance do Dashboard.
+  Componentes da integração Open Finance (Pluggy): o card de Configurações e o
+  bloco "Hoje" do Resumo.
   """
   use GranaWeb, :html
 
@@ -34,7 +34,8 @@ defmodule GranaWeb.OpenFinanceComponents do
       </div>
       <p class="text-sm opacity-50 mb-5 ml-8">
         Saldos, cartões e transações lidos direto dos seus bancos, com o consentimento do
-        Open Finance Brasil. Por enquanto ficam separados das faturas e extratos importados.
+        Open Finance Brasil. As faturas e extratos que você importa continuam valendo; o Open
+        Finance só preenche os meses ainda sem upload.
       </p>
 
       <.credentials
@@ -136,17 +137,8 @@ defmodule GranaWeb.OpenFinanceComponents do
 
         <p class="text-xs opacity-50 mt-4 leading-relaxed">
           No widget, entre com a sua conta do Meu Pluggy e escolha um banco. Para outro banco,
-          conecte de novo. Quer só testar?
-          <button
-            id="connect-sandbox"
-            type="button"
-            phx-click="open_finance_connect"
-            phx-value-sandbox="true"
-            class="link link-hover"
-          >
-            Use o Sandbox
-          </button>
-          (usuário <code>user-ok</code>, senha <code>password-ok</code>).
+          conecte de novo. Os dados são atualizados sozinhos (no máximo uma vez por hora) e
+          aparecem no Resumo do Dashboard.
         </p>
       <% end %>
     </div>
@@ -307,17 +299,6 @@ defmodule GranaWeb.OpenFinanceComponents do
 
       <div class="flex items-center gap-1 shrink-0">
         <button
-          id={"sync-connection-#{@connection.id}"}
-          type="button"
-          phx-click="open_finance_sync"
-          phx-value-id={@connection.id}
-          disabled={@syncing}
-          class="btn btn-ghost btn-sm btn-square"
-          title="Sincronizar agora"
-        >
-          <.icon name="hero-arrow-path" class={["size-4", @syncing && "animate-spin"]} />
-        </button>
-        <button
           id={"remove-connection-#{@connection.id}"}
           type="button"
           phx-click="open_finance_remove"
@@ -363,276 +344,341 @@ defmodule GranaWeb.OpenFinanceComponents do
   end
 
   @doc """
-  Aba Open Finance do Dashboard: totais, contas/cartões e transações da conta
-  escolhida. Somente leitura e separada das faturas/extratos importados.
+  Bloco "Hoje" do Resumo: o estado atual pelo Open Finance. Totais e alertas no
+  topo; contas e cartões agrupados por banco; num bloco recolhível, um calendário
+  em miniatura (o mesmo da aba de uploads) mostra os meses em que o Open Finance
+  supre a falta de upload. Não obedece aos filtros de período do histórico.
   """
-  attr :configured, :boolean, required: true
-  attr :accounts, :list, required: true
+  attr :accounts, :list, required: true, doc: "contas com a conexão pré-carregada"
   attr :totals, :map, required: true
-  attr :selected_account, :any, required: true
-  attr :transactions, :any, required: true, doc: "stream das transações da conta escolhida"
-  attr :transactions_count, :integer, required: true
-  attr :has_more, :boolean, required: true
-  attr :syncing, :boolean, required: true
+  attr :calendar, :list, required: true, doc: "linhas de `OpenFinance.coverage_calendar/1`"
+  attr :refreshed_at, :any, required: true
 
-  def overview(assigns) do
+  def today(assigns) do
+    of_months =
+      for row <- assigns.calendar, cell <- row.cells, cell.open_finance != [], do: cell
+
+    assigns =
+      assign(assigns,
+        groups: Enum.chunk_by(assigns.accounts, & &1.connection_id),
+        alerts: alerts(assigns.accounts),
+        of_month_count: length(of_months)
+      )
+
     ~H"""
-    <div id="open-finance-tab">
-      <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-        <p class="text-xs sm:text-sm opacity-60 flex-1">
-          Dados lidos direto dos seus bancos via Pluggy — separados das faturas e extratos importados.
-        </p>
-        <div class="flex items-center gap-2">
-          <button
-            :if={@accounts != []}
-            id="sync-all"
-            type="button"
-            phx-click="of_sync_all"
-            disabled={@syncing}
-            class="btn btn-sm btn-primary gap-2"
-          >
-            <.icon name="hero-arrow-path" class={["size-4", @syncing && "animate-spin"]} />
-            {if @syncing, do: "Sincronizando...", else: "Sincronizar"}
-          </button>
-          <.link navigate={~p"/users/settings"} class="btn btn-sm btn-ghost gap-1">
-            <.icon name="hero-cog-6-tooth" class="size-4" /> Conexões
-          </.link>
+    <section
+      id="open-finance-today"
+      class="card bg-base-200 border border-base-content/5 p-4 sm:p-5 mb-6"
+    >
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4">
+        <h2 class="text-sm font-semibold uppercase tracking-wide">Hoje</h2>
+        <span class="text-xs opacity-50 flex items-center gap-1">
+          <.open_finance_logo class="size-3.5" /> Open Finance
+          <span :if={@refreshed_at}>· atualizado {time_ago(@refreshed_at)}</span>
+        </span>
+      </div>
+
+      <div id="open-finance-today-totals" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div>
+          <p class="text-xs opacity-60">Em conta</p>
+          <p class="text-xl font-semibold tabular-nums">{format_money(@totals.bank)}</p>
+          <p class="text-[11px] opacity-50">saldo somado de {@totals.bank_count} conta(s)</p>
+        </div>
+        <div>
+          <p class="text-xs opacity-60">Faturas abertas</p>
+          <p class="text-xl font-semibold tabular-nums text-warning">
+            {format_money(@totals.card_used)}
+          </p>
+          <p class="text-[11px] opacity-50">somando {@totals.card_count} cartão(ões)</p>
+        </div>
+        <div>
+          <p class="text-xs opacity-60">Limite disponível</p>
+          <p class="text-xl font-semibold tabular-nums text-success">
+            {format_money(@totals.card_available)}
+          </p>
+          <p class="text-[11px] opacity-50">de {format_money(@totals.card_limit)} de limite total</p>
         </div>
       </div>
 
-      <%= if @accounts == [] do %>
-        <div id="open-finance-empty-state" class="card bg-base-200 p-10 text-center">
-          <.icon name="hero-building-library" class="size-10 opacity-30 mx-auto mb-3" />
-          <h2 class="text-lg font-semibold">Nenhuma conta por aqui ainda</h2>
-          <p class="text-sm opacity-60 mt-1 max-w-md mx-auto">
-            <%= if @configured do %>
-              Conecte seus bancos pelo Meu Pluggy em Configurações. Se você acabou de
-              conectar, a importação pode levar alguns segundos.
-            <% else %>
-              A integração com a Pluggy ainda não foi configurada. O passo a passo está em Configurações.
-            <% end %>
-          </p>
-          <.link navigate={~p"/users/settings"} class="btn btn-primary btn-sm mt-5 mx-auto">
-            Ir para Configurações
-          </.link>
-        </div>
-      <% else %>
-        <div id="open-finance-summary" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <div class="stat bg-base-200 rounded-xl p-4">
-            <div class="stat-title text-xs">Saldo em contas</div>
-            <div class="stat-value text-lg sm:text-xl">{format_money(@totals.bank)}</div>
-            <div class="stat-desc text-xs">{@totals.bank_count} conta(s)</div>
-          </div>
-          <div class="stat bg-base-200 rounded-xl p-4">
-            <div class="stat-title text-xs">Fatura atual dos cartões</div>
-            <div class="stat-value text-lg sm:text-xl text-warning">
-              {format_money(@totals.card_used)}
+      <ul :if={@alerts != []} id="open-finance-today-alerts" class="mb-4 space-y-1 text-xs">
+        <li :for={alert <- @alerts} class="flex items-start gap-1.5 text-warning">
+          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert}
+        </li>
+      </ul>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <.bank_group :for={accounts <- @groups} accounts={accounts} />
+      </div>
+
+      <details :if={@of_month_count > 0} id="open-finance-today-sources" class="group mt-4">
+        <summary class="flex items-center gap-1.5 text-xs opacity-60 cursor-pointer select-none list-none hover:opacity-90 transition-opacity">
+          <.icon
+            name="hero-chevron-right"
+            class="size-3.5 transition-transform group-open:rotate-90"
+          /> Meses sem upload cobertos pelo Open Finance ({@of_month_count})
+        </summary>
+        <div class="mt-3 ml-5 flex flex-col md:flex-row md:items-end gap-4">
+          <.mini_calendar rows={@calendar} />
+          <div class="flex flex-col gap-2 text-[11px] opacity-80">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span class="flex items-center gap-1">
+                <span class="grana-calendar-legend-swatch calendar-count-0 !size-3"></span> sem upload
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="grana-calendar-legend-swatch calendar-count-1 !size-3"></span>
+                extrato ou fatura
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="grana-calendar-legend-swatch calendar-count-3 !size-3"></span>
+                extrato e fatura
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="grid place-items-center size-3 rounded-full bg-base-100 shadow-sm">
+                  <.open_finance_logo class="size-2" />
+                </span>
+                veio do Open Finance
+              </span>
             </div>
-            <div class="stat-desc text-xs">{@totals.card_count} cartão(ões)</div>
-          </div>
-          <div class="stat bg-base-200 rounded-xl p-4">
-            <div class="stat-title text-xs">Limite disponível</div>
-            <div class="stat-value text-lg sm:text-xl text-success">
-              {format_money(@totals.card_available)}
-            </div>
-            <div class="stat-desc text-xs">somando todos os cartões</div>
+            <.link
+              id="open-finance-calendar-link"
+              navigate={~p"/upload?tab=calendario"}
+              class="btn btn-ghost btn-xs gap-1 self-start group/link"
+            >
+              <.icon name="hero-calendar-days" class="size-3.5" /> Ver calendário completo
+              <.icon
+                name="hero-arrow-right"
+                class="size-3 transition-transform group-hover/link:translate-x-0.5"
+              />
+            </.link>
           </div>
         </div>
+      </details>
+    </section>
+    """
+  end
 
-        <div id="open-finance-accounts" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
-          <.account_card
-            :for={account <- @accounts}
-            account={account}
-            selected={@selected_account && account.id == @selected_account.id}
-          />
+  attr :rows, :list, required: true
+
+  # Miniatura do calendário da aba de uploads: mesmas cores (tipos importados no
+  # mês) e o símbolo do Open Finance nos meses que tiveram dados vindos dele.
+  defp mini_calendar(assigns) do
+    ~H"""
+    <div id="open-finance-mini-calendar" class="inline-block">
+      <div class="flex gap-1 mb-1">
+        <div class="w-8 shrink-0"></div>
+        <div :for={m <- 1..12} class="w-[18px] text-center text-[9px] opacity-50">
+          {month_initial(m)}
         </div>
-
-        <div :if={@selected_account} id="open-finance-transactions-panel" class="card bg-base-200">
-          <div class="px-4 sm:px-5 pt-4 pb-3 min-w-0">
-            <h2 class="font-semibold truncate">{account_name(@selected_account)}</h2>
-            <p class="text-xs opacity-50">
-              {@transactions_count} transação(ões) nos últimos 12 meses
-            </p>
-          </div>
-
-          <div
-            id="open-finance-transactions"
-            phx-update="stream"
-            class="divide-y divide-base-content/5"
+      </div>
+      <div :for={row <- @rows} class="flex gap-1 items-center mb-1">
+        <div class="w-8 shrink-0 text-right pr-1 text-[10px] opacity-60 tabular-nums">
+          {row.year}
+        </div>
+        <div
+          :for={cell <- row.cells}
+          id={"mini-calendar-#{cell.year}-#{cell.month}"}
+          class={[
+            "grana-calendar-cell size-[18px] grid place-items-center",
+            mini_cell_class(cell)
+          ]}
+          title={mini_cell_title(cell)}
+        >
+          <span
+            :if={cell.open_finance != []}
+            class="grid place-items-center size-3 rounded-full bg-base-100 shadow-sm"
           >
-            <div
-              id="open-finance-transactions-empty"
-              class="hidden only:block px-5 py-10 text-center text-sm opacity-50"
-            >
-              Nenhuma transação nesta conta.
-            </div>
-            <div
-              :for={{dom_id, transaction} <- @transactions}
-              id={dom_id}
-              class="flex items-center gap-3 px-4 sm:px-5 py-3 transition-colors hover:bg-base-100/50"
-            >
-              <div class="w-20 shrink-0 text-xs opacity-60 tabular-nums">
-                {format_date(transaction.date)}
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm truncate">{transaction.description}</p>
-                <div class="flex flex-wrap gap-1 mt-0.5">
-                  <span :if={transaction.status == "PENDING"} class="badge badge-warning badge-xs">
-                    Pendente
-                  </span>
-                  <span :if={transaction.operation_type} class="badge badge-ghost badge-xs">
-                    {transaction.operation_type}
-                  </span>
-                  <span :if={transaction.total_installments} class="badge badge-ghost badge-xs">
-                    Parcela {transaction.installment_number}/{transaction.total_installments}
-                  </span>
-                  <span :if={transaction.category} class="text-xs opacity-40 truncate">
-                    {transaction.category}
-                  </span>
-                </div>
-              </div>
-              <div class={[
-                "text-sm font-mono font-semibold whitespace-nowrap",
-                if(transaction.type == "CREDIT", do: "text-success", else: "text-error")
-              ]}>
-                {signed_amount(transaction)}
-              </div>
-            </div>
-          </div>
-
-          <div :if={@has_more} class="p-4 text-center border-t border-base-content/5">
-            <button
-              id="load-more-transactions"
-              type="button"
-              phx-click="of_load_more"
-              class="btn btn-ghost btn-sm"
-            >
-              Carregar mais
-            </button>
-          </div>
+            <.open_finance_logo class="size-2" />
+          </span>
         </div>
-      <% end %>
+      </div>
     </div>
     """
   end
 
-  attr :account, Account, required: true
-  attr :selected, :boolean, required: true
+  defp mini_cell_class(%{future?: true}), do: "calendar-count-future opacity-60"
+  defp mini_cell_class(%{upload_types: []}), do: "calendar-count-0"
+  defp mini_cell_class(%{upload_types: [_]}), do: "calendar-count-1"
+  defp mini_cell_class(%{upload_types: _both}), do: "calendar-count-3"
 
-  defp account_card(assigns) do
+  defp mini_cell_title(%{future?: true}), do: nil
+
+  defp mini_cell_title(cell) do
+    uploads =
+      case cell.upload_types do
+        [] -> "sem upload"
+        types -> "upload: " <> Enum.join(types, " e ")
+      end
+
+    open_finance =
+      Enum.map_join(cell.open_finance, ", ", fn {bank, type} -> "#{bank_name(bank)} (#{type})" end)
+
+    label = "#{month_abbr(cell.month)}/#{cell.year} · #{uploads}"
+    if open_finance == "", do: label, else: "#{label} · Open Finance: #{open_finance}"
+  end
+
+  @month_abbr {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"}
+  defp month_abbr(month), do: elem(@month_abbr, month - 1)
+  defp month_initial(month), do: month |> month_abbr() |> String.first()
+
+  attr :accounts, :list, required: true
+
+  defp bank_group(assigns) do
+    connection = hd(assigns.accounts).connection
+    {cards, banks} = Enum.split_with(assigns.accounts, &Account.credit_card?/1)
+
+    assigns = assign(assigns, connection: connection, cards: cards, banks: banks)
+
     ~H"""
-    <.link
-      id={"account-#{@account.id}"}
-      patch={~p"/dashboard?#{[tab: "open_finance", account: @account.id]}"}
-      class={[
-        "card bg-base-200 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
-        @selected && "ring-2 ring-primary/60"
-      ]}
-    >
-      <div class="flex items-center gap-2 mb-3">
-        <img
-          :if={@account.connection.connector_image_url}
-          src={@account.connection.connector_image_url}
-          alt=""
-          class="size-6 rounded-md bg-base-100 object-contain p-0.5"
-        />
-        <span class="text-xs opacity-60 truncate flex-1">
-          {@account.connection.connector_name} · {account_kind(@account)}
-        </span>
-        <.status_badge
-          status={@account.connection.status}
-          execution_status={@account.connection.execution_status}
-        />
+    <div id={"today-bank-#{@connection.id}"} class="rounded-xl bg-base-100/60 p-3">
+      <div class="flex items-center gap-2 mb-2">
+        <img src={bank_logo(@connection.bank)} alt="" class="size-6 rounded-full shrink-0" />
+        <span class="font-medium">{bank_name(@connection.bank)}</span>
+        <span :if={@connection.holder_type == "PJ"} class="badge badge-ghost badge-xs">PJ</span>
       </div>
 
-      <p class="font-medium truncate">{account_name(@account)}</p>
-      <p class="text-xs opacity-50 truncate">{account_details(@account)}</p>
+      <div :if={@banks != []} class="mb-2">
+        <p class="text-[10px] font-semibold uppercase tracking-wide opacity-40 mb-1">Contas</p>
+        <div
+          :for={account <- @banks}
+          id={"today-account-#{account.id}"}
+          class={[
+            "flex items-baseline justify-between gap-2 py-0.5 text-sm",
+            zero?(account.balance) && "opacity-40"
+          ]}
+        >
+          <span class="truncate">
+            {account_kind(account)}<span :if={account.number} class="opacity-50"> ••{last4(account.number)}</span>
+          </span>
+          <span class={[
+            "font-medium tabular-nums whitespace-nowrap",
+            account.balance && Decimal.negative?(account.balance) && "text-error"
+          ]}>
+            {format_money(account.balance, account.currency_code)}
+          </span>
+        </div>
+      </div>
 
-      <%= if Account.credit_card?(@account) do %>
-        <div class="mt-3">
-          <p class="text-xs opacity-60">Fatura atual</p>
-          <p class="text-xl font-semibold tabular-nums">
-            {format_money(@account.balance, @account.currency_code)}
-          </p>
-          <div :if={@account.credit_limit} class="mt-2">
+      <div :if={@cards != []}>
+        <p class="text-[10px] font-semibold uppercase tracking-wide opacity-40 mb-1">
+          Cartão de crédito
+        </p>
+        <div :for={card <- @cards} id={"today-card-#{card.id}"} class="py-0.5 mb-1.5 last:mb-0">
+          <div class="flex items-baseline justify-between gap-2 text-sm">
+            <span class="truncate">
+              {card_name(card)}<span :if={card.number} class="opacity-50"> ••{last4(card.number)}</span>
+            </span>
+            <span class="text-right whitespace-nowrap">
+              <span class="block text-[10px] opacity-50 leading-none">fatura atual</span>
+              <span class="font-medium tabular-nums">
+                {format_money(card.balance, card.currency_code)}
+              </span>
+            </span>
+          </div>
+          <div :if={positive?(card.credit_limit)} class="mt-1">
             <progress
-              class="progress progress-warning w-full h-1.5"
-              value={limit_usage(@account)}
+              class="progress progress-warning w-full h-1"
+              value={limit_usage(card)}
               max="100"
             >
             </progress>
-            <p class="text-xs opacity-60 mt-1">
-              Limite {format_money(@account.credit_limit, @account.currency_code)} · disponível {format_money(
-                @account.available_credit_limit,
-                @account.currency_code
-              )}
+            <p class="text-[11px] opacity-60 mt-0.5">
+              {round(limit_usage(card))}% do limite usado · disponível {format_money(
+                card.available_credit_limit,
+                card.currency_code
+              )} de {format_money(card.credit_limit, card.currency_code)}
             </p>
           </div>
-          <p :if={@account.balance_due_date} class="text-xs opacity-60 mt-1">
-            Fecha {format_date(@account.balance_close_date)} · vence {format_date(
-              @account.balance_due_date
-            )}
+          <p :if={card.balance_due_date} class="text-[11px] opacity-60">
+            {due_dates(card)}
           </p>
         </div>
-      <% else %>
-        <div class="mt-3">
-          <p class="text-xs opacity-60">Saldo</p>
-          <p class="text-xl font-semibold tabular-nums">
-            {format_money(@account.balance, @account.currency_code)}
-          </p>
-          <p
-            :if={
-              @account.automatically_invested_balance &&
-                Decimal.positive?(@account.automatically_invested_balance)
-            }
-            class="text-xs opacity-60 mt-1"
-          >
-            + {format_money(@account.automatically_invested_balance, @account.currency_code)} aplicado automaticamente
-          </p>
-        </div>
-      <% end %>
-
-      <p class="text-[11px] opacity-40 mt-3">
-        Sincronizado {time_ago(@account.synced_at)}
-      </p>
-    </.link>
+      </div>
+    </div>
     """
   end
 
-  defp account_kind(%Account{subtype: "CREDIT_CARD"}), do: "Cartão de crédito"
-  defp account_kind(%Account{subtype: "SAVINGS_ACCOUNT"}), do: "Poupança"
-  defp account_kind(%Account{}), do: "Conta corrente"
+  # Só o que pede ação: fatura com valor a pagar vencendo em até 5 dias, saldo negativo.
+  defp alerts(accounts) do
+    today = Date.utc_today()
 
-  defp account_details(%Account{type: "CREDIT"} = account) do
-    [account.brand, account.level, account.number && "final #{account.number}"]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" · ")
+    Enum.flat_map(accounts, fn account ->
+      cond do
+        (Account.credit_card?(account) and positive?(account.balance) and
+           account.balance_due_date) &&
+            Date.diff(account.balance_due_date, today) in 0..5 ->
+          days = Date.diff(account.balance_due_date, today)
+          when_text = if days == 0, do: "vence hoje", else: "vence em #{days} dia(s)"
+
+          [
+            "Fatura #{bank_name(account.connection.bank)} #{card_name(account)} #{when_text}: #{format_money(account.balance)}"
+          ]
+
+        (not Account.credit_card?(account) and account.balance) &&
+            Decimal.negative?(account.balance) ->
+          ["Saldo negativo: #{bank_name(account.connection.bank)} #{account_kind(account)}"]
+
+        true ->
+          []
+      end
+    end)
   end
 
-  defp account_details(account) do
-    [account.transfer_number || account.number, account.owner]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" · ")
-  end
+  # Uso real do limite: o que já está comprometido (fatura aberta, fechada a pagar,
+  # parcelas futuras), e não só a fatura atual.
+  defp limit_usage(%Account{
+         credit_limit: limit,
+         available_credit_limit: available,
+         balance: balance
+       }) do
+    used = if available, do: Decimal.sub(limit, available), else: balance
 
-  defp limit_usage(%Account{credit_limit: limit, balance: balance}) do
-    if Decimal.positive?(limit) and balance do
-      balance
+    if used do
+      used
       |> Decimal.div(limit)
       |> Decimal.mult(100)
       |> Decimal.to_float()
       |> max(0.0)
       |> min(100.0)
     else
-      0
+      0.0
     end
   end
 
-  # A direção vem de `type` (DEBIT = saída); o sinal de `amount` muda de convenção entre conta e cartão.
-  defp signed_amount(transaction) do
-    prefix = if transaction.type == "CREDIT", do: "+ ", else: "- "
-    prefix <> format_money(Decimal.abs(transaction.amount), transaction.currency_code)
+  defp positive?(%Decimal{} = value), do: Decimal.positive?(value)
+  defp positive?(_value), do: false
+
+  defp zero?(%Decimal{} = value), do: Decimal.equal?(value, 0)
+  defp zero?(_value), do: true
+
+  defp account_kind(%Account{subtype: "SAVINGS_ACCOUNT"}), do: "Poupança"
+  defp account_kind(%Account{}), do: "Conta corrente"
+
+  # "VISA INFINITE PRIME" → "Visa Infinite Prime"; "platinum" → "Platinum".
+  defp card_name(%Account{} = card) do
+    (card.marketing_name || card.name || "Cartão")
+    |> String.downcase()
+    |> String.split()
+    |> Enum.map_join(" ", &String.capitalize/1)
   end
+
+  defp last4(number), do: String.slice(number, -4, 4)
+
+  defp due_dates(%Account{balance_close_date: nil} = card),
+    do: "vence #{format_short_date(card.balance_due_date)}"
+
+  defp due_dates(card),
+    do:
+      "fecha #{format_short_date(card.balance_close_date)} · vence #{format_short_date(card.balance_due_date)}"
+
+  defp bank_logo("nubank"), do: ~p"/images/nubank-logo.png"
+  defp bank_logo("bradesco"), do: ~p"/images/bradesco-logo.png"
+  defp bank_logo(_), do: ~p"/images/logo-32.png"
+
+  defp bank_name("nubank"), do: "Nubank"
+  defp bank_name("bradesco"), do: "Bradesco"
+  defp bank_name(bank), do: String.capitalize(bank || "")
+
+  defp format_short_date(%Date{} = date), do: Calendar.strftime(date, "%d/%m")
 
   @doc """
   Símbolo oficial do Open Finance Brasil (manual de identidade da marca). O arco
@@ -683,9 +729,9 @@ defmodule GranaWeb.OpenFinanceComponents do
   defp status_info("WAITING_USER_INPUT", _), do: {"Aguardando você", "badge-warning"}
   defp status_info(status, _), do: {status || "—", "badge-ghost"}
 
-  defp sync_label(true, _last_synced_at), do: "Sincronizando..."
-  defp sync_label(false, nil), do: "Aguardando a primeira sincronização"
-  defp sync_label(false, last_synced_at), do: "Sincronizado #{time_ago(last_synced_at)}"
+  defp sync_label(true, _last_synced_at), do: "Importando contas e transações..."
+  defp sync_label(false, nil), do: "Aguardando a primeira leitura"
+  defp sync_label(false, last_synced_at), do: "Atualizado #{time_ago(last_synced_at)}"
 
   defp accounts_summary([]), do: "Nenhuma conta sincronizada ainda"
 
@@ -701,7 +747,7 @@ defmodule GranaWeb.OpenFinanceComponents do
     seconds = DateTime.diff(DateTime.utc_now(), datetime)
 
     cond do
-      seconds < 60 -> "agora há pouco"
+      seconds < 60 -> "há instantes"
       seconds < 3_600 -> "há #{div(seconds, 60)} min"
       seconds < 86_400 -> "há #{div(seconds, 3_600)} h"
       seconds < 172_800 -> "ontem"

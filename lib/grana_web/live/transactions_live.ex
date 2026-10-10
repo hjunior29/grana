@@ -2,6 +2,7 @@ defmodule GranaWeb.TransactionsLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
+  alias Grana.OpenFinance
 
   @per_page 50
   @sort_fields ~w(date description source kind amount)
@@ -19,7 +20,23 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:expanded_ids, MapSet.new())
       |> assign(:selected_ids, MapSet.new())
 
+    # Meses sem upload vêm do Open Finance; relê se a última leitura passou de 1h.
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Grana.PubSub, OpenFinance.topic(user_id))
+      OpenFinance.refresh_if_stale(socket.assigns.current_scope)
+    end
+
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_info({:open_finance_synced, _connection_id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    {:noreply,
+     socket
+     |> assign(:banks, Banking.available_banks(user_id))
+     |> load_transactions(user_id)}
   end
 
   @impl true
@@ -639,6 +656,13 @@ defmodule GranaWeb.TransactionsLive do
 
     ~H"""
     <span :if={@txn.bank_statement} class="badge badge-outline gap-1 h-auto whitespace-nowrap">
+      <div
+        :if={@txn.bank_statement.source == "open_finance"}
+        class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0 grid place-items-center"
+        title="Período sem upload: dado lido via Open Finance"
+      >
+        <GranaWeb.OpenFinanceComponents.open_finance_logo class="size-3" />
+      </div>
       <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
         <img src={bank_logo(@txn.bank_statement.bank)} alt="" />
       </div>

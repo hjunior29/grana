@@ -13,6 +13,8 @@ defmodule Grana.Banking.Transaction do
     field :installment_total, :integer
     field :installment_group_id, :string
     field :is_internal_transfer, :boolean, default: false
+    # Id da transação na Pluggy, nas que vêm do Open Finance.
+    field :external_id, :string
 
     belongs_to :bank_statement, Grana.Banking.BankStatement
     belongs_to :user, Grana.Accounts.User

@@ -5,11 +5,17 @@ defmodule Grana.OpenFinanceTest do
   use Oban.Testing, repo: Grana.Repo, engine: Oban.Engines.Lite
 
   import Grana.AccountsFixtures
+
+  import Grana.BankingFixtures,
+    only: [category_fixture: 2, statement_fixture: 2, transaction_fixture: 2]
+
   import Grana.OpenFinanceFixtures
 
   alias Grana.Accounts.{Scope, User}
+  alias Grana.Banking.BankStatement
+  alias Grana.Banking.Transaction, as: BankingTransaction
   alias Grana.OpenFinance
-  alias Grana.OpenFinance.{Account, Connection, Pluggy, Transaction}
+  alias Grana.OpenFinance.{Account, Connection, Pluggy}
   alias Grana.Workers.OpenFinanceSyncWorker
 
   @creds %{client_id: "0b0e2a4c-6c2d-4b8e-9f3a-1d2c3b4a5e6f", client_secret: "test-secret"}
@@ -179,6 +185,7 @@ defmodule Grana.OpenFinanceTest do
     end
 
     defp stub_pluggy(item, accounts, transactions_by_account) do
+      stub(Pluggy, :get_identity, fn @creds, _ -> {:ok, %{"documentType" => "CPF"}} end)
       stub(Pluggy, :get_item, fn @creds, _ -> {:ok, item} end)
       stub(Pluggy, :list_accounts, fn @creds, _ -> {:ok, accounts} end)
 
@@ -187,8 +194,24 @@ defmodule Grana.OpenFinanceTest do
       end)
     end
 
-    test "mirrors accounts and transactions", %{connection: connection} do
-      bank = bank_account_payload()
+    defp bradesco_account(attrs \\ %{}),
+      do: bank_account_payload(Map.merge(%{"name" => "Banco Bradesco"}, attrs))
+
+    defp of_transactions(user) do
+      from(t in BankingTransaction,
+        join: s in assoc(t, :bank_statement),
+        where: t.user_id == ^user.id and s.source == "open_finance",
+        order_by: [t.date, t.id],
+        preload: [bank_statement: s, category: []]
+      )
+      |> Repo.all()
+    end
+
+    test "keeps the snapshot of accounts and fills periods without uploads", %{
+      connection: connection,
+      user: user
+    } do
+      bank = bradesco_account()
       card = card_account_payload()
 
       card_purchase =
@@ -196,81 +219,192 @@ defmodule Grana.OpenFinanceTest do
           "description" => "NETFLIX.COM",
           "amount" => 55.9,
           "type" => "DEBIT",
-          "status" => "PENDING",
           "date" => "2026-10-01T02:30:00.000Z",
+          "categoryId" => "09010000",
           "creditCardMetadata" => %{
             "installmentNumber" => 2.0,
             "totalInstallments" => 6,
             "billId" => "bill-1"
-          },
-          "providerId" => "of-123"
+          }
         })
 
+      open_bill = transaction_payload(%{"description" => "PADARIA", "type" => "DEBIT"})
+
       stub_pluggy(item_payload(%{"id" => connection.item_id}), [bank, card], %{
-        bank["id"] => [transaction_payload()],
-        card["id"] => [card_purchase]
+        bank["id"] => [transaction_payload(%{"descriptionRaw" => "SALARIO RAW"})],
+        card["id"] => [card_purchase, open_bill]
       })
 
       assert {:ok, %Connection{} = synced} = OpenFinance.sync_connection(connection)
       assert synced.status == "UPDATED"
-      assert synced.sync_error == nil
+      assert synced.bank == "bradesco"
       assert synced.last_synced_at
       assert_received {:open_finance_synced, id} when id == connection.id
 
       bank_account = Repo.get_by!(Account, pluggy_id: bank["id"])
       assert Decimal.equal?(bank_account.balance, "36471.90")
       assert Decimal.equal?(bank_account.automatically_invested_balance, "3647.19")
-      assert bank_account.transfer_number == "123/0001/12345-0"
 
       card_account = Repo.get_by!(Account, pluggy_id: card["id"])
       assert Decimal.equal?(card_account.credit_limit, 3000)
-      assert Decimal.equal?(card_account.available_credit_limit, 2000)
-      assert card_account.balance_close_date == ~D[2026-10-10]
       assert card_account.balance_due_date == ~D[2026-10-15]
-      assert card_account.brand == "MASTERCARD"
 
-      salary = Repo.get_by!(Transaction, account_id: bank_account.id)
-      # 03:00Z é meia-noite em Brasília: continua dia 05.
+      [salary, netflix, padaria] =
+        Enum.sort_by(of_transactions(user), & &1.description)
+        |> then(fn txns ->
+          [
+            Enum.find(txns, &(&1.description =~ "SALARIO")),
+            Enum.find(txns, &(&1.description == "NETFLIX.COM")),
+            Enum.find(txns, &(&1.description == "PADARIA"))
+          ]
+        end)
+
+      # Extrato virtual do Bradesco: entrada positiva, data em Brasília, categoria
+      # do Grana (Salário) e a descrição bruta da Pluggy como original.
+      assert salary.bank_statement.bank == "bradesco"
+      assert salary.bank_statement.statement_type == "extrato"
+      assert salary.bank_statement.open_finance_account_id == bank_account.id
       assert salary.date == ~D[2026-10-05]
+      assert salary.type == "credit"
       assert Decimal.equal?(salary.amount, 8500)
-      assert salary.type == "CREDIT"
+      assert salary.original_description == "SALARIO RAW"
+      assert salary.external_id
 
-      netflix = Repo.get_by!(Transaction, account_id: card_account.id)
-      # 02:30Z ainda é dia 30/09 em Brasília.
+      # Fatura virtual por fatura da Pluggy; débito negativo como nos uploads.
+      assert netflix.bank_statement.statement_type == "fatura"
+      assert netflix.bank_statement.external_id == "#{card["id"]}:bill-1"
       assert netflix.date == ~D[2026-09-30]
-      assert Decimal.equal?(netflix.amount, "55.90")
-      assert netflix.status == "PENDING"
-      assert netflix.installment_number == 2
-      assert netflix.total_installments == 6
-      assert netflix.bill_id == "bill-1"
-      assert netflix.provider_id == "of-123"
+      assert netflix.type == "debit"
+      assert Decimal.equal?(netflix.amount, "-55.90")
+      assert netflix.installment_current == 2
+      assert netflix.installment_total == 6
+      assert netflix.installment_group_id
+      # Sem regra do Grana, vale a categoria da Pluggy (Serviços digitais → Assinaturas).
+      assert netflix.category.name == "Assinaturas"
+
+      assert padaria.bank_statement.external_id == "#{card["id"]}:aberta"
     end
 
-    test "a later sync updates what changed and drops what disappeared on Pluggy",
-         %{connection: connection} do
-      bank = bank_account_payload()
-      card = card_account_payload()
-      kept = transaction_payload(%{"description" => "ANTES"})
-      gone = transaction_payload()
+    test "uploads win: covered periods and boundary matches stay out", %{
+      connection: connection,
+      user: user
+    } do
+      bank = bradesco_account()
+      upload = statement_fixture(user, %{bank: "bradesco", statement_type: "extrato"})
 
-      stub_pluggy(item_payload(), [bank, card], %{bank["id"] => [kept, gone]})
+      Repo.update!(
+        Ecto.Changeset.change(upload, period_start: ~D[2026-09-01], period_end: ~D[2026-09-30])
+      )
+
+      # Mesma compra no upload com data de lançamento diferente (fora do período).
+      transaction_fixture(user, %{
+        bank_statement_id: upload.id,
+        date: ~D[2026-09-30],
+        amount: "-42.00"
+      })
+
+      stub_pluggy(item_payload(), [bank], %{
+        bank["id"] => [
+          transaction_payload(%{"description" => "DENTRO", "date" => "2026-09-15T12:00:00Z"}),
+          transaction_payload(%{
+            "description" => "MESMA COMPRA",
+            "type" => "DEBIT",
+            "amount" => 42,
+            "date" => "2026-10-02T12:00:00Z"
+          }),
+          transaction_payload(%{"description" => "DEPOIS", "date" => "2026-10-03T12:00:00Z"})
+        ]
+      })
+
       assert {:ok, _} = OpenFinance.sync_connection(connection)
-      assert Repo.aggregate(Transaction, :count) == 2
 
-      # O espelho apaga o que tem synced_at anterior ao da nova sincronização.
-      Repo.update_all(Account, set: [synced_at: ~U[2026-01-01 00:00:00Z]])
-      Repo.update_all(Transaction, set: [synced_at: ~U[2026-01-01 00:00:00Z]])
+      assert ["DEPOIS"] = Enum.map(of_transactions(user), & &1.description)
+    end
 
-      stub_pluggy(item_payload(), [Map.put(bank, "balance", 10)], %{
+    test "a later sync keeps manual categories and drops what is gone or now covered", %{
+      connection: connection,
+      user: user
+    } do
+      bank = bradesco_account()
+      kept = transaction_payload(%{"description" => "ANTES", "date" => "2026-10-02T12:00:00Z"})
+      gone = transaction_payload(%{"description" => "SOME", "date" => "2026-10-03T12:00:00Z"})
+
+      stub_pluggy(item_payload(), [bank], %{bank["id"] => [kept, gone]})
+      assert {:ok, _} = OpenFinance.sync_connection(connection)
+
+      manual = category_fixture(user, %{name: "Manual"})
+      [kept_row, _] = of_transactions(user)
+      Repo.update!(Ecto.Changeset.change(kept_row, category_id: manual.id))
+
+      stub_pluggy(item_payload(), [bank], %{
         bank["id"] => [Map.put(kept, "description", "DEPOIS")]
       })
 
       assert {:ok, _} = OpenFinance.sync_connection(connection)
 
-      assert [%Account{pluggy_id: pluggy_id, balance: balance}] = Repo.all(Account)
-      assert pluggy_id == bank["id"]
-      assert Decimal.equal?(balance, 10)
-      assert [%Transaction{description: "DEPOIS"}] = Repo.all(Transaction)
+      assert [%BankingTransaction{description: "DEPOIS", category_id: category_id}] =
+               of_transactions(user)
+
+      assert category_id == manual.id
+    end
+
+    test "virtual statements disappear when nothing is left in them", %{
+      connection: connection,
+      user: user
+    } do
+      bank = bradesco_account()
+      stub_pluggy(item_payload(), [bank], %{bank["id"] => [transaction_payload()]})
+      assert {:ok, _} = OpenFinance.sync_connection(connection)
+
+      assert Repo.aggregate(from(s in BankStatement, where: s.source == "open_finance"), :count) ==
+               1
+
+      stub_pluggy(item_payload(), [bank], %{bank["id"] => []})
+      assert {:ok, _} = OpenFinance.sync_connection(connection)
+
+      assert Repo.aggregate(from(s in BankStatement, where: s.source == "open_finance"), :count) ==
+               0
+
+      assert of_transactions(user) == []
+    end
+
+    test "reads PF/PJ from the identity once", %{connection: connection} do
+      stub_pluggy(item_payload(), [bank_account_payload()], %{})
+
+      for {identity, holder} <- [
+            {%{"documentType" => "CNPJ"}, "PJ"},
+            {%{"documentType" => "CPF", "companyName" => "MINHA EMPRESA ME"}, "PJ"},
+            {%{"documentType" => "CPF", "fullName" => "Fulano"}, "PF"},
+            {nil, nil}
+          ] do
+        Repo.update_all(Connection, set: [holder_type: nil])
+
+        stub(Pluggy, :get_identity, fn _, _ ->
+          if identity, do: {:ok, identity}, else: {:error, :not_found}
+        end)
+
+        assert {:ok, %Connection{holder_type: ^holder}} =
+                 OpenFinance.sync_connection(Repo.get!(Connection, connection.id))
+      end
+
+      # Já conhecido: não consulta de novo.
+      Repo.update_all(Connection, set: [holder_type: "PJ"])
+      reject(Pluggy, :get_identity, 2)
+
+      assert {:ok, %Connection{holder_type: "PJ"}} =
+               OpenFinance.sync_connection(Repo.get!(Connection, connection.id))
+    end
+
+    test "infers the bank from the account names", %{connection: connection} do
+      for {name, bank} <- [
+            {"Nu Pagamentos S.A. - Instituição de Pagamento", "nubank"},
+            {"Banco Inter S.A.", "inter"},
+            {"Itaú Unibanco", "itau"}
+          ] do
+        stub_pluggy(item_payload(), [bank_account_payload(%{"name" => name})], %{})
+
+        assert {:ok, %Connection{bank: ^bank}} = OpenFinance.sync_connection(connection)
+      end
     end
 
     test "records the error and keeps the data when Pluggy fails", %{connection: connection} do
@@ -281,7 +415,10 @@ defmodule Grana.OpenFinanceTest do
 
       assert OpenFinance.sync_connection(connection) == {:error, :rate_limited}
 
-      assert Repo.get!(Connection, connection.id).sync_error =~ "Limite de requisições"
+      failed = Repo.get!(Connection, connection.id)
+      assert failed.sync_error =~ "Limite de requisições"
+      # A tentativa conta para o cache de 1h: não fica relendo a cada tela aberta.
+      assert failed.last_synced_at
       assert Repo.get!(Account, account.id)
       assert_received {:open_finance_synced, _}
     end
@@ -305,11 +442,37 @@ defmodule Grana.OpenFinanceTest do
     end
   end
 
+  describe "release_period/5" do
+    test "removes Open Finance rows of the same bank and type inside the period", %{user: user} do
+      account = account_fixture(connection_fixture(user))
+      extrato = open_finance_statement_fixture(account)
+
+      fatura =
+        open_finance_statement_fixture(account, %{
+          statement_type: "fatura",
+          external_id: "#{account.pluggy_id}:bill"
+        })
+
+      inside = transaction_fixture(user, %{bank_statement_id: extrato.id, date: ~D[2026-10-05]})
+      outside = transaction_fixture(user, %{bank_statement_id: extrato.id, date: ~D[2026-10-09]})
+
+      other_type =
+        transaction_fixture(user, %{bank_statement_id: fatura.id, date: ~D[2026-10-05]})
+
+      OpenFinance.release_period(user.id, "nubank", "extrato", ~D[2026-10-01], ~D[2026-10-08])
+
+      refute Repo.get(BankingTransaction, inside.id)
+      assert Repo.get(BankingTransaction, outside.id)
+      assert Repo.get(BankingTransaction, other_type.id)
+    end
+  end
+
   describe "delete_connection/2" do
-    test "deletes the item on Pluggy and the local mirror", %{scope: scope, user: user} do
+    test "deletes the item on Pluggy and everything it brought", %{scope: scope, user: user} do
       connection = connection_fixture(user)
       account = account_fixture(connection)
-      transaction_fixture(account)
+      statement = open_finance_statement_fixture(account)
+      transaction_fixture(user, %{bank_statement_id: statement.id})
       item_id = connection.item_id
       expect(Pluggy, :delete_item, fn @creds, ^item_id -> :ok end)
 
@@ -317,7 +480,8 @@ defmodule Grana.OpenFinanceTest do
 
       assert Repo.aggregate(Connection, :count) == 0
       assert Repo.aggregate(Account, :count) == 0
-      assert Repo.aggregate(Transaction, :count) == 0
+      refute Repo.get(BankStatement, statement.id)
+      assert Repo.aggregate(BankingTransaction, :count) == 0
     end
 
     test "deletes locally when the item no longer exists on Pluggy", %{scope: scope, user: user} do
@@ -336,50 +500,94 @@ defmodule Grana.OpenFinanceTest do
     end
   end
 
-  describe "reading the mirror" do
-    test "lists only the scope's data", %{scope: scope, user: user} do
+  describe "current state" do
+    test "lists the scope's accounts, totals and where Open Finance is the source", %{
+      scope: scope,
+      user: user
+    } do
       connection = connection_fixture(user)
-      account = account_fixture(connection)
-      transaction_fixture(account, %{date: ~D[2026-10-01], description: "OLD"})
-      transaction_fixture(account, %{date: ~D[2026-10-09], description: "NEW"})
+      account = account_fixture(connection, %{balance: Decimal.new("100.50")})
 
-      other_scope = user_scope_fixture()
+      account_fixture(connection, %{
+        type: "CREDIT",
+        subtype: "CREDIT_CARD",
+        balance: Decimal.new("40"),
+        available_credit_limit: Decimal.new("960")
+      })
 
-      assert [%Connection{accounts: [%Account{}]}] = OpenFinance.list_connections(scope)
-      assert OpenFinance.list_connections(other_scope) == []
+      today = Date.utc_today()
+      last_month = today |> Date.beginning_of_month() |> Date.shift(month: -1)
+      statement = open_finance_statement_fixture(account)
+      transaction_fixture(user, %{bank_statement_id: statement.id, date: today})
 
-      assert [%Account{connection: %Connection{}}] = OpenFinance.list_accounts(scope)
-      assert OpenFinance.list_accounts(other_scope) == []
+      # Mês passado: fatura importada; nada do Open Finance.
+      transaction_fixture(user, %{
+        bank_statement_id: statement_fixture(user, %{statement_type: "fatura"}).id,
+        date: last_month
+      })
 
-      assert ["NEW", "OLD"] =
-               scope |> OpenFinance.list_transactions(account.id) |> Enum.map(& &1.description)
+      assert [%Account{connection: %Connection{}}, _] = OpenFinance.list_accounts(scope)
+      assert OpenFinance.list_accounts(user_scope_fixture()) == []
 
-      assert [%Transaction{description: "OLD"}] =
-               OpenFinance.list_transactions(scope, account.id, limit: 1, offset: 1)
+      totals = scope |> OpenFinance.list_accounts() |> OpenFinance.totals()
+      assert Decimal.equal?(totals.bank, "100.50")
+      assert Decimal.equal?(totals.card_used, 40)
+      assert Decimal.equal?(totals.card_available, 960)
+      assert totals.bank_count == 1
+      assert totals.card_count == 1
 
-      assert OpenFinance.list_transactions(other_scope, account.id) == []
-      assert OpenFinance.count_transactions(scope, account.id) == 2
-      assert OpenFinance.count_transactions(other_scope, account.id) == 0
+      # Últimos 12 meses, em linhas por ano como o calendário de uploads.
+      rows = OpenFinance.coverage_calendar(scope)
+      cells = Enum.flat_map(rows, & &1.cells)
+      assert Enum.all?(rows, &(length(&1.cells) == 12))
+      assert List.last(rows).year == today.year
 
-      assert OpenFinance.get_connection!(scope, connection.id).id == connection.id
+      current = Enum.find(cells, &(&1.year == today.year and &1.month == today.month))
+      assert current.open_finance == [{"nubank", "extrato"}]
+      assert current.upload_types == []
+      refute current.future?
 
-      assert_raise Ecto.NoResultsError, fn ->
-        OpenFinance.get_connection!(other_scope, connection.id)
-      end
+      previous = Enum.find(cells, &(&1.year == last_month.year and &1.month == last_month.month))
+      assert previous.upload_types == ["fatura"]
+      assert previous.open_finance == []
+
+      other_cells =
+        user_scope_fixture() |> OpenFinance.coverage_calendar() |> Enum.flat_map(& &1.cells)
+
+      assert Enum.all?(other_cells, &(&1.open_finance == [] and &1.upload_types == []))
+      assert OpenFinance.last_refreshed_at(scope) == connection.last_synced_at
     end
   end
 
-  describe "enqueueing syncs" do
-    test "per user and for everyone", %{scope: scope, user: user} do
+  describe "refreshing" do
+    test "refresh_if_stale/1 only rereads connections older than 1 hour", %{
+      scope: scope,
+      user: user
+    } do
+      fresh = connection_fixture(user)
+      stale = connection_fixture(user, %{last_synced_at: ~U[2026-01-01 00:00:00Z]})
+      never = connection_fixture(user, %{last_synced_at: nil})
+
+      OpenFinance.refresh_if_stale(scope)
+
+      refute_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => fresh.id})
+      assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => stale.id})
+      assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => never.id})
+    end
+
+    test "uploads_changed/1 and enqueue_user_syncs/1 reread every connection of the user", %{
+      scope: scope,
+      user: user
+    } do
       mine = connection_fixture(user)
       other = connection_fixture(user_fixture())
 
-      OpenFinance.enqueue_user_syncs(scope)
+      OpenFinance.uploads_changed(user.id)
       assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => mine.id})
       refute_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => other.id})
 
-      OpenFinance.enqueue_sync_all()
-      assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => other.id})
+      OpenFinance.enqueue_user_syncs(scope)
+      refute_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => other.id})
     end
   end
 
@@ -534,6 +742,7 @@ defmodule Grana.OpenFinanceTest do
     test "sync/1 ensures the webhook and syncs even when that fails", %{user: user} do
       connection = connection_fixture(user)
       stub(Pluggy, :list_webhooks, fn _ -> {:error, :rate_limited} end)
+      stub(Pluggy, :get_identity, fn _, _ -> {:ok, %{"documentType" => "CPF"}} end)
       stub(Pluggy, :get_item, fn _, _ -> {:ok, item_payload()} end)
       stub(Pluggy, :list_accounts, fn _, _ -> {:ok, []} end)
 

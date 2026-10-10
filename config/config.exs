@@ -91,8 +91,7 @@ config :grana, Oban,
     Oban.Plugins.Lifeline,
     {Oban.Plugins.Cron,
      crontab: [
-       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications},
-       {"0 */6 * * *", Grana.Workers.OpenFinanceSyncWorker}
+       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications}
      ]}
   ]
 
