@@ -12,7 +12,7 @@ defmodule GranaWeb.OnboardingLive do
   @steps [
     %{id: :appearance, title: "Aparência", icon: "hero-paint-brush"},
     %{id: :smtp, title: "Email", icon: "hero-envelope"},
-    %{id: :ai, title: "IA", icon: "hero-sparkles"},
+    %{id: :ai, title: "LLM", icon: "hero-sparkles"},
     %{id: :open_finance, title: "Open Finance", icon: "hero-link"},
     %{id: :import, title: "Importar", icon: "hero-arrow-up-tray"},
     %{id: :done, title: "Pronto", icon: "hero-check-circle"}
@@ -63,7 +63,7 @@ defmodule GranaWeb.OnboardingLive do
             />
           <% :ai -> %>
             <.step_card
-              title="Inteligência artificial"
+              title="LLM"
               subtitle="Cole sua chave do Gemini para categorizar gastos e gerar análises."
             >
               <AccountComponents.ai_form
@@ -71,6 +71,7 @@ defmodule GranaWeb.OnboardingLive do
                 env_key={@ai_env_key}
                 has_api_key={@has_ai_api_key}
                 show_api_key={@show_api_key}
+                embedded
               />
             </.step_card>
           <% :open_finance -> %>
@@ -127,15 +128,36 @@ defmodule GranaWeb.OnboardingLive do
             </.step_card>
         <% end %>
 
-        <div :if={@step != :done} class="mt-4 flex items-center justify-between">
-          <button id="onboarding-skip-all" phx-click="skip_all" class="btn btn-ghost btn-sm">
-            Pular tudo
+        <div class="mt-4 flex items-center justify-between">
+          <button
+            :if={@step != :appearance}
+            id="onboarding-back"
+            phx-click="back"
+            class="btn btn-ghost btn-sm"
+          >
+            <.icon name="hero-arrow-left" class="size-4" /> Voltar
           </button>
-          <div class="flex gap-2">
+          <span :if={@step == :appearance}></span>
+          <div :if={@step != :done} class="flex gap-2">
             <button id="onboarding-skip" phx-click="next" class="btn btn-ghost btn-sm">
               Pular
             </button>
-            <button id="onboarding-next" phx-click="next" class="btn btn-primary btn-sm">
+            <%!-- Na etapa de LLM, o Continuar envia o form e salva antes de avançar. --%>
+            <button
+              :if={@step == :ai}
+              id="onboarding-next"
+              type="submit"
+              form="ai_form"
+              class="btn btn-primary btn-sm"
+            >
+              Continuar
+            </button>
+            <button
+              :if={@step != :ai}
+              id="onboarding-next"
+              phx-click="next"
+              class="btn btn-primary btn-sm"
+            >
               Continuar
             </button>
           </div>
@@ -174,7 +196,24 @@ defmodule GranaWeb.OnboardingLive do
     {:noreply, assign(socket, :step, next_step(socket.assigns.step))}
   end
 
-  def handle_event("skip_all", _params, socket), do: finish(socket)
+  def handle_event("back", _params, socket) do
+    {:noreply, assign(socket, :step, previous_step(socket.assigns.step))}
+  end
+
+  def handle_event("ai_continue", %{"user" => params}, socket) do
+    case Accounts.update_user_ai_settings(socket.assigns.current_scope.user, params) do
+      {:ok, user} ->
+        {:noreply,
+         socket
+         |> assign(:ai_form, to_form(Accounts.change_user_ai_settings(user)))
+         |> assign(:has_ai_api_key, user.ai_api_key != nil)
+         |> assign(:step, next_step(:ai))}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :ai_form, to_form(changeset, action: :insert))}
+    end
+  end
+
   def handle_event("finish", _params, socket), do: finish(socket)
 
   def handle_event("validate_import", _params, socket), do: {:noreply, socket}
@@ -201,6 +240,10 @@ defmodule GranaWeb.OnboardingLive do
   end
 
   defp step_index(id), do: Enum.find_index(@steps, &(&1.id == id))
+
+  defp previous_step(id) do
+    @steps |> Enum.at(max(step_index(id) - 1, 0)) |> Map.fetch!(:id)
+  end
 
   defp next_step(id) do
     @steps |> Enum.at(min(step_index(id) + 1, length(@steps) - 1)) |> Map.fetch!(:id)

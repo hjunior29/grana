@@ -13,6 +13,10 @@ defmodule GranaWeb.Layouts do
     default: false,
     doc: "hide the navigation bar"
 
+  attr :show_appearance, :boolean,
+    default: false,
+    doc: "mostra tema e estilo visual no header (telas sem login, como o setup)"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -29,6 +33,21 @@ defmodule GranaWeb.Layouts do
               Grana
             </span>
           </.link>
+        </div>
+        <div :if={@show_appearance} id="header-appearance" class="flex flex-none items-center gap-2">
+          <.theme_toggle />
+          <details class="dropdown dropdown-end">
+            <summary
+              id="header-visual-style"
+              class="btn btn-ghost btn-sm btn-circle list-none"
+              title="Estilo visual"
+            >
+              <.icon name="hero-paint-brush" class="size-5" />
+            </summary>
+            <div class="dropdown-content z-50 mt-2 max-h-[70vh] w-[min(22rem,90vw)] overflow-y-auto rounded-box bg-base-200 p-3 shadow-xl">
+              <.visual_style_toggle />
+            </div>
+          </details>
         </div>
         <%!-- Desktop nav --%>
         <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">

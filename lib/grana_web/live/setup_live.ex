@@ -12,7 +12,7 @@ defmodule GranaWeb.SetupLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} hide_nav>
+    <Layouts.app flash={@flash} hide_nav show_appearance>
       <div id="setup" class="mx-auto max-w-xl py-6 sm:py-10">
         <ol id="setup-steps" class="mb-8 flex items-center justify-center gap-2">
           <li
