@@ -14,6 +14,17 @@ defmodule GranaWeb.LandingLiveTest do
     assert html =~ "no seu servidor"
   end
 
+  test "a marca é o símbolo com o nome em vetor, no topo e no rodapé", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/")
+
+    for id <- ~w(landing-brand footer-brand) do
+      assert has_element?(lv, ~s|##{id} img[src^="/images/logo"]|)
+      assert has_element?(lv, ~s|##{id} svg[aria-label="Grana"]|)
+    end
+
+    assert has_element?(lv, ~s|#hero img[src^="/images/logo"]|)
+  end
+
   test "tem as seções de como funciona, Open Finance, segurança e instalação", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/")
 

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="priv/static/images/grana-lockup-dark.svg">
+    <img alt="Grana" src="priv/static/images/grana-lockup.svg" width="320">
+  </picture>
+</p>
+
 # Grana
 
 Finanças pessoais **self-hosted**, para uma pessoa só. Importe extratos e faturas

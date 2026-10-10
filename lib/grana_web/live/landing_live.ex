@@ -18,9 +18,8 @@ defmodule GranaWeb.LandingLive do
     <div class="min-h-screen">
       <nav class="navbar bg-base-100/10 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-4 sm:px-6 lg:px-8">
         <div class="flex-1">
-          <a href="/" class="flex items-center gap-2 text-xl font-bold tracking-tight">
-            <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
-            <span style="font-family: 'Grand Hotel', cursive" class="text-2xl">Grana</span>
+          <a id="landing-brand" href="/" class="flex items-center">
+            <GranaWeb.BrandComponents.brand />
           </a>
         </div>
         <div class="flex-none">
@@ -39,11 +38,7 @@ defmodule GranaWeb.LandingLive do
       <%!-- Hero --%>
       <section id="hero" class="py-24 px-4">
         <div class="max-w-4xl mx-auto text-center">
-          <img
-            src={~p"/images/logo-animated.gif"}
-            alt="Grana"
-            class="w-40 h-40 mx-auto mb-8 drop-shadow-xl"
-          />
+          <GranaWeb.BrandComponents.logo class="w-40 h-40 mx-auto mb-8 drop-shadow-xl transition-transform duration-300 ease-out hover:-rotate-6 hover:scale-105" />
           <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-tight mb-6">
             Suas finanças, <br />
             <span
@@ -1584,9 +1579,8 @@ defmodule GranaWeb.LandingLive do
       <%!-- Footer --%>
       <footer class="border-t border-base-content/5 px-4 sm:px-6 lg:px-8 py-8">
         <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <a href="/" class="flex items-center gap-2 text-xl font-bold tracking-tight">
-            <img src={~p"/images/logo-32.png"} alt="" class="w-7 h-7" />
-            <span style="font-family: 'Grand Hotel', cursive">Grana</span>
+          <a id="footer-brand" href="/" class="flex items-center">
+            <GranaWeb.BrandComponents.brand logo_class="size-6" wordmark_class="h-4 w-auto" />
           </a>
           <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-6 text-sm">
             <a
