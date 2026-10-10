@@ -152,7 +152,6 @@ jobs:
       # suficientes para o app bootar no smoke — nenhum secret real aqui.
       CLOAK_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
       SMTP_HOST: "localhost"
-      # REDIS_URL ausente → cache desabilitado (degrada para no-op, ver Grana.Cache).
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/elixir-setup

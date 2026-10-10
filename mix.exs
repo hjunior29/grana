@@ -81,7 +81,7 @@ defmodule Grana.MixProject do
       {:oban, "~> 2.18"},
       {:oban_web, ">= 2.12.5"},
       {:hammer, "~> 6.0"},
-      {:redix, "~> 1.5"},
+      {:cachex, "~> 4.1"},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},

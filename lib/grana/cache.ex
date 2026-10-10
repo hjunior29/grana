@@ -1,69 +1,57 @@
 defmodule Grana.Cache do
   @moduledoc """
-  Cache de leituras pesadas (agregações de dashboard/análise/investimentos e
-  listas paginadas) com Redis via Redix — Upstash gerenciado do Fly em produção,
-  container local em dev (`make redis.up`).
+  Cache em memória de leituras pesadas (agregações de dashboard/análise/investimentos e
+  listas paginadas) backed por Cachex (ETS).
 
   ## Como funciona ("cache inteligente")
 
     * `get_or_store/4` cacheia o resultado de uma leitura por **(usuário, namespace,
       filtros)**. Os filtros viram um hash SHA-256 determinístico, então cada
-      combinação de filtro tem sua própria entrada — é o "salve o hash e o valor".
-    * O valor é serializado com `:erlang.term_to_binary/1`, preservando `Decimal`,
-      `Date` e structs do Ecto (JSON perderia precisão e tipos).
-    * Cada chave é registrada num **índice por usuário** (um Set Redis), de modo
-      que `invalidate_user/1` apaga TODAS as entradas daquele usuário de uma vez.
-    * `invalidate_user/1` é chamado em QUALQUER escrita/upload que afete os dados
+      combinação de filtro tem sua própria entrada.
+    * O valor é armazenado diretamente como termo Elixir na memória (ETS), preservando
+      `Decimal`, `Date` e structs do Ecto com latência em sub-milissegundos.
+    * Cada chave é registrada num índice por usuário (um MapSet armazenado no Cachex),
+      de modo que `invalidate_user/1` apaga todas as entradas daquele usuário de uma vez.
+    * `invalidate_user/1` é chamado em qualquer escrita/upload que afete os dados
       cacheados (ver `Grana.Banking` e `Grana.Investments`). É a garantia de
       frescor; o TTL é só um teto de validade.
 
   ## TTL
 
-  Default 300s (`:ttl_seconds`), a janela de ociosidade após a qual o Fly derruba
-  a máquina (`auto_stop_machines`). Ajustável por `CACHE_TTL_SECONDS`.
+  Default 300s (`:ttl_seconds`). Ajustável por `CACHE_TTL_SECONDS`.
 
   ## Degradação graciosa
 
-  Se o cache estiver desligado (test, ou sem `REDIS_URL`) ou o Redis indisponível,
-  `get_or_store/4` simplesmente executa a função e devolve o resultado, e
-  `invalidate_user/1` é no-op. Nenhum erro de Redis jamais quebra o caller —
-  a aplicação funciona normalmente sem Redis, apenas sem cache.
+  Se o cache estiver desligado (ex.: ambiente de test) ou ocorrer qualquer erro inesperado,
+  `get_or_store/4` executa a função de consulta e devolve o resultado diretamente, e
+  `invalidate_user/1` é no-op.
   """
 
   require Logger
 
-  @conn __MODULE__.Redix
+  @cache_name __MODULE__
 
   @doc """
-  Child spec da conexão Redix para a árvore de supervisão, ou `nil` quando o
-  cache está desligado/sem URL (nesse caso nada é iniciado).
+  Child spec do Cachex para a árvore de supervisão, ou `nil` quando o
+  cache está desligado.
   """
   def child_spec_or_nil do
-    cfg = config()
-
-    if cfg[:enabled] && cfg[:url] do
-      # socket_opts: o Upstash gerenciado do Fly só existe na rede privada 6PN
-      # (IPv6); sem `:inet6` o Redix tenta IPv4 e nunca conecta (igual ao Repo,
-      # que usa ECTO_IPV6). Em dev o Redis é localhost/IPv4 → socket_opts vazio.
-      opts = [name: @conn, sync_connect: false, socket_opts: cfg[:socket_opts] || []]
-
-      %{
-        id: @conn,
-        start: {Redix, :start_link, [cfg[:url], opts]}
-      }
+    if enabled?() do
+      Cachex.child_spec(name: @cache_name)
     end
   end
 
-  @doc "Verdadeiro quando o cache está habilitado e configurado com uma URL."
+  @doc "Nome do cache no Cachex."
+  def cache_name, do: @cache_name
+
+  @doc "Verdadeiro quando o cache está habilitado."
   def enabled? do
-    cfg = config()
-    cfg[:enabled] == true and not is_nil(cfg[:url])
+    config()[:enabled] == true
   end
 
   @doc """
   Devolve o valor cacheado para `(namespace, user_id, filters)` ou computa com
-  `fun`, guarda e devolve. Cai no `fun.()` direto se o cache estiver desligado ou
-  o Redis indisponível.
+  `fun`, guarda e devolve. Cai no `fun.()` direto se o cache estiver desligado.
   """
   @spec get_or_store(String.t(), integer(), term(), (-> result)) :: result when result: var
   def get_or_store(namespace, user_id, filters, fun)
@@ -90,7 +78,7 @@ defmodule Grana.Cache do
 
   @doc """
   Apaga todas as entradas de cache do usuário. Chamado em toda escrita/upload que
-  afete os dados cacheados. Nunca levanta erro (falha de Redis vira no-op + log).
+  afete os dados cacheados.
   """
   @spec invalidate_user(integer() | nil) :: :ok
   def invalidate_user(user_id) when is_integer(user_id) do
@@ -98,12 +86,9 @@ defmodule Grana.Cache do
       idx = index_key(user_id)
 
       safe(fn ->
-        case Redix.command(@conn, ["SMEMBERS", idx]) do
-          {:ok, []} ->
-            Redix.command(@conn, ["DEL", idx])
-
-          {:ok, keys} when is_list(keys) ->
-            Redix.pipeline(@conn, [["DEL" | keys], ["DEL", idx]])
+        case Cachex.take(@cache_name, idx) do
+          {:ok, keys} when is_struct(keys, MapSet) ->
+            Enum.each(keys, &Cachex.del(@cache_name, &1))
 
           _ ->
             :ok
@@ -120,17 +105,12 @@ defmodule Grana.Cache do
 
   defp do_get(key) do
     safe_result(fn ->
-      case Redix.command(@conn, ["GET", key]) do
+      case Cachex.get(@cache_name, key) do
+        {:ok, {:cached, value}} ->
+          {:ok, value}
+
         {:ok, nil} ->
           :miss
-
-        {:ok, bin} when is_binary(bin) ->
-          try do
-            {:ok, :erlang.binary_to_term(bin, [:safe])}
-          rescue
-            # Payload corrompido/incompatível: trata como miss (recomputa).
-            _ -> :miss
-          end
 
         {:error, _} ->
           :error
@@ -139,17 +119,24 @@ defmodule Grana.Cache do
   end
 
   defp do_put(key, user_id, value) do
-    bin = :erlang.term_to_binary(value)
     ttl = ttl_seconds()
+    ttl_ms = ttl * 1000
     idx = index_key(user_id)
 
     safe(fn ->
-      Redix.pipeline(@conn, [
-        ["SET", key, bin, "EX", Integer.to_string(ttl)],
-        ["SADD", idx, key],
-        # O índice sobrevive um pouco além das entradas, para invalidação confiável.
-        ["EXPIRE", idx, Integer.to_string(ttl + 120)]
-      ])
+      Cachex.put(@cache_name, key, {:cached, value}, expire: ttl_ms)
+
+      # Registra a chave no índice do usuário de forma atômica
+      Cachex.get_and_update(@cache_name, idx, fn
+        nil ->
+          {:commit, MapSet.new([key]), expire: ttl_ms + 120_000}
+
+        %MapSet{} = set ->
+          {:commit, MapSet.put(set, key), expire: ttl_ms + 120_000}
+
+        _other ->
+          {:commit, MapSet.new([key]), expire: ttl_ms + 120_000}
+      end)
     end)
   end
 
@@ -170,8 +157,6 @@ defmodule Grana.Cache do
   defp prefix, do: config()[:namespace] || "grana:cache"
   defp ttl_seconds, do: config()[:ttl_seconds] || 300
 
-  # Executa `fun` engolindo qualquer erro de Redis/conexão (inclusive :noproc se a
-  # conexão não estiver de pé), garantindo que o cache nunca quebre o caller.
   defp safe(fun) do
     fun.()
     :ok
@@ -185,7 +170,6 @@ defmodule Grana.Cache do
       :ok
   end
 
-  # Como `safe/1`, mas devolve o valor de `fun` ou `:error` em caso de falha.
   defp safe_result(fun) do
     fun.()
   rescue
