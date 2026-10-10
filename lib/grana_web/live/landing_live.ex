@@ -38,7 +38,7 @@ defmodule GranaWeb.LandingLive do
       <%!-- Hero --%>
       <section id="hero" class="py-24 px-4">
         <div class="max-w-4xl mx-auto text-center">
-          <GranaWeb.BrandComponents.logo class="w-40 h-40 mx-auto mb-8 drop-shadow-xl transition-transform duration-300 ease-out hover:-rotate-6 hover:scale-105" />
+          <GranaWeb.BrandComponents.logo class="block w-40 h-40 mx-auto mb-8 drop-shadow-xl transition-transform duration-300 ease-out hover:-rotate-6 hover:scale-105" />
           <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-tight mb-6">
             Suas finanças, <br />
             <span
@@ -62,6 +62,300 @@ defmodule GranaWeb.LandingLive do
           </div>
         </div>
       </section>
+
+      <%!-- A logo contada pelo scroll: moeda, categorias e meses se juntam no símbolo --%>
+      <section
+        id="logo-story"
+        class="logo-story"
+        phx-hook=".LogoStory"
+        phx-update="ignore"
+        data-geometry={Jason.encode!(GranaWeb.BrandComponents.geometry())}
+        data-months={Jason.encode!(story_months())}
+        aria-label="Como nasceu a logo do Grana"
+      >
+        <div class="logo-story-stage">
+          <svg class="logo-story-canvas" data-canvas aria-hidden="true"></svg>
+
+          <div id="logo-story-coin" class="logo-story-panel" data-panel="0">
+            <div class="logo-story-coin-anchor" data-anchor="coin"></div>
+            <p class="logo-story-kicker">Por trás da logo</p>
+            <h2>Tudo começa na moeda</h2>
+            <p>
+              Ter controle financeiro é saber onde você gasta, onde dá para economizar e quanto
+              sobra no fim do mês. A moeda de 1 real no centro é isso: o seu dinheiro como ponto
+              de partida.
+            </p>
+          </div>
+
+          <div id="logo-story-categories" class="logo-story-panel" data-panel="1">
+            <div class="logo-story-card">
+              <h3>Despesas por categoria</h3>
+              <div class="logo-story-donut">
+                <div class="logo-story-donut-anchor" data-anchor="donut"></div>
+                <div class="logo-story-donut-total">
+                  <span>Total</span>
+                  <strong>{brl(story_categories_total())}</strong>
+                </div>
+              </div>
+              <ul class="logo-story-category-list">
+                <li :for={cat <- story_categories()}>
+                  <span class="logo-story-category-icon" style={"background-color: #{cat.color}20"}>
+                    <span class="flex" style={"color: #{cat.color}"}>
+                      <.icon name={cat.icon} class="size-3.5" />
+                    </span>
+                  </span>
+                  <span class="logo-story-category-name">{cat.name}</span>
+                  <span class="logo-story-category-amount">{brl(cat.amount)}</span>
+                  <span class="logo-story-category-share">{percent(cat.share)}</span>
+                </li>
+              </ul>
+            </div>
+            <p class="logo-story-kicker">Categorias</p>
+            <h2>Cada gasto no seu lugar</h2>
+            <p>
+              O Grana coloca cada transação numa categoria, com cor e ícone, e mostra quanto cada
+              uma leva do seu dinheiro. Na logo, essa rosca abraça a moeda.
+            </p>
+          </div>
+
+          <div id="logo-story-months" class="logo-story-panel" data-panel="2">
+            <div class="logo-story-card">
+              <div class="logo-story-card-header">
+                <h3>Receitas vs Despesas</h3>
+                <div class="logo-story-card-balance">
+                  <strong>+{brl(story_balance())}</strong>
+                  <span>economizou {percent(story_balance() / story_income())}</span>
+                </div>
+              </div>
+              <div class="logo-story-chart-anchor" data-anchor="chart"></div>
+              <div class="logo-story-legend">
+                <span><i class="logo-story-dot-positive"></i> Receitas</span>
+                <span><i class="logo-story-dot-negative"></i> Despesas</span>
+              </div>
+            </div>
+            <p class="logo-story-kicker">Ganhos e despesas</p>
+            <h2>O saldo de cada mês</h2>
+            <p>
+              Todo mês o Grana compara o que entrou com o que saiu. O que sobra fica verde; o que
+              falta, vermelho. Na logo, cada mês vira uma pétala do tamanho desse saldo.
+            </p>
+          </div>
+
+          <div id="logo-story-final" class="logo-story-panel" data-panel="3">
+            <GranaWeb.BrandComponents.wordmark class="h-9 w-auto mb-5" />
+            <h2>Isso é o Grana</h2>
+            <p>
+              O seu dinheiro no centro, as categorias em volta e os meses contando a história.
+              A logo é um resumo do próprio app.
+            </p>
+          </div>
+
+          <div class="logo-story-hint" data-hint>
+            Role para baixo <.icon name="hero-chevron-double-down" class="size-4" />
+          </div>
+        </div>
+      </section>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".LogoStory">
+        const N = 16
+        const SVG = "http://www.w3.org/2000/svg"
+        const LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+        const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
+        const seg = (p, a, b) => clamp((p - a) / (b - a))
+        const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+        const lerp = (a, b, t) => a + (b - a) * t
+
+        // Formas como listas de pontos na mesma ordem (borda de fora → borda de dentro),
+        // para uma virar a outra ponto a ponto.
+        const arc = (cx, cy, r, a0, a1) => {
+          const pts = []
+          for (let i = 0; i < N; i++) {
+            const a = ((a0 + ((a1 - a0) * i) / (N - 1)) * Math.PI) / 180
+            pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)])
+          }
+          return pts
+        }
+        const sector = (cx, cy, r0, r1, a0, a1) => arc(cx, cy, r1, a0, a1).concat(arc(cx, cy, r0, a1, a0))
+        const bar = (x0, x1, yFar, yNear) => {
+          const far = [], near = []
+          for (let i = 0; i < N; i++) {
+            const x = x0 + ((x1 - x0) * i) / (N - 1)
+            far.push([x, yFar])
+            near.unshift([x, yNear])
+          }
+          return far.concat(near)
+        }
+        const mix = (from, to, t) => from.map((p, i) => [lerp(p[0], to[i][0], t), lerp(p[1], to[i][1], t)])
+        const d = pts => "M" + pts.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join("L") + "Z"
+
+        export default {
+          mounted() {
+            this.geo = JSON.parse(this.el.dataset.geometry)
+            this.data = JSON.parse(this.el.dataset.months)
+            this.stage = this.el.querySelector(".logo-story-stage")
+            this.svg = this.el.querySelector("[data-canvas]")
+            this.panels = [...this.el.querySelectorAll("[data-panel]")]
+            this.hint = this.el.querySelector("[data-hint]")
+            this.build()
+            this.onScroll = () => this.queue()
+            this.onResize = () => {
+              this.layout()
+              this.queue()
+            }
+            window.addEventListener("scroll", this.onScroll, {passive: true})
+            window.addEventListener("resize", this.onResize)
+            this.layout()
+            this.render()
+          },
+          destroyed() {
+            window.removeEventListener("scroll", this.onScroll)
+            window.removeEventListener("resize", this.onResize)
+            cancelAnimationFrame(this.raf)
+          },
+          queue() {
+            if (this.raf) return
+            this.raf = requestAnimationFrame(() => {
+              this.raf = null
+              this.render()
+            })
+          },
+          add(tag, attrs = {}, parent = this.svg) {
+            const node = document.createElementNS(SVG, tag)
+            for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v)
+            parent.appendChild(node)
+            return node
+          },
+          build() {
+            this.baseline = this.add("line", {"stroke-width": 1})
+            this.labels = LABELS.map(label => {
+              const t = this.add("text", {"text-anchor": "middle", "font-size": 10})
+              t.textContent = label
+              return t
+            })
+            this.income = this.data.map(() => this.add("path"))
+            this.expense = this.data.map(() => this.add("path"))
+            this.cats = this.geo.categories.map(() => this.add("path"))
+            this.coin = this.add("g")
+            this.add("circle", {r: 4, fill: "#D97706"}, this.coin)
+            this.add("circle", {r: 3.65, fill: "#FBBF24"}, this.coin)
+            this.add("circle", {r: 2.55, fill: "#E2E8F0", stroke: "#94A3B8", "stroke-width": 0.35}, this.coin)
+          },
+          rel(node) {
+            const r = node.getBoundingClientRect(), s = this.stage.getBoundingClientRect()
+            return {x: r.left - s.left, y: r.top - s.top, w: r.width, h: r.height}
+          },
+          layout() {
+            const w = this.stage.clientWidth, h = this.stage.clientHeight
+            this.svg.setAttribute("viewBox", `0 0 ${w} ${h}`)
+            const mobile = w < 768
+            const panel = this.rel(this.panels[1])
+            const size = mobile ? Math.min(h * 0.4, w * 0.8) : Math.min(h * 0.66, w * 0.42, 600)
+            const half = (size / 32) * 15.4
+            this.s = size / 32
+            this.cx = mobile ? w / 2 : Math.min(w / 2, panel.x - half - 32)
+            this.cy = mobile ? 16 + half + 56 : h / 2
+            this.coinFrom = this.rel(this.el.querySelector("[data-anchor=coin]"))
+            this.donut = this.rel(this.el.querySelector("[data-anchor=donut]"))
+            this.chart = this.rel(this.el.querySelector("[data-anchor=chart]"))
+          },
+          dark() {
+            const theme = document.documentElement.getAttribute("data-theme")
+            return theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches
+          },
+          render() {
+            const box = this.el.getBoundingClientRect()
+            if (box.bottom < -50 || box.top > window.innerHeight + 50) return
+            const p = clamp(-box.top / (box.height - window.innerHeight))
+            const dark = this.dark()
+            const geo = this.geo, s = this.s, cx = this.cx, cy = this.cy
+            const colors = geo.month_colors[dark ? "dark" : "light"]
+            const ink = dark ? "#94A3B8" : "#64748B"
+
+            // textos: moeda → categorias → meses → fechamento
+            const show = [
+              1 - seg(p, 0.05, 0.12),
+              seg(p, 0.15, 0.22) * (1 - seg(p, 0.4, 0.46)),
+              seg(p, 0.48, 0.55) * (1 - seg(p, 0.8, 0.86)),
+              seg(p, 0.9, 0.96)
+            ]
+            this.panels.forEach((el, i) => {
+              el.style.opacity = show[i]
+              el.style.visibility = show[i] > 0.01 ? "visible" : "hidden"
+            })
+            this.hint.style.opacity = 1 - seg(p, 0.02, 0.05)
+
+            // 1. a moeda sai do texto e vai para o centro
+            const m = ease(seg(p, 0.05, 0.17))
+            const c0 = this.coinFrom
+            const k = lerp(c0.w / 8, s, m)
+            this.coin.setAttribute(
+              "transform",
+              `translate(${lerp(c0.x + c0.w / 2, cx, m)} ${lerp(c0.y + c0.h / 2, cy, m)}) scale(${k})`
+            )
+
+            // 2. a rosca de categorias do card voa e vira o anel em volta da moeda
+            const dn = this.donut
+            const dcx = dn.x + dn.w / 2, dcy = dn.y + dn.h / 2, dr = dn.w / 2
+            let a = -90
+            geo.categories.forEach((cat, j) => {
+              const a0 = a + 3, a1 = a + cat.span + 5
+              a += cat.span + 8
+              const from = sector(dcx, dcy, dr * 0.64, dr, a0, a1)
+              const to = sector(cx, cy, geo.ring[0] * s, geo.ring[1] * s, a0, a1)
+              const t = ease(seg(p, 0.3 + j * 0.012, 0.42 + j * 0.012))
+              const path = this.cats[j]
+              path.setAttribute("d", d(mix(from, to, t)))
+              path.setAttribute("fill", dark ? cat.dark : cat.color)
+              path.style.opacity = seg(p, 0.15, 0.22)
+            })
+
+            // 3. receitas x despesas → saldo de cada mês → pétalas
+            const c = this.chart
+            const max = Math.max(...this.data.map(mo => Math.max(mo.income, mo.expense)))
+            const group = c.w / 12
+            const bw = group * 0.36
+            const base = c.y + c.h
+            const chartIn = seg(p, 0.48, 0.55)
+            const chartOut = 1 - seg(p, 0.72, 0.78)
+            this.baseline.setAttribute("x1", c.x)
+            this.baseline.setAttribute("x2", c.x + c.w)
+            this.baseline.setAttribute("y1", base)
+            this.baseline.setAttribute("y2", base)
+            this.baseline.setAttribute("stroke", ink)
+            this.baseline.style.opacity = chartIn * chartOut * 0.35
+            this.data.forEach((mo, i) => {
+              const gx = c.x + i * group + group * 0.12
+              const grow = ease(seg(p, 0.52 + i * 0.006, 0.6 + i * 0.006))
+              const hI = (mo.income / max) * c.h * grow
+              const hE = (mo.expense / max) * c.h * grow
+              const incomeBar = bar(gx, gx + bw, base - hI, base)
+              const expenseBar = bar(gx + bw + 1.5, gx + 2 * bw + 1.5, base - hE, base)
+              // o saldo: uma barra só, da cor de quem venceu, com a diferença entre as duas
+              const positive = mo.income >= mo.expense
+              const balance = bar(gx, gx + 2 * bw + 1.5, base - Math.abs(hI - hE), base)
+              const merge = ease(seg(p, 0.64 + i * 0.004, 0.72 + i * 0.004))
+              const month = geo.months[i]
+              const a0 = -90 + i * 30 + 1.4, a1 = -90 + (i + 1) * 30 - 1.4
+              const petal = sector(cx, cy, geo.petal_inner * s, month.size * s, a0, a1)
+              const fly = ease(seg(p, 0.76 + i * 0.006, 0.88 + i * 0.006))
+              const keep = positive ? this.income[i] : this.expense[i]
+              const drop = positive ? this.expense[i] : this.income[i]
+              const keepFrom = positive ? incomeBar : expenseBar
+              const dropFrom = positive ? expenseBar : incomeBar
+              keep.setAttribute("d", d(mix(mix(keepFrom, balance, merge), petal, fly)))
+              keep.setAttribute("fill", positive ? colors.positive : colors.negative)
+              keep.style.opacity = chartIn
+              drop.setAttribute("d", d(mix(dropFrom, balance, merge)))
+              drop.setAttribute("fill", positive ? colors.negative : colors.positive)
+              drop.style.opacity = chartIn * (1 - merge)
+              const label = this.labels[i]
+              label.setAttribute("x", gx + bw + 0.75)
+              label.setAttribute("y", base + 14)
+              label.setAttribute("fill", ink)
+              label.style.opacity = chartIn * chartOut
+            })
+          }
+        }
+      </script>
 
       <%!-- How it works --%>
       <section id="como-funciona" class="py-24 px-4 bg-base-200/50">
@@ -1604,4 +1898,55 @@ defmodule GranaWeb.LandingLive do
     </div>
     """
   end
+
+  # Despesas de Jan a Dez. A receita sai do saldo que a logo desenha: a pétala tem o
+  # tamanho do saldo e a cor diz se sobrou (receita maior) ou faltou.
+  @story_expenses [5200, 4900, 8600, 5100, 7400, 4700, 5600, 8300, 5000, 5400, 7600, 5900]
+  @story_categories_total 6400
+
+  defp story_months do
+    GranaWeb.BrandComponents.geometry().months
+    |> Enum.zip(@story_expenses)
+    |> Enum.map(fn {%{size: size, positive: positive}, expense} ->
+      balance = round((size - 10) * 1000)
+      %{income: if(positive, do: expense + balance, else: expense - balance), expense: expense}
+    end)
+  end
+
+  defp story_income, do: story_months() |> Enum.map(& &1.income) |> Enum.sum()
+
+  defp story_balance,
+    do: story_income() - (story_months() |> Enum.map(& &1.expense) |> Enum.sum())
+
+  # As fatias da rosca são as mesmas do anel da logo.
+  defp story_categories do
+    categories = GranaWeb.BrandComponents.geometry().categories
+    spans = categories |> Enum.map(& &1.span) |> Enum.sum()
+
+    Enum.map(categories, fn cat ->
+      share = cat.span / spans
+      Map.merge(cat, %{share: share, amount: round(share * @story_categories_total)})
+    end)
+  end
+
+  defp story_categories_total, do: @story_categories_total
+
+  defp brl(reais) do
+    int =
+      reais
+      |> Integer.to_string()
+      |> String.reverse()
+      |> String.to_charlist()
+      |> Enum.chunk_every(3)
+      |> Enum.join(".")
+      |> String.reverse()
+
+    "R$ #{int},00"
+  end
+
+  defp percent(ratio),
+    do:
+      :erlang.float_to_binary(ratio * 100, decimals: 1)
+      |> String.replace(".", ",")
+      |> Kernel.<>("%")
 end

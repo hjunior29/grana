@@ -187,26 +187,59 @@ defmodule GranaWeb.UserLive.Settings do
             <.icon name="hero-archive-box" class="size-5 opacity-60" />
             <h3 class="text-lg font-semibold">Backup</h3>
           </div>
-          <p class="text-sm opacity-50 mb-4 ml-8">
-            Todos os seus dados ficam em um único arquivo. Baixe uma cópia ou restaure uma anterior.
-            Guarde também a <code>CLOAK_KEY</code>
-            (ou a pasta <code>secrets/</code>) se quiser levar as credenciais cifradas.
+          <p class="text-sm opacity-50 mb-5 ml-8">
+            Todos os seus dados ficam em um único arquivo: baixe uma cópia ou restaure uma anterior.
           </p>
-          <.link
-            id="download-backup"
-            href={~p"/users/settings/backup"}
-            class="btn btn-sm mb-5 self-start"
-          >
-            <.icon name="hero-arrow-down-tray" class="size-4" /> Baixar backup
-          </.link>
-          <h4 class="text-sm font-medium opacity-70 mb-3">Restaurar um backup</h4>
-          <BackupComponents.restore_panel
-            stage={@restore_stage}
-            uploads={@uploads}
-            analysis={@restore_analysis}
-            form={@restore_form}
-            error={@restore_error}
-          />
+
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div id="backup-download" class="flex flex-col rounded-xl bg-base-100/60 p-4">
+              <div class="mb-1 flex items-center gap-2">
+                <.icon name="hero-arrow-down-tray" class="size-5 text-primary" />
+                <h4 class="font-medium">Baixar backup</h4>
+              </div>
+              <p class="mb-4 text-sm opacity-60">
+                Gera uma cópia consistente do banco, pronta para guardar ou levar para outro servidor.
+              </p>
+              <.link
+                id="download-backup"
+                href={~p"/users/settings/backup"}
+                class="btn btn-sm mt-auto self-start"
+              >
+                <.icon name="hero-arrow-down-tray" class="size-4" /> Baixar agora
+              </.link>
+            </div>
+
+            <div
+              id="backup-restore"
+              class={[
+                "flex flex-col rounded-xl bg-base-100/60 p-4",
+                @restore_stage == :options && "md:col-span-2"
+              ]}
+            >
+              <div class="mb-1 flex items-center gap-2">
+                <.icon name="hero-arrow-up-tray" class="size-5 text-primary" />
+                <h4 class="font-medium">Restaurar um backup</h4>
+              </div>
+              <p class="mb-4 text-sm opacity-60">
+                Substitui todos os dados desta instância pelos do arquivo.
+              </p>
+              <BackupComponents.restore_panel
+                stage={@restore_stage}
+                uploads={@uploads}
+                analysis={@restore_analysis}
+                form={@restore_form}
+                error={@restore_error}
+              />
+            </div>
+          </div>
+
+          <p class="mt-4 flex items-start gap-2 text-xs opacity-60">
+            <.icon name="hero-key" class="mt-0.5 size-4 shrink-0" />
+            <span>
+              Guarde também a <code>CLOAK_KEY</code> (ou a pasta <code>secrets/</code>) junto do
+              backup se quiser levar as credenciais cifradas.
+            </span>
+          </p>
         </div>
 
         <div id="diagnostics" class="card bg-base-200 p-6 mb-6">

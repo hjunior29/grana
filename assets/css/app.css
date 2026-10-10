@@ -233,6 +233,37 @@ html {
   }
 }
 
+/* Logo: versão clara ou escura conforme o tema (escolhido no app ou o do sistema). */
+@layer components {
+  .grana-logo {
+    display: inline-block;
+  }
+
+  .grana-logo > img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .grana-logo-dark,
+  [data-theme="dark"] .grana-logo-light {
+    display: none;
+  }
+
+  [data-theme="dark"] .grana-logo-dark {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .grana-logo-light {
+      display: none;
+    }
+
+    :root:not([data-theme]) .grana-logo-dark {
+      display: block;
+    }
+  }
+}
+
 .grana-app-shell {
   --grana-visual-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
   --grana-visual-shadow: 0 16px 44px color-mix(in oklch, var(--color-base-content) 9%, transparent);
@@ -2267,4 +2298,329 @@ html {
 .cyber-light-notice.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Landing: a história da logo, guiada pelo scroll (hook .LogoStory). O palco fica
+   preso na tela enquanto a seção rola; o SVG por cima desenha moeda, categorias e
+   meses indo dos cards até o símbolo. */
+.logo-story {
+  --story-positive: #009689;
+  --story-negative: #ea003e;
+  position: relative;
+  height: 620vh;
+}
+
+[data-theme="dark"] .logo-story {
+  --story-positive: #00baa6;
+  --story-negative: #f43f5e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .logo-story {
+    --story-positive: #00baa6;
+    --story-negative: #f43f5e;
+  }
+}
+
+.logo-story-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.logo-story-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.logo-story-panel {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: max(5vw, 1.5rem);
+  width: min(27rem, 40vw);
+  transform: translateY(-50%);
+  opacity: 0;
+  visibility: hidden;
+}
+
+.logo-story-panel[data-panel="0"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.logo-story-panel h2 {
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.75rem, 2.6vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.logo-story-panel > p:not(.logo-story-kicker) {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+
+.logo-story-kicker {
+  margin-bottom: 0.5rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.logo-story-coin-anchor {
+  width: 7rem;
+  height: 7rem;
+  margin-bottom: 1.75rem;
+}
+
+.logo-story-card {
+  margin-bottom: 1.75rem;
+  padding: 1.25rem;
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  border-radius: 1rem;
+  background: var(--color-base-200);
+}
+
+.logo-story-card h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.logo-story-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.logo-story-card-balance {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.logo-story-card-balance strong {
+  color: var(--story-positive);
+}
+
+.logo-story-card-balance span {
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--story-positive);
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.logo-story-donut {
+  position: relative;
+  width: 9rem;
+  height: 9rem;
+  margin: 1rem auto;
+}
+
+.logo-story-donut-anchor {
+  width: 100%;
+  height: 100%;
+}
+
+.logo-story-donut-total {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.logo-story-donut-total span {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+.logo-story-donut-total strong {
+  font-size: 0.85rem;
+}
+
+.logo-story-category-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.logo-story-category-list li {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto 3rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+}
+
+.logo-story-category-icon {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+}
+
+.logo-story-category-name {
+  font-weight: 500;
+}
+
+.logo-story-category-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.logo-story-category-share {
+  font-size: 0.75rem;
+  text-align: right;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
+.logo-story-chart-anchor {
+  width: 100%;
+  height: 9rem;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.logo-story-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.logo-story-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.logo-story-legend i {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 0.2rem;
+}
+
+.logo-story-dot-positive {
+  background: var(--story-positive);
+}
+
+.logo-story-dot-negative {
+  background: var(--story-negative);
+}
+
+.logo-story-hint {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .logo-story-hint > span {
+    animation: logo-story-bounce 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes logo-story-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+@media (max-width: 767px) {
+  .logo-story-panel {
+    top: auto;
+    right: 1rem;
+    bottom: 4vh;
+    left: 1rem;
+    width: auto;
+    transform: none;
+  }
+
+  .logo-story-panel h2 {
+    margin-bottom: 0.4rem;
+    font-size: 1.4rem;
+  }
+
+  .logo-story-panel > p:not(.logo-story-kicker) {
+    font-size: 0.9rem;
+  }
+
+  .logo-story-coin-anchor {
+    width: 4.5rem;
+    height: 4.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .logo-story-card {
+    margin-bottom: 1rem;
+    padding: 0.85rem;
+  }
+
+  .logo-story-donut {
+    width: 6rem;
+    height: 6rem;
+    margin: 0.6rem auto;
+  }
+
+  .logo-story-category-list {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 0.75rem;
+  }
+
+  .logo-story-category-list li {
+    grid-template-columns: 1.25rem 1fr auto;
+    font-size: 0.75rem;
+  }
+
+  .logo-story-category-amount {
+    display: none;
+  }
+
+  .logo-story-category-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .logo-story-chart-anchor {
+    height: 6rem;
+    margin: 0.75rem 0 1.25rem;
+  }
+
+  .logo-story-panel[data-panel="0"] {
+    bottom: calc(4vh + 2.25rem);
+  }
+
+  .logo-story-hint {
+    bottom: 1rem;
+  }
 }
