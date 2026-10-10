@@ -3,8 +3,11 @@ defmodule GranaWeb.SetupLive do
 
   alias Grana.Accounts
   alias Grana.Setup
+  alias GranaWeb.BackupComponents
 
-  @steps [:code, :welcome, :account]
+  on_mount {GranaWeb.BackupHooks, :setup}
+
+  @steps [:code, :welcome, :choice, :account]
 
   @impl true
   def render(assigns) do
@@ -73,10 +76,58 @@ defmodule GranaWeb.SetupLive do
               <button
                 id="setup-continue"
                 type="button"
-                phx-click="goto_account"
+                phx-click="goto_choice"
                 class="btn btn-primary w-full"
               >
-                Criar minha conta <.icon name="hero-arrow-right" class="size-4" />
+                Continuar <.icon name="hero-arrow-right" class="size-4" />
+              </button>
+            </div>
+          <% :choice -> %>
+            <div id="setup-choice-step" class="card bg-base-200 p-6 sm:p-8">
+              <h1 class="mb-1 text-2xl font-bold tracking-tight">Como quer começar?</h1>
+              <p class="mb-5 text-sm opacity-70">
+                Comece do zero ou traga os dados de outra instalação.
+              </p>
+              <div class="flex flex-col gap-3">
+                <button
+                  id="setup-new-install"
+                  type="button"
+                  phx-click="goto_account"
+                  class="btn btn-primary justify-start"
+                >
+                  <.icon name="hero-sparkles" class="size-5" /> Nova instalação
+                </button>
+                <button
+                  id="setup-restore"
+                  type="button"
+                  phx-click="goto_restore"
+                  class="btn justify-start"
+                >
+                  <.icon name="hero-archive-box-arrow-down" class="size-5" /> Restaurar um backup
+                </button>
+              </div>
+            </div>
+          <% :restore -> %>
+            <div id="setup-restore-step" class="card bg-base-200 p-6 sm:p-8">
+              <h1 class="mb-1 text-2xl font-bold tracking-tight">Restaurar um backup</h1>
+              <p class="mb-5 text-sm opacity-70">
+                Envie o arquivo <code>.db</code> baixado em Configurações → Backup.
+              </p>
+              <BackupComponents.restore_panel
+                stage={@restore_stage}
+                uploads={@uploads}
+                analysis={@restore_analysis}
+                form={@restore_form}
+                error={@restore_error}
+              />
+              <button
+                :if={@restore_stage == :idle}
+                id="setup-restore-back"
+                type="button"
+                phx-click="goto_choice"
+                class="btn btn-ghost btn-sm mt-4"
+              >
+                Voltar
               </button>
             </div>
           <% :account -> %>
@@ -165,8 +216,17 @@ defmodule GranaWeb.SetupLive do
     end
   end
 
-  def handle_event("goto_account", _params, %{assigns: %{step: :welcome}} = socket) do
+  def handle_event("goto_choice", _params, %{assigns: %{step: step}} = socket)
+      when step in [:welcome, :restore] do
+    {:noreply, assign(socket, :step, :choice)}
+  end
+
+  def handle_event("goto_account", _params, %{assigns: %{step: :choice}} = socket) do
     {:noreply, assign(socket, :step, :account)}
+  end
+
+  def handle_event("goto_restore", _params, %{assigns: %{step: :choice}} = socket) do
+    {:noreply, assign(socket, :step, :restore)}
   end
 
   def handle_event("validate", %{"user" => params}, %{assigns: %{step: :account}} = socket) do
@@ -206,6 +266,7 @@ defmodule GranaWeb.SetupLive do
   end
 
   defp step_reached?(current, step), do: step_index(step) <= step_index(current)
+  defp step_index(:restore), do: step_index(:account)
   defp step_index(step), do: Enum.find_index(@steps, &(&1 == step))
 
   defp how_it_works do

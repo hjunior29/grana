@@ -6,9 +6,12 @@ defmodule GranaWeb.UserLive.Settings do
   # (alterar email/senha, excluir conta) é que exigem sudo mode, com redirect
   # gracioso para reautenticar — em vez de derrubar/quebrar a sessão.
   alias Grana.Accounts
+  alias Grana.Diagnostics
   alias GranaWeb.AccountComponents
+  alias GranaWeb.BackupComponents
   alias GranaWeb.OpenFinanceComponents
 
+  on_mount {GranaWeb.BackupHooks, :settings}
   on_mount GranaWeb.AiSettingsHooks
   on_mount GranaWeb.SmtpHooks
   on_mount GranaWeb.OpenFinanceHooks
@@ -179,6 +182,33 @@ defmodule GranaWeb.UserLive.Settings do
           </div>
         </div>
 
+        <div id="backup" class="card bg-base-200 p-6 mb-6">
+          <div class="flex items-center gap-3 mb-1">
+            <.icon name="hero-archive-box" class="size-5 opacity-60" />
+            <h3 class="text-lg font-semibold">Backup</h3>
+          </div>
+          <p class="text-sm opacity-50 mb-4 ml-8">
+            Todos os seus dados ficam em um único arquivo. Baixe uma cópia ou restaure uma anterior.
+            Guarde também a <code>CLOAK_KEY</code>
+            (ou a pasta <code>secrets/</code>) se quiser levar as credenciais cifradas.
+          </p>
+          <.link
+            id="download-backup"
+            href={~p"/users/settings/backup"}
+            class="btn btn-sm mb-5 self-start"
+          >
+            <.icon name="hero-arrow-down-tray" class="size-4" /> Baixar backup
+          </.link>
+          <h4 class="text-sm font-medium opacity-70 mb-3">Restaurar um backup</h4>
+          <BackupComponents.restore_panel
+            stage={@restore_stage}
+            uploads={@uploads}
+            analysis={@restore_analysis}
+            form={@restore_form}
+            error={@restore_error}
+          />
+        </div>
+
         <div id="diagnostics" class="card bg-base-200 p-6 mb-6">
           <div class="flex items-center gap-3 mb-1">
             <.icon name="hero-wrench-screwdriver" class="size-5 opacity-60" />
@@ -187,6 +217,18 @@ defmodule GranaWeb.UserLive.Settings do
           <p class="text-sm opacity-50 mb-4 ml-8">
             Painéis técnicos da sua instância: filas de jobs e erros registrados.
           </p>
+          <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt class="opacity-60">Versão</dt>
+            <dd id="diagnostics-version">{@diagnostics.version}</dd>
+            <dt class="opacity-60">Pasta de dados</dt>
+            <dd><code id="diagnostics-data-dir">{@diagnostics.data_dir}</code></dd>
+            <dt class="opacity-60">Banco</dt>
+            <dd id="diagnostics-db-size">{Diagnostics.format_bytes(@diagnostics.database_size)}</dd>
+            <%= for {label, source} <- @diagnostics.credentials do %>
+              <dt class="opacity-60">{label}</dt>
+              <dd>{source_label(source)}</dd>
+            <% end %>
+          </dl>
           <div class="flex flex-wrap gap-2">
             <.link id="diagnostics-oban" href="/admin/oban" target="_blank" class="btn btn-sm">
               <.icon name="hero-queue-list" class="size-4" /> Jobs (Oban)
@@ -203,37 +245,49 @@ defmodule GranaWeb.UserLive.Settings do
             <h3 class="text-lg font-semibold text-error">Zona de Perigo</h3>
           </div>
           <p class="text-sm opacity-60 mb-4">
-            Ao excluir sua conta, todos os seus dados serão removidos permanentemente,
-            incluindo extratos, transações, categorias e análises. Esta ação não pode ser desfeita.
+            Apagar todos os dados remove sua conta, extratos, transações, categorias, análises e
+            conexões, e volta a instância ao assistente de configuração. Faça um backup antes:
+            esta ação não pode ser desfeita.
           </p>
           <button
-            phx-click="show_delete_modal"
+            id="show-reset-modal"
+            phx-click="show_reset_modal"
             class="btn btn-error btn-outline btn-sm"
           >
-            <.icon name="hero-trash" class="size-4" /> Excluir Minha Conta
+            <.icon name="hero-trash" class="size-4" /> Apagar todos os dados
           </button>
         </div>
 
         <dialog
-          :if={@show_delete_modal}
+          :if={@show_reset_modal}
+          id="reset-modal"
           class="modal modal-open"
-          phx-window-keydown="cancel_delete"
+          phx-window-keydown="cancel_reset"
           phx-key="Escape"
         >
           <div class="modal-box">
-            <h3 class="text-lg font-bold text-error">Excluir Conta Permanentemente</h3>
+            <h3 class="text-lg font-bold text-error">Apagar todos os dados</h3>
             <p class="py-4 opacity-70">
-              Esta ação é irreversível. Todos os seus dados serão apagados.
+              Esta ação é irreversível. Confirme com a sua senha e digite <strong>APAGAR</strong>.
             </p>
-            <div class="modal-action">
-              <button type="button" phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
-              <button phx-click="confirm_delete" class="btn btn-error">
-                Excluir Permanentemente
-              </button>
-            </div>
+            <.form for={@reset_form} id="reset-form" phx-submit="confirm_reset">
+              <.input
+                field={@reset_form[:password]}
+                type="password"
+                label="Senha"
+                autocomplete="current-password"
+              />
+              <.input field={@reset_form[:confirmation]} type="text" label="Digite APAGAR" />
+              <div class="modal-action">
+                <button type="button" phx-click="cancel_reset" class="btn btn-ghost">
+                  Cancelar
+                </button>
+                <button id="confirm-reset" class="btn btn-error">Apagar tudo</button>
+              </div>
+            </.form>
           </div>
           <form method="dialog" class="modal-backdrop">
-            <button phx-click="cancel_delete">close</button>
+            <button phx-click="cancel_reset">close</button>
           </form>
         </dialog>
       </div>
@@ -268,7 +322,9 @@ defmodule GranaWeb.UserLive.Settings do
       |> assign(:password_form, to_form(password_changeset))
       |> assign(:identity_form, to_form(identity_changeset))
       |> assign(:trigger_submit, false)
-      |> assign(:show_delete_modal, false)
+      |> assign(:show_reset_modal, false)
+      |> assign(:reset_form, to_form(%{"password" => "", "confirmation" => ""}, as: :reset))
+      |> assign(:diagnostics, Diagnostics.summary(user))
 
     {:ok, socket}
   end
@@ -357,36 +413,27 @@ defmodule GranaWeb.UserLive.Settings do
     end
   end
 
-  def handle_event("show_delete_modal", _params, socket) do
-    {:noreply, assign(socket, :show_delete_modal, true)}
+  def handle_event("show_reset_modal", _params, socket) do
+    {:noreply, assign(socket, :show_reset_modal, true)}
   end
 
-  def handle_event("cancel_delete", _params, socket) do
-    {:noreply, assign(socket, :show_delete_modal, false)}
+  def handle_event("cancel_reset", _params, socket) do
+    {:noreply, assign(socket, :show_reset_modal, false)}
   end
 
-  def handle_event("confirm_delete", _params, socket) do
+  def handle_event("confirm_reset", %{"reset" => params}, socket) do
     user = socket.assigns.current_scope.user
 
-    if Accounts.sudo_mode?(user) do
-      # Capturado antes do delete: o cascade remove os tokens, mas precisamos das
-      # referências para derrubar quaisquer sessões LiveView ativas em outras abas.
-      session_tokens = Accounts.list_user_session_tokens(user)
+    cond do
+      params["confirmation"] != "APAGAR" ->
+        {:noreply, put_flash(socket, :error, "Digite APAGAR para confirmar.")}
 
-      case Accounts.delete_user(user) do
-        {:ok, _} ->
-          GranaWeb.UserAuth.disconnect_sessions(session_tokens)
+      not Grana.Accounts.User.valid_password?(user, params["password"] || "") ->
+        {:noreply, put_flash(socket, :error, "Senha incorreta.")}
 
-          {:noreply,
-           socket
-           |> redirect(to: ~p"/users/log-in")
-           |> put_flash(:info, "Sua conta foi excluída permanentemente.")}
-
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Erro ao excluir conta.")}
-      end
-    else
-      {:noreply, redirect_for_reauth(socket)}
+      true ->
+        :ok = Grana.Backup.reset_all()
+        {:noreply, redirect(socket, to: ~p"/setup")}
     end
   end
 
@@ -423,4 +470,8 @@ defmodule GranaWeb.UserLive.Settings do
   end
 
   defp redirect_for_reauth(socket), do: GranaWeb.UserAuth.redirect_for_reauth(socket)
+
+  defp source_label(:env), do: "variável de ambiente (.env)"
+  defp source_label(:database), do: "salva no Grana (cifrada)"
+  defp source_label(nil), do: "não configurada"
 end
