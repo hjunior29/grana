@@ -101,6 +101,13 @@ defmodule Grana.Cache do
 
   def invalidate_user(_), do: :ok
 
+  @doc "Esvazia o cache inteiro (restaurar backup, apagar tudo)."
+  @spec clear_all() :: :ok
+  def clear_all do
+    if enabled?(), do: safe(fn -> Cachex.clear(@cache_name) end)
+    :ok
+  end
+
   # ── internals ──────────────────────────────────────────────────────────────
 
   defp do_get(key) do

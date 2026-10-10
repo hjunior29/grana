@@ -119,6 +119,8 @@ if config_env() == :prod do
   data_dir = System.get_env("DATA_DIR") || "/var/lib/grana"
   File.mkdir_p!(data_dir)
 
+  config :grana, :data_dir, data_dir
+
   database_path = System.get_env("DATABASE_PATH") || Path.join(data_dir, "grana.db")
 
   config :grana, Grana.Repo,

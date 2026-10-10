@@ -20,6 +20,10 @@ config :grana, :scopes,
     test_setup_helper: :register_and_log_in_user
   ]
 
+# Diretório de dados (banco, segredos, temporários de backup). Em prod vem do
+# DATA_DIR (config/runtime.exs); em dev é a raiz do projeto.
+config :grana, :data_dir, Path.expand("..", __DIR__)
+
 config :grana,
   ecto_repos: [Grana.Repo],
   generators: [timestamp_type: :utc_datetime]

@@ -65,3 +65,5 @@ config :grana, :announce_setup_code, false
 
 # O SMTP configurado nos testes envia pelo adapter Test, nunca pela rede.
 config :grana, :smtp_adapter, Swoosh.Adapters.Test
+
+config :grana, :data_dir, Path.expand("../tmp/test_data", __DIR__)

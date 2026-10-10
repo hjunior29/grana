@@ -39,9 +39,11 @@ defmodule Grana.Encrypted.Binary do
 
   def load(nil), do: {:ok, nil}
 
-  def load(encoded) when is_binary(encoded) do
-    key = get_key!()
+  def load(encoded) when is_binary(encoded), do: decrypt(encoded, get_key!())
 
+  def load(_), do: :error
+
+  defp decrypt(encoded, key) do
     with {:ok, <<iv::binary-size(@iv_size), tag::binary-size(@tag_size), ciphertext::binary>>} <-
            Base.decode64(encoded) do
       case :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, ciphertext, @aad, tag, false) do
@@ -53,8 +55,6 @@ defmodule Grana.Encrypted.Binary do
     end
   end
 
-  def load(_), do: :error
-
   def equal?(a, b), do: a == b
 
   @doc """
@@ -62,6 +62,20 @@ defmodule Grana.Encrypted.Binary do
   fixa de `config/*.exs` — pública no repositório, então não protege nada.
   """
   def private_key?, do: System.get_env("CLOAK_KEY") not in [nil, ""]
+
+  @doc """
+  Decifra um valor guardado (base64) com a chave `old_key_b64` e o cifra de novo
+  com a chave atual. `:error` se a chave antiga não decifra o valor.
+  """
+  def reencrypt(encoded, old_key_b64) when is_binary(encoded) and is_binary(old_key_b64) do
+    with {:ok, old_key} <- Base.decode64(old_key_b64),
+         32 <- byte_size(old_key),
+         {:ok, plaintext} <- decrypt(encoded, old_key) do
+      dump(plaintext)
+    else
+      _ -> :error
+    end
+  end
 
   def embed_as(_), do: :dump
 

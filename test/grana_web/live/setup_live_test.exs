@@ -15,6 +15,7 @@ defmodule GranaWeb.SetupLiveTest do
 
     lv |> form("#setup-code-form", setup: %{code: code}) |> render_submit()
     lv |> element("#setup-continue") |> render_click()
+    lv |> element("#setup-new-install") |> render_click()
     lv
   end
 
@@ -39,6 +40,9 @@ defmodule GranaWeb.SetupLiveTest do
     assert has_element?(lv, "#setup-welcome-step")
 
     lv |> element("#setup-continue") |> render_click()
+    assert has_element?(lv, "#setup-choice-step")
+
+    lv |> element("#setup-new-install") |> render_click()
     assert has_element?(lv, "#setup-account-form")
   end
 

@@ -4,6 +4,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
   alias Grana.Accounts
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
+  import Grana.BankingFixtures
 
   describe "Settings page" do
     test "renders settings page", %{conn: conn} do
@@ -375,39 +376,85 @@ defmodule GranaWeb.UserLive.SettingsTest do
     end
   end
 
-  describe "account deletion" do
+  describe "apagar todos os dados" do
     setup %{conn: conn} do
       user = user_fixture()
       %{conn: log_in_user(conn, user), user: user}
     end
 
-    test "show_delete_modal shows deletion dialog", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
+    test "abre e fecha a confirmação", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      render_click(view, "show_delete_modal", %{})
+      refute has_element?(lv, "#reset-modal")
+      lv |> element("#show-reset-modal") |> render_click()
+      assert has_element?(lv, "#reset-form")
 
-      html = render(view)
-      assert html =~ "settings" or html =~ "excluir" or html =~ "Excluir"
+      render_click(lv, "cancel_reset", %{})
+      refute has_element?(lv, "#reset-modal")
     end
 
-    test "cancel_delete closes deletion dialog", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users/settings")
+    test "sem digitar APAGAR nada acontece", %{conn: conn, user: user} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      lv |> element("#show-reset-modal") |> render_click()
 
-      render_click(view, "show_delete_modal", %{})
-      render_click(view, "cancel_delete", %{})
+      html =
+        lv
+        |> form("#reset-form", reset: %{password: valid_user_password(), confirmation: "apagar"})
+        |> render_submit()
 
-      html = render(view)
-      assert html =~ "settings" or html =~ "Configurações"
+      assert html =~ "Digite APAGAR"
+      assert Accounts.get_user!(user.id)
     end
 
-    test "confirm_delete with sudo mode deletes account and redirects", %{conn: conn} do
-      fresh_conn = log_in_user(conn, user_fixture())
-      {:ok, view, _html} = live(fresh_conn, ~p"/users/settings")
+    test "senha errada não apaga", %{conn: conn, user: user} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      lv |> element("#show-reset-modal") |> render_click()
 
-      result = render_click(view, "confirm_delete", %{})
-      assert result =~ "settings" or result =~ "Configurações"
-    rescue
-      _ -> :ok
+      html =
+        lv
+        |> form("#reset-form", reset: %{password: "errada", confirmation: "APAGAR"})
+        |> render_submit()
+
+      assert html =~ "Senha incorreta"
+      assert Accounts.get_user!(user.id)
+    end
+
+    test "com senha e APAGAR, apaga tudo e volta ao setup", %{conn: conn, user: user} do
+      transaction_fixture(user)
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      lv |> element("#show-reset-modal") |> render_click()
+
+      lv
+      |> form("#reset-form", reset: %{password: valid_user_password(), confirmation: "APAGAR"})
+      |> render_submit()
+
+      assert_redirect(lv, ~p"/setup")
+      assert Accounts.setup_required?()
+      assert Grana.Repo.aggregate("transactions", :count) == 0
+    end
+  end
+
+  describe "backup e diagnóstico" do
+    setup %{conn: conn} do
+      user = user_fixture()
+      %{conn: log_in_user(conn, user), user: user}
+    end
+
+    test "mostra o card de backup com download e restauração", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      assert has_element?(lv, ~s|#download-backup[href="/users/settings/backup"]|)
+      assert has_element?(lv, "#restore-upload-form")
+    end
+
+    test "mostra o diagnóstico da instância", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      assert has_element?(lv, "#diagnostics-version")
+      assert has_element?(lv, "#diagnostics-data-dir")
+      assert has_element?(lv, "#diagnostics-db-size")
+      assert has_element?(lv, "#diagnostics-oban")
+      assert has_element?(lv, "#diagnostics-errors")
     end
   end
 end
