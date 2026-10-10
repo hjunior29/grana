@@ -513,6 +513,23 @@ And **never** do this:
 
 ## Grana — instruções específicas do projeto
 
+### Arquitetura (self-hosted, single-user)
+
+- A instância tem **exatamente um usuário** (o dono). Não há cadastro: o único caminho de
+  criação é `Accounts.register_owner/1`, usado pelo `/setup`. `Accounts.setup_required?/0`
+  (cacheado em `:persistent_term`) alimenta o `GranaWeb.SetupGate`, que redireciona tudo para
+  `/setup` enquanto não há dono. O código de uso único do setup (`Grana.Setup`) vive em memória
+  e é impresso no log.
+- Login por email + senha. Com SMTP efetivo (`Accounts.smtp_config/0`: ambiente > banco), todo
+  login pede um código por email (2FA). `.env`/ambiente sempre tem precedência sobre o que a
+  tela salva (SMTP, Gemini, Pluggy).
+- `DATA_DIR` guarda banco, `secrets/` (`SECRET_KEY_BASE` e `CLOAK_KEY` gerados no 1º boot) e
+  temporários de backup (`Grana.DataDir`). Backup/restauração/"apagar tudo" ficam em
+  `Grana.Backup`. Deploy: release + systemd (`deploy/`), tarball e Docker; sem Fly.
+- Fixtures de teste inserem usuários direto pelo `Repo` (vários usuários só existem em teste).
+  Testes de backup usam `Grana.BackupCase` (Repo em modo `:auto`, síncronos), porque o SQLite não
+  faz `VACUUM`/`DETACH` dentro da transação do Sandbox.
+
 ### Regras de teste
 
 - **Nunca modificar `lib/` para facilitar testes.** Os testes devem se adaptar ao código existente.

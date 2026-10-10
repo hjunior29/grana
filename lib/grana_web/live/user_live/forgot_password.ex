@@ -37,9 +37,9 @@ defmodule GranaWeb.UserLive.ForgotPassword do
 
         <div :if={!@smtp?} id="reset-instructions" class="rounded-xl bg-base-200 p-4 text-sm">
           <p class="mb-2">No servidor onde o Grana roda, execute:</p>
-          <pre class="overflow-x-auto rounded bg-base-100 p-2 text-xs" phx-no-curly-interpolation>/opt/grana/bin/grana-reset-password</pre>
+          <pre class="overflow-x-auto rounded bg-base-100 p-2 text-xs" phx-no-curly-interpolation>sudo -u grana /opt/grana/bin/grana-reset-password</pre>
           <p class="mt-3 mb-2">ou, com Docker:</p>
-          <pre class="overflow-x-auto rounded bg-base-100 p-2 text-xs" phx-no-curly-interpolation>docker exec grana /app/bin/grana-reset-password</pre>
+          <pre class="overflow-x-auto rounded bg-base-100 p-2 text-xs" phx-no-curly-interpolation>docker exec -u nobody grana /app/bin/grana-reset-password</pre>
           <p class="mt-3 opacity-70">Abra o link impresso para definir a nova senha.</p>
         </div>
 

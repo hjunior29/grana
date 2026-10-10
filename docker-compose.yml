@@ -1,5 +1,23 @@
-# Infra para desenvolvimento/testes locais.
-# A aplicação agora roda 100% autossuficiente (SQLite para banco de dados e Cachex
-# para cache em memória). Não são necessários serviços externos ou containers Docker
-# para desenvolvimento local.
-services: {}
+# Grana via Docker Compose.
+#
+#   docker compose up -d
+#   docker compose logs grana        # o código do setup aparece aqui no primeiro acesso
+#
+# Opcional: crie um .env ao lado deste arquivo (veja .env.example) para SMTP, Gemini,
+# Pluggy etc. Sem ele, tudo se configura pela tela. Os dados (banco e segredos) ficam
+# no volume grana-data: faça backup em Configurações → Backup.
+services:
+  grana:
+    image: ghcr.io/hjunior29/grana:latest
+    container_name: grana
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - grana-data:/data
+    env_file:
+      - path: .env
+        required: false
+
+volumes:
+  grana-data:

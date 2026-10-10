@@ -46,7 +46,7 @@ defmodule GranaWeb.UserSessionController do
         conn
         |> put_flash(
           :error,
-          "Não foi possível enviar o código por email. Verifique o SMTP; no servidor, `grana-disable-smtp` desliga o 2FA."
+          "Não foi possível enviar o código por email. Verifique o SMTP; no servidor, o comando grana-disable-smtp desliga o 2FA."
         )
         |> redirect(to: ~p"/users/log-in")
     end
