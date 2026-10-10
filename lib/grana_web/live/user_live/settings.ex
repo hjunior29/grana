@@ -168,14 +168,14 @@ defmodule GranaWeb.UserLive.Settings do
               <p class="text-sm">Tema</p>
               <p class="text-xs opacity-50">Escolha entre claro, escuro ou sistema</p>
             </div>
-            <Layouts.theme_toggle />
+            <Layouts.theme_toggle persist />
           </div>
           <div class="mt-5 flex flex-col gap-3">
             <div>
               <p class="text-sm">Estilo visual</p>
               <p class="text-xs opacity-50">Escolha a linguagem visual do app interno</p>
             </div>
-            <Layouts.visual_style_toggle />
+            <Layouts.visual_style_toggle persist />
           </div>
         </div>
 

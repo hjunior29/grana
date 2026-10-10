@@ -1,5 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="scroll-smooth">
+<html
+  lang="pt-BR"
+  class="scroll-smooth"
+  data-server-theme={assigns[:current_scope] && assigns[:current_scope].user.theme}
+  data-server-visual-style={assigns[:current_scope] && assigns[:current_scope].user.visual_style}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -53,10 +58,16 @@
             setTheme("dark");
           }
         };
-        if (!document.documentElement.hasAttribute("data-theme")) {
+        // Logado: a preferência salva no servidor vence o localStorage (que só serve
+        // para telas sem login e para evitar o flash).
+        const serverTheme = document.documentElement.dataset.serverTheme;
+        const serverStyle = document.documentElement.dataset.serverVisualStyle;
+        setVisualStyle(serverStyle || localStorage.getItem("phx:visual-style") || "default");
+        if (serverTheme) {
+          setTheme(serverTheme);
+        } else if (!document.documentElement.hasAttribute("data-theme")) {
           setTheme(localStorage.getItem("phx:theme") || "system");
         }
-        setVisualStyle(localStorage.getItem("phx:visual-style") || "default");
         window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
         window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default"));
 

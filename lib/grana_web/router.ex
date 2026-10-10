@@ -109,7 +109,8 @@ defmodule GranaWeb.Router do
     live_session :require_authenticated_user,
       on_mount: [
         {GranaWeb.SetupGate, :setup_complete},
-        {GranaWeb.UserAuth, :require_authenticated}
+        {GranaWeb.UserAuth, :require_authenticated},
+        GranaWeb.PreferencesHook
       ] do
       live "/onboarding", OnboardingLive, :index
       live "/dashboard", DashboardLive, :index

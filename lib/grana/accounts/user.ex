@@ -37,6 +37,9 @@ defmodule Grana.Accounts.User do
 
     # Preenchido ao concluir (ou pular) o onboarding; base_url é a origem usada
     # nos links enviados por email quando não há PUBLIC_URL.
+    field :theme, :string, default: "system"
+    field :visual_style, :string, default: "default"
+
     field :onboarded_at, :utc_datetime
     field :base_url, :string
 
@@ -56,6 +59,16 @@ defmodule Grana.Accounts.User do
     |> validate_confirmation(:password, required: true, message: "does not match password")
     |> validate_password(opts)
     |> put_change(:confirmed_at, DateTime.utc_now(:second))
+  end
+
+  @themes ~w(system light dark)
+  @visual_styles ~w(default signal bossa papel caderneta planetario cyber)
+
+  def preferences_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:theme, :visual_style])
+    |> validate_inclusion(:theme, @themes)
+    |> validate_inclusion(:visual_style, @visual_styles)
   end
 
   def onboarded_changeset(user), do: change(user, onboarded_at: DateTime.utc_now(:second))

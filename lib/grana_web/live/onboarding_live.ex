@@ -43,7 +43,15 @@ defmodule GranaWeb.OnboardingLive do
         <%= case @step do %>
           <% :appearance -> %>
             <.step_card title="Aparência" subtitle="Escolha o tema e o estilo visual do Grana.">
-              <p class="text-sm opacity-60">Você pode mudar isso depois em Configurações.</p>
+              <div class="mb-5 flex items-center justify-between gap-4">
+                <p class="text-sm">Tema</p>
+                <Layouts.theme_toggle persist />
+              </div>
+              <div class="flex flex-col gap-3">
+                <p class="text-sm">Estilo visual</p>
+                <Layouts.visual_style_toggle persist />
+              </div>
+              <p class="mt-4 text-xs opacity-60">Você pode mudar isso depois em Configurações.</p>
             </.step_card>
           <% :smtp -> %>
             <AccountComponents.smtp_card
