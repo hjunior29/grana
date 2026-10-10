@@ -6,8 +6,6 @@ defmodule GranaWeb.DashboardLive do
   alias Grana.OpenFinance
   alias GranaWeb.OpenFinanceComponents
 
-  @of_page_size 50
-
   # ── Mount ──
 
   @impl true
@@ -51,17 +49,13 @@ defmodule GranaWeb.DashboardLive do
       |> assign(:rec_window, "6")
       |> assign(:rec_bank, "all")
       |> assign(:rec_type, "all")
-      # Open Finance state (lazy loaded on first tab switch)
-      |> assign(:of_loaded, false)
-      |> assign(:of_syncing, false)
-      |> assign(:of_selected_account, nil)
-      |> assign(:of_transactions_count, 0)
-      |> assign(:of_offset, 0)
-      |> assign(:of_has_more, false)
-      |> stream(:of_transactions, [])
+      |> assign_today()
 
+    # O Open Finance é relido em segundo plano se a última leitura tiver mais de
+    # 1h; quando terminar, chega {:open_finance_synced, _} e a tela se atualiza.
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Grana.PubSub, OpenFinance.topic(user_id))
+      OpenFinance.refresh_if_stale(socket.assigns.current_scope)
     end
 
     {:ok, socket}
@@ -78,12 +72,6 @@ defmodule GranaWeb.DashboardLive do
           |> then(fn s -> if s.assigns[:rec_loaded], do: s, else: load_recurring_data(s) end)
           |> assign(:tab, "recurring")
 
-        "open_finance" ->
-          socket
-          |> then(fn s -> if s.assigns.of_loaded, do: s, else: load_open_finance(s) end)
-          |> select_of_account(params["account"])
-          |> assign(:tab, "open_finance")
-
         _ ->
           assign(socket, :tab, "banking")
       end
@@ -96,17 +84,6 @@ defmodule GranaWeb.DashboardLive do
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, push_patch(socket, to: ~p"/dashboard?tab=#{tab}")}
-  end
-
-  # ── Events: Open Finance tab ──
-
-  def handle_event("of_load_more", _params, socket) do
-    {:noreply, load_of_transactions(socket, socket.assigns.of_offset)}
-  end
-
-  def handle_event("of_sync_all", _params, socket) do
-    OpenFinance.enqueue_user_syncs(socket.assigns.current_scope)
-    {:noreply, assign(socket, :of_syncing, true)}
   end
 
   # ── Events: Recurring expenses tab ──
@@ -216,69 +193,34 @@ defmodule GranaWeb.DashboardLive do
 
   # ── PubSub: Open Finance ──
 
+  # Uma releitura do Open Finance pode trazer o retrato novo e transações dos
+  # períodos sem upload (inclusive um mês novo nos seletores).
   @impl true
   def handle_info({:open_finance_synced, _connection_id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
     socket =
-      if socket.assigns.of_loaded do
-        socket
-        |> assign(:of_syncing, false)
-        |> load_open_finance()
-        |> select_of_account(
-          socket.assigns.of_selected_account && socket.assigns.of_selected_account.id
-        )
-      else
-        socket
-      end
+      socket
+      |> assign_today()
+      |> assign(:available_years, Banking.available_years(user_id))
+      |> assign(:available_months, Banking.available_months(user_id))
+      |> assign(:banks, Banking.available_banks(user_id))
+      |> load_banking_data()
+      |> then(fn s -> if s.assigns.rec_loaded, do: load_recurring_data(s), else: s end)
 
     {:noreply, socket}
   end
 
-  defp load_open_finance(socket) do
+  defp assign_today(socket) do
     scope = socket.assigns.current_scope
     accounts = OpenFinance.list_accounts(scope)
 
-    socket
-    |> assign(:of_loaded, true)
-    |> assign(:of_configured, OpenFinance.configured?(scope))
-    |> assign(:of_accounts, accounts)
-    |> assign(:of_totals, OpenFinance.totals(accounts))
-  end
-
-  # Conta escolhida pela URL (?account=id); sem parâmetro válido, a primeira.
-  defp select_of_account(socket, account_id) do
-    accounts = socket.assigns.of_accounts
-
-    case Enum.find(accounts, &(to_string(&1.id) == to_string(account_id))) ||
-           List.first(accounts) do
-      nil ->
-        socket
-
-      account ->
-        socket
-        |> assign(:of_selected_account, account)
-        |> assign(
-          :of_transactions_count,
-          OpenFinance.count_transactions(socket.assigns.current_scope, account.id)
-        )
-        |> load_of_transactions(0)
-    end
-  end
-
-  defp load_of_transactions(socket, offset) do
-    transactions =
-      OpenFinance.list_transactions(
-        socket.assigns.current_scope,
-        socket.assigns.of_selected_account.id,
-        limit: @of_page_size,
-        offset: offset
-      )
-
-    next_offset = offset + length(transactions)
-
-    socket
-    |> stream(:of_transactions, transactions, reset: offset == 0)
-    |> assign(:of_offset, next_offset)
-    |> assign(:of_has_more, next_offset < socket.assigns.of_transactions_count)
+    assign(socket, :today, %{
+      accounts: accounts,
+      totals: OpenFinance.totals(accounts),
+      calendar: OpenFinance.coverage_calendar(scope),
+      refreshed_at: OpenFinance.last_refreshed_at(scope)
+    })
   end
 
   # ── Data Loading: Banking ──
@@ -572,7 +514,7 @@ defmodule GranaWeb.DashboardLive do
             phx-value-tab="banking"
             class={["tab", @tab == "banking" && "tab-active"]}
           >
-            <.icon name="hero-banknotes" class="size-4 mr-1" /> Bancário
+            <.icon name="hero-banknotes" class="size-4 mr-1" /> Resumo
           </button>
           <button
             role="tab"
@@ -582,32 +524,19 @@ defmodule GranaWeb.DashboardLive do
           >
             <.icon name="hero-arrow-path" class="size-4 mr-1" /> Despesas Fixas
           </button>
-          <button
-            id="tab-open-finance"
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="open_finance"
-            class={["tab", @tab == "open_finance" && "tab-active"]}
-          >
-            <.icon name="hero-building-library" class="size-4 mr-1" /> Open Finance
-          </button>
         </div>
 
         <%= cond do %>
           <% @tab == "recurring" -> %>
             {render_recurring_tab(assigns)}
-          <% @tab == "open_finance" -> %>
-            <OpenFinanceComponents.overview
-              configured={@of_configured}
-              accounts={@of_accounts}
-              totals={@of_totals}
-              selected_account={@of_selected_account}
-              transactions={@streams.of_transactions}
-              transactions_count={@of_transactions_count}
-              has_more={@of_has_more}
-              syncing={@of_syncing}
-            />
           <% true -> %>
+            <OpenFinanceComponents.today
+              :if={@today.accounts != []}
+              accounts={@today.accounts}
+              totals={@today.totals}
+              calendar={@today.calendar}
+              refreshed_at={@today.refreshed_at}
+            />
             {render_banking_tab(assigns)}
         <% end %>
       </div>

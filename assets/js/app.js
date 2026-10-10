@@ -896,14 +896,13 @@ const CurrencyInput = {
 // Item criado — o servidor confere esse id na API da Pluggy antes de gravar.
 const PluggyConnectWidget = {
   mounted() {
-    this.handleEvent("pluggy:open", ({connect_token, connector_id, sandbox}) => {
+    this.handleEvent("pluggy:open", ({connect_token, connector_id}) => {
       this.destroyWidget()
 
       this.widget = new PluggyConnect({
         connectToken: connect_token,
         connectorIds: [connector_id],
         selectedConnectorId: connector_id,
-        includeSandbox: sandbox,
         language: "pt",
         theme: activeThemeMode() === "dark" ? "dark" : "light",
         onSuccess: ({item}) => this.pushEvent("pluggy_connected", {item_id: item.id}),

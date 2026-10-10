@@ -4,75 +4,36 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
   use Oban.Testing, repo: Grana.Repo, engine: Oban.Engines.Lite
 
   import Phoenix.LiveViewTest
-  import Grana.AccountsFixtures
+  import Grana.BankingFixtures, only: [transaction_fixture: 2]
   import Grana.OpenFinanceFixtures
 
   alias Grana.Workers.OpenFinanceSyncWorker
 
   setup :register_and_log_in_user
 
-  test "the Open Finance tab sits next to the other dashboard tabs", %{conn: conn} do
+  test "the main tab is called Resumo and there is no Open Finance tab", %{conn: conn} do
+    {:ok, _lv, html} = live(conn, ~p"/dashboard")
+
+    assert html =~ "Resumo"
+    refute html =~ "Bancário"
+    refute html =~ "tab-open-finance"
+  end
+
+  test "without connections there is no Hoje block", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/dashboard")
 
-    refute has_element?(lv, "#open-finance-tab")
-
-    lv |> element("#tab-open-finance") |> render_click()
-    assert_patch(lv, ~p"/dashboard?tab=open_finance")
-
-    assert has_element?(lv, "#tab-open-finance.tab-active")
-    assert has_element?(lv, "#open-finance-tab")
+    refute has_element?(lv, "#open-finance-today")
   end
 
-  test "shows the empty state without accounts", %{conn: conn, user: user} do
-    with_pluggy_credentials(user)
-
-    {:ok, lv, html} = live(conn, ~p"/dashboard?tab=open_finance")
-
-    assert has_element?(lv, "#open-finance-empty-state")
-    assert html =~ "Conecte seus bancos pelo Meu Pluggy"
-    refute has_element?(lv, "#sync-all")
-  end
-
-  test "explains that the integration is not configured", %{conn: conn} do
-    {:ok, _lv, html} = live(conn, ~p"/dashboard?tab=open_finance")
-
-    assert html =~ "ainda não foi configurada"
-  end
-
-  test "ignores sync notifications while the tab was never opened", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/dashboard")
-
-    send(lv.pid, {:open_finance_synced, 1})
-
-    refute has_element?(lv, "#open-finance-tab")
-  end
-
-  test "picks up the first account when it arrives after the tab was opened", %{
-    conn: conn,
-    user: user
-  } do
-    {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=open_finance")
-    assert has_element?(lv, "#open-finance-empty-state")
-
-    connection = connection_fixture(user)
-    account = account_fixture(connection, %{marketing_name: "Chegou agora"})
-    transaction_fixture(account, %{description: "PRIMEIRA"})
-    send(lv.pid, {:open_finance_synced, connection.id})
-
-    assert has_element?(lv, "#account-#{account.id}", "Chegou agora")
-    assert has_element?(lv, "#open-finance-transactions", "PRIMEIRA")
-  end
-
-  describe "with accounts" do
+  describe "with Open Finance" do
     setup %{user: user} do
-      connection = connection_fixture(user, %{connector_name: "Nubank"})
+      connection =
+        connection_fixture(user, %{bank: "nubank", last_synced_at: ~U[2026-01-01 00:00:00Z]})
 
-      bank =
+      checking =
         account_fixture(connection, %{
           marketing_name: "Conta Nubank",
-          balance: Decimal.new("1234.56"),
-          transfer_number: "260/0001/123-4",
-          automatically_invested_balance: Decimal.new("50.00")
+          balance: Decimal.new("1234.56")
         })
 
       card =
@@ -81,112 +42,111 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
           subtype: "CREDIT_CARD",
           name: "Ultravioleta",
           number: "4321",
-          brand: "MASTERCARD",
           balance: Decimal.new("750.00"),
           credit_limit: Decimal.new("3000.00"),
           available_credit_limit: Decimal.new("2250.00"),
-          balance_close_date: ~D[2026-10-20],
-          balance_due_date: ~D[2026-10-27]
+          balance_due_date: Date.add(Date.utc_today(), 2)
         })
 
-      transaction_fixture(bank, %{
-        description: "SALARIO",
-        amount: Decimal.new("5000"),
-        type: "CREDIT"
-      })
-
-      transaction_fixture(card, %{
-        description: "MERCADO",
-        amount: Decimal.new("120.50"),
-        type: "DEBIT",
-        status: "PENDING",
-        installment_number: 1,
-        total_installments: 3,
-        operation_type: "PAGAMENTO"
-      })
-
-      %{connection: connection, bank: bank, card: card}
+      %{connection: connection, checking: checking, card: card}
     end
 
-    test "summarizes balances and card limits", %{conn: conn, bank: bank, card: card} do
-      {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=open_finance")
-
-      assert has_element?(lv, "#open-finance-summary", "R$ 1.234,56")
-      assert has_element?(lv, "#open-finance-summary", "R$ 750,00")
-      assert has_element?(lv, "#open-finance-summary", "R$ 2.250,00")
-
-      assert has_element?(lv, "#account-#{bank.id}", "Conta Nubank")
-      assert has_element?(lv, "#account-#{bank.id}", "aplicado automaticamente")
-      assert has_element?(lv, "#account-#{card.id}", "final 4321")
-      assert has_element?(lv, "#account-#{card.id}", "vence 27/10/2026")
-      assert has_element?(lv, "#account-#{card.id} progress[value='25.0']")
-    end
-
-    test "shows the first account's transactions and switches account", %{
+    test "shows today's position, cards and alerts above the history", %{
       conn: conn,
+      checking: checking,
       card: card
     } do
-      {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=open_finance")
+      {:ok, lv, _html} = live(conn, ~p"/dashboard")
 
-      assert has_element?(lv, "#open-finance-transactions", "SALARIO")
-      assert has_element?(lv, "#open-finance-transactions", "+ R$ 5.000,00")
-
-      lv |> element("#account-#{card.id}") |> render_click()
-      assert_patch(lv, ~p"/dashboard?#{[tab: "open_finance", account: card.id]}")
-
-      assert has_element?(lv, "#open-finance-transactions", "MERCADO")
-      assert has_element?(lv, "#open-finance-transactions", "- R$ 120,50")
-      assert has_element?(lv, "#open-finance-transactions", "Pendente")
-      assert has_element?(lv, "#open-finance-transactions", "Parcela 1/3")
-      refute has_element?(lv, "#open-finance-transactions", "SALARIO")
+      assert has_element?(lv, "#open-finance-today-totals", "R$ 1.234,56")
+      assert has_element?(lv, "#open-finance-today-totals", "R$ 750,00")
+      assert has_element?(lv, "#open-finance-today-totals", "R$ 2.250,00")
+      assert has_element?(lv, "#today-account-#{checking.id}", "Conta corrente")
+      assert has_element?(lv, "#today-card-#{card.id}", "Ultravioleta")
+      assert has_element?(lv, "#today-card-#{card.id}", "••4321")
+      # Uso do limite = comprometido (limite - disponível), não só a fatura atual.
+      assert has_element?(lv, "#today-card-#{card.id} progress[value='25.0']")
+      assert has_element?(lv, "#today-card-#{card.id}", "25% do limite usado")
+      assert has_element?(lv, "#open-finance-today-alerts", "vence em 2 dia(s)")
     end
 
-    test "paginates long histories", %{conn: conn, bank: bank} do
-      for day <- 1..55 do
-        transaction_fixture(bank, %{
-          description: "COMPRA #{String.pad_leading(to_string(day), 2, "0")}",
-          date: Date.add(~D[2026-01-01], day),
-          type: "DEBIT"
-        })
-      end
-
-      {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=open_finance&account=#{bank.id}")
-
-      assert has_element?(lv, "#load-more-transactions")
-      refute has_element?(lv, "#open-finance-transactions", "COMPRA 01")
-
-      lv |> element("#load-more-transactions") |> render_click()
-
-      assert has_element?(lv, "#open-finance-transactions", "COMPRA 01")
-      refute has_element?(lv, "#load-more-transactions")
-    end
-
-    test "ignores accounts from other users in the URL", %{conn: conn} do
-      other_connection = connection_fixture(user_fixture())
-      other_account = account_fixture(other_connection, %{marketing_name: "Alheia"})
-
-      {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=open_finance&account=#{other_account.id}")
-
-      refute has_element?(lv, "#account-#{other_account.id}")
-      assert has_element?(lv, "#open-finance-transactions", "SALARIO")
-    end
-
-    test "syncs every connection and refreshes when done", %{
+    test "labels business accounts and leaves zero-balance due dates out of the alerts", %{
       conn: conn,
-      connection: connection,
-      bank: bank
+      user: user
     } do
-      {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=open_finance")
+      business = connection_fixture(user, %{bank: "nubank", holder_type: "PJ"})
 
-      lv |> element("#sync-all") |> render_click()
+      account_fixture(business, %{
+        type: "CREDIT",
+        subtype: "CREDIT_CARD",
+        name: "company",
+        balance: Decimal.new("0"),
+        credit_limit: Decimal.new("9800"),
+        available_credit_limit: Decimal.new("2800"),
+        balance_due_date: Date.utc_today()
+      })
+
+      {:ok, lv, _html} = live(conn, ~p"/dashboard")
+
+      assert has_element?(lv, "#today-bank-#{business.id}", "PJ")
+      assert has_element?(lv, "#today-bank-#{business.id}", "71% do limite usado")
+      refute has_element?(lv, "#open-finance-today-alerts", "Company")
+    end
+
+    test "is only shown on the Resumo tab", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=recurring")
+
+      refute has_element?(lv, "#open-finance-today")
+    end
+
+    test "tells where Open Finance is filling a period without upload", %{
+      conn: conn,
+      user: user,
+      checking: checking
+    } do
+      today = Date.utc_today()
+      statement = open_finance_statement_fixture(checking)
+      transaction_fixture(user, %{bank_statement_id: statement.id, date: today})
+
+      {:ok, lv, _html} = live(conn, ~p"/dashboard")
+
+      assert has_element?(lv, "#open-finance-today-sources", "(1)")
+      cell = "#mini-calendar-#{today.year}-#{today.month}"
+      assert has_element?(lv, "#{cell} svg[aria-label='Open Finance Brasil']")
+      assert has_element?(lv, "#{cell}[title*='Open Finance: Nubank (extrato)']")
+      assert has_element?(lv, ~s|#open-finance-calendar-link[href="/upload?tab=calendario"]|)
+    end
+
+    test "rereads Pluggy when the last read is older than 1 hour", %{
+      conn: conn,
+      connection: connection
+    } do
+      {:ok, _lv, _html} = live(conn, ~p"/dashboard")
+
       assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => connection.id})
-      assert has_element?(lv, "#sync-all[disabled]")
+    end
 
-      Grana.Repo.update!(Ecto.Changeset.change(bank, balance: Decimal.new("99.00")))
+    test "refreshes the Hoje block and the history when a read finishes", %{
+      conn: conn,
+      user: user,
+      connection: connection,
+      checking: checking
+    } do
+      {:ok, lv, _html} = live(conn, ~p"/dashboard")
+
+      Grana.Repo.update!(Ecto.Changeset.change(checking, balance: Decimal.new("99.00")))
+      statement = open_finance_statement_fixture(checking)
+
+      transaction_fixture(user, %{
+        bank_statement_id: statement.id,
+        date: Date.utc_today(),
+        description: "VEIO DO OPEN FINANCE"
+      })
+
       send(lv.pid, {:open_finance_synced, connection.id})
 
-      assert has_element?(lv, "#account-#{bank.id}", "R$ 99,00")
-      refute has_element?(lv, "#sync-all[disabled]")
+      assert has_element?(lv, "#open-finance-today-totals", "R$ 99,00")
+      assert render(lv) =~ "VEIO DO OPEN FINANCE"
     end
   end
 end

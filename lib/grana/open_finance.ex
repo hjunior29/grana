@@ -6,8 +6,14 @@ defmodule Grana.OpenFinance do
   As credenciais da aplicação Pluggy vêm do ambiente (`.env`) ou, se não houver
   nada lá, das salvas pela tela de cada usuário (secret cifrado).
 
-  Os dados são espelhados em tabelas próprias (`open_finance_*`) e, por enquanto,
-  apenas exibidos — não se misturam com os extratos e faturas importados.
+  Dois papéis, sem nunca somar com os uploads:
+
+    * **Estado atual**: o retrato das contas (saldos, faturas, limites,
+      vencimentos), relido no máximo uma vez por hora.
+    * **Fonte para os períodos sem upload**: o que nenhum extrato/fatura importado
+      cobre entra como extratos/faturas virtuais do mesmo banco
+      (`source = "open_finance"`), e todo o sistema passa a enxergá-lo. Quando um
+      upload passa a cobrir o período, ele vence e o Open Finance sai.
   """
 
   import Ecto.Query
@@ -15,7 +21,11 @@ defmodule Grana.OpenFinance do
   require Logger
 
   alias Grana.Accounts.{Scope, User}
-  alias Grana.OpenFinance.{Account, Connection, Pluggy, Transaction}
+  alias Grana.Banking
+  alias Grana.Banking.{BankStatement, KeywordCategorizer}
+  alias Grana.Banking.Parsers.InstallmentParser
+  alias Grana.Banking.Transaction, as: BankingTransaction
+  alias Grana.OpenFinance.{Account, Connection, Pluggy}
   alias Grana.Repo
   alias Grana.Workers.OpenFinanceSyncWorker
 
@@ -182,13 +192,28 @@ defmodule Grana.OpenFinance do
       ) do
     with {:ok, credentials} <- fetch_credentials(scope) do
       case Pluggy.delete_item(credentials, connection.item_id) do
-        result when result in [:ok, {:error, :not_found}] -> Repo.delete(connection)
-        {:error, _} = error -> error
+        result when result in [:ok, {:error, :not_found}] ->
+          # O cascade leva junto contas, extratos/faturas virtuais e suas transações.
+          with {:ok, _} = deleted <- Repo.delete(connection) do
+            Banking.detect_internal_transfers(user_id)
+            deleted
+          end
+
+        {:error, _} = error ->
+          error
       end
     end
   end
 
   ## Sincronização
+
+  # O Meu Pluggy atualiza os dados uma vez por dia: reler a Pluggy mais de uma vez
+  # por hora só gastaria chamadas. As telas pedem releitura e o TTL decide.
+  @refresh_ttl_seconds 60 * 60
+
+  # Janela (dias) para reconhecer, na fronteira de um upload, a mesma transação
+  # vinda do Open Finance com data um pouco diferente.
+  @boundary_days 3
 
   def enqueue_sync(%Connection{id: id}) do
     %{"connection_id" => id} |> OpenFinanceSyncWorker.new() |> Oban.insert()
@@ -200,10 +225,51 @@ defmodule Grana.OpenFinance do
     |> Enum.each(&enqueue_sync/1)
   end
 
-  def enqueue_sync_all do
-    Connection
+  @doc """
+  Agenda a releitura das conexões do usuário lidas há mais de 1h. Chamado ao
+  abrir as telas: na prática, um cache de 1h dos dados da Pluggy.
+  """
+  def refresh_if_stale(%Scope{user: user}) do
+    cutoff = DateTime.add(DateTime.utc_now(:second), -@refresh_ttl_seconds)
+
+    from(c in Connection,
+      where:
+        c.user_id == ^user.id and
+          (is_nil(c.last_synced_at) or c.last_synced_at < ^cutoff)
+    )
     |> Repo.all()
     |> Enum.each(&enqueue_sync/1)
+  end
+
+  @doc """
+  Uploads do usuário mudaram (importação ou exclusão): o que o Open Finance
+  cobre muda junto, então as conexões são relidas já, sem esperar o TTL.
+  """
+  def uploads_changed(user_id) do
+    from(c in Connection, where: c.user_id == ^user_id)
+    |> Repo.all()
+    |> Enum.each(&enqueue_sync/1)
+  end
+
+  @doc """
+  Um upload passou a cobrir `inicio..fim` de um banco/tipo: as transações do Open
+  Finance desse período saem antes de o upload entrar (o upload sempre vence).
+  """
+  def release_period(user_id, bank, statement_type, period_start, period_end) do
+    statement_ids =
+      from(s in BankStatement,
+        where:
+          s.user_id == ^user_id and s.source == "open_finance" and s.bank == ^bank and
+            s.statement_type == ^statement_type,
+        select: s.id
+      )
+
+    from(t in BankingTransaction,
+      where:
+        t.bank_statement_id in subquery(statement_ids) and t.date >= ^period_start and
+          t.date <= ^period_end
+    )
+    |> Repo.delete_all()
   end
 
   @doc """
@@ -234,9 +300,9 @@ defmodule Grana.OpenFinance do
   end
 
   @doc """
-  Relê o Item, as contas e as transações na Pluggy e regrava o espelho local:
-  o que sumiu na Pluggy (ex.: transações de cartão reapresentadas com outro id
-  no fechamento da fatura) também some aqui. Só apaga depois de buscar tudo.
+  Relê a conexão na Pluggy: guarda o retrato atual das contas (saldos, limites,
+  vencimentos) e preenche, como uma fonte a mais do banco, os períodos que
+  nenhum upload cobre. O que um upload cobre fica só com o upload.
   """
   def sync_connection(%Connection{} = connection) do
     connection = Repo.preload(connection, :user)
@@ -246,8 +312,12 @@ defmodule Grana.OpenFinance do
       with {:ok, credentials} <- fetch_credentials(connection.user),
            {:ok, item} <- Pluggy.get_item(credentials, connection.item_id),
            {:ok, accounts} <- Pluggy.list_accounts(credentials, connection.item_id),
-           {:ok, transactions} <- fetch_transactions(credentials, accounts) do
-        store_snapshot(connection, item, accounts, transactions, now)
+           {:ok, transactions} <- fetch_transactions(credentials, accounts),
+           holder_type = holder_type(connection, credentials),
+           {:ok, connection} <-
+             store(connection, item, accounts, transactions, now, holder_type) do
+        Banking.detect_internal_transfers(connection.user_id)
+        {:ok, connection}
       end
 
     result =
@@ -256,8 +326,9 @@ defmodule Grana.OpenFinance do
           {:ok, connection}
 
         {:error, reason} = error ->
+          # Também conta como leitura: a próxima tentativa respeita o mesmo TTL.
           connection
-          |> Connection.sync_changeset(%{sync_error: error_message(reason)})
+          |> Connection.sync_changeset(%{sync_error: error_message(reason), last_synced_at: now})
           |> Repo.update!()
 
           error
@@ -281,60 +352,333 @@ defmodule Grana.OpenFinance do
     end)
   end
 
-  defp store_snapshot(connection, item, accounts, transactions_by_account, now) do
+  defp store(connection, item, accounts, transactions_by_account, now, holder_type) do
+    attrs =
+      item
+      |> item_attrs()
+      |> Map.merge(%{bank: infer_bank(accounts, item), holder_type: holder_type})
+
     Repo.transaction(fn ->
       connection =
         connection
-        |> Connection.item_changeset(item_attrs(item))
+        |> Connection.item_changeset(attrs)
         |> Connection.sync_changeset(%{last_synced_at: now, sync_error: nil})
         |> Repo.update!()
 
-      upsert(
-        Account,
-        Enum.map(accounts, &account_row(&1, connection, now))
-      )
+      upsert_accounts(Enum.map(accounts, &account_row(&1, connection, now)))
 
-      account_ids =
-        from(a in Account, where: a.connection_id == ^connection.id, select: {a.pluggy_id, a.id})
-        |> Repo.all()
-        |> Map.new()
-
-      transaction_rows =
-        for {pluggy_account_id, transactions} <- transactions_by_account,
-            transaction <- transactions do
-          transaction_row(
-            transaction,
-            Map.fetch!(account_ids, pluggy_account_id),
-            connection,
-            now
-          )
-        end
-
-      upsert(Transaction, transaction_rows)
-
-      account_query = from(a in Account, where: a.connection_id == ^connection.id)
-
-      from(t in Transaction,
-        where: t.account_id in subquery(select(account_query, [a], a.id)) and t.synced_at < ^now
-      )
+      from(a in Account, where: a.connection_id == ^connection.id and a.synced_at < ^now)
       |> Repo.delete_all()
 
-      account_query |> where([a], a.synced_at < ^now) |> Repo.delete_all()
+      local_accounts =
+        from(a in Account, where: a.connection_id == ^connection.id)
+        |> Repo.all()
+        |> Map.new(&{&1.pluggy_id, &1})
+
+      fill_gaps(connection, accounts, transactions_by_account, local_accounts, now)
 
       connection
     end)
   end
 
-  defp upsert(schema, rows) do
+  # PF/PJ não muda: lido uma vez. Sem identidade disponível, fica para a próxima.
+  defp holder_type(%Connection{holder_type: type}, _credentials) when is_binary(type), do: type
+
+  defp holder_type(connection, credentials) do
+    case Pluggy.get_identity(credentials, connection.item_id) do
+      {:ok, %{"documentType" => "CNPJ"}} -> "PJ"
+      # Conta empresarial ligada ao CPF (ex.: MEI): vem com CPF, mas é de empresa.
+      {:ok, %{"companyName" => name}} when is_binary(name) and name != "" -> "PJ"
+      {:ok, %{"documentType" => "CPF"}} -> "PF"
+      _ -> nil
+    end
+  end
+
+  defp upsert_accounts(rows) do
+    Repo.insert_all(Account, rows,
+      on_conflict: {:replace_all_except, [:id, :pluggy_id, :inserted_at]},
+      conflict_target: :pluggy_id
+    )
+  end
+
+  # Pelo Meu Pluggy o conector é sempre "MeuPluggy": o banco vem do nome das
+  # contas ("Banco Bradesco", "Nu Pagamentos S.A."), no vocabulário dos uploads.
+  defp infer_bank(accounts, item) do
+    name =
+      Enum.find_value(accounts, fn a -> a["type"] == "BANK" && a["name"] end) ||
+        get_in(item, ["connector", "name"]) || ""
+
+    normalized =
+      name
+      |> String.downcase()
+      |> :unicode.characters_to_nfd_binary()
+      |> String.replace(~r/[^a-z0-9 ]/u, "")
+
+    cond do
+      normalized =~ "nubank" or normalized =~ "nu pagamentos" ->
+        "nubank"
+
+      normalized =~ "bradesco" ->
+        "bradesco"
+
+      true ->
+        normalized
+        |> String.replace(~r/\b(banco|bank|sa|instituicao|de|pagamento)\b/u, "")
+        |> String.split()
+        |> List.first() || "open_finance"
+    end
+  end
+
+  # Cada conta vira extratos/faturas virtuais com as transações que caem fora dos
+  # períodos de upload do mesmo banco e tipo. Tudo que não couber mais (o upload
+  # passou a cobrir, ou a Pluggy reapresentou com outro id) é removido.
+  defp fill_gaps(connection, accounts, transactions_by_account, local_accounts, now) do
+    periods = Banking.upload_periods(connection.user_id, connection.bank)
+    categorize = categorizer(connection.user_id)
+
+    kept_statement_ids =
+      Enum.flat_map(accounts, fn account ->
+        local = Map.fetch!(local_accounts, account["id"])
+        type = if account["type"] == "CREDIT", do: "fatura", else: "extrato"
+
+        transactions_by_account
+        |> Map.get(account["id"], [])
+        |> Enum.map(&parse_transaction/1)
+        |> reject_covered(connection, type, periods)
+        |> Enum.group_by(&statement_key(&1, type))
+        |> Enum.map(fn {key, rows} ->
+          store_statement(connection, local, type, key, rows, categorize, now)
+        end)
+      end)
+
+    from(s in BankStatement,
+      where:
+        s.user_id == ^connection.user_id and s.source == "open_finance" and
+          s.open_finance_account_id in subquery(
+            from(a in Account, where: a.connection_id == ^connection.id, select: a.id)
+          ) and s.id not in ^kept_statement_ids
+    )
+    |> Repo.delete_all()
+  end
+
+  defp parse_transaction(transaction) do
+    card = transaction["creditCardMetadata"] || %{}
+    amount = transaction["amount"] |> to_decimal() |> Decimal.abs()
+    credit? = transaction["type"] == "CREDIT"
+    total = to_integer(card["totalInstallments"])
+
+    %{
+      external_id: transaction["id"],
+      date: local_date(transaction["date"]),
+      description: transaction["description"],
+      original_description: transaction["descriptionRaw"],
+      amount: if(credit?, do: amount, else: Decimal.negate(amount)),
+      type: if(credit?, do: "credit", else: "debit"),
+      installment_current: to_integer(card["installmentNumber"]),
+      installment_total: total,
+      installment_group_id:
+        InstallmentParser.generate_group_id(transaction["description"], total),
+      bill_id: card["billId"],
+      pluggy_category_id: transaction["categoryId"]
+    }
+  end
+
+  # Dentro de um período de upload, vale o upload. Fora dele, ainda descarta o
+  # que bate (mesmo valor, até 3 dias de diferença) com uma transação de upload:
+  # é a mesma compra vista com a data de lançamento da fatura/extrato.
+  defp reject_covered([], _connection, _type, _periods), do: []
+
+  defp reject_covered(rows, connection, type, periods) do
+    type_periods = for {^type, first, last} <- periods, do: {first, last}
+    {min_date, max_date} = rows |> Enum.map(& &1.date) |> Enum.min_max_by(& &1, Date)
+
+    uploaded =
+      connection.user_id
+      |> Banking.upload_amounts(
+        connection.bank,
+        type,
+        Date.add(min_date, -@boundary_days),
+        Date.add(max_date, @boundary_days)
+      )
+      |> Enum.group_by(fn {_date, amount} -> Decimal.abs(amount) end, &elem(&1, 0))
+
+    {kept, _uploaded} =
+      rows
+      |> Enum.sort_by(& &1.date, Date)
+      |> Enum.reduce({[], uploaded}, fn row, {kept, uploaded} ->
+        cond do
+          Enum.any?(type_periods, fn {first, last} ->
+            Date.compare(row.date, first) != :lt and Date.compare(row.date, last) != :gt
+          end) ->
+            {kept, uploaded}
+
+          match = find_upload_match(uploaded, row) ->
+            {kept, match}
+
+          true ->
+            {[row | kept], uploaded}
+        end
+      end)
+
+    kept
+  end
+
+  # Devolve as transações de upload sem a que casou com `row`, ou nil se nenhuma casar.
+  defp find_upload_match(uploaded, row) do
+    key = Decimal.abs(row.amount)
+    dates = Map.get(uploaded, key, [])
+
+    case Enum.find_index(dates, &(abs(Date.diff(&1, row.date)) <= @boundary_days)) do
+      nil -> nil
+      index -> Map.put(uploaded, key, List.delete_at(dates, index))
+    end
+  end
+
+  # Extrato: um por conta. Fatura: uma por fatura da Pluggy (id da fatura), para
+  # o Grana atribuir o mês da fatura como faz com os uploads.
+  defp statement_key(_row, "extrato"), do: "extrato"
+  defp statement_key(row, "fatura"), do: row.bill_id || "aberta"
+
+  defp store_statement(connection, account, type, key, rows, categorize, now) do
+    {period_start, period_end} = rows |> Enum.map(& &1.date) |> Enum.min_max_by(& &1, Date)
+    external_id = "#{account.pluggy_id}:#{key}"
+
+    attrs = %{
+      bank: connection.bank,
+      filename: "Open Finance · #{account_label(account)} · #{key}",
+      statement_type: type,
+      status: "completed",
+      period_start: period_start,
+      period_end: period_end,
+      total_transactions: length(rows)
+    }
+
+    statement =
+      case Repo.get_by(BankStatement,
+             open_finance_account_id: account.id,
+             external_id: external_id
+           ) do
+        nil ->
+          %BankStatement{
+            source: "open_finance",
+            external_id: external_id,
+            open_finance_account_id: account.id,
+            user_id: connection.user_id
+          }
+
+        statement ->
+          statement
+      end
+      |> Ecto.Changeset.change(attrs)
+      |> Repo.insert_or_update!()
+
+    upsert_transactions(rows, statement, connection.user_id, categorize, now)
+
+    external_ids = Enum.map(rows, & &1.external_id)
+
+    from(t in BankingTransaction,
+      where: t.bank_statement_id == ^statement.id and t.external_id not in ^external_ids
+    )
+    |> Repo.delete_all()
+
+    statement.id
+  end
+
+  defp account_label(account) do
+    name = account.marketing_name || account.name || "Conta"
+    suffix = account.number && String.slice(account.number, -4, 4)
+    if suffix, do: "#{name} ••#{suffix}", else: name
+  end
+
+  # A categoria de uma transação que já existe não é tocada: pode ter sido
+  # ajustada à mão. Só as novas recebem categoria.
+  defp upsert_transactions(rows, statement, user_id, categorize, now) do
     rows
+    |> Enum.map(fn row ->
+      row
+      |> Map.drop([:bill_id, :pluggy_category_id])
+      |> Map.merge(%{
+        bank_statement_id: statement.id,
+        user_id: user_id,
+        category_id: categorize.(row),
+        identifier: nil,
+        is_internal_transfer: false,
+        inserted_at: now,
+        updated_at: now
+      })
+    end)
     |> Enum.chunk_every(@insert_chunk_size)
     |> Enum.each(fn chunk ->
-      Repo.insert_all(schema, chunk,
-        on_conflict: {:replace_all_except, [:id, :pluggy_id, :inserted_at]},
-        conflict_target: :pluggy_id
+      Repo.insert_all(BankingTransaction, chunk,
+        on_conflict:
+          {:replace,
+           [
+             :date,
+             :description,
+             :original_description,
+             :amount,
+             :type,
+             :installment_current,
+             :installment_total,
+             :installment_group_id,
+             :bank_statement_id,
+             :updated_at
+           ]},
+        conflict_target: :external_id
       )
     end)
   end
+
+  # Mesma ordem dos uploads (regras do usuário e palavras-chave do Grana); a
+  # categoria da Pluggy entra só como reserva, antes de "Sem Categoria".
+  defp categorizer(user_id) do
+    categories = Banking.ensure_default_categories(user_id)
+    by_name = Map.new(categories, &{&1.name, &1.id})
+    uncategorized_id = by_name["Sem Categoria"]
+    rules = Banking.list_category_rules(user_id)
+
+    fn row ->
+      category_id = Banking.categorize_transaction_with_rules(row.description, rules, user_id)
+
+      if category_id in [nil, uncategorized_id] do
+        name =
+          KeywordCategorizer.categorize(row.description) ||
+            pluggy_category_name(row.pluggy_category_id)
+
+        by_name[name] || uncategorized_id
+      else
+        category_id
+      end
+    end
+  end
+
+  # Grupos da árvore de categorias da Pluggy (dois primeiros dígitos do id).
+  defp pluggy_category_name("0101" <> _), do: "Salário"
+  defp pluggy_category_name("0702" <> _), do: "Educação"
+  defp pluggy_category_name("0703" <> _), do: "Saúde"
+  defp pluggy_category_name("0704" <> _), do: "Lazer"
+  defp pluggy_category_name("0701" <> _), do: "Moradia"
+  defp pluggy_category_name("01" <> _), do: "Rendimentos"
+  defp pluggy_category_name("03" <> _), do: "Investimentos"
+  defp pluggy_category_name("04" <> _), do: "Transferências"
+  defp pluggy_category_name("05" <> _), do: "Transferências"
+  defp pluggy_category_name("08" <> _), do: "Compras"
+  defp pluggy_category_name("09" <> _), do: "Assinaturas"
+  defp pluggy_category_name("10" <> _), do: "Alimentação"
+  defp pluggy_category_name("11" <> _), do: "Alimentação"
+  defp pluggy_category_name("12" <> _), do: "Lazer"
+  defp pluggy_category_name("14" <> _), do: "Lazer"
+  defp pluggy_category_name("15" <> _), do: "Impostos e Taxas"
+  defp pluggy_category_name("16" <> _), do: "Impostos e Taxas"
+  defp pluggy_category_name("17" <> _), do: "Moradia"
+  defp pluggy_category_name("18" <> _), do: "Saúde"
+  defp pluggy_category_name("19" <> _), do: "Transporte"
+  defp pluggy_category_name("21" <> _), do: "Lazer"
+
+  defp pluggy_category_name(id) when is_binary(id) and id not in ["", "99999999"],
+    do: "Pagamentos"
+
+  defp pluggy_category_name(_), do: nil
 
   defp item_attrs(item) do
     connector = item["connector"] || %{}
@@ -382,31 +726,6 @@ defmodule Grana.OpenFinance do
     }
   end
 
-  defp transaction_row(transaction, account_id, connection, now) do
-    card = transaction["creditCardMetadata"] || %{}
-
-    %{
-      pluggy_id: transaction["id"],
-      date: local_date(transaction["date"]),
-      description: transaction["description"],
-      amount: to_decimal(transaction["amount"]),
-      currency_code: transaction["currencyCode"],
-      type: transaction["type"],
-      status: transaction["status"],
-      category: transaction["category"],
-      operation_type: transaction["operationType"],
-      installment_number: to_integer(card["installmentNumber"]),
-      total_installments: to_integer(card["totalInstallments"]),
-      bill_id: card["billId"],
-      provider_id: transaction["providerId"],
-      synced_at: now,
-      account_id: account_id,
-      user_id: connection.user_id,
-      inserted_at: now,
-      updated_at: now
-    }
-  end
-
   defp to_decimal(nil), do: nil
   defp to_decimal(value) when is_integer(value), do: Decimal.new(value)
 
@@ -430,28 +749,7 @@ defmodule Grana.OpenFinance do
     end
   end
 
-  ## Leitura dos dados espelhados
-
-  @doc "Totais das contas em reais: saldo das contas, fatura atual e limite disponível dos cartões."
-  def totals(accounts) do
-    brl = Enum.filter(accounts, &(&1.currency_code in [nil, "BRL"]))
-    {cards, banks} = Enum.split_with(brl, &Account.credit_card?/1)
-
-    %{
-      bank: sum(banks, :balance),
-      bank_count: length(banks),
-      card_used: sum(cards, :balance),
-      card_available: sum(cards, :available_credit_limit),
-      card_count: length(cards)
-    }
-  end
-
-  defp sum(accounts, field) do
-    accounts
-    |> Enum.map(&Map.fetch!(&1, field))
-    |> Enum.reject(&is_nil/1)
-    |> Enum.reduce(Decimal.new(0), &Decimal.add/2)
-  end
+  ## Estado atual (retrato das contas)
 
   def list_accounts(%Scope{user: user}) do
     from(a in Account,
@@ -463,21 +761,75 @@ defmodule Grana.OpenFinance do
     |> Repo.all()
   end
 
-  def list_transactions(%Scope{user: user}, account_id, opts \\ []) do
-    from(t in Transaction,
-      where: t.user_id == ^user.id and t.account_id == ^account_id,
-      order_by: [desc: t.date, asc: t.id],
-      limit: ^Keyword.get(opts, :limit, 50),
-      offset: ^Keyword.get(opts, :offset, 0)
-    )
-    |> Repo.all()
+  @doc "Totais das contas em reais: saldo das contas, fatura atual e limite disponível dos cartões."
+  def totals(accounts) do
+    brl = Enum.filter(accounts, &(&1.currency_code in [nil, "BRL"]))
+    {cards, banks} = Enum.split_with(brl, &Account.credit_card?/1)
+
+    %{
+      bank: sum(banks, :balance),
+      bank_count: length(banks),
+      card_used: sum(cards, :balance),
+      card_available: sum(cards, :available_credit_limit),
+      card_limit: sum(cards, :credit_limit),
+      card_count: length(cards)
+    }
   end
 
-  def count_transactions(%Scope{user: user}, account_id) do
-    Repo.aggregate(
-      from(t in Transaction, where: t.user_id == ^user.id and t.account_id == ^account_id),
-      :count
+  defp sum(accounts, field) do
+    accounts
+    |> Enum.map(&Map.fetch!(&1, field))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce(Decimal.new(0), &Decimal.add/2)
+  end
+
+  @doc """
+  Calendário dos últimos 12 meses no formato do calendário de uploads (linhas por
+  ano, 12 meses cada). Por mês: os tipos importados (`upload_types`) e o que veio
+  do Open Finance por falta de upload (`open_finance`, ex.: `[{"bradesco", "extrato"}]`).
+  """
+  def coverage_calendar(%Scope{user: user}) do
+    today = Date.utc_today()
+    window_start = today |> Date.beginning_of_month() |> Date.shift(month: -11)
+    uploads = Banking.coverage_by_statement_type(user.id)
+    open_finance = open_finance_months(user.id)
+
+    for year <- window_start.year..today.year do
+      cells =
+        for month <- 1..12 do
+          key = {year, month}
+
+          %{
+            year: year,
+            month: month,
+            upload_types: for(type <- ["extrato", "fatura"], key in uploads[type], do: type),
+            open_finance: Map.get(open_finance, key, []),
+            future?: key > {today.year, today.month}
+          }
+        end
+
+      %{year: year, cells: cells}
+    end
+  end
+
+  # Meses (e de qual banco/tipo) com transações vindas do Open Finance.
+  defp open_finance_months(user_id) do
+    from(t in BankingTransaction,
+      join: s in assoc(t, :bank_statement),
+      where: t.user_id == ^user_id and s.source == "open_finance",
+      distinct: true,
+      select: {s.bank, s.statement_type, t.date}
     )
+    |> Repo.all()
+    |> Enum.group_by(fn {_bank, _type, date} -> {date.year, date.month} end, fn {bank, type, _} ->
+      {bank, type}
+    end)
+    |> Map.new(fn {month, sources} -> {month, sources |> Enum.uniq() |> Enum.sort()} end)
+  end
+
+  @doc "Momento da leitura mais antiga entre as conexões do usuário (idade do retrato)."
+  def last_refreshed_at(%Scope{user: user}) do
+    Repo.one(from(c in Connection, where: c.user_id == ^user.id, select: min(c.last_synced_at)))
   end
 
   ## Webhooks

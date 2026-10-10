@@ -170,9 +170,14 @@ defmodule Grana.Banking do
 
   # Statements
 
+  # Extratos/faturas virtuais do Open Finance não são arquivos: ficam fora das
+  # listagens, contagens e exclusões de upload.
+  defp uploads(query), do: where(query, [s], s.source == "upload")
+
   def list_statements(user_id) do
     BankStatement
     |> where([s], s.user_id == ^user_id)
+    |> uploads()
     |> order_by([s], desc: s.inserted_at)
     |> Repo.all()
   end
@@ -185,6 +190,7 @@ defmodule Grana.Banking do
     base =
       BankStatement
       |> where([s], s.user_id == ^user_id)
+      |> uploads()
       |> order_by([s], desc: s.inserted_at)
 
     total = Repo.aggregate(base, :count)
@@ -223,6 +229,7 @@ defmodule Grana.Banking do
     result =
       BankStatement
       |> where([s], s.id in ^ids and s.user_id == ^user_id)
+      |> uploads()
       |> Repo.delete_all()
 
     Grana.Cache.invalidate_user(user_id)
@@ -245,7 +252,7 @@ defmodule Grana.Banking do
   def coverage_by_statement_type(user_id) do
     Transaction
     |> join(:inner, [t], s in BankStatement, on: t.bank_statement_id == s.id)
-    |> where([t], t.user_id == ^user_id)
+    |> where([t, s], t.user_id == ^user_id and s.source == "upload")
     |> select([t, s], {t.date, s.statement_type})
     |> distinct(true)
     |> Repo.all()
@@ -265,10 +272,36 @@ defmodule Grana.Banking do
   """
   def upload_counts_by_month(user_id) do
     Transaction
-    |> where([t], t.user_id == ^user_id)
+    |> join(:inner, [t], s in BankStatement, on: t.bank_statement_id == s.id)
+    |> where([t, s], t.user_id == ^user_id and s.source == "upload")
     |> select([t], {t.date, t.bank_statement_id})
     |> Repo.all()
     |> distinct_upload_counts()
+  end
+
+  @doc """
+  Períodos cobertos por uploads de um banco, por tipo: `[{statement_type, inicio, fim}]`.
+  O Open Finance só preenche o que fica fora deles.
+  """
+  def upload_periods(user_id, bank) do
+    BankStatement
+    |> where([s], s.user_id == ^user_id and s.bank == ^bank and not is_nil(s.period_start))
+    |> uploads()
+    |> select([s], {s.statement_type, s.period_start, s.period_end})
+    |> Repo.all()
+  end
+
+  @doc "Valores (absolutos) e datas das transações de upload de um banco/tipo num intervalo."
+  def upload_amounts(user_id, bank, statement_type, date_from, date_to) do
+    Transaction
+    |> join(:inner, [t], s in BankStatement, on: t.bank_statement_id == s.id)
+    |> where(
+      [t, s],
+      t.user_id == ^user_id and s.bank == ^bank and s.statement_type == ^statement_type and
+        s.source == "upload" and t.date >= ^date_from and t.date <= ^date_to
+    )
+    |> select([t], {t.date, t.amount})
+    |> Repo.all()
   end
 
   # Transactions

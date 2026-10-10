@@ -2,11 +2,10 @@ defmodule Grana.Workers.OpenFinanceSyncWorker do
   @moduledoc """
   Sincroniza conexões Open Finance (Pluggy) em background.
 
-    * `%{"connection_id" => id}` — sincroniza uma conexão (botão, webhook, pós-conexão).
+    * `%{"connection_id" => id}` — relê uma conexão (telas com cache vencido,
+      webhook, pós-conexão, uploads alterados).
     * `%{"user_id" => id, "item_id" => item_id}` — vincula um Item criado pelo widget
       cujo `onSuccess` não chegou (avisado pelo webhook `item/created`).
-    * `%{}` — cron: agenda a sincronização de todas as conexões. Garante dados
-      atualizados mesmo sem webhook (ex.: Grana rodando só em localhost).
   """
   use Oban.Worker,
     queue: :open_finance,
@@ -37,10 +36,5 @@ defmodule Grana.Workers.OpenFinanceSyncWorker do
     else
       _ -> :ok
     end
-  end
-
-  def perform(%Oban.Job{args: _}) do
-    OpenFinance.enqueue_sync_all()
-    :ok
   end
 end

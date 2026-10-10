@@ -1,7 +1,7 @@
 defmodule Grana.OpenFinance.Account do
   @moduledoc """
-  Conta (corrente, poupança ou cartão de crédito) de uma conexão Open Finance.
-  Espelho do `GET /accounts` da Pluggy, regravado a cada sincronização.
+  Conta (corrente, poupança ou cartão de crédito) de uma conexão Open Finance:
+  o retrato atual (saldo, limite, vencimento) do `GET /accounts` da Pluggy.
   """
   use Ecto.Schema
 
@@ -28,7 +28,6 @@ defmodule Grana.OpenFinance.Account do
 
     belongs_to :connection, Grana.OpenFinance.Connection
     belongs_to :user, Grana.Accounts.User
-    has_many :transactions, Grana.OpenFinance.Transaction
 
     timestamps(type: :utc_datetime)
   end

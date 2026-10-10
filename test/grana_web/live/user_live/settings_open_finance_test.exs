@@ -185,22 +185,9 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
       lv |> element("#connect-meu-pluggy") |> render_click()
 
-      assert_push_event(lv, "pluggy:open", %{
-        connect_token: "ct-1",
-        connector_id: 200,
-        sandbox: false
-      })
+      assert_push_event(lv, "pluggy:open", %{connect_token: "ct-1", connector_id: 200})
 
       assert has_element?(lv, "#connect-meu-pluggy[disabled]")
-    end
-
-    test "opens the widget on the Sandbox connector", %{conn: conn} do
-      stub(Pluggy, :create_connect_token, fn _, _ -> {:ok, "ct-2"} end)
-
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
-      lv |> element("#connect-sandbox") |> render_click()
-
-      assert_push_event(lv, "pluggy:open", %{connector_id: 2, sandbox: true})
     end
 
     test "shows Pluggy errors when the token cannot be created", %{conn: conn} do
@@ -304,22 +291,18 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
       assert has_element?(lv, "#connection-#{connection.id}", "Atualizado")
     end
 
-    test "schedules a sync and refreshes when it finishes", %{
+    test "has no manual sync and refreshes when a read finishes", %{
       conn: conn,
       connection: connection
     } do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      lv |> element("#sync-connection-#{connection.id}") |> render_click()
-
-      assert_enqueued(worker: OpenFinanceSyncWorker, args: %{"connection_id" => connection.id})
-      assert has_element?(lv, "#sync-connection-#{connection.id}[disabled]")
+      refute has_element?(lv, "#sync-connection-#{connection.id}")
 
       Repo.update!(Ecto.Changeset.change(connection, sync_error: "Falhou feio"))
       send(lv.pid, {:open_finance_synced, connection.id})
 
       assert has_element?(lv, "#connection-#{connection.id}", "Falhou feio")
-      refute has_element?(lv, "#sync-connection-#{connection.id}[disabled]")
     end
 
     test "removes the connection", %{conn: conn, connection: connection} do

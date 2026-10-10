@@ -14,6 +14,7 @@ defmodule Grana.Banking.StatementProcessor do
   require Logger
   alias Grana.Banking.AICategorizer
   alias Grana.Banking.KeywordCategorizer
+  alias Grana.OpenFinance
 
   def process(file_content, bank, statement_type, user_id, filename) do
     categories = Banking.ensure_default_categories(user_id)
@@ -70,6 +71,16 @@ defmodule Grana.Banking.StatementProcessor do
                 }
               end)
 
+            # O upload vence o Open Finance no período que cobre: as transações
+            # dele saem antes da deduplicação, que compara só com outros uploads.
+            OpenFinance.release_period(
+              user_id,
+              bank,
+              statement_type,
+              period_start,
+              period_end
+            )
+
             entries = deduplicate(entries, user_id)
 
             {count, _} = Banking.bulk_insert_transactions(entries)
@@ -92,6 +103,8 @@ defmodule Grana.Banking.StatementProcessor do
 
     case transaction_result do
       {:ok, result} ->
+        OpenFinance.uploads_changed(user_id)
+
         case Banking.detect_internal_transfers(user_id) do
           :ok -> {:ok, result}
           {:error, reason} -> {:error, reason}
