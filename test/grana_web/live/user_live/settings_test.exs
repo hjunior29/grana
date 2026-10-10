@@ -447,15 +447,14 @@ defmodule GranaWeb.UserLive.SettingsTest do
 
       assert has_element?(
                lv,
-               ~s|#backup-download #download-backup[href="/users/settings/backup"]|
+               ~s|#download-backup[href="/users/settings/backup"]|
              )
 
       assert has_element?(lv, "#backup-restore #restore-upload-form")
-      assert has_element?(lv, "#restore-dropzone")
       assert has_element?(lv, "button#restore-verify[disabled]")
     end
 
-    test "escolher o arquivo mostra o nome e habilita Verificar", %{conn: conn} do
+    test "escolher o arquivo habilita Verificar", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
       file =
@@ -465,8 +464,6 @@ defmodule GranaWeb.UserLive.SettingsTest do
 
       render_upload(file, "meu-backup.db")
 
-      assert has_element?(lv, "#restore-dropzone", "meu-backup.db")
-      assert has_element?(lv, "#restore-dropzone", "2.0 KB")
       refute has_element?(lv, "button#restore-verify[disabled]")
     end
 

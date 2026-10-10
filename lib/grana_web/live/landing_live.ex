@@ -87,7 +87,11 @@ defmodule GranaWeb.LandingLive do
             </p>
           </div>
 
-          <div id="logo-story-categories" class="logo-story-panel" data-panel="1">
+          <div
+            id="logo-story-categories"
+            class="logo-story-panel logo-story-panel-left"
+            data-panel="1"
+          >
             <div class="logo-story-card">
               <h3>Despesas por categoria</h3>
               <div class="logo-story-donut">
@@ -247,11 +251,14 @@ defmodule GranaWeb.LandingLive do
             const w = this.stage.clientWidth, h = this.stage.clientHeight
             this.svg.setAttribute("viewBox", `0 0 ${w} ${h}`)
             const mobile = w < 768
-            const panel = this.rel(this.panels[1])
             const size = mobile ? Math.min(h * 0.4, w * 0.8) : Math.min(h * 0.66, w * 0.42, 600)
             const half = (size / 32) * 15.4
             this.s = size / 32
-            this.cx = mobile ? w / 2 : Math.min(w / 2, panel.x - half - 32)
+            // O símbolo fica do lado oposto ao texto: à direita enquanto as categorias
+            // estão à esquerda, à esquerda quando os meses entram à direita.
+            const left = this.rel(this.panels[1]), right = this.rel(this.panels[2])
+            this.cxRight = mobile ? w / 2 : Math.max(w / 2, left.x + left.w + half + 32)
+            this.cxLeft = mobile ? w / 2 : Math.min(w / 2, right.x - half - 32)
             this.cy = mobile ? 16 + half + 56 : h / 2
             this.coinFrom = this.rel(this.el.querySelector("[data-anchor=coin]"))
             this.donut = this.rel(this.el.querySelector("[data-anchor=donut]"))
@@ -266,7 +273,8 @@ defmodule GranaWeb.LandingLive do
             if (box.bottom < -50 || box.top > window.innerHeight + 50) return
             const p = clamp(-box.top / (box.height - window.innerHeight))
             const dark = this.dark()
-            const geo = this.geo, s = this.s, cx = this.cx, cy = this.cy
+            const geo = this.geo, s = this.s, cy = this.cy
+            const cx = lerp(this.cxRight, this.cxLeft, ease(seg(p, 0.44, 0.54)))
             const colors = geo.month_colors[dark ? "dark" : "light"]
             const ink = dark ? "#94A3B8" : "#64748B"
 
@@ -299,7 +307,7 @@ defmodule GranaWeb.LandingLive do
             geo.categories.forEach((cat, j) => {
               const a0 = a + 3, a1 = a + cat.span + 5
               a += cat.span + 8
-              const from = sector(dcx, dcy, dr * 0.64, dr, a0, a1)
+              const from = sector(dcx, dcy, dr * 0.76, dr, a0, a1)
               const to = sector(cx, cy, geo.ring[0] * s, geo.ring[1] * s, a0, a1)
               const t = ease(seg(p, 0.3 + j * 0.012, 0.42 + j * 0.012))
               const path = this.cats[j]

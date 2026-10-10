@@ -22,50 +22,24 @@ defmodule GranaWeb.BackupComponents do
         id="restore-upload-form"
         phx-submit="restore_analyze"
         phx-change="restore_validate_upload"
-        class="flex flex-col gap-3"
+        class="flex flex-col gap-2 sm:flex-row sm:items-center"
       >
-        <%!-- Zona de soltar: o próprio input cobre a área, então clicar ou arrastar funciona. --%>
-        <div
-          id="restore-dropzone"
-          phx-drop-target={@uploads.backup.ref}
-          class="relative flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-base-content/20 bg-base-100/40 px-4 py-6 text-center transition-colors hover:border-primary/50 hover:bg-base-100/70"
+        <.live_file_input
+          upload={@uploads.backup}
+          class="file-input file-input-bordered file-input-sm w-full sm:flex-1"
+        />
+        <.button
+          id="restore-verify"
+          class="btn btn-primary btn-sm"
+          disabled={@uploads.backup.entries == []}
+          phx-disable-with="Verificando..."
         >
-          <.icon name="hero-arrow-up-tray" class="size-6 opacity-50" />
-          <%= if @uploads.backup.entries == [] do %>
-            <p class="text-sm font-medium">Arraste o arquivo ou clique para escolher</p>
-            <p class="text-xs opacity-50">Arquivo de backup do Grana (.db)</p>
-          <% else %>
-            <p
-              :for={entry <- @uploads.backup.entries}
-              id={"restore-entry-#{entry.ref}"}
-              class="text-sm font-medium break-all"
-            >
-              {entry.client_name}
-              <span class="font-normal opacity-60">· {format_size(entry.client_size)}</span>
-            </p>
-          <% end %>
-          <.live_file_input
-            upload={@uploads.backup}
-            class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          />
-        </div>
-        <p
-          :for={err <- upload_errors(@uploads.backup)}
-          class="text-sm text-error"
-        >
-          {upload_error(err)}
-        </p>
-        <div class="flex justify-end">
-          <.button
-            id="restore-verify"
-            class="btn btn-primary btn-sm"
-            disabled={@uploads.backup.entries == []}
-            phx-disable-with="Verificando..."
-          >
-            <.icon name="hero-shield-check" class="size-4" /> Verificar backup
-          </.button>
-        </div>
+          Verificar
+        </.button>
       </form>
+      <p :for={err <- upload_errors(@uploads.backup)} class="mt-2 text-sm text-error">
+        {upload_error(err)}
+      </p>
 
       <.form
         :if={@stage == :options}
@@ -158,9 +132,6 @@ defmodule GranaWeb.BackupComponents do
     </div>
     """
   end
-
-  defp format_size(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_size(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
 
   defp upload_error(:too_large), do: "Arquivo grande demais (máximo 500 MB)."
   defp upload_error(:too_many_files), do: "Envie um arquivo por vez."
