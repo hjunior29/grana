@@ -7,7 +7,7 @@ defmodule Grana.Application do
 
   @impl true
   def start(_type, _args) do
-    # Conexão Redis do cache (só quando habilitado/configurado — ver Grana.Cache).
+    # Cache em memória (só quando habilitado — ver Grana.Cache).
     children =
       [
         GranaWeb.Telemetry,

@@ -4,7 +4,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help setup deps server s console iex \
         db.nuke db.setup db.migrate db.rollback db.reset \
-        redis.up redis.down redis.cli redis.flush \
         test cov coverage coverage.html format format.check credo audit gate precommit \
         assets clean
 
@@ -16,7 +15,7 @@ help: ## Mostra esta ajuda
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 # ── Setup ──────────────────────────────────────────────────────────────────
-setup: redis.up deps ## Setup completo (Redis + deps + banco SQLite + assets)
+setup: deps ## Setup completo (deps + banco SQLite + assets)
 	mix setup
 
 deps: ## Baixa as dependências Elixir
@@ -26,7 +25,7 @@ assets: ## Compila os assets (tailwind + esbuild)
 	mix assets.build
 
 # ── Rodar ──────────────────────────────────────────────────────────────────
-server: redis.up ## Sobe o servidor Phoenix (http://localhost:4000)
+server: ## Sobe o servidor Phoenix (http://localhost:4000)
 	mix phx.server
 
 s: server ## Alias de `server`
@@ -51,20 +50,6 @@ db.rollback: ## Reverte a última migration
 
 db.reset: ## Recria o banco do zero (drop + create + migrate + seed)
 	mix ecto.reset
-
-# ── Cache (Redis) ────────────────────────────────────────────────────────────
-redis.up: ## Sobe o Redis de dev (docker compose, aguarda ficar saudável)
-	docker compose up -d --wait redis
-	@echo "Redis (grana-redis) rodando em localhost:6379"
-
-redis.down: ## Para o Redis de dev
-	docker compose stop redis
-
-redis.cli: ## Abre o redis-cli no container
-	docker compose exec redis redis-cli
-
-redis.flush: ## Esvazia TODO o cache local (FLUSHALL) — destrutivo
-	docker compose exec redis redis-cli FLUSHALL
 
 # ── Qualidade (espelha o quality gate do CI) ─────────────────────────────────
 test: ## Roda a suíte de testes

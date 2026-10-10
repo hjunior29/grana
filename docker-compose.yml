@@ -1,20 +1,5 @@
-# Infra para desenvolvimento/testes locais (NÃO faz parte do Dockerfile da
-# aplicação — esse é o release de produção). O banco agora é SQLite (armazenado
-# localmente como arquivo .db). Suba o Redis com `make redis.up` (ou `docker compose up -d`).
-#
-# Em produção o Redis é o Upstash gerenciado do Fly (secret REDIS_URL); aqui é local.
-services:
-  # Cache local (espelha o Upstash de produção). `maxmemory-policy allkeys-lru`
-  # replica o "eviction" habilitado no Fly Redis: quando enche, descarta as
-  # chaves menos usadas — comportamento de cache, não de banco durável.
-  redis:
-    image: redis:7-alpine
-    container_name: grana-redis
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+# Infra para desenvolvimento/testes locais.
+# A aplicação agora roda 100% autossuficiente (SQLite para banco de dados e Cachex
+# para cache em memória). Não são necessários serviços externos ou containers Docker
+# para desenvolvimento local.
+services: {}
