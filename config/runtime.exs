@@ -51,9 +51,6 @@ public_url =
 config :grana, :public_url, public_url
 config :grana, :trust_proxy_headers, System.get_env("TRUST_PROXY_HEADERS") == "true"
 
-config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
-config :grana, :roadmap_url, System.get_env("ROADMAP_URL")
-
 # Cache (Grana.Cache / Cachex). Em dev e prod o cache roda 100% em memória (ETS).
 # TTL padrão de 300s, customizável por CACHE_TTL_SECONDS. Pode ser desabilitado por CACHE_ENABLED=false.
 if config_env() != :test do

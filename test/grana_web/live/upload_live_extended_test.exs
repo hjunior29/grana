@@ -68,15 +68,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
     end
   end
 
-  describe "dismiss_roadmap" do
-    test "dismisses the roadmap notice", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-      render_click(view, "dismiss_roadmap", %{})
-      html = render(view)
-      assert html =~ "Upload"
-    end
-  end
-
   describe "switch_tab" do
     test "switches between tabs", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/upload")

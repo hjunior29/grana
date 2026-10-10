@@ -26,8 +26,6 @@ defmodule GranaWeb.UploadLive do
       |> assign(:cal_has_data, false)
       |> assign(:cal_score, nil)
       |> assign(:show_api_key_alert, false)
-      |> assign(:roadmap_url, Application.get_env(:grana, :roadmap_url))
-      |> assign(:roadmap_dismissed, false)
       |> allow_upload(:statements,
         accept: ~w(.csv .pdf),
         max_entries: 12,
@@ -102,10 +100,6 @@ defmodule GranaWeb.UploadLive do
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, push_patch(socket, to: ~p"/upload?tab=#{tab}")}
-  end
-
-  def handle_event("dismiss_roadmap", _params, socket) do
-    {:noreply, assign(socket, :roadmap_dismissed, true)}
   end
 
   def handle_event("select-bank", _params, %{assigns: %{processing: true}} = socket) do
@@ -927,21 +921,6 @@ defmodule GranaWeb.UploadLive do
                 </div>
               </form>
             </div>
-          </div>
-
-          <div :if={@roadmap_url && !@roadmap_dismissed} class="alert alert-info alert-soft mt-8">
-            <.icon name="hero-light-bulb-mini" class="size-5" />
-            <div>
-              <span class="font-medium">Seu banco não está na lista?</span>
-              <br />
-              <.link href={@roadmap_url} target="_blank" class="link">
-                Sugira no nosso roadmap
-              </.link>
-              e adicionaremos suporte.
-            </div>
-            <button phx-click="dismiss_roadmap" class="btn btn-sm btn-ghost btn-circle">
-              <.icon name="hero-x-mark-mini" class="size-4" />
-            </button>
           </div>
         </div>
 

@@ -9,8 +9,11 @@ defmodule GranaWeb.LandingLiveTest do
     {:ok, _view, html} = live(conn, ~p"/")
     assert html =~ "Controle total"
     assert html =~ "suas finanças"
-    assert html =~ "Criar Conta"
     assert html =~ "Entrar"
+    refute html =~ "Criar Conta"
+    refute html =~ "/users/register"
+    refute html =~ "/terms"
+    refute html =~ "oadmap"
   end
 
   test "shows features section", %{conn: conn} do
