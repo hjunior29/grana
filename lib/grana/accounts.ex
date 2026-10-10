@@ -115,6 +115,10 @@ defmodule Grana.Accounts do
 
   def change_owner(attrs \\ %{}, opts \\ []), do: User.owner_changeset(%User{}, attrs, opts)
 
+  def update_user_preferences(%User{} = user, attrs) do
+    user |> User.preferences_changeset(attrs) |> Repo.update()
+  end
+
   def complete_onboarding(%User{onboarded_at: nil} = user) do
     user |> User.onboarded_changeset() |> Repo.update()
   end

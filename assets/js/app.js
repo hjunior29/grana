@@ -217,8 +217,11 @@ const setVisualStyle = (style, opts = {}) => {
   }
 }
 
-setTheme(localStorage.getItem("phx:theme") || "system", {notify: false})
-setVisualStyle(localStorage.getItem("phx:visual-style") || "default", {notify: false})
+// Logado, a preferência do servidor (data-server-*) vence o localStorage.
+const serverTheme = document.documentElement.dataset.serverTheme
+const serverVisualStyle = document.documentElement.dataset.serverVisualStyle
+setVisualStyle(serverVisualStyle || localStorage.getItem("phx:visual-style") || "default", {notify: false})
+setTheme(serverTheme || localStorage.getItem("phx:theme") || "system", {notify: false})
 window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system", {notify: false}))
 window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default", {notify: false}))
 window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme))

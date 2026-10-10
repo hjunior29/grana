@@ -174,6 +174,16 @@ defmodule GranaWeb.Layouts do
     """
   end
 
+  # Aplica na hora no navegador (JS) e, quando `persist`, também grava no servidor.
+  defp set_preference(event, key, value, persist) do
+    js = JS.dispatch(event)
+    if persist, do: JS.push(js, "set_preference", value: %{key => value}), else: js
+  end
+
+  attr :persist, :boolean,
+    default: false,
+    doc: "salva a escolha no servidor (só em LiveViews autenticadas)"
+
   def theme_toggle(assigns) do
     ~H"""
     <div class="theme-toggle card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
@@ -181,7 +191,7 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
+        phx-click={set_preference("phx:set-theme", "theme", "system", @persist)}
         data-phx-theme="system"
       >
         <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
@@ -189,7 +199,7 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
+        phx-click={set_preference("phx:set-theme", "theme", "light", @persist)}
         data-phx-theme="light"
       >
         <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
@@ -197,7 +207,7 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
+        phx-click={set_preference("phx:set-theme", "theme", "dark", @persist)}
         data-phx-theme="dark"
       >
         <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
@@ -206,13 +216,15 @@ defmodule GranaWeb.Layouts do
     """
   end
 
+  attr :persist, :boolean, default: false
+
   def visual_style_toggle(assigns) do
     ~H"""
     <div id="visual-style-toggle" class="visual-style-toggle" role="group" aria-label="Estilo visual">
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "default", @persist)}
         data-phx-visual-style="default"
       >
         <span class="visual-style-copy">
@@ -235,7 +247,7 @@ defmodule GranaWeb.Layouts do
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "signal", @persist)}
         data-phx-visual-style="signal"
       >
         <span class="visual-style-copy">
@@ -258,7 +270,7 @@ defmodule GranaWeb.Layouts do
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "bossa", @persist)}
         data-phx-visual-style="bossa"
       >
         <span class="visual-style-copy">
@@ -281,7 +293,7 @@ defmodule GranaWeb.Layouts do
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "papel", @persist)}
         data-phx-visual-style="papel"
       >
         <span class="visual-style-copy">
@@ -304,7 +316,7 @@ defmodule GranaWeb.Layouts do
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "caderneta", @persist)}
         data-phx-visual-style="caderneta"
       >
         <span class="visual-style-copy">
@@ -327,7 +339,7 @@ defmodule GranaWeb.Layouts do
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "planetario", @persist)}
         data-phx-visual-style="planetario"
       >
         <span class="visual-style-copy">
@@ -350,7 +362,7 @@ defmodule GranaWeb.Layouts do
       <button
         type="button"
         class="visual-style-option"
-        phx-click={JS.dispatch("phx:set-visual-style")}
+        phx-click={set_preference("phx:set-visual-style", "visual_style", "cyber", @persist)}
         data-phx-visual-style="cyber"
       >
         <span class="visual-style-copy">
