@@ -27,11 +27,21 @@ defmodule GranaWeb.OnboardingLiveTest do
     {:ok, lv, _html} = live(conn, ~p"/onboarding")
     refute has_element?(lv, "#onboarding-back")
 
-    advance(lv, 5)
+    advance(lv, 4)
     assert has_element?(lv, "#onboarding-finish")
 
     lv |> element("#onboarding-back") |> render_click()
-    assert has_element?(lv, "#import-form")
+    assert has_element?(lv, "#open-finance-settings")
+  end
+
+  test "o onboarding não tem mais etapa de importação", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/onboarding")
+
+    refute has_element?(lv, "#onboarding-step-import")
+    advance(lv, 3)
+    refute has_element?(lv, "#import-form")
+    advance(lv, 1)
+    assert has_element?(lv, "#onboarding-finish")
   end
 
   test "não há mais Pular tudo", %{conn: conn} do
@@ -92,21 +102,9 @@ defmodule GranaWeb.OnboardingLiveTest do
     assert has_element?(lv, "#open-finance-settings")
   end
 
-  test "importar CSV enfileira o job", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/onboarding")
-    advance(lv, 4)
-
-    csv = file_input(lv, "#import-form", :import, [%{name: "export.csv", content: "a,b\n1,2\n"}])
-    render_upload(csv, "export.csv")
-    lv |> form("#import-form") |> render_submit()
-
-    assert has_element?(lv, "#import-result")
-    assert [_job] = Grana.Repo.all(Oban.Job)
-  end
-
   test "Ir para o painel na última etapa conclui o onboarding", %{conn: conn, user: user} do
     {:ok, lv, _html} = live(conn, ~p"/onboarding")
-    advance(lv, 5)
+    advance(lv, 4)
 
     lv |> element("#onboarding-finish") |> render_click()
     assert_redirect(lv, ~p"/dashboard")
@@ -218,13 +216,6 @@ defmodule GranaWeb.OnboardingLiveTest do
       {:ok, lv, _html} = live(conn, ~p"/onboarding")
       advance(lv, 3)
       refute has_element?(lv, "button#onboarding-next[disabled]")
-    end
-
-    test "Importar: Continuar fica bloqueado até enviar um arquivo", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/onboarding")
-      advance(lv, 4)
-
-      assert has_element?(lv, "button#onboarding-next[disabled]")
     end
   end
 end

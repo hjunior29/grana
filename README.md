@@ -77,7 +77,7 @@ docker compose logs grana                                     # Docker
 
 O assistente explica como o Grana funciona e pergunta se você quer uma **nova instalação** ou
 **restaurar um backup**. Depois de criar a conta (nome, email e senha), um onboarding opcional
-configura aparência, email (SMTP), IA, Open Finance e importa dados — cada etapa pode ser
+configura aparência, email (SMTP), IA e Open Finance — cada etapa pode ser
 pulada e refeita em Configurações. O código vale só até o dono ser criado; um novo boot gera
 outro.
 
