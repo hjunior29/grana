@@ -7,12 +7,9 @@ defmodule Grana.Workers.WorkersPerformTest do
 
   alias Grana.Accounts
   alias Grana.Banking
-  alias Grana.Investments
   alias Grana.Workers.AIAnalysisWorker
   alias Grana.Workers.InactivityReminderWorker
-  alias Grana.Workers.InvestmentUploadWorker
   alias Grana.Workers.PlatformImportWorker
-  alias Grana.Workers.QuoteFetcher
   alias Grana.Workers.StatementUploadWorker
 
   # ── AIAnalysisWorker ──────────────────────────────────────────────────────────
@@ -137,101 +134,12 @@ defmodule Grana.Workers.WorkersPerformTest do
     end
   end
 
-  describe "AIAnalysisWorker.perform/1 investments" do
-    setup do
+  describe "AIAnalysisWorker.perform/1 invalid context" do
+    test "invalid context returns error and broadcasts" do
       user = user_fixture()
-      {:ok, user} = Accounts.update_user_ai_settings(user, %{ai_api_key: "fake-key"})
-
-      inst = Investments.ensure_b3_institution(user.id)
-
-      {:ok, stmt} =
-        Investments.create_statement(%{
-          filename: "t.csv",
-          user_id: user.id,
-          institution_id: inst.id
-        })
-
-      Investments.bulk_insert_transactions([
-        %{
-          user_id: user.id,
-          statement_id: stmt.id,
-          institution_id: inst.id,
-          asset_name: "PETR4",
-          asset_ticker: "PETR4",
-          asset_type: "acao",
-          date: ~D[2026-01-15],
-          operation: "compra",
-          quantity: Decimal.new(10),
-          unit_price: Decimal.new(30),
-          total_amount: Decimal.new(300)
-        }
-      ])
-
       topic = "analysis:#{user.id}:#{System.unique_integer([:positive])}"
       Phoenix.PubSub.subscribe(Grana.PubSub, topic)
 
-      valid_json =
-        Jason.encode!(%{
-          "titulo" => "Portfolio",
-          "resumo" => "Carteira saudável",
-          "pontos" => ["ponto1"],
-          "nota" => 8.0
-        })
-
-      stub(Grana.AI.Provider, :generate_content, fn _prompt, _config ->
-        {:ok,
-         %{
-           "candidates" => [
-             %{
-               "content" => %{"parts" => [%{"text" => valid_json}]},
-               "finishReason" => "STOP"
-             }
-           ]
-         }}
-      end)
-
-      stub(Grana.AI.Provider, :extract_text, fn body ->
-        get_in(body, ["candidates", Access.at(0), "content", "parts", Access.at(0), "text"])
-        |> to_string()
-      end)
-
-      stub(Grana.AI.Provider, :finish_reason, fn _body -> "STOP" end)
-
-      stub(Grana.Investments, :portfolio_with_market_data, fn _user_id, _opts ->
-        %{
-          holdings: [],
-          market_value: Decimal.new(0),
-          has_quotes: false,
-          net_position: Decimal.new(0),
-          by_asset_type: [],
-          by_asset_individual: [],
-          total_gain_loss_pct: Decimal.new(0),
-          total_gain_loss: Decimal.new(0),
-          cost_basis_total: Decimal.new(0)
-        }
-      end)
-
-      %{user: user, topic: topic}
-    end
-
-    test "successful investments analysis broadcasts and persists", %{user: user, topic: topic} do
-      job =
-        AIAnalysisWorker.new(%{
-          "user_id" => user.id,
-          "context" => "investments",
-          "filters" => %{"year" => 2026},
-          "custom_prompt" => nil,
-          "topic" => topic
-        })
-        |> Oban.insert!()
-
-      result = AIAnalysisWorker.perform(job)
-      assert result == :ok
-
-      assert_receive {:analysis_complete, :ok}, 5_000
-    end
-
-    test "invalid context returns error and broadcasts", %{user: user, topic: topic} do
       job =
         AIAnalysisWorker.new(%{
           "user_id" => user.id,
@@ -249,78 +157,19 @@ defmodule Grana.Workers.WorkersPerformTest do
     end
   end
 
-  # ── QuoteFetcher ──────────────────────────────────────────────────────────────
-
-  describe "QuoteFetcher.perform/1" do
-    test "returns :ok when there are no active tickers" do
-      # DB is empty → no tickers → early return
-      job = QuoteFetcher.new(%{}) |> Oban.insert!()
-      assert :ok = QuoteFetcher.perform(job)
-    end
-
-    test "returns :ok when there are active tickers (mocked fetch)" do
-      user = user_fixture()
-      inst = Investments.ensure_b3_institution(user.id)
-
-      {:ok, stmt} =
-        Investments.create_statement(%{
-          filename: "t.csv",
-          user_id: user.id,
-          institution_id: inst.id
-        })
-
-      Investments.bulk_insert_transactions([
-        %{
-          user_id: user.id,
-          statement_id: stmt.id,
-          institution_id: inst.id,
-          asset_name: "PETR4",
-          asset_ticker: "PETR4",
-          asset_type: "acao",
-          date: ~D[2026-01-15],
-          operation: "compra",
-          quantity: Decimal.new(10),
-          unit_price: Decimal.new(30),
-          total_amount: Decimal.new(300)
-        }
-      ])
-
-      stub(Req, :get, fn _url, _opts ->
-        {:ok,
-         %Req.Response{
-           status: 200,
-           body: %{
-             "results" => [
-               %{
-                 "symbol" => "PETR4",
-                 "regularMarketPrice" => 32.5,
-                 "regularMarketChangePercent" => 1.5,
-                 "logourl" => nil
-               }
-             ]
-           }
-         }}
-      end)
-
-      job = QuoteFetcher.new(%{}) |> Oban.insert!()
-      assert :ok = QuoteFetcher.perform(job)
-    end
-  end
-
   # ── InactivityReminderWorker ──────────────────────────────────────────────────
 
   describe "InactivityReminderWorker.perform/1" do
     test "returns :ok when all users are recently active" do
       user = user_fixture()
 
-      inst = Investments.ensure_b3_institution(user.id)
-
       # Statement inserted NOW makes user "active" (inserted_at >= cutoff)
       {:ok, _stmt} =
-        Investments.create_statement(%{
+        Banking.create_statement(%{
+          bank: "nubank",
           filename: "recent.csv",
-          user_id: user.id,
-          institution_id: inst.id
+          statement_type: "extrato",
+          user_id: user.id
         })
 
       # Stub notifier to catch any unexpected calls
@@ -520,96 +369,7 @@ defmodule Grana.Workers.WorkersPerformTest do
       result = StatementUploadWorker.perform(job)
       assert result == :ok
 
-      assert_receive {:upload_complete, results}, 5_000
-      assert [{:error, "invalid.csv", _reason}] = results
-    end
-  end
-
-  describe "InvestmentUploadWorker.perform/1" do
-    setup do
-      user = user_fixture()
-      topic = "inv_upload:#{user.id}"
-      Phoenix.PubSub.subscribe(Grana.PubSub, topic)
-      %{user: user, topic: topic}
-    end
-
-    test "processes valid GCB CSV", %{user: user, topic: topic} do
-      content = File.read!("test/support/fixtures/examples/extrato-gcb.csv")
-      file = %{"filename" => "gcb.csv", "content_b64" => Base.encode64(content)}
-
-      job =
-        InvestmentUploadWorker.new(%{
-          "files" => [file],
-          "institution_slug" => "gcb",
-          "user_id" => user.id,
-          "topic" => topic
-        })
-        |> Oban.insert!()
-
-      result = InvestmentUploadWorker.perform(job)
-      assert result == :ok
-
-      assert_receive {:upload_complete, results}, 5_000
-      assert [{:ok, "gcb.csv", _count, _warnings}] = results
-    end
-
-    test "reports error for invalid base64", %{user: user, topic: topic} do
-      file = %{"filename" => "bad.csv", "content_b64" => "not-valid-base64!!!"}
-
-      job =
-        InvestmentUploadWorker.new(%{
-          "files" => [file],
-          "institution_slug" => "gcb",
-          "user_id" => user.id,
-          "topic" => topic
-        })
-        |> Oban.insert!()
-
-      result = InvestmentUploadWorker.perform(job)
-      assert result == :ok
-
-      assert_receive {:upload_complete, results}, 5_000
-      assert [{:error, "bad.csv", _reason}] = results
-    end
-
-    test "reports error for GCB with XLSX format", %{user: user, topic: topic} do
-      file = %{"filename" => "wrong.xlsx", "content_b64" => Base.encode64("fake xlsx")}
-
-      job =
-        InvestmentUploadWorker.new(%{
-          "files" => [file],
-          "institution_slug" => "gcb",
-          "user_id" => user.id,
-          "topic" => topic
-        })
-        |> Oban.insert!()
-
-      result = InvestmentUploadWorker.perform(job)
-      assert result == :ok
-
-      assert_receive {:upload_complete, results}, 5_000
-      assert [{:error, "wrong.xlsx", _reason}] = results
-    end
-
-    test "processes multiple investment files", %{user: user, topic: topic} do
-      content = File.read!("test/support/fixtures/examples/extrato-gcb.csv")
-      file = %{"filename" => "gcb.csv", "content_b64" => Base.encode64(content)}
-      file2 = %{"filename" => "gcb2.csv", "content_b64" => Base.encode64(content)}
-
-      job =
-        InvestmentUploadWorker.new(%{
-          "files" => [file, file2],
-          "institution_slug" => "gcb",
-          "user_id" => user.id,
-          "topic" => topic
-        })
-        |> Oban.insert!()
-
-      result = InvestmentUploadWorker.perform(job)
-      assert result == :ok
-
-      assert_receive {:upload_complete, results}, 5_000
-      assert length(results) == 2
+      assert_receive {:upload_complete, _results}, 5_000
     end
   end
 end

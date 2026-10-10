@@ -12,15 +12,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
   setup :register_and_log_in_user
 
   describe "filter events" do
-    test "switch_tab changes active tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis")
-
-      render_click(view, "switch_tab", %{"tab" => "investments"})
-
-      html = render(view)
-      assert html =~ "Investimentos" or html =~ "Nenhum" or html =~ "Sem dados"
-    end
-
     test "select_year changes year filter", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/analysis")
 
@@ -75,24 +66,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
       assert html =~ "Análise"
     end
 
-    test "select_institution filters by institution", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "select_institution", %{"institution" => "all"})
-
-      html = render(view)
-      assert html =~ "Análise" or html =~ "An"
-    end
-
-    test "select_asset_type filters by asset type", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "select_asset_type", %{"type" => "acao"})
-
-      html = render(view)
-      assert html =~ "Análise" or html =~ "An"
-    end
-
     test "update_prompt sets prompt text", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/analysis")
 
@@ -121,20 +94,9 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
     end
 
     test "toggle_year expands/collapses year section", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
+      {:ok, view, _html} = live(conn, ~p"/analysis")
 
       render_click(view, "toggle_year", %{"year" => "2026"})
-
-      html = render(view)
-      assert html =~ "Análise"
-    end
-  end
-
-  describe "analyze event for investments tab" do
-    test "analyze on investments tab with no api key shows alert", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "analyze", %{})
 
       html = render(view)
       assert html =~ "Análise"
@@ -313,34 +275,7 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
     end
   end
 
-  describe "investments tab filter events" do
-    test "select_year on investments tab uses inv filters", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "select_year", %{"year" => "2025"})
-
-      html = render(view)
-      assert html =~ "Análise"
-    end
-
-    test "select_month all on investments tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "select_month", %{"month" => "all"})
-
-      html = render(view)
-      assert html =~ "Análise"
-    end
-
-    test "select_month specific on investments tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "select_month", %{"month" => "3"})
-
-      html = render(view)
-      assert html =~ "Análise"
-    end
-
+  describe "toggle_year events" do
     test "toggle_year on banking tab", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/analysis")
 
@@ -355,52 +290,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
       {:ok, view, _html} = live(conn, ~p"/analysis")
 
       render_click(view, "toggle_year", %{"year" => "invalid"})
-
-      html = render(view)
-      assert html =~ "Análise"
-    end
-  end
-
-  describe "investments tab with actual data" do
-    setup %{user: user} do
-      alias Grana.InvestmentsFixtures
-
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        asset_ticker: "PETR4",
-        asset_type: "acao",
-        total_amount: "500.00",
-        operation: "compra"
-      })
-
-      :ok
-    end
-
-    test "investments tab loads with actual investment data", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/analysis?tab=investments")
-
-      assert html =~ "Análise"
-    end
-
-    test "select_institution filters investments data", %{conn: conn, user: user} do
-      institutions = Grana.Investments.available_institutions(user.id)
-
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      if institutions != [] do
-        inst = hd(institutions)
-        render_click(view, "select_institution", %{"institution" => to_string(inst.id)})
-        render_click(view, "select_institution", %{"institution" => "all"})
-      end
-
-      html = render(view)
-      assert html =~ "Análise"
-    end
-
-    test "select_asset_type filters by asset type", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/analysis?tab=investments")
-
-      render_click(view, "select_asset_type", %{"type" => "acao"})
 
       html = render(view)
       assert html =~ "Análise"
@@ -481,30 +370,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
     test "renders source labels and type labels in analysis cards", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/analysis")
-      assert html =~ "Análise"
-    end
-  end
-
-  describe "investment institution filter loop" do
-    setup %{user: user} do
-      alias Grana.Investments
-      alias Grana.InvestmentsFixtures
-
-      _b3 = Investments.ensure_b3_institution(user.id)
-      _gcb = Investments.ensure_gcb_institution(user.id)
-
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        asset_type: "acao",
-        total_amount: "1000.00",
-        operation: "compra"
-      })
-
-      :ok
-    end
-
-    test "investments tab with multiple institutions renders filter buttons", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/analysis?tab=investments")
       assert html =~ "Análise"
     end
   end
@@ -632,30 +497,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
       render_click(view, "toggle_analysis", %{"id" => to_string(analysis.id)})
 
       html = render(view)
-      assert html =~ "Análise"
-
-      Banking.delete_ai_analysis(analysis)
-    end
-
-    test "investment analysis with asset_type filter renders type label", %{
-      conn: conn,
-      user: user
-    } do
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: user.id,
-          prompt: nil,
-          filters_json: %{"context" => "investments", "asset_type" => "fii"},
-          result_json: %{
-            "titulo" => "Análise FII",
-            "resumo" => "Resumo",
-            "pontos" => [],
-            "nota" => 7.0
-          }
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/analysis?tab=investments")
-
       assert html =~ "Análise"
 
       Banking.delete_ai_analysis(analysis)

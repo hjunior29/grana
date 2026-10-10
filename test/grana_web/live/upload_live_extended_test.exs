@@ -4,10 +4,7 @@ defmodule GranaWeb.UploadLiveExtendedTest do
   import Phoenix.LiveViewTest
   import Grana.BankingFixtures
 
-  alias Grana.InvestmentsFixtures
-
   alias Grana.Banking
-  alias Grana.Investments
 
   setup :register_and_log_in_user
 
@@ -18,14 +15,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       html = render_click(view, "select_upload_category", %{"category" => "banking"})
 
       assert html =~ "Nubank" or html =~ "Bradesco"
-    end
-
-    test "select investment category shows provider options", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      html = render_click(view, "select_upload_category", %{"category" => "investment"})
-
-      assert html =~ "B3" or html =~ "GCB" or html =~ "Investimento"
     end
 
     test "select platform category shows platform import options", %{conn: conn} do
@@ -79,26 +68,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
     end
   end
 
-  describe "select_investment_provider" do
-    test "select B3 provider sets upload context", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "investment"})
-      html = render_click(view, "select_investment_provider", %{"provider" => "b3"})
-
-      assert html =~ "B3" or html =~ "arquivo" or html =~ "Selecionar"
-    end
-
-    test "select GCB provider sets upload context", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "investment"})
-      html = render_click(view, "select_investment_provider", %{"provider" => "gcb"})
-
-      assert html =~ "GCB" or html =~ "arquivo" or html =~ "Selecionar"
-    end
-  end
-
   describe "dismiss_roadmap" do
     test "dismisses the roadmap notice", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/upload")
@@ -109,16 +78,16 @@ defmodule GranaWeb.UploadLiveExtendedTest do
   end
 
   describe "switch_tab" do
-    test "switches between banking and investment tabs", %{conn: conn} do
+    test "switches between tabs", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/upload")
 
-      render_click(view, "switch_tab", %{"tab" => "banking"})
+      render_click(view, "switch_tab", %{"tab" => "historico"})
       html = render(view)
-      assert html =~ "Fatura / Extrato" or html =~ "Upload"
+      assert html =~ "Upload"
 
-      render_click(view, "switch_tab", %{"tab" => "investment"})
+      render_click(view, "switch_tab", %{"tab" => "calendario"})
       html = render(view)
-      assert html =~ "Investimento" or html =~ "Upload"
+      assert html =~ "Upload"
     end
   end
 
@@ -183,20 +152,8 @@ defmodule GranaWeb.UploadLiveExtendedTest do
 
       {:ok, view, _html} = live(conn, ~p"/upload")
 
-      render_click(view, "toggle_select", %{"id" => "bank_#{stmt.id}"})
+      render_click(view, "toggle_select", %{"id" => to_string(stmt.id)})
       render_click(view, "confirm_bulk_delete", %{})
-
-      html = render(view)
-      assert html =~ "Upload"
-    end
-
-    test "investment statement toggle_select works", %{conn: conn, user: user} do
-      inst = Investments.ensure_b3_institution(user.id)
-      inv_stmt = InvestmentsFixtures.statement_fixture(user, inst)
-
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "toggle_select", %{"id" => "inv_#{inv_stmt.id}"})
 
       html = render(view)
       assert html =~ "Upload"
@@ -287,16 +244,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       send(view.pid, {:upload_complete, []})
       Process.sleep(100)
       html = render(view)
-      assert html =~ "Upload"
-    end
-
-    test "investment upload triggers processing state", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "investment"})
-      render_click(view, "select_investment_provider", %{"provider" => "gcb"})
-
-      html = render_click(view, "upload", %{})
       assert html =~ "Upload"
     end
 
@@ -434,31 +381,9 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       assert html =~ "Upload" or html =~ "Histórico"
     end
 
-    test "switch_tab to historico investment source", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "switch_tab", %{"tab" => "historico", "source" => "investment"})
-
-      html = render(view)
-      assert html =~ "Upload"
-    end
-
     test "historico tab via URL params loads directly", %{conn: conn, user: user} do
       statement_fixture(user)
       {:ok, _view, html} = live(conn, ~p"/upload?tab=historico")
-      assert html =~ "Upload"
-    end
-
-    test "historico banking source filter", %{conn: conn, user: user} do
-      statement_fixture(user)
-      {:ok, _view, html} = live(conn, ~p"/upload?tab=historico&source=banking")
-      assert html =~ "Upload"
-    end
-
-    test "historico investment source filter", %{conn: conn, user: user} do
-      inst = Investments.ensure_b3_institution(user.id)
-      InvestmentsFixtures.statement_fixture(user, inst)
-      {:ok, _view, html} = live(conn, ~p"/upload?tab=historico&source=investment")
       assert html =~ "Upload"
     end
   end
@@ -473,17 +398,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       statement_fixture(user)
       {:ok, _view, html} = live(conn, ~p"/upload?tab=calendario")
       assert html =~ "Upload"
-    end
-  end
-
-  describe "select_investment_provider for gcb" do
-    test "select GCB provider with a specific format", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "investment"})
-      html = render_click(view, "select_investment_provider", %{"provider" => "gcb"})
-
-      assert html =~ "GCB" or html =~ "arquivo" or html =~ "Selecionar"
     end
   end
 
@@ -529,16 +443,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       assert html =~ "Upload"
     end
 
-    test "process_investment_uploads with no files starts worker", %{conn: conn, user: user} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:process_investment_uploads, "gcb", user.id})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Upload"
-    end
-
     test "process_platform_uploads with no files starts worker", %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/upload")
 
@@ -563,7 +467,7 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       render_click(view, "select-type", %{"type" => "extrato"})
       render_click(view, "upload", %{})
 
-      html = render_click(view, "switch_tab", %{"tab" => "investments"})
+      html = render_click(view, "switch_tab", %{"tab" => "historico"})
       assert html =~ "Upload"
     end
 
@@ -599,7 +503,7 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       render_click(view, "select-type", %{"type" => "extrato"})
       render_click(view, "upload", %{})
 
-      html = render_click(view, "select_upload_category", %{"category" => "investment"})
+      html = render_click(view, "select_upload_category", %{"category" => "platform"})
       assert html =~ "Upload"
     end
   end
@@ -664,33 +568,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
 
       html = render(view)
       assert html =~ "Upload"
-    end
-  end
-
-  describe "investment statement delete" do
-    test "delete single investment statement", %{conn: conn, user: user} do
-      inst = Investments.ensure_b3_institution(user.id)
-      inv_stmt = InvestmentsFixtures.statement_fixture(user, inst)
-
-      {:ok, view, _html} = live(conn, ~p"/upload?tab=historico&source=investment")
-
-      render_click(view, "confirm_delete", %{"id" => "inv_#{inv_stmt.id}"})
-      render_click(view, "delete", %{})
-
-      assert Investments.list_statements(user.id) == []
-    end
-
-    test "bulk delete with investment statements", %{conn: conn, user: user} do
-      inst = Investments.ensure_b3_institution(user.id)
-      inv_stmt = InvestmentsFixtures.statement_fixture(user, inst)
-
-      {:ok, view, _html} = live(conn, ~p"/upload?tab=historico&source=investment")
-
-      render_click(view, "toggle_select", %{"id" => "inv_#{inv_stmt.id}"})
-      render_click(view, "confirm_bulk_delete", %{})
-      render_click(view, "delete", %{})
-
-      assert Investments.list_statements(user.id) == []
     end
   end
 end

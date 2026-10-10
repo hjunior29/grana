@@ -33,9 +33,6 @@ defmodule Grana.Workers.AIAnalysisWorker do
         "banking" ->
           AIAnalyzer.analyze_with_filters(user_id, filters, custom_prompt)
 
-        "investments" ->
-          AIAnalyzer.analyze_investments_with_filters(user_id, filters, custom_prompt)
-
         other ->
           {:error, "Contexto de análise inválido: #{inspect(other)}"}
       end

@@ -2,14 +2,10 @@ defmodule GranaWeb.TransactionsLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
-  alias Grana.Investments
-  alias Grana.Investments.Constants
 
   @per_page 50
   @sort_fields ~w(date description source kind amount)
   @sort_dirs ~w(asc desc)
-  @dividend_ops Constants.dividend_ops()
-  @income_ops ~w(venda) ++ @dividend_ops
 
   @impl true
   def mount(_params, _session, socket) do
@@ -20,9 +16,6 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:page_title, "Transações")
       |> assign(:categories, Banking.ensure_default_categories(user_id))
       |> assign(:banks, Banking.available_banks(user_id))
-      |> assign(:inv_institutions, Investments.available_institutions(user_id))
-      |> assign(:inv_asset_types, Investments.available_asset_types(user_id))
-      |> assign(:inv_operations, Investments.available_operations(user_id))
       |> assign(:expanded_ids, MapSet.new())
       |> assign(:selected_ids, MapSet.new())
 
@@ -220,34 +213,24 @@ defmodule GranaWeb.TransactionsLive do
   defp load_transactions(socket, user_id) do
     %{filters: filters, page: page} = socket.assigns
 
-    banking_transactions =
-      if include_banking?(filters),
-        do: Banking.list_transactions(user_id, banking_opts(filters)),
-        else: []
-
-    investment_transactions =
-      if include_investments?(filters),
-        do: Investments.list_transactions(user_id, investment_opts(filters)),
-        else: []
+    banking_transactions = Banking.list_transactions(user_id, banking_opts(filters))
 
     all_rows =
       banking_transactions
       |> Enum.map(&banking_row/1)
-      |> Kernel.++(Enum.map(investment_transactions, &investment_row/1))
       |> sort_rows(filters.sort_by, filters.sort_dir)
 
     total = length(all_rows)
     total_pages = max(1, ceil(total / @per_page))
     page = min(page, total_pages)
     page_rows = Enum.slice(all_rows, (page - 1) * @per_page, @per_page)
-    visible_banking = page_rows |> Enum.filter(&(&1.source == :banking)) |> Enum.map(& &1.raw)
+    visible_banking = Enum.map(page_rows, & &1.raw)
 
     socket
     |> assign(:page, page)
     |> assign(:total_pages, total_pages)
     |> assign(:total, total)
-    |> assign(:banking_total, length(banking_transactions))
-    |> assign(:investment_total, length(investment_transactions))
+    |> assign(:banking_total, total)
     |> assign(:transactions, page_rows)
     |> assign(:summary, unified_summary(all_rows))
     |> assign(:recurring_statuses, Banking.recurring_statuses(user_id, visible_banking))
@@ -271,50 +254,10 @@ defmodule GranaWeb.TransactionsLive do
     |> maybe_uncategorized(filters)
   end
 
-  defp investment_opts(filters) do
-    []
-    |> maybe_add_opt(:search, filters.search)
-    |> maybe_add_opt(:operation, investment_operation(filters.movement))
-    |> maybe_add_opt(:asset_type, kind_asset_type(filters.kind))
-    |> maybe_add_opt(:institution_id, origin_institution_id(filters.origin))
-    |> maybe_add_opt(:date_from, parse_date(filters.date_from))
-    |> maybe_add_opt(:date_to, parse_date(filters.date_to))
-    |> maybe_add_opt(:amount_min, parse_decimal(filters.amount_min))
-    |> maybe_add_opt(:amount_max, parse_decimal(filters.amount_max))
-    |> maybe_add_opt(:statement_id, statement_id(filters, "investments"))
-  end
-
   defp maybe_uncategorized(opts, %{filter: "uncategorized"}),
     do: Keyword.put(opts, :uncategorized, true)
 
   defp maybe_uncategorized(opts, _filters), do: opts
-
-  defp include_banking?(%{source: "investments"}), do: false
-
-  defp include_banking?(filters) do
-    not origin_investment?(filters.origin) and
-      not kind_investment?(filters.kind) and
-      not movement_investment_only?(filters.movement) and
-      not statement_for?(filters, "investments")
-  end
-
-  defp include_investments?(%{source: "banking"}), do: false
-
-  defp include_investments?(%{source: "investments"} = filters) do
-    not origin_banking?(filters.origin) and
-      not kind_banking?(filters.kind) and
-      not movement_banking_only?(filters.movement) and
-      not statement_for?(filters, "banking")
-  end
-
-  defp include_investments?(filters) do
-    filters.internal == "all" and
-      filters.filter == "all" and
-      not origin_banking?(filters.origin) and
-      not kind_banking?(filters.kind) and
-      not movement_banking_only?(filters.movement) and
-      not statement_for?(filters, "banking")
-  end
 
   # ── Render ──
 
@@ -367,44 +310,22 @@ defmodule GranaWeb.TransactionsLive do
                   type="search"
                   name="search"
                   value={@filters.search}
-                  placeholder="Buscar transação, categoria ou ativo..."
+                  placeholder="Buscar transação ou categoria..."
                   class="input input-bordered input-sm w-full"
                   phx-debounce="300"
                 />
               </div>
 
-              <div class="transactions-filter-source">
-                <select name="source" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.source == "all"}>Todas as fontes</option>
-                  <option value="banking" selected={@filters.source == "banking"}>Bancário</option>
-                  <option value="investments" selected={@filters.source == "investments"}>
-                    Investimentos
-                  </option>
-                </select>
-              </div>
-
               <div class="transactions-filter-movement">
                 <select name="movement" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.movement == "all"}>Todos movimentos</option>
-                  <optgroup label="Bancário">
-                    <option value="expense" selected={@filters.movement == "expense"}>
-                      Despesas
-                    </option>
-                    <option value="income" selected={@filters.movement == "income"}>Receitas</option>
-                    <option value="bank_investment" selected={@filters.movement == "bank_investment"}>
-                      Investimentos
-                    </option>
-                  </optgroup>
-                  <optgroup label="Investimentos">
-                    <option value="purchase" selected={@filters.movement == "purchase"}>
-                      Compras
-                    </option>
-                    <option value="sale" selected={@filters.movement == "sale"}>Vendas</option>
-                    <option value="dividend" selected={@filters.movement == "dividend"}>
-                      Proventos
-                    </option>
-                    <option value="fee" selected={@filters.movement == "fee"}>Taxas</option>
-                  </optgroup>
+                  <option value="expense" selected={@filters.movement == "expense"}>
+                    Despesas
+                  </option>
+                  <option value="income" selected={@filters.movement == "income"}>Receitas</option>
+                  <option value="bank_investment" selected={@filters.movement == "bank_investment"}>
+                    Investimentos
+                  </option>
                 </select>
               </div>
 
@@ -412,24 +333,13 @@ defmodule GranaWeb.TransactionsLive do
                 <label class="text-xs opacity-50 mb-1 block">Origem</label>
                 <select name="origin" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.origin == "all"}>Todas origens</option>
-                  <optgroup :if={@banks != []} label="Bancos">
-                    <option
-                      :for={bank <- @banks}
-                      value={"bank:#{bank}"}
-                      selected={@filters.origin == "bank:#{bank}"}
-                    >
-                      {String.capitalize(bank)}
-                    </option>
-                  </optgroup>
-                  <optgroup :if={@inv_institutions != []} label="Instituições">
-                    <option
-                      :for={inst <- @inv_institutions}
-                      value={"institution:#{inst.id}"}
-                      selected={@filters.origin == "institution:#{inst.id}"}
-                    >
-                      {inst.name}
-                    </option>
-                  </optgroup>
+                  <option
+                    :for={bank <- @banks}
+                    value={"bank:#{bank}"}
+                    selected={@filters.origin == "bank:#{bank}"}
+                  >
+                    {String.capitalize(bank)}
+                  </option>
                 </select>
               </div>
 
@@ -437,30 +347,19 @@ defmodule GranaWeb.TransactionsLive do
                 <label class="text-xs opacity-50 mb-1 block">Classificação</label>
                 <select name="kind" class="select select-bordered select-sm w-full">
                   <option value="all" selected={@filters.kind == "all"}>Todos os tipos</option>
-                  <optgroup label="Bancário">
-                    <option value="statement:extrato" selected={@filters.kind == "statement:extrato"}>
-                      Extrato
-                    </option>
-                    <option value="statement:fatura" selected={@filters.kind == "statement:fatura"}>
-                      Fatura
-                    </option>
-                    <option
-                      :for={cat <- @categories}
-                      value={"category:#{cat.id}"}
-                      selected={@filters.kind == "category:#{cat.id}"}
-                    >
-                      {cat.name}
-                    </option>
-                  </optgroup>
-                  <optgroup :if={@inv_asset_types != []} label="Investimentos">
-                    <option
-                      :for={asset_type <- @inv_asset_types}
-                      value={"asset:#{asset_type}"}
-                      selected={@filters.kind == "asset:#{asset_type}"}
-                    >
-                      {asset_type_label(asset_type)}
-                    </option>
-                  </optgroup>
+                  <option value="statement:extrato" selected={@filters.kind == "statement:extrato"}>
+                    Extrato
+                  </option>
+                  <option value="statement:fatura" selected={@filters.kind == "statement:fatura"}>
+                    Fatura
+                  </option>
+                  <option
+                    :for={cat <- @categories}
+                    value={"category:#{cat.id}"}
+                    selected={@filters.kind == "category:#{cat.id}"}
+                  >
+                    {cat.name}
+                  </option>
                 </select>
               </div>
 
@@ -532,12 +431,6 @@ defmodule GranaWeb.TransactionsLive do
           <span :if={@total == 0} class="opacity-60">Nenhuma transação</span>
           <span :if={@total > 1} class="opacity-60">{@total} transações</span>
           <span :if={@total == 1} class="opacity-60">{@total} transação</span>
-          <span :if={@banking_total > 0} class="opacity-50">
-            {@banking_total} bancária(s)
-          </span>
-          <span :if={@investment_total > 0} class="opacity-50">
-            {@investment_total} investimento(s)
-          </span>
           <span
             :if={Decimal.compare(@summary.bank_expenses, 0) == :gt}
             class="text-error font-medium"
@@ -551,34 +444,18 @@ defmodule GranaWeb.TransactionsLive do
             Receitas: R$ {format_br_number(@summary.bank_income)}
           </span>
           <span
-            :if={Decimal.compare(@summary.inv_dividends, 0) == :gt}
-            class="text-success font-medium"
+            :if={Decimal.compare(@summary.bank_investments, 0) == :gt}
+            class="text-info font-medium"
           >
-            Proventos: R$ {format_br_number(@summary.inv_dividends)}
-          </span>
-          <span
-            :if={Decimal.compare(@summary.inv_fees, 0) == :gt}
-            class="text-error font-medium"
-          >
-            Taxas: R$ {format_br_number(@summary.inv_fees)}
+            Investimentos: R$ {format_br_number(@summary.bank_investments)}
           </span>
 
           <div :if={@total > 0} class="flex gap-2 ml-auto">
             <a
-              :if={@banking_total > 0}
               href={"/transactions/export?#{banking_export_query(@filters)}"}
               class="btn btn-sm gap-1"
             >
-              <.icon name="hero-arrow-down-tray" class="size-4" />
-              {if @investment_total > 0, do: "Exportar bancário", else: "Exportar CSV"}
-            </a>
-            <a
-              :if={@investment_total > 0}
-              href={"/transactions/export/investments?#{investment_export_query(@filters)}"}
-              class="btn btn-sm gap-1"
-            >
-              <.icon name="hero-arrow-down-tray" class="size-4" />
-              {if @banking_total > 0, do: "Exportar investimentos", else: "Exportar CSV"}
+              <.icon name="hero-arrow-down-tray" class="size-4" /> Exportar CSV
             </a>
           </div>
         </div>
@@ -712,7 +589,7 @@ defmodule GranaWeb.TransactionsLive do
 
   # ── Row rendering ──
 
-  defp render_title_cell(assigns, %{source: :banking} = row) do
+  defp render_title_cell(assigns, row) do
     assigns = assign(assigns, :row, row)
 
     ~H"""
@@ -757,24 +634,7 @@ defmodule GranaWeb.TransactionsLive do
     """
   end
 
-  defp render_title_cell(assigns, %{source: :investment} = row) do
-    assigns = assign(assigns, :row, row)
-
-    ~H"""
-    <div>
-      <span class="font-medium">{@row.raw.asset_ticker || @row.raw.asset_name}</span>
-      <span
-        :if={@row.raw.asset_ticker && @row.raw.asset_name != @row.raw.asset_ticker}
-        class="text-xs opacity-50 block truncate max-w-64"
-        title={@row.raw.asset_name}
-      >
-        {@row.raw.asset_name}
-      </span>
-    </div>
-    """
-  end
-
-  defp render_origin_cell(%{source: :banking, raw: txn}) do
+  defp render_origin_cell(%{raw: txn}) do
     assigns = %{txn: txn}
 
     ~H"""
@@ -788,23 +648,7 @@ defmodule GranaWeb.TransactionsLive do
     """
   end
 
-  defp render_origin_cell(%{source: :investment, raw: txn}) do
-    assigns = %{txn: txn}
-
-    ~H"""
-    <span :if={@txn.institution} class="badge badge-outline gap-1 h-auto whitespace-nowrap">
-      <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
-        <img
-          src={Grana.Investments.Institution.logo_url(@txn.institution) || ~p"/images/logo-32.png"}
-          alt=""
-        />
-      </div>
-      {@txn.institution.name}
-    </span>
-    """
-  end
-
-  defp render_kind_cell(assigns, %{source: :banking} = row) do
+  defp render_kind_cell(assigns, row) do
     assigns = assign(assigns, :row, row)
 
     ~H"""
@@ -836,31 +680,8 @@ defmodule GranaWeb.TransactionsLive do
     """
   end
 
-  defp render_kind_cell(assigns, %{source: :investment} = row) do
-    assigns = assign(assigns, :row, row)
-
-    ~H"""
-    <div class="flex items-center justify-center gap-2">
-      <span class="size-5 shrink-0"></span>
-      <select
-        class="select select-bordered select-sm w-full max-w-44"
-        aria-label="Tipo de ativo"
-        disabled
-      >
-        <option selected>{asset_type_label(@row.raw.asset_type)}</option>
-      </select>
-    </div>
-    """
-  end
-
-  defp render_recurring_column(assigns, %{source: :banking} = row) do
+  defp render_recurring_column(assigns, row) do
     render_recurring_cell(assigns, row.raw)
-  end
-
-  defp render_recurring_column(assigns, %{source: :investment}) do
-    ~H"""
-    <span class="inline-flex w-full justify-center text-xs opacity-30">—</span>
-    """
   end
 
   defp render_recurring_cell(assigns, txn) do
@@ -953,30 +774,20 @@ defmodule GranaWeb.TransactionsLive do
     }
   end
 
-  defp normalize_source(source) when source in ["all", "banking", "investments"], do: source
+  defp normalize_source(source) when source in ["all", "banking"], do: source
   defp normalize_source(_source), do: "all"
 
-  defp normalize_statement_source("investments"), do: "investments"
   defp normalize_statement_source(_source), do: "banking"
 
-  defp tab_to_source("banking"), do: "banking"
-  defp tab_to_source("investments"), do: "investments"
   defp tab_to_source(_tab), do: nil
 
   defp normalize_origin(%{"origin" => origin}) when is_binary(origin) and origin != "",
     do: origin
 
   defp normalize_origin(params) do
-    cond do
-      params["bank"] not in [nil, "", "all"] ->
-        "bank:#{params["bank"]}"
-
-      params["institution_id"] not in [nil, "", "all"] ->
-        "institution:#{params["institution_id"]}"
-
-      true ->
-        "all"
-    end
+    if params["bank"] not in [nil, "", "all"],
+      do: "bank:#{params["bank"]}",
+      else: "all"
   end
 
   defp normalize_kind(%{"kind" => kind}) when is_binary(kind) and kind != "", do: kind
@@ -985,7 +796,6 @@ defmodule GranaWeb.TransactionsLive do
     cond do
       params["category_id"] not in [nil, "", "all"] -> "category:#{params["category_id"]}"
       params["statement_type"] not in [nil, "", "all"] -> "statement:#{params["statement_type"]}"
-      params["asset_type"] not in [nil, "", "all"] -> "asset:#{params["asset_type"]}"
       true -> "all"
     end
   end
@@ -998,11 +808,6 @@ defmodule GranaWeb.TransactionsLive do
       params["type"] == "debit" -> "expense"
       params["type"] == "credit" -> "income"
       params["type"] == "investment" -> "bank_investment"
-      params["operation"] == "compra" -> "purchase"
-      params["operation"] == "venda" -> "sale"
-      params["operation"] in @dividend_ops -> "dividend"
-      params["operation"] == "taxa" -> "fee"
-      params["operation"] not in [nil, "", "all"] -> "operation:#{params["operation"]}"
       true -> "all"
     end
   end
@@ -1070,28 +875,6 @@ defmodule GranaWeb.TransactionsLive do
     |> build_query_string()
   end
 
-  defp investment_export_query(filters) do
-    %{
-      search: filters.search,
-      operation: export_operation(filters.movement),
-      asset_type: kind_asset_type(filters.kind),
-      institution_id: origin_institution_id(filters.origin),
-      date_from: filters.date_from,
-      date_to: filters.date_to,
-      amount_min: filters.amount_min,
-      amount_max: filters.amount_max,
-      statement_id: statement_id(filters, "investments")
-    }
-    |> build_query_string()
-  end
-
-  defp export_operation(movement) do
-    case investment_operation(movement) do
-      ops when is_list(ops) -> Enum.join(ops, ",")
-      op -> op
-    end
-  end
-
   # ── Row normalization and summaries ──
 
   defp banking_row(txn) do
@@ -1107,22 +890,6 @@ defmodule GranaWeb.TransactionsLive do
       kind_sort: category_sort(txn),
       amount_sort: txn.amount |> Decimal.abs() |> Decimal.to_float(),
       selectable?: true
-    }
-  end
-
-  defp investment_row(txn) do
-    %{
-      id: "investment-#{txn.id}",
-      raw_id: txn.id,
-      raw: txn,
-      source: :investment,
-      source_label: "Investimentos",
-      date: txn.date,
-      title: txn.asset_ticker || txn.asset_name || "",
-      origin_sort: if(txn.institution, do: txn.institution.name, else: ""),
-      kind_sort: asset_type_label(txn.asset_type),
-      amount_sort: txn.total_amount |> Decimal.abs() |> Decimal.to_float(),
-      selectable?: false
     }
   end
 
@@ -1149,18 +916,10 @@ defmodule GranaWeb.TransactionsLive do
       %{
         bank_expenses: zero,
         bank_income: zero,
-        bank_investments: zero,
-        inv_purchases: zero,
-        inv_sales: zero,
-        inv_dividends: zero,
-        inv_fees: zero
+        bank_investments: zero
       },
-      fn
-        %{source: :banking, raw: txn}, acc ->
-          summarize_banking(txn, acc)
-
-        %{source: :investment, raw: txn}, acc ->
-          summarize_investment(txn, acc)
+      fn %{source: :banking, raw: txn}, acc ->
+        summarize_banking(txn, acc)
       end
     )
   end
@@ -1181,38 +940,10 @@ defmodule GranaWeb.TransactionsLive do
 
   defp summarize_banking(_txn, acc), do: acc
 
-  defp summarize_investment(%{operation: "compra", total_amount: amount}, acc) do
-    %{acc | inv_purchases: Decimal.add(acc.inv_purchases, Decimal.abs(amount))}
-  end
-
-  defp summarize_investment(%{operation: "venda", total_amount: amount}, acc) do
-    %{acc | inv_sales: Decimal.add(acc.inv_sales, Decimal.abs(amount))}
-  end
-
-  defp summarize_investment(%{operation: op, total_amount: amount}, acc)
-       when op in @dividend_ops do
-    %{acc | inv_dividends: Decimal.add(acc.inv_dividends, Decimal.abs(amount))}
-  end
-
-  defp summarize_investment(%{operation: "taxa", total_amount: amount}, acc) do
-    %{acc | inv_fees: Decimal.add(acc.inv_fees, Decimal.abs(amount))}
-  end
-
-  defp summarize_investment(_txn, acc), do: acc
-
   # ── Filter value helpers ──
 
   defp origin_bank("bank:" <> bank), do: bank
   defp origin_bank(_origin), do: nil
-
-  defp origin_institution_id("institution:" <> id), do: id
-  defp origin_institution_id(_origin), do: nil
-
-  defp origin_banking?("bank:" <> _bank), do: true
-  defp origin_banking?(_origin), do: false
-
-  defp origin_investment?("institution:" <> _id), do: true
-  defp origin_investment?(_origin), do: false
 
   defp kind_statement_type("statement:" <> type), do: type
   defp kind_statement_type(_kind), do: nil
@@ -1220,44 +951,15 @@ defmodule GranaWeb.TransactionsLive do
   defp kind_category_id("category:" <> id), do: id
   defp kind_category_id(_kind), do: nil
 
-  defp kind_asset_type("asset:" <> type), do: type
-  defp kind_asset_type(_kind), do: nil
-
-  defp kind_banking?("statement:" <> _type), do: true
-  defp kind_banking?("category:" <> _id), do: true
-  defp kind_banking?(_kind), do: false
-
-  defp kind_investment?("asset:" <> _type), do: true
-  defp kind_investment?(_kind), do: false
-
   defp banking_type("expense"), do: "debit"
   defp banking_type("income"), do: "credit"
   defp banking_type("bank_investment"), do: "investment"
   defp banking_type(_movement), do: nil
 
-  defp investment_operation("purchase"), do: "compra"
-  defp investment_operation("sale"), do: "venda"
-  defp investment_operation("dividend"), do: @dividend_ops
-  defp investment_operation("fee"), do: "taxa"
-  defp investment_operation("operation:" <> op), do: op
-  defp investment_operation(_movement), do: nil
-
-  defp movement_banking_only?(movement), do: movement in ["expense", "income", "bank_investment"]
-  defp movement_investment_only?("operation:" <> _op), do: true
-
-  defp movement_investment_only?(movement),
-    do: movement in ["purchase", "sale", "dividend", "fee"]
-
   defp statement_id(%{statement_id: nil}, _source), do: nil
   defp statement_id(%{statement_id: ""}, _source), do: nil
   defp statement_id(%{statement_id: id, statement_source: source}, source), do: parse_int_opt(id)
   defp statement_id(_filters, _source), do: nil
-
-  defp statement_for?(%{statement_id: id, statement_source: source}, source)
-       when id not in [nil, ""],
-       do: true
-
-  defp statement_for?(_filters, _source), do: false
 
   # ── Formatting helpers ──
 
@@ -1270,18 +972,6 @@ defmodule GranaWeb.TransactionsLive do
       filename: stmt.filename,
       logo: bank_logo(stmt.bank),
       icon: "hero-banknotes"
-    }
-  end
-
-  defp statement_info(%{statement_id: id, statement_source: "investments"}, user_id)
-       when id not in [nil, ""] do
-    stmt = Investments.get_statement!(parse_int(id, -1), user_id)
-
-    %{
-      label: if(stmt.institution, do: stmt.institution.name, else: "Investimentos"),
-      filename: stmt.filename,
-      logo: if(stmt.institution, do: Grana.Investments.Institution.logo_url(stmt.institution)),
-      icon: "hero-chart-bar"
     }
   end
 
@@ -1301,12 +991,10 @@ defmodule GranaWeb.TransactionsLive do
   defp statement_type_label("extrato"), do: "Extrato"
   defp statement_type_label(_type), do: "Bancário"
 
-  defp format_row_amount(%{source: :banking, raw: txn}), do: format_amount(txn)
-  defp format_row_amount(%{source: :investment, raw: txn}), do: format_inv_amount(txn)
+  defp format_row_amount(%{raw: txn}), do: format_amount(txn)
 
-  defp amount_class(%{source: :banking, raw: %{type: "credit"}}), do: "text-success"
-  defp amount_class(%{source: :banking}), do: "text-error"
-  defp amount_class(%{source: :investment, raw: txn}), do: inv_amount_color(txn.operation)
+  defp amount_class(%{raw: %{type: "credit"}}), do: "text-success"
+  defp amount_class(%{raw: _txn}), do: "text-error"
 
   defp format_amount(txn) do
     prefix =
@@ -1317,16 +1005,6 @@ defmodule GranaWeb.TransactionsLive do
 
     "#{prefix}R$ #{format_br_number(txn.amount)}"
   end
-
-  defp format_inv_amount(txn) do
-    prefix = if txn.operation in @income_ops, do: "+ ", else: "- "
-    "#{prefix}R$ #{format_br_number(txn.total_amount)}"
-  end
-
-  defp inv_amount_color(operation) when operation in @income_ops, do: "text-success"
-  defp inv_amount_color(_), do: "text-error"
-
-  defp asset_type_label(type), do: Constants.asset_type_label(type)
 
   defp transfer_like?(description), do: Grana.Banking.TransferIdentity.transfer?(description)
 

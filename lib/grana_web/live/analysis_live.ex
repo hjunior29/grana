@@ -2,8 +2,6 @@ defmodule GranaWeb.AnalysisLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
-  alias Grana.Investments
-  alias Grana.Investments.{Constants, Institution}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -27,14 +25,11 @@ defmodule GranaWeb.AnalysisLive do
       |> Enum.map(fn {_y, m} -> m end)
       |> Enum.max(fn -> 0 end)
 
-    # All analyses (both banking and investments)
     analyses = Banking.list_ai_analyses(user_id)
 
     socket =
       socket
       |> assign(:page_title, "Análise")
-      |> assign(:tab, "banking")
-      # Banking state
       |> assign(:banks, banks)
       |> assign(:available_years, years)
       |> assign(:available_months, months)
@@ -53,77 +48,30 @@ defmodule GranaWeb.AnalysisLive do
       |> assign(:prompt_form, to_form(%{"prompt" => ""}))
       |> assign(:expanded_analyses, expanded_default(analyses))
       |> assign(:delete_target, nil)
-      # Investment state (lazy loaded)
-      |> assign(:inv_loaded, false)
 
     {:ok, socket}
   end
 
-  # ── Tab Switch ──
-
   @impl true
-  def handle_params(params, _uri, socket) do
-    tab = params["tab"] || socket.assigns.tab
-
-    socket =
-      case tab do
-        "investments" ->
-          socket
-          |> then(fn s ->
-            if s.assigns.inv_loaded, do: s, else: init_inv_data(s)
-          end)
-          |> apply_inv_url_params(params)
-          |> assign(:tab, "investments")
-
-        _ ->
-          assign(socket, :tab, "banking")
-      end
-
+  def handle_params(_params, _uri, socket) do
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, push_patch(socket, to: ~p"/analysis?tab=#{tab}")}
   end
 
   # ── Banking Events ──
 
+  @impl true
   def handle_event("select_year", %{"year" => year_str}, socket) do
     year = safe_to_int(year_str, Date.utc_today().year)
-
-    case socket.assigns.tab do
-      "banking" ->
-        {:noreply, socket |> put_filter(:year, year) |> put_filter(:month, 0)}
-
-      "investments" ->
-        socket = socket |> put_inv_filter(:year, year) |> put_inv_filter(:month, 0)
-        {:noreply, push_inv_patch(socket)}
-    end
+    {:noreply, socket |> put_filter(:year, year) |> put_filter(:month, 0)}
   end
 
   def handle_event("select_month", %{"month" => "all"}, socket) do
-    case socket.assigns.tab do
-      "banking" ->
-        {:noreply, put_filter(socket, :month, 0)}
-
-      "investments" ->
-        socket = put_inv_filter(socket, :month, 0)
-        {:noreply, push_inv_patch(socket)}
-    end
+    {:noreply, put_filter(socket, :month, 0)}
   end
 
   def handle_event("select_month", %{"month" => month_str}, socket) do
     month = safe_to_int(month_str, 0)
-
-    case socket.assigns.tab do
-      "banking" ->
-        {:noreply, put_filter(socket, :month, month)}
-
-      "investments" ->
-        socket = put_inv_filter(socket, :month, month)
-        {:noreply, push_inv_patch(socket)}
-    end
+    {:noreply, put_filter(socket, :month, month)}
   end
 
   def handle_event("select_bank", %{"bank" => bank}, socket) do
@@ -138,20 +86,6 @@ defmodule GranaWeb.AnalysisLive do
     {:noreply, put_filter(socket, :type, txn_type)}
   end
 
-  # ── Investment Filter Events ──
-
-  def handle_event("select_institution", %{"institution" => inst}, socket) do
-    socket = put_inv_filter(socket, :institution_id, inst)
-    {:noreply, push_inv_patch(socket)}
-  end
-
-  def handle_event("select_asset_type", %{"type" => type}, socket) do
-    socket = put_inv_filter(socket, :asset_type, type)
-    {:noreply, push_inv_patch(socket)}
-  end
-
-  # ── Shared Events ──
-
   def handle_event("update_prompt", %{"prompt" => prompt}, socket) do
     {:noreply,
      socket
@@ -160,14 +94,8 @@ defmodule GranaWeb.AnalysisLive do
   end
 
   def handle_event("analyze", _params, socket) do
-    %{current_scope: scope, custom_prompt: prompt, tab: tab} = socket.assigns
-
-    {context, filters} =
-      case tab do
-        "banking" -> {"banking", socket.assigns.filters}
-        "investments" -> {"investments", socket.assigns.inv_filters}
-      end
-
+    %{current_scope: scope, custom_prompt: prompt, filters: filters} = socket.assigns
+    context = "banking"
     custom_prompt = if prompt == "", do: nil, else: prompt
 
     # Check for duplicate analysis in the last 2 minutes
@@ -310,46 +238,6 @@ defmodule GranaWeb.AnalysisLive do
     {:noreply, socket}
   end
 
-  # ── Data Init ──
-
-  defp init_inv_data(socket) do
-    user_id = socket.assigns.current_scope.user.id
-
-    inv_years = Investments.available_years(user_id)
-    inv_months = Investments.available_months(user_id)
-
-    institutions =
-      Investments.available_institutions(user_id)
-      |> Enum.map(fn inst -> %{inst | logo_path: Institution.logo_url(inst)} end)
-
-    asset_types = Investments.available_asset_types(user_id)
-
-    current_year =
-      case inv_years do
-        [_ | _] -> List.last(inv_years)
-        [] -> Date.utc_today().year
-      end
-
-    current_month =
-      inv_months
-      |> Enum.filter(fn {y, _m} -> y == current_year end)
-      |> Enum.map(fn {_y, m} -> m end)
-      |> Enum.max(fn -> 0 end)
-
-    socket
-    |> assign(:inv_available_years, inv_years)
-    |> assign(:inv_available_months, inv_months)
-    |> assign(:inv_institutions, institutions)
-    |> assign(:inv_asset_types, asset_types)
-    |> assign(:inv_filters, %{
-      year: current_year,
-      month: current_month,
-      institution_id: "all",
-      asset_type: "all"
-    })
-    |> assign(:inv_loaded, true)
-  end
-
   # ── Helpers ──
 
   defp put_filter(socket, key, value) do
@@ -357,74 +245,11 @@ defmodule GranaWeb.AnalysisLive do
     assign(socket, :filters, filters)
   end
 
-  defp put_inv_filter(socket, key, value) do
-    filters = Map.put(socket.assigns.inv_filters, key, value)
-    assign(socket, :inv_filters, filters)
-  end
-
-  defp push_inv_patch(socket) do
-    filters = socket.assigns.inv_filters
-
-    params =
-      %{tab: "investments"}
-      |> then(fn p -> if filters.year, do: Map.put(p, :inv_year, filters.year), else: p end)
-      |> then(fn p ->
-        if filters.month && filters.month != 0, do: Map.put(p, :inv_month, filters.month), else: p
-      end)
-      |> then(fn p ->
-        if filters[:institution_id] not in [nil, "all"],
-          do: Map.put(p, :inv_inst, filters.institution_id),
-          else: p
-      end)
-      |> then(fn p ->
-        if filters[:asset_type] not in [nil, "all"],
-          do: Map.put(p, :inv_type, filters.asset_type),
-          else: p
-      end)
-
-    qs =
-      params
-      |> Enum.map(fn {k, v} -> "#{k}=#{URI.encode_www_form(to_string(v))}" end)
-      |> Enum.join("&")
-
-    push_patch(socket, to: "/analysis?#{qs}", replace: true)
-  end
-
-  # Safely parses client-supplied integers (URL params, phx-value). Returns the
-  # default (nil) on garbage instead of crashing the LiveView with String.to_integer.
   defp safe_to_int(value, default \\ nil) do
     case value |> to_string() |> Integer.parse() do
       {n, _} -> n
       :error -> default
     end
-  end
-
-  defp apply_inv_url_params(socket, params) do
-    socket
-    |> then(fn s ->
-      case safe_to_int(params["inv_year"]) do
-        nil -> s
-        y -> put_inv_filter(s, :year, y)
-      end
-    end)
-    |> then(fn s ->
-      case safe_to_int(params["inv_month"]) do
-        nil -> s
-        m -> put_inv_filter(s, :month, m)
-      end
-    end)
-    |> then(fn s ->
-      case params["inv_inst"] do
-        nil -> s
-        i -> put_inv_filter(s, :institution_id, i)
-      end
-    end)
-    |> then(fn s ->
-      case params["inv_type"] do
-        nil -> s
-        t -> put_inv_filter(s, :asset_type, t)
-      end
-    end)
   end
 
   defp expanded_default(analyses) do
@@ -471,20 +296,6 @@ defmodule GranaWeb.AnalysisLive do
   defp type_label("debit"), do: "Despesas"
   defp type_label("credit"), do: "Receitas"
   defp type_label(_), do: nil
-
-  defp inv_asset_type_label(type), do: Constants.asset_type_label(type)
-
-  defp filter_analyses(analyses, "banking") do
-    Enum.filter(analyses, fn a ->
-      a.filters_json["context"] != "investments"
-    end)
-  end
-
-  defp filter_analyses(analyses, "investments") do
-    Enum.filter(analyses, fn a ->
-      a.filters_json["context"] == "investments"
-    end)
-  end
 
   defp group_by_year(analyses) do
     analyses
@@ -541,30 +352,473 @@ defmodule GranaWeb.AnalysisLive do
           </p>
         </div>
 
-        <div role="tablist" class="tabs tabs-border mb-6">
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="banking"
-            class={["tab", @tab == "banking" && "tab-active"]}
-          >
-            <.icon name="hero-banknotes" class="size-4 mr-1" /> Bancário
-          </button>
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="investments"
-            class={["tab", @tab == "investments" && "tab-active"]}
-          >
-            <.icon name="hero-chart-bar" class="size-4 mr-1" /> Investimentos
-          </button>
+        <%!-- Filters --%>
+        <div :if={@available_years != []} class="mb-4 sm:mb-6 space-y-2">
+          <%!-- Row 1: Year + Month --%>
+          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+            <div class="flex gap-1">
+              <button
+                :for={y <- @available_years}
+                phx-click="select_year"
+                phx-value-year={y}
+                class={[
+                  "btn btn-xs sm:btn-sm",
+                  (y == @filters.year && "btn-primary") || "btn-ghost"
+                ]}
+              >
+                {y}
+              </button>
+            </div>
+            <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+            <div class="flex flex-wrap gap-1">
+              <button
+                phx-click="select_month"
+                phx-value-month="all"
+                class={["btn btn-xs", (@filters.month == 0 && "btn-primary") || "btn-ghost"]}
+              >
+                Ano
+              </button>
+              <button
+                :for={m <- months_for_year(@available_months, @filters.year)}
+                phx-click="select_month"
+                phx-value-month={m}
+                class={[
+                  "btn btn-xs",
+                  (@filters.month == m && "btn-primary") || "btn-ghost"
+                ]}
+              >
+                {Banking.month_name_short(m)}
+              </button>
+            </div>
+          </div>
+
+          <%!-- Row 2: Bank + Source + Txn Type --%>
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div :if={@banks != []} class="flex items-center gap-1">
+              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
+              <button
+                phx-click="select_bank"
+                phx-value-bank="all"
+                class={["btn btn-xs", (@filters.bank == "all" && "btn-primary") || "btn-ghost"]}
+              >
+                Todos
+              </button>
+              <button
+                :for={b <- @banks}
+                phx-click="select_bank"
+                phx-value-bank={b}
+                class={["btn btn-xs gap-1", (@filters.bank == b && "btn-primary") || "btn-ghost"]}
+              >
+                <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
+                <span class="hidden sm:inline">{String.capitalize(b)}</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
+              <button
+                phx-click="select_source"
+                phx-value-source="all"
+                class={[
+                  "btn btn-xs",
+                  (@filters.statement_type == "all" && "btn-primary") || "btn-ghost"
+                ]}
+              >
+                Todas
+              </button>
+              <button
+                phx-click="select_source"
+                phx-value-source="extrato"
+                class={[
+                  "btn btn-xs gap-1",
+                  (@filters.statement_type == "extrato" && "btn-primary") || "btn-ghost"
+                ]}
+              >
+                <.icon name="hero-banknotes" class="size-3" />
+                <span class="hidden sm:inline">Extrato</span>
+              </button>
+              <button
+                phx-click="select_source"
+                phx-value-source="fatura"
+                class={[
+                  "btn btn-xs gap-1",
+                  (@filters.statement_type == "fatura" && "btn-primary") || "btn-ghost"
+                ]}
+              >
+                <.icon name="hero-credit-card" class="size-3" />
+                <span class="hidden sm:inline">Fatura</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
+              <button
+                phx-click="select_txn_type"
+                phx-value-txn_type="all"
+                class={["btn btn-xs", (@filters.type == "all" && "btn-primary") || "btn-ghost"]}
+              >
+                Todas
+              </button>
+              <button
+                phx-click="select_txn_type"
+                phx-value-txn_type="debit"
+                class={["btn btn-xs", (@filters.type == "debit" && "btn-primary") || "btn-ghost"]}
+              >
+                Despesas
+              </button>
+              <button
+                phx-click="select_txn_type"
+                phx-value-txn_type="credit"
+                class={["btn btn-xs", (@filters.type == "credit" && "btn-primary") || "btn-ghost"]}
+              >
+                Receitas
+              </button>
+            </div>
+          </div>
         </div>
 
-        <%= if @tab == "banking" do %>
-          {render_banking_tab(assigns)}
-        <% else %>
-          {render_investments_tab(assigns)}
-        <% end %>
+        <%!-- Prompt + Analyze --%>
+        <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-8">
+          <.form for={@prompt_form} phx-submit="analyze" phx-change="update_prompt" novalidate>
+            <div class="mb-3 sm:mb-4">
+              <.input
+                type="textarea"
+                field={@prompt_form[:prompt]}
+                label="Pergunte algo sobre suas finanças (opcional)"
+                placeholder="Ex: Onde posso economizar? Qual categoria cresceu mais?"
+                rows={2}
+              />
+            </div>
+
+            <div class="flex flex-wrap gap-1.5 mb-3">
+              <button
+                :for={
+                  chip <- [
+                    "Onde posso economizar?",
+                    "Qual categoria cresceu mais?",
+                    "Como estão meus gastos fixos?",
+                    "Resumo do mês"
+                  ]
+                }
+                type="button"
+                phx-click="set_chip"
+                phx-value-text={chip}
+                class="btn btn-xs btn-outline btn-primary rounded-full font-normal"
+              >
+                {chip}
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm sm:btn-md gap-2 w-full sm:w-auto"
+              disabled={@loading}
+            >
+              <.icon :if={!@loading} name="hero-sparkles" class="size-4" />
+              {if @loading, do: "Analisando...", else: "Analisar com IA"}
+            </button>
+          </.form>
+        </div>
+
+        <%!-- Loading --%>
+        <div :if={@loading} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div class="flex items-center gap-3">
+            <span class="loading loading-spinner loading-sm text-primary" />
+            <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
+          </div>
+        </div>
+
+        <%!-- Empty State --%>
+        <div :if={@analyses == [] and !@loading} class="text-center py-10 sm:py-16">
+          <.icon name="hero-sparkles" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
+          <h2 class="text-lg sm:text-xl font-semibold mb-2">Nenhuma análise ainda</h2>
+          <p class="opacity-60 text-sm">Configure os filtros e clique em "Analisar com IA"</p>
+        </div>
+
+        <%!-- Analyses grouped by year --%>
+        <div :if={@analyses != []} class="space-y-4 sm:space-y-6">
+          <div :for={{year, year_analyses} <- group_by_year(@analyses)}>
+            <button
+              phx-click="toggle_year"
+              phx-value-year={year}
+              class="flex items-center gap-2 mb-2 sm:mb-3 group cursor-pointer"
+            >
+              <.icon
+                name="hero-chevron-down"
+                class={[
+                  "size-4 opacity-40 group-hover:opacity-70 transition-transform duration-250 ease-out",
+                  MapSet.member?(@collapsed_years, year) && "-rotate-90"
+                ]}
+              />
+              <h3 class="text-lg font-bold">{year}</h3>
+              <span class="badge badge-sm badge-ghost">{length(year_analyses)}</span>
+            </button>
+
+            <div class={[
+              "grid transition-[grid-template-rows] duration-250 ease-out",
+              if(MapSet.member?(@collapsed_years, year),
+                do: "grid-rows-[0fr]",
+                else: "grid-rows-[1fr]"
+              )
+            ]}>
+              <div class="overflow-hidden">
+                <div class="space-y-3 sm:space-y-4 ml-2 sm:ml-6">
+                  <div :for={analysis <- year_analyses} class="card bg-base-200 overflow-hidden">
+                    <%!-- New format --%>
+                    <div :if={is_new_format?(analysis)} class="p-3 sm:p-5">
+                      <%!-- Header (always visible, clickable to toggle) --%>
+                      <div
+                        class="flex items-start justify-between gap-2 sm:gap-3 cursor-pointer"
+                        phx-click="toggle_analysis"
+                        phx-value-id={analysis.id}
+                      >
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 sm:gap-3 mb-1">
+                            <.icon
+                              name="hero-chevron-down"
+                              class={[
+                                "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
+                                !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
+                              ]}
+                            />
+                            <span class={[
+                              "inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg text-xs sm:text-sm font-bold border shrink-0",
+                              score_color(analysis.result_json["nota"])
+                            ]}>
+                              {format_score(analysis.result_json["nota"])}
+                            </span>
+                            <div class="min-w-0">
+                              <h4
+                                class="font-semibold text-xs sm:text-sm truncate"
+                                title={analysis.result_json["titulo"]}
+                              >
+                                {analysis.result_json["titulo"]}
+                              </h4>
+                              <div class="flex flex-wrap items-center gap-1 mt-0.5">
+                                <span class="text-[10px] sm:text-xs opacity-40">
+                                  {format_datetime_br(analysis.inserted_at)}
+                                </span>
+                                <span
+                                  :if={
+                                    analysis.filters_json["month"] &&
+                                      analysis.filters_json["month"] != 0
+                                  }
+                                  class="badge badge-xs badge-ghost"
+                                >
+                                  {Banking.month_name(analysis.filters_json["month"])}
+                                </span>
+                                <span
+                                  :if={analysis.filters_json["month"] == 0}
+                                  class="badge badge-xs badge-ghost"
+                                >
+                                  Ano todo
+                                </span>
+                                <span
+                                  :if={
+                                    analysis.filters_json["bank"] &&
+                                      analysis.filters_json["bank"] != "all"
+                                  }
+                                  class="badge badge-xs badge-ghost"
+                                >
+                                  {String.capitalize(analysis.filters_json["bank"])}
+                                </span>
+                                <span
+                                  :if={source_label(analysis.filters_json["statement_type"])}
+                                  class="badge badge-xs badge-ghost"
+                                >
+                                  {source_label(analysis.filters_json["statement_type"])}
+                                </span>
+                                <span
+                                  :if={type_label(analysis.filters_json["type"])}
+                                  class="badge badge-xs badge-ghost"
+                                >
+                                  {type_label(analysis.filters_json["type"])}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <p
+                            :if={analysis.prompt && analysis.prompt != ""}
+                            class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13"
+                            title={analysis.prompt}
+                          >
+                            "{analysis.prompt}"
+                          </p>
+                        </div>
+                        <button
+                          phx-click="confirm_delete"
+                          phx-value-id={analysis.id}
+                          class="btn btn-ghost btn-xs text-error shrink-0 opacity-40 hover:opacity-100"
+                        >
+                          <.icon name="hero-trash" class="size-4" />
+                        </button>
+                      </div>
+
+                      <%!-- Collapsible body --%>
+                      <div class={[
+                        "grid transition-[grid-template-rows] duration-250 ease-out",
+                        if(MapSet.member?(@expanded_analyses, analysis.id),
+                          do: "grid-rows-[1fr]",
+                          else: "grid-rows-[0fr]"
+                        )
+                      ]}>
+                        <div class="overflow-hidden">
+                          <div class="mt-3">
+                            <p class="text-xs sm:text-sm opacity-80 mb-3 sm:mb-4">
+                              {analysis.result_json["resumo"]}
+                            </p>
+
+                            <div class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
+                              <div
+                                :for={ponto <- analysis.result_json["pontos"] || []}
+                                class="flex items-start gap-2 text-xs sm:text-sm"
+                              >
+                                <.icon
+                                  name={elem(ponto_icon(ponto["tipo"]), 0)}
+                                  class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
+                                />
+                                <span class="opacity-80">{ponto["texto"]}</span>
+                              </div>
+                            </div>
+
+                            <div
+                              :if={analysis.result_json["alerta"]}
+                              class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
+                            >
+                              <.icon name="hero-exclamation-triangle" class="size-4" />
+                              <span>{analysis.result_json["alerta"]}</span>
+                            </div>
+
+                            <div
+                              :if={analysis.result_json["resposta"]}
+                              class="bg-primary/5 border border-primary/10 rounded-lg p-2.5 sm:p-3"
+                            >
+                              <div class="flex items-center gap-1.5 mb-1">
+                                <.icon
+                                  name="hero-chat-bubble-left-right"
+                                  class="size-3.5 text-primary"
+                                />
+                                <span class="text-xs font-medium text-primary">Resposta</span>
+                              </div>
+                              <p class="text-xs sm:text-sm opacity-80">
+                                {analysis.result_json["resposta"]}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <%!-- Legacy format (old analyses) --%>
+                    <div :if={!is_new_format?(analysis)} class="p-3 sm:p-5">
+                      <%!-- Header (always visible, clickable to toggle) --%>
+                      <div
+                        class="flex items-start justify-between cursor-pointer"
+                        phx-click="toggle_analysis"
+                        phx-value-id={analysis.id}
+                      >
+                        <div>
+                          <div class="flex items-center gap-2 mb-1">
+                            <.icon
+                              name="hero-chevron-down"
+                              class={[
+                                "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
+                                !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
+                              ]}
+                            />
+                            <.icon name="hero-sparkles" class="size-4 text-primary" />
+                            <span class="font-semibold text-xs sm:text-sm">
+                              {format_datetime_br(analysis.inserted_at)}
+                            </span>
+                          </div>
+                          <div class="flex flex-wrap gap-1 ml-5">
+                            <span
+                              :if={analysis.filters_json["year"]}
+                              class="badge badge-xs badge-ghost"
+                            >
+                              {analysis.filters_json["year"]}
+                            </span>
+                            <span
+                              :if={
+                                analysis.filters_json["month"] && analysis.filters_json["month"] != 0
+                              }
+                              class="badge badge-xs badge-ghost"
+                            >
+                              {Banking.month_name(analysis.filters_json["month"])}
+                            </span>
+                            <span
+                              :if={
+                                analysis.filters_json["bank"] &&
+                                  analysis.filters_json["bank"] != "all"
+                              }
+                              class="badge badge-xs badge-ghost"
+                            >
+                              {String.capitalize(analysis.filters_json["bank"])}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          phx-click="confirm_delete"
+                          phx-value-id={analysis.id}
+                          class="btn btn-ghost btn-xs text-error opacity-40 hover:opacity-100"
+                        >
+                          <.icon name="hero-trash" class="size-4" />
+                        </button>
+                      </div>
+
+                      <%!-- Collapsible body --%>
+                      <div class={[
+                        "grid transition-[grid-template-rows] duration-250 ease-out",
+                        if(MapSet.member?(@expanded_analyses, analysis.id),
+                          do: "grid-rows-[1fr]",
+                          else: "grid-rows-[0fr]"
+                        )
+                      ]}>
+                        <div class="overflow-hidden">
+                          <div class="mt-3">
+                            <p class="text-xs sm:text-sm mb-3 opacity-80">
+                              {analysis.result_json["resumo"]}
+                            </p>
+
+                            <div class="space-y-2 mb-3">
+                              <div
+                                :for={insight <- analysis.result_json["insights"] || []}
+                                class="flex items-start gap-2 text-xs sm:text-sm"
+                              >
+                                <.icon
+                                  name="hero-light-bulb"
+                                  class="size-4 text-warning shrink-0 mt-0.5"
+                                />
+                                <span class="opacity-80">{insight}</span>
+                              </div>
+                            </div>
+
+                            <div
+                              :if={analysis.result_json["alerta"]}
+                              class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
+                            >
+                              <.icon name="hero-exclamation-triangle" class="size-4" />
+                              <span>{analysis.result_json["alerta"]}</span>
+                            </div>
+
+                            <div
+                              :if={analysis.result_json["dica"]}
+                              class="flex items-start gap-2 text-xs sm:text-sm bg-success/10 rounded-lg p-3"
+                            >
+                              <.icon
+                                name="hero-check-circle"
+                                class="size-4 text-success shrink-0 mt-0.5"
+                              />
+                              <span class="opacity-80">{analysis.result_json["dica"]}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <%!-- API Key Alert Modal --%>
         <dialog
@@ -624,611 +878,6 @@ defmodule GranaWeb.AnalysisLive do
         </dialog>
       </div>
     </Layouts.app>
-    """
-  end
-
-  # ── Banking Tab ──
-
-  defp render_banking_tab(assigns) do
-    assigns = assign(assigns, :tab_analyses, filter_analyses(assigns.analyses, "banking"))
-
-    ~H"""
-    <%!-- Filters --%>
-    <div :if={@available_years != []} class="mb-4 sm:mb-6 space-y-2">
-      <%!-- Row 1: Year + Month --%>
-      <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-        <div class="flex gap-1">
-          <button
-            :for={y <- @available_years}
-            phx-click="select_year"
-            phx-value-year={y}
-            class={[
-              "btn btn-xs sm:btn-sm",
-              (y == @filters.year && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            {y}
-          </button>
-        </div>
-        <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
-        <div class="flex flex-wrap gap-1">
-          <button
-            phx-click="select_month"
-            phx-value-month="all"
-            class={["btn btn-xs", (@filters.month == 0 && "btn-primary") || "btn-ghost"]}
-          >
-            Ano
-          </button>
-          <button
-            :for={m <- months_for_year(@available_months, @filters.year)}
-            phx-click="select_month"
-            phx-value-month={m}
-            class={[
-              "btn btn-xs",
-              (@filters.month == m && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            {Banking.month_name_short(m)}
-          </button>
-        </div>
-      </div>
-
-      <%!-- Row 2: Bank + Source + Txn Type --%>
-      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div :if={@banks != []} class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
-          <button
-            phx-click="select_bank"
-            phx-value-bank="all"
-            class={["btn btn-xs", (@filters.bank == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todos
-          </button>
-          <button
-            :for={b <- @banks}
-            phx-click="select_bank"
-            phx-value-bank={b}
-            class={["btn btn-xs gap-1", (@filters.bank == b && "btn-primary") || "btn-ghost"]}
-          >
-            <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
-            <span class="hidden sm:inline">{String.capitalize(b)}</span>
-          </button>
-        </div>
-        <div class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
-          <button
-            phx-click="select_source"
-            phx-value-source="all"
-            class={[
-              "btn btn-xs",
-              (@filters.statement_type == "all" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            Todas
-          </button>
-          <button
-            phx-click="select_source"
-            phx-value-source="extrato"
-            class={[
-              "btn btn-xs gap-1",
-              (@filters.statement_type == "extrato" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            <.icon name="hero-banknotes" class="size-3" />
-            <span class="hidden sm:inline">Extrato</span>
-          </button>
-          <button
-            phx-click="select_source"
-            phx-value-source="fatura"
-            class={[
-              "btn btn-xs gap-1",
-              (@filters.statement_type == "fatura" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            <.icon name="hero-credit-card" class="size-3" />
-            <span class="hidden sm:inline">Fatura</span>
-          </button>
-        </div>
-        <div class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="all"
-            class={["btn btn-xs", (@filters.type == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todas
-          </button>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="debit"
-            class={["btn btn-xs", (@filters.type == "debit" && "btn-primary") || "btn-ghost"]}
-          >
-            Despesas
-          </button>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="credit"
-            class={["btn btn-xs", (@filters.type == "credit" && "btn-primary") || "btn-ghost"]}
-          >
-            Receitas
-          </button>
-        </div>
-      </div>
-    </div>
-
-    {render_prompt_and_results(assigns)}
-    """
-  end
-
-  # ── Investments Tab ──
-
-  defp render_investments_tab(assigns) do
-    assigns = assign(assigns, :tab_analyses, filter_analyses(assigns.analyses, "investments"))
-
-    ~H"""
-    <%!-- Filters --%>
-    <div :if={@inv_available_years != []} class="mb-4 sm:mb-6 space-y-2">
-      <%!-- Row 1: Year + Month --%>
-      <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-        <div class="flex gap-1">
-          <button
-            :for={y <- @inv_available_years}
-            phx-click="select_year"
-            phx-value-year={y}
-            class={[
-              "btn btn-xs sm:btn-sm",
-              (y == @inv_filters.year && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            {y}
-          </button>
-        </div>
-        <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
-        <div class="flex flex-wrap gap-1">
-          <button
-            phx-click="select_month"
-            phx-value-month="all"
-            class={["btn btn-xs", (@inv_filters.month == 0 && "btn-primary") || "btn-ghost"]}
-          >
-            Ano
-          </button>
-          <button
-            :for={m <- months_for_year(@inv_available_months, @inv_filters.year)}
-            phx-click="select_month"
-            phx-value-month={m}
-            class={[
-              "btn btn-xs",
-              (@inv_filters.month == m && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            {Banking.month_name_short(m)}
-          </button>
-        </div>
-      </div>
-
-      <%!-- Row 2: Institution + Asset Type --%>
-      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div :if={length(@inv_institutions) > 1} class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Instituição</span>
-          <button
-            phx-click="select_institution"
-            phx-value-institution="all"
-            class={[
-              "btn btn-xs",
-              (@inv_filters.institution_id == "all" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            Todas
-          </button>
-          <button
-            :for={inst <- @inv_institutions}
-            phx-click="select_institution"
-            phx-value-institution={inst.id}
-            class={[
-              "btn btn-xs gap-1",
-              (to_string(@inv_filters.institution_id) == to_string(inst.id) && "btn-primary") ||
-                "btn-ghost"
-            ]}
-          >
-            <div
-              :if={inst.logo_path}
-              class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0"
-            >
-              <img src={inst.logo_path} alt="" />
-            </div>
-            <span class="hidden sm:inline">{inst.name}</span>
-          </button>
-        </div>
-
-        <div :if={length(@inv_asset_types) > 1} class="flex flex-wrap items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
-          <button
-            phx-click="select_asset_type"
-            phx-value-type="all"
-            class={[
-              "btn btn-xs",
-              (@inv_filters.asset_type == "all" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            Todos
-          </button>
-          <button
-            :for={type <- @inv_asset_types}
-            phx-click="select_asset_type"
-            phx-value-type={type}
-            class={[
-              "btn btn-xs",
-              (@inv_filters.asset_type == type && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            {inv_asset_type_label(type)}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    {render_prompt_and_results(assigns)}
-    """
-  end
-
-  # ── Shared: Prompt + Results ──
-
-  defp render_prompt_and_results(assigns) do
-    ~H"""
-    <%!-- Prompt + Analyze --%>
-    <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-8">
-      <.form for={@prompt_form} phx-submit="analyze" phx-change="update_prompt" novalidate>
-        <div class="mb-3 sm:mb-4">
-          <.input
-            type="textarea"
-            field={@prompt_form[:prompt]}
-            label="Pergunte algo sobre suas finanças (opcional)"
-            placeholder="Ex: Onde posso economizar? Qual categoria cresceu mais?"
-            rows={2}
-          />
-        </div>
-
-        <div class="flex flex-wrap gap-1.5 mb-3">
-          <button
-            :for={
-              chip <- [
-                "Onde posso economizar?",
-                "Qual categoria cresceu mais?",
-                "Como estão meus gastos fixos?",
-                "Resumo do mês"
-              ]
-            }
-            type="button"
-            phx-click="set_chip"
-            phx-value-text={chip}
-            class="btn btn-xs btn-outline btn-primary rounded-full font-normal"
-          >
-            {chip}
-          </button>
-        </div>
-
-        <button
-          type="submit"
-          class="btn btn-primary btn-sm sm:btn-md gap-2 w-full sm:w-auto"
-          disabled={@loading}
-        >
-          <.icon :if={!@loading} name="hero-sparkles" class="size-4" />
-          {if @loading, do: "Analisando...", else: "Analisar com IA"}
-        </button>
-      </.form>
-    </div>
-
-    <%!-- Loading --%>
-    <div :if={@loading} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
-      <div class="flex items-center gap-3">
-        <span class="loading loading-spinner loading-sm text-primary" />
-        <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
-      </div>
-    </div>
-
-    <%!-- Empty State --%>
-    <div :if={@tab_analyses == [] and !@loading} class="text-center py-10 sm:py-16">
-      <.icon name="hero-sparkles" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
-      <h2 class="text-lg sm:text-xl font-semibold mb-2">Nenhuma análise ainda</h2>
-      <p class="opacity-60 text-sm">Configure os filtros e clique em "Analisar com IA"</p>
-    </div>
-
-    <%!-- Analyses grouped by year --%>
-    <div :if={@tab_analyses != []} class="space-y-4 sm:space-y-6">
-      <div :for={{year, year_analyses} <- group_by_year(@tab_analyses)}>
-        <button
-          phx-click="toggle_year"
-          phx-value-year={year}
-          class="flex items-center gap-2 mb-2 sm:mb-3 group cursor-pointer"
-        >
-          <.icon
-            name="hero-chevron-down"
-            class={[
-              "size-4 opacity-40 group-hover:opacity-70 transition-transform duration-250 ease-out",
-              MapSet.member?(@collapsed_years, year) && "-rotate-90"
-            ]}
-          />
-          <h3 class="text-lg font-bold">{year}</h3>
-          <span class="badge badge-sm badge-ghost">{length(year_analyses)}</span>
-        </button>
-
-        <div class={[
-          "grid transition-[grid-template-rows] duration-250 ease-out",
-          if(MapSet.member?(@collapsed_years, year),
-            do: "grid-rows-[0fr]",
-            else: "grid-rows-[1fr]"
-          )
-        ]}>
-          <div class="overflow-hidden">
-            <div class="space-y-3 sm:space-y-4 ml-2 sm:ml-6">
-              <div :for={analysis <- year_analyses} class="card bg-base-200 overflow-hidden">
-                <%!-- New format --%>
-                <div :if={is_new_format?(analysis)} class="p-3 sm:p-5">
-                  <%!-- Header (always visible, clickable to toggle) --%>
-                  <div
-                    class="flex items-start justify-between gap-2 sm:gap-3 cursor-pointer"
-                    phx-click="toggle_analysis"
-                    phx-value-id={analysis.id}
-                  >
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2 sm:gap-3 mb-1">
-                        <.icon
-                          name="hero-chevron-down"
-                          class={[
-                            "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
-                            !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
-                          ]}
-                        />
-                        <span class={[
-                          "inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg text-xs sm:text-sm font-bold border shrink-0",
-                          score_color(analysis.result_json["nota"])
-                        ]}>
-                          {format_score(analysis.result_json["nota"])}
-                        </span>
-                        <div class="min-w-0">
-                          <h4
-                            class="font-semibold text-xs sm:text-sm truncate"
-                            title={analysis.result_json["titulo"]}
-                          >
-                            {analysis.result_json["titulo"]}
-                          </h4>
-                          <div class="flex flex-wrap items-center gap-1 mt-0.5">
-                            <span class="text-[10px] sm:text-xs opacity-40">
-                              {format_datetime_br(analysis.inserted_at)}
-                            </span>
-                            <span
-                              :if={analysis.filters_json["context"] == "investments"}
-                              class="badge badge-xs badge-info"
-                            >
-                              Investimentos
-                            </span>
-                            <span
-                              :if={
-                                analysis.filters_json["month"] &&
-                                  analysis.filters_json["month"] != 0
-                              }
-                              class="badge badge-xs badge-ghost"
-                            >
-                              {Banking.month_name(analysis.filters_json["month"])}
-                            </span>
-                            <span
-                              :if={analysis.filters_json["month"] == 0}
-                              class="badge badge-xs badge-ghost"
-                            >
-                              Ano todo
-                            </span>
-                            <span
-                              :if={
-                                analysis.filters_json["bank"] &&
-                                  analysis.filters_json["bank"] != "all"
-                              }
-                              class="badge badge-xs badge-ghost"
-                            >
-                              {String.capitalize(analysis.filters_json["bank"])}
-                            </span>
-                            <span
-                              :if={source_label(analysis.filters_json["statement_type"])}
-                              class="badge badge-xs badge-ghost"
-                            >
-                              {source_label(analysis.filters_json["statement_type"])}
-                            </span>
-                            <span
-                              :if={type_label(analysis.filters_json["type"])}
-                              class="badge badge-xs badge-ghost"
-                            >
-                              {type_label(analysis.filters_json["type"])}
-                            </span>
-                            <span
-                              :if={
-                                analysis.filters_json["asset_type"] &&
-                                  analysis.filters_json["asset_type"] != "all"
-                              }
-                              class="badge badge-xs badge-ghost"
-                            >
-                              {inv_asset_type_label(analysis.filters_json["asset_type"])}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <p
-                        :if={analysis.prompt && analysis.prompt != ""}
-                        class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13"
-                        title={analysis.prompt}
-                      >
-                        "{analysis.prompt}"
-                      </p>
-                    </div>
-                    <button
-                      phx-click="confirm_delete"
-                      phx-value-id={analysis.id}
-                      class="btn btn-ghost btn-xs text-error shrink-0 opacity-40 hover:opacity-100"
-                    >
-                      <.icon name="hero-trash" class="size-4" />
-                    </button>
-                  </div>
-
-                  <%!-- Collapsible body --%>
-                  <div class={[
-                    "grid transition-[grid-template-rows] duration-250 ease-out",
-                    if(MapSet.member?(@expanded_analyses, analysis.id),
-                      do: "grid-rows-[1fr]",
-                      else: "grid-rows-[0fr]"
-                    )
-                  ]}>
-                    <div class="overflow-hidden">
-                      <div class="mt-3">
-                        <p class="text-xs sm:text-sm opacity-80 mb-3 sm:mb-4">
-                          {analysis.result_json["resumo"]}
-                        </p>
-
-                        <div class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
-                          <div
-                            :for={ponto <- analysis.result_json["pontos"] || []}
-                            class="flex items-start gap-2 text-xs sm:text-sm"
-                          >
-                            <.icon
-                              name={elem(ponto_icon(ponto["tipo"]), 0)}
-                              class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
-                            />
-                            <span class="opacity-80">{ponto["texto"]}</span>
-                          </div>
-                        </div>
-
-                        <div
-                          :if={analysis.result_json["alerta"]}
-                          class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
-                        >
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          <span>{analysis.result_json["alerta"]}</span>
-                        </div>
-
-                        <div
-                          :if={analysis.result_json["resposta"]}
-                          class="bg-primary/5 border border-primary/10 rounded-lg p-2.5 sm:p-3"
-                        >
-                          <div class="flex items-center gap-1.5 mb-1">
-                            <.icon name="hero-chat-bubble-left-right" class="size-3.5 text-primary" />
-                            <span class="text-xs font-medium text-primary">Resposta</span>
-                          </div>
-                          <p class="text-xs sm:text-sm opacity-80">
-                            {analysis.result_json["resposta"]}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <%!-- Legacy format (old analyses) --%>
-                <div :if={!is_new_format?(analysis)} class="p-3 sm:p-5">
-                  <%!-- Header (always visible, clickable to toggle) --%>
-                  <div
-                    class="flex items-start justify-between cursor-pointer"
-                    phx-click="toggle_analysis"
-                    phx-value-id={analysis.id}
-                  >
-                    <div>
-                      <div class="flex items-center gap-2 mb-1">
-                        <.icon
-                          name="hero-chevron-down"
-                          class={[
-                            "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
-                            !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
-                          ]}
-                        />
-                        <.icon name="hero-sparkles" class="size-4 text-primary" />
-                        <span class="font-semibold text-xs sm:text-sm">
-                          {format_datetime_br(analysis.inserted_at)}
-                        </span>
-                      </div>
-                      <div class="flex flex-wrap gap-1 ml-5">
-                        <span
-                          :if={analysis.filters_json["year"]}
-                          class="badge badge-xs badge-ghost"
-                        >
-                          {analysis.filters_json["year"]}
-                        </span>
-                        <span
-                          :if={analysis.filters_json["month"] && analysis.filters_json["month"] != 0}
-                          class="badge badge-xs badge-ghost"
-                        >
-                          {Banking.month_name(analysis.filters_json["month"])}
-                        </span>
-                        <span
-                          :if={
-                            analysis.filters_json["bank"] &&
-                              analysis.filters_json["bank"] != "all"
-                          }
-                          class="badge badge-xs badge-ghost"
-                        >
-                          {String.capitalize(analysis.filters_json["bank"])}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      phx-click="confirm_delete"
-                      phx-value-id={analysis.id}
-                      class="btn btn-ghost btn-xs text-error opacity-40 hover:opacity-100"
-                    >
-                      <.icon name="hero-trash" class="size-4" />
-                    </button>
-                  </div>
-
-                  <%!-- Collapsible body --%>
-                  <div class={[
-                    "grid transition-[grid-template-rows] duration-250 ease-out",
-                    if(MapSet.member?(@expanded_analyses, analysis.id),
-                      do: "grid-rows-[1fr]",
-                      else: "grid-rows-[0fr]"
-                    )
-                  ]}>
-                    <div class="overflow-hidden">
-                      <div class="mt-3">
-                        <p class="text-xs sm:text-sm mb-3 opacity-80">
-                          {analysis.result_json["resumo"]}
-                        </p>
-
-                        <div class="space-y-2 mb-3">
-                          <div
-                            :for={insight <- analysis.result_json["insights"] || []}
-                            class="flex items-start gap-2 text-xs sm:text-sm"
-                          >
-                            <.icon
-                              name="hero-light-bulb"
-                              class="size-4 text-warning shrink-0 mt-0.5"
-                            />
-                            <span class="opacity-80">{insight}</span>
-                          </div>
-                        </div>
-
-                        <div
-                          :if={analysis.result_json["alerta"]}
-                          class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
-                        >
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          <span>{analysis.result_json["alerta"]}</span>
-                        </div>
-
-                        <div
-                          :if={analysis.result_json["dica"]}
-                          class="flex items-start gap-2 text-xs sm:text-sm bg-success/10 rounded-lg p-3"
-                        >
-                          <.icon
-                            name="hero-check-circle"
-                            class="size-4 text-success shrink-0 mt-0.5"
-                          />
-                          <span class="opacity-80">{analysis.result_json["dica"]}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
     """
   end
 end

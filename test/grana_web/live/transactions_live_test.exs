@@ -4,7 +4,6 @@ defmodule GranaWeb.TransactionsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Grana.Banking
-  alias Grana.Investments
 
   setup :register_and_log_in_user
 
@@ -46,16 +45,13 @@ defmodule GranaWeb.TransactionsLiveTest do
     assert has_element?(view, "a[href*='sort_by=amount']", "Valor")
   end
 
-  test "shows banking and investment transactions in one table", %{conn: conn, user: user} do
+  test "shows banking transactions in the table", %{conn: conn, user: user} do
     bank_txn = banking_transaction_fixture(user, description: "PADARIA", amount: "-12.00")
-    inv_txn = investment_transaction_fixture(user, asset_name: "TESOURO SELIC", amount: "100.00")
 
     {:ok, view, html} = live(conn, ~p"/transactions")
 
     assert has_element?(view, "#transaction-banking-#{bank_txn.id}")
-    assert has_element?(view, "#transaction-investment-#{inv_txn.id}")
     assert html =~ "PADARIA"
-    assert html =~ "TESOURO SELIC"
   end
 
   test "marks a transaction as fixed from the transaction row", %{conn: conn, user: user} do
@@ -158,40 +154,6 @@ defmodule GranaWeb.TransactionsLiveTest do
 
     user.id
     |> Banking.list_transactions(search: description, date_from: date, date_to: date)
-    |> List.first()
-  end
-
-  defp investment_transaction_fixture(user, attrs) do
-    inst = Investments.ensure_b3_institution(user.id)
-
-    {:ok, statement} =
-      Investments.create_statement(%{
-        filename: "transactions-live-investments-test.xlsx",
-        user_id: user.id,
-        institution_id: inst.id,
-        status: "completed"
-      })
-
-    asset_name = Keyword.fetch!(attrs, :asset_name)
-    date = Keyword.get(attrs, :date, ~D[2026-01-11])
-
-    {1, _} =
-      Investments.bulk_insert_transactions([
-        %{
-          date: date,
-          asset_name: asset_name,
-          asset_ticker: Keyword.get(attrs, :asset_ticker),
-          asset_type: Keyword.get(attrs, :asset_type, "renda_fixa"),
-          operation: Keyword.get(attrs, :operation, "compra"),
-          total_amount: Decimal.new(Keyword.fetch!(attrs, :amount)),
-          user_id: user.id,
-          statement_id: statement.id,
-          institution_id: inst.id
-        }
-      ])
-
-    user.id
-    |> Investments.list_transactions(search: asset_name, date_from: date, date_to: date)
     |> List.first()
   end
 

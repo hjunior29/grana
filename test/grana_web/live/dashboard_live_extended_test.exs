@@ -6,9 +6,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
   import Phoenix.LiveViewTest
 
   alias Grana.BankingFixtures
-  alias Grana.InvestmentsFixtures
   alias Grana.Banking
-  alias Grana.Investments
 
   setup :register_and_log_in_user
 
@@ -19,19 +17,10 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       assert html =~ "Despesas Fixas" or html =~ "Nenhuma"
     end
 
-    test "switch to investments tab renders investments section", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard")
-
-      render_click(view, "switch_tab", %{"tab" => "investments"})
-
-      html = render(view)
-      assert html =~ "Investimento" or html =~ "Portfolio" or html =~ "Nenhum"
-    end
-
     test "switch back to overview tab", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
 
-      render_click(view, "switch_tab", %{"tab" => "investments"})
+      render_click(view, "switch_tab", %{"tab" => "recurring"})
       render_click(view, "switch_tab", %{"tab" => "overview"})
 
       html = render(view)
@@ -98,24 +87,6 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       assert html =~ "Dashboard"
     end
 
-    test "select_institution filters by investment institution", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "select_institution", %{"institution" => "all"})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "select_asset_type filters investments by asset type", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "select_asset_type", %{"type" => "acao"})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
     test "toggle-category toggles nil category filter", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
 
@@ -141,24 +112,6 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       render_click(view, "reset-categories", %{})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "toggle-asset toggles an investment asset filter", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "toggle-asset", %{"id" => "PETR4"})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "reset-assets clears asset filters", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard")
-
-      render_click(view, "reset-assets", %{})
 
       html = render(view)
       assert html =~ "Dashboard"
@@ -228,21 +181,6 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
 
       assert html =~ "Dashboard"
-    end
-
-    test "shows investment data when investments exist", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        total_amount: "500.00",
-        operation: "compra"
-      })
-
-      {:ok, view, _html} = live(conn, ~p"/dashboard")
-
-      render_click(view, "switch_tab", %{"tab" => "investments"})
-
-      html = render(view)
-      assert html =~ "Dashboard" or html =~ "PETR4" or html =~ "Portfolio"
     end
   end
 
@@ -327,100 +265,6 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       render_click(view, "select_view_total", %{})
-      render_click(view, "select_view_total", %{})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-  end
-
-  describe "dashboard with investment data" do
-    setup %{user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        asset_ticker: "PETR4",
-        asset_type: "acao",
-        total_amount: "500.00",
-        operation: "compra"
-      })
-
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "HGLG11",
-        asset_ticker: "HGLG11",
-        asset_type: "fii",
-        total_amount: "1000.00",
-        operation: "compra"
-      })
-
-      :ok
-    end
-
-    test "investments tab with data shows holdings", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "select_institution with actual institution", %{conn: conn, user: user} do
-      institutions = Investments.available_institutions(user.id)
-
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      if institutions != [] do
-        inst = hd(institutions)
-        render_click(view, "select_institution", %{"institution" => to_string(inst.id)})
-        render_click(view, "select_institution", %{"institution" => "all"})
-      else
-        render_click(view, "select_institution", %{"institution" => "all"})
-      end
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "toggle-asset with actual ticker", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "toggle-asset", %{"id" => "PETR4"})
-      render_click(view, "toggle-asset", %{"id" => "PETR4"})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "select_year for investments", %{conn: conn} do
-      year = Date.utc_today().year
-
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "select_year", %{"year" => to_string(year)})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "select_month all on investments tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "select_month", %{"month" => "all"})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "select_month specific on investments tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
-      render_click(view, "select_month", %{"month" => "1"})
-
-      html = render(view)
-      assert html =~ "Dashboard"
-    end
-
-    test "select_view_total on investments tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=investments")
-
       render_click(view, "select_view_total", %{})
 
       html = render(view)
@@ -716,44 +560,6 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       end
 
       {:ok, _view, html} = live(conn, ~p"/dashboard?tab=recurring")
-      assert html =~ "Dashboard"
-    end
-  end
-
-  describe "dashboard investments with market data" do
-    setup %{user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "VALE3",
-        asset_ticker: "VALE3",
-        asset_type: "acao",
-        operation: "compra",
-        quantity: "10",
-        unit_price: "50.00",
-        total_amount: "500.00"
-      })
-
-      stub(Req, :get, fn _url, _opts ->
-        {:ok,
-         %Req.Response{
-           status: 200,
-           body: %{
-             "results" => [
-               %{
-                 "symbol" => "VALE3",
-                 "regularMarketPrice" => 60.0,
-                 "regularMarketChangePercent" => 20.0,
-                 "logourl" => nil
-               }
-             ]
-           }
-         }}
-      end)
-
-      :ok
-    end
-
-    test "investments tab with positive gain renders gain_loss_class green", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/dashboard?tab=investments")
       assert html =~ "Dashboard"
     end
   end

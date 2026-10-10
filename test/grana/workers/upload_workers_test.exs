@@ -2,7 +2,6 @@ defmodule Grana.Workers.UploadWorkersTest do
   use Grana.DataCase, async: false
 
   alias Grana.Workers.StatementUploadWorker
-  alias Grana.Workers.InvestmentUploadWorker
 
   import Grana.AccountsFixtures
 
@@ -58,27 +57,6 @@ defmodule Grana.Workers.UploadWorkersTest do
       assert_receive {:upload_complete, results}, 5_000
       # First file should be a decode error
       assert {:error, "bad.csv", "Arquivo com codificação inválida"} = Enum.at(results, 0)
-    end
-  end
-
-  describe "InvestmentUploadWorker with invalid base64" do
-    test "reports error for corrupted base64 content", %{user: user, topic: topic} do
-      job =
-        InvestmentUploadWorker.new(%{
-          "files" => [
-            %{"filename" => "bad.xlsx", "content_b64" => "%%%invalid%%%"}
-          ],
-          "institution_slug" => "b3",
-          "user_id" => user.id,
-          "topic" => topic
-        })
-        |> Oban.insert!()
-
-      result = InvestmentUploadWorker.perform(job)
-      assert result == :ok
-
-      assert_receive {:upload_complete, results}, 5_000
-      assert [{:error, "bad.xlsx", "Arquivo com codificação inválida"}] = results
     end
   end
 end

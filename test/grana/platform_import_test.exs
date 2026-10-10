@@ -5,8 +5,6 @@ defmodule Grana.PlatformImportTest do
 
   alias Grana.Banking
   alias Grana.Banking.CsvExporter
-  alias Grana.Investments
-  alias Grana.Investments.CsvExporter, as: InvCsvExporter
   alias Grana.PlatformImport
 
   describe "banking round-trip" do
@@ -112,51 +110,6 @@ defmodule Grana.PlatformImportTest do
     end
   end
 
-  describe "investments round-trip" do
-    test "export then import recreates investment transactions reversing labels" do
-      source = user_fixture()
-      {:ok, inst} = Investments.create_institution(%{name: "B3", slug: "b3", user_id: source.id})
-
-      {:ok, stmt} =
-        Investments.create_statement(%{
-          filename: "inv.csv",
-          user_id: source.id,
-          institution_id: inst.id
-        })
-
-      Investments.bulk_insert_transactions([
-        %{
-          date: ~D[2026-03-05],
-          asset_name: "PETROBRAS PN",
-          asset_ticker: "PETR4",
-          asset_type: "acao",
-          operation: "compra",
-          quantity: Decimal.new("100"),
-          unit_price: Decimal.new("38.50"),
-          total_amount: Decimal.new("3850.00"),
-          fees: Decimal.new("1.20"),
-          user_id: source.id,
-          statement_id: stmt.id,
-          institution_id: inst.id
-        }
-      ])
-
-      csv = source.id |> Investments.list_transactions() |> InvCsvExporter.generate()
-
-      dest = user_fixture()
-
-      assert {:ok, %{transaction_count: 1}} =
-               PlatformImport.process(csv, dest.id, "inv-export.csv")
-
-      [t] = Investments.list_transactions(dest.id)
-      assert t.asset_name == "PETROBRAS PN"
-      assert t.asset_type == "acao"
-      assert t.operation == "compra"
-      assert t.institution.name == "B3"
-      assert Decimal.equal?(t.total_amount, Decimal.new("3850.00"))
-    end
-  end
-
   describe "parse/1 error paths" do
     test "returns error for empty content" do
       assert {:error, "Arquivo vazio."} = PlatformImport.parse("")
@@ -180,53 +133,6 @@ defmodule Grana.PlatformImportTest do
       dest = user_fixture()
       assert {:error, msg} = PlatformImport.process(csv, dest.id, "empty_banking.csv")
       assert msg =~ "transação" or msg =~ "vazio"
-    end
-
-    test "re-importing investments does not duplicate" do
-      source = user_fixture()
-
-      {:ok, inst} =
-        Investments.create_institution(%{
-          name: "GCB",
-          slug: "gcb_dedup_#{System.unique_integer()}",
-          user_id: source.id
-        })
-
-      {:ok, stmt} =
-        Investments.create_statement(%{
-          filename: "inv2.csv",
-          user_id: source.id,
-          institution_id: inst.id
-        })
-
-      Investments.bulk_insert_transactions([
-        %{
-          date: ~D[2026-04-01],
-          asset_name: "VALE ON",
-          asset_ticker: "VALE3",
-          asset_type: "acao",
-          operation: "compra",
-          quantity: Decimal.new("50"),
-          unit_price: Decimal.new("70.00"),
-          total_amount: Decimal.new("3500.00"),
-          fees: Decimal.new("0.00"),
-          user_id: source.id,
-          statement_id: stmt.id,
-          institution_id: inst.id
-        }
-      ])
-
-      csv = source.id |> Investments.list_transactions() |> InvCsvExporter.generate()
-
-      dest = user_fixture()
-
-      assert {:ok, %{transaction_count: 1}} =
-               PlatformImport.process(csv, dest.id, "inv-export.csv")
-
-      assert {:ok, %{transaction_count: 0}} =
-               PlatformImport.process(csv, dest.id, "inv-export.csv")
-
-      assert length(Investments.list_transactions(dest.id)) == 1
     end
   end
 

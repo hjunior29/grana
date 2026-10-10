@@ -13,7 +13,7 @@ defmodule Grana.Cache do
     * Cada chave é registrada num índice por usuário (um MapSet armazenado no Cachex),
       de modo que `invalidate_user/1` apaga todas as entradas daquele usuário de uma vez.
     * `invalidate_user/1` é chamado em qualquer escrita/upload que afete os dados
-      cacheados (ver `Grana.Banking` e `Grana.Investments`). É a garantia de
+      cacheados (ver `Grana.Banking`). É a garantia de
       frescor; o TTL é só um teto de validade.
 
   ## TTL
