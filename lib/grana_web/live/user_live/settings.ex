@@ -211,30 +211,109 @@ defmodule GranaWeb.UserLive.Settings do
 
         <div id="diagnostics" class="card bg-base-200 p-6 mb-6">
           <div class="flex items-center gap-3 mb-1">
-            <.icon name="hero-wrench-screwdriver" class="size-5 opacity-60" />
-            <h3 class="text-lg font-semibold">Diagnóstico</h3>
+            <.icon name="hero-server-stack" class="size-5 opacity-60" />
+            <h3 class="text-lg font-semibold">Sistema</h3>
+            <span class="badge badge-ghost badge-sm">Grana {@diagnostics.version}</span>
           </div>
-          <p class="text-sm opacity-50 mb-4 ml-8">
-            Painéis técnicos da sua instância: filas de jobs e erros registrados.
+          <p class="text-sm opacity-50 mb-5 ml-8">
+            O estado da sua instância: dados, integrações, filas e erros.
           </p>
-          <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-            <dt class="opacity-60">Versão</dt>
-            <dd id="diagnostics-version">{@diagnostics.version}</dd>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <.system_tile id="diagnostics-version" label="Versão" value={@diagnostics.version} />
+            <.system_tile
+              id="diagnostics-db-size"
+              label="Banco"
+              value={Diagnostics.format_bytes(@diagnostics.database_size)}
+            />
+            <.system_tile
+              id="diagnostics-uptime"
+              label="No ar há"
+              value={Diagnostics.format_uptime(@diagnostics.uptime_seconds)}
+            />
+            <.system_tile
+              id="diagnostics-last-upload"
+              label="Último upload"
+              value={format_last_upload(@diagnostics.data.last_upload)}
+            />
+          </div>
+
+          <h4 class="text-sm font-medium opacity-70 mb-2">Seus dados</h4>
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <.system_tile
+              id="diagnostics-transactions"
+              label="Transações"
+              value={@diagnostics.data.transactions}
+            />
+            <.system_tile
+              id="diagnostics-statements"
+              label="Extratos e faturas"
+              value={@diagnostics.data.statements}
+            />
+            <.system_tile
+              id="diagnostics-categories"
+              label="Categorias"
+              value={@diagnostics.data.categories}
+            />
+          </div>
+
+          <h4 class="text-sm font-medium opacity-70 mb-2">Integrações</h4>
+          <ul id="diagnostics-integrations" class="mb-5 divide-y divide-base-content/10">
+            <li
+              :for={{label, source} <- @diagnostics.credentials}
+              class="flex items-center justify-between gap-3 py-2 text-sm"
+            >
+              <span>
+                {label}
+                <span class="block text-xs opacity-50">
+                  {integration_detail(label, @diagnostics)}
+                </span>
+              </span>
+              <span class={["badge badge-sm", source_badge(source)]}>{source_label(source)}</span>
+            </li>
+          </ul>
+
+          <h4 class="text-sm font-medium opacity-70 mb-2">Ambiente</h4>
+          <dl class="mb-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt class="opacity-60">Endereço</dt>
+            <dd>
+              <code id="diagnostics-public-url" class="break-all">{@diagnostics.public_url}</code>
+            </dd>
             <dt class="opacity-60">Pasta de dados</dt>
-            <dd><code id="diagnostics-data-dir">{@diagnostics.data_dir}</code></dd>
-            <dt class="opacity-60">Banco</dt>
-            <dd id="diagnostics-db-size">{Diagnostics.format_bytes(@diagnostics.database_size)}</dd>
-            <%= for {label, source} <- @diagnostics.credentials do %>
-              <dt class="opacity-60">{label}</dt>
-              <dd>{source_label(source)}</dd>
-            <% end %>
+            <dd><code id="diagnostics-data-dir" class="break-all">{@diagnostics.data_dir}</code></dd>
+            <dt class="opacity-60">Runtime</dt>
+            <dd id="diagnostics-runtime">
+              Elixir {@diagnostics.runtime.elixir} · OTP {@diagnostics.runtime.otp} · SQLite {@diagnostics.runtime.sqlite}
+            </dd>
           </dl>
+
           <div class="flex flex-wrap gap-2">
             <.link id="diagnostics-oban" href="/admin/oban" target="_blank" class="btn btn-sm">
-              <.icon name="hero-queue-list" class="size-4" /> Jobs (Oban)
+              <.icon name="hero-queue-list" class="size-4" /> Fila de jobs
+              <span
+                :if={@diagnostics.jobs.pending > 0}
+                id="diagnostics-jobs-pending"
+                class="badge badge-info badge-sm"
+              >
+                {@diagnostics.jobs.pending}
+              </span>
+              <span
+                :if={@diagnostics.jobs.failed > 0}
+                id="diagnostics-jobs-failed"
+                class="badge badge-error badge-sm"
+              >
+                {@diagnostics.jobs.failed} com falha
+              </span>
             </.link>
             <.link id="diagnostics-errors" href="/admin/errors" target="_blank" class="btn btn-sm">
-              <.icon name="hero-bug-ant" class="size-4" /> Erros
+              <.icon name="hero-bug-ant" class="size-4" /> Erros registrados
+              <span
+                :if={@diagnostics.unresolved_errors > 0}
+                id="diagnostics-errors-count"
+                class="badge badge-warning badge-sm"
+              >
+                {@diagnostics.unresolved_errors}
+              </span>
             </.link>
           </div>
         </div>
@@ -485,7 +564,45 @@ defmodule GranaWeb.UserLive.Settings do
 
   defp redirect_for_reauth(socket), do: GranaWeb.UserAuth.redirect_for_reauth(socket)
 
-  defp source_label(:env), do: "variável de ambiente (.env)"
-  defp source_label(:database), do: "salva no Grana (cifrada)"
+  defp source_label(:env), do: "do .env"
+  defp source_label(:database), do: "salva (cifrada)"
   defp source_label(nil), do: "não configurada"
+
+  defp source_badge(:env), do: "badge-info badge-soft"
+  defp source_badge(:database), do: "badge-success badge-soft"
+  defp source_badge(nil), do: "badge-ghost"
+
+  defp integration_detail("Chave do Gemini", d), do: "Modelo #{d.ai_model}"
+
+  defp integration_detail("Pluggy (Open Finance)", d),
+    do: "#{d.open_finance_connections} conexão(ões) com bancos"
+
+  defp integration_detail("Email (SMTP)", _d), do: "Código de login (2FA) e recuperação de senha"
+
+  defp format_last_upload(nil), do: "nenhum"
+  defp format_last_upload(%NaiveDateTime{} = at), do: Calendar.strftime(at, "%d/%m/%Y")
+  defp format_last_upload(%DateTime{} = at), do: Calendar.strftime(at, "%d/%m/%Y")
+
+  defp format_last_upload(at) when is_binary(at),
+    do: at |> String.slice(0, 10) |> format_iso_date()
+
+  defp format_iso_date(iso) do
+    case Date.from_iso8601(iso) do
+      {:ok, date} -> Calendar.strftime(date, "%d/%m/%Y")
+      _ -> iso
+    end
+  end
+
+  attr :id, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :any, required: true
+
+  defp system_tile(assigns) do
+    ~H"""
+    <div class="rounded-xl bg-base-100/60 px-3 py-2">
+      <p class="text-[11px] opacity-50">{@label}</p>
+      <p id={@id} class="text-lg font-semibold tabular-nums">{@value}</p>
+    </div>
+    """
+  end
 end

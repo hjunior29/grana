@@ -1,5 +1,5 @@
 defmodule Grana.DiagnosticsTest do
-  use Grana.DataCase, async: true
+  use Grana.DataCase, async: false
 
   import Grana.AccountsFixtures
 
@@ -14,6 +14,32 @@ defmodule Grana.DiagnosticsTest do
 
     assert [{"Chave do Gemini", nil}, {"Pluggy (Open Finance)", nil}, {"Email (SMTP)", nil}] =
              summary.credentials
+  end
+
+  test "summary traz dados, jobs, erros e ambiente" do
+    user = user_fixture()
+    Grana.BankingFixtures.transaction_fixture(user)
+    Repo.insert!(Oban.Job.new(%{}, worker: "X"))
+
+    summary = Diagnostics.summary(user)
+
+    assert %{transactions: 1, statements: 1} = summary.data
+    assert summary.data.categories > 0
+    assert summary.data.last_upload
+    assert summary.jobs.pending == 1
+    assert summary.jobs.failed == 0
+    assert summary.unresolved_errors == 0
+    assert summary.uptime_seconds >= 0
+    assert summary.public_url =~ "http"
+    assert %{elixir: _, otp: _, sqlite: _} = summary.runtime
+    assert summary.open_finance_connections == 0
+  end
+
+  test "format_uptime" do
+    assert Diagnostics.format_uptime(5) == "5 s"
+    assert Diagnostics.format_uptime(300) == "5 min"
+    assert Diagnostics.format_uptime(3 * 3600 + 120) == "3 h 2 min"
+    assert Diagnostics.format_uptime(2 * 86_400 + 3 * 3600) == "2 d 3 h"
   end
 
   test "reconhece credenciais salvas no banco" do
