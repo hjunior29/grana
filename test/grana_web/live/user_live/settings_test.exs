@@ -462,7 +462,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
     test "mostra o diagnóstico da instância", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      assert has_element?(lv, "#diagnostics-version")
+      refute has_element?(lv, "#diagnostics-version")
+      refute render(lv) =~ "Grana 1.0.0"
       assert has_element?(lv, "#diagnostics-data-dir")
       assert has_element?(lv, "#diagnostics-db-size")
       assert has_element?(lv, "#diagnostics h3", "Sistema")

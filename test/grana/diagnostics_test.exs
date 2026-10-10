@@ -5,10 +5,10 @@ defmodule Grana.DiagnosticsTest do
 
   alias Grana.Diagnostics
 
-  test "summary traz versão, pasta, tamanho e a origem de cada credencial" do
+  test "summary traz pasta, tamanho e a origem de cada credencial" do
     summary = Diagnostics.summary(user_fixture())
 
-    assert summary.version =~ ~r/^\d+\.\d+\.\d+/
+    refute Map.has_key?(summary, :version)
     assert summary.data_dir == Application.fetch_env!(:grana, :data_dir)
     assert is_integer(summary.database_size)
 

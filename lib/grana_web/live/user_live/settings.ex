@@ -213,14 +213,12 @@ defmodule GranaWeb.UserLive.Settings do
           <div class="flex items-center gap-3 mb-1">
             <.icon name="hero-server-stack" class="size-5 opacity-60" />
             <h3 class="text-lg font-semibold">Sistema</h3>
-            <span class="badge badge-ghost badge-sm">Grana {@diagnostics.version}</span>
           </div>
           <p class="text-sm opacity-50 mb-5 ml-8">
             O estado da sua instância: dados, integrações, filas e erros.
           </p>
 
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <.system_tile id="diagnostics-version" label="Versão" value={@diagnostics.version} />
+          <div class="grid grid-cols-3 gap-3 mb-5">
             <.system_tile
               id="diagnostics-db-size"
               label="Banco"
@@ -564,7 +562,7 @@ defmodule GranaWeb.UserLive.Settings do
 
   defp redirect_for_reauth(socket), do: GranaWeb.UserAuth.redirect_for_reauth(socket)
 
-  defp source_label(:env), do: "do .env"
+  defp source_label(:env), do: ".env"
   defp source_label(:database), do: "salva (cifrada)"
   defp source_label(nil), do: "não configurada"
 
