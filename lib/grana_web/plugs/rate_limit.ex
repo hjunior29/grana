@@ -75,44 +75,35 @@ defmodule GranaWeb.RateLimit do
   end
 
   @doc """
-  Extracts the client IP do socket LiveView. Atrás do proxy do Fly, usa o último
-  IP de X-Forwarded-For (o que o proxy anexa = cliente real) via connect_info
-  :x_headers; cai para peer_data quando não há proxy (dev/local).
+  IP do cliente do socket LiveView: `peer_data`, ou o último IP de
+  X-Forwarded-For quando `TRUST_PROXY_HEADERS=true` (instância atrás de proxy).
   """
   @spec get_ip(Phoenix.LiveView.Socket.t()) :: String.t()
   def get_ip(socket) do
     headers = Phoenix.LiveView.get_connect_info(socket, :x_headers) || []
     xff = for {"x-forwarded-for", v} <- headers, do: v
 
-    case xff_last(xff) do
-      nil ->
-        case Phoenix.LiveView.get_connect_info(socket, :peer_data) do
-          %{address: ip} -> ip |> :inet.ntoa() |> to_string()
-          _ -> "unknown"
-        end
-
-      ip ->
-        ip
-    end
+    forwarded_ip(xff) ||
+      case Phoenix.LiveView.get_connect_info(socket, :peer_data) do
+        %{address: ip} -> ip |> :inet.ntoa() |> to_string()
+        _ -> "unknown"
+      end
   end
 
   @doc """
-  IP do cliente para requests de controller. Prefere Fly-Client-IP (setado e
-  não-spoofável atrás do proxy do Fly); senão o último IP de X-Forwarded-For;
-  senão o remote_ip (dev/local).
+  IP do cliente para requests de controller: `remote_ip`, ou o último IP de
+  X-Forwarded-For quando `TRUST_PROXY_HEADERS=true`.
   """
   def client_ip(conn) do
-    case get_req_header(conn, "fly-client-ip") do
-      [ip | _] when is_binary(ip) and ip != "" ->
-        ip
-
-      _ ->
-        xff_last(get_req_header(conn, "x-forwarded-for")) ||
-          conn.remote_ip |> :inet.ntoa() |> to_string()
-    end
+    forwarded_ip(get_req_header(conn, "x-forwarded-for")) ||
+      conn.remote_ip |> :inet.ntoa() |> to_string()
   end
 
-  # Último IP de uma lista X-Forwarded-For (o appendado pelo proxy de borda).
+  defp forwarded_ip(values) do
+    if Application.get_env(:grana, :trust_proxy_headers, false), do: xff_last(values)
+  end
+
+  # Último IP de uma lista X-Forwarded-For (o appendado pelo proxy).
   defp xff_last([value | _]) when is_binary(value) do
     value |> String.split(",") |> List.last() |> to_string() |> String.trim() |> presence()
   end

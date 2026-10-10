@@ -34,6 +34,8 @@ RUN mix local.hex --force \
 
 # set build ENV
 ENV MIX_ENV="prod"
+ENV DATA_DIR=/data
+VOLUME /data
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
@@ -86,10 +88,12 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 WORKDIR "/app"
-RUN chown nobody /app
+RUN chown nobody /app && mkdir /data && chown nobody /data
 
 # set runner ENV
 ENV MIX_ENV="prod"
+ENV DATA_DIR=/data
+VOLUME /data
 
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/grana ./
@@ -100,5 +104,8 @@ USER nobody
 # advised to add an init process such as tini via `apt-get install`
 # above and adding an entrypoint. See https://github.com/krallin/tini for details
 # ENTRYPOINT ["/tini", "--"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${PORT:-4000} && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q 200 <&3"]
 
 CMD ["/app/bin/server"]

@@ -43,6 +43,8 @@ defmodule GranaWeb.Router do
     plug :accepts, ["json"]
   end
 
+  get "/health", GranaWeb.HealthController, :show
+
   # Webhooks da Pluggy (Open Finance). Fora do pipeline :browser: sem sessão/CSRF;
   # a autenticação é o header secreto conferido no controller.
   scope "/webhooks", GranaWeb do

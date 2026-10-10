@@ -11,11 +11,12 @@ defmodule Grana.Application do
     children =
       [
         GranaWeb.Telemetry,
-        Grana.Repo
+        Grana.Repo,
+        {Ecto.Migrator,
+         repos: Application.fetch_env!(:grana, :ecto_repos), skip: skip_migrations?()}
       ] ++
         List.wrap(Grana.Cache.child_spec_or_nil()) ++
         [
-          {DNSCluster, query: Application.get_env(:grana, :dns_cluster_query) || :ignore},
           {Phoenix.PubSub, name: Grana.PubSub},
           {Oban, Application.fetch_env!(:grana, Oban)},
           GranaWeb.Endpoint
@@ -25,6 +26,11 @@ defmodule Grana.Application do
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Grana.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  # Só em release (RELEASE_NAME); em dev/test as migrations rodam via mix.
+  defp skip_migrations? do
+    System.get_env("SKIP_MIGRATIONS") == "true" or System.get_env("RELEASE_NAME") == nil
   end
 
   # Tell Phoenix to update the endpoint configuration
