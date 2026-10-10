@@ -122,7 +122,7 @@ defmodule GranaWeb.UserLive.Settings do
         <OpenFinanceComponents.settings_card
           configured={@open_finance_configured}
           credentials_source={@open_finance_credentials_source}
-          client_id={@current_scope.user.pluggy_client_id}
+          client_id={@open_finance_client_id}
           credentials_form={@open_finance_credentials_form}
           show_credentials_form={@open_finance_show_credentials_form}
           private_key={@open_finance_private_key}

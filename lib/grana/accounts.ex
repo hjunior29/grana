@@ -197,11 +197,22 @@ defmodule Grana.Accounts do
   fora da própria conta).
   """
   def save_smtp_settings(%User{} = user, attrs) do
+    with {:ok, changeset} <- smtp_test(user, attrs) do
+      Repo.update(changeset)
+    end
+  end
+
+  @doc "Só envia o email de teste com os dados informados, sem gravar nada."
+  def send_smtp_test(%User{} = user, attrs) do
+    with {:ok, _changeset} <- smtp_test(user, attrs), do: :ok
+  end
+
+  defp smtp_test(user, attrs) do
     changeset = User.smtp_settings_changeset(user, attrs)
 
     with {:ok, candidate} <- Ecto.Changeset.apply_action(changeset, :update),
          {:ok, _email} <- UserNotifier.deliver_smtp_test(candidate, saved_smtp_config(candidate)) do
-      Repo.update(changeset)
+      {:ok, changeset}
     else
       {:error, %Ecto.Changeset{}} = error ->
         error

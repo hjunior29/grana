@@ -187,14 +187,25 @@ defmodule GranaWeb.OpenFinanceComponents do
             </div>
           </div>
         <% :env -> %>
-          <div
-            id="credentials-env"
-            class="flex flex-wrap items-center gap-2 rounded-xl bg-base-100/60 px-3 py-2 text-xs"
-          >
-            <.icon name="hero-key" class="size-4 opacity-60" />
-            <span class="opacity-70">
+          <div id="credentials-env" class="mt-1">
+            <p class="mb-3 flex items-center gap-2 text-xs opacity-70">
+              <.icon name="hero-key" class="size-4" />
               Usando <code>PLUGGY_CLIENT_ID</code>/<code>PLUGGY_CLIENT_SECRET</code> do <code>.env</code>.
-            </span>
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+              <GranaWeb.AccountComponents.env_field
+                id="credentials-env-client-id"
+                label="Client ID"
+                value={@client_id}
+                var="PLUGGY_CLIENT_ID"
+              />
+              <GranaWeb.AccountComponents.env_field
+                id="credentials-env-client-secret"
+                label="Client Secret"
+                secret
+                var="PLUGGY_CLIENT_SECRET"
+              />
+            </div>
           </div>
         <% nil -> %>
           <.setup_steps />

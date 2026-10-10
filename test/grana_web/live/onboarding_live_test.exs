@@ -3,6 +3,7 @@ defmodule GranaWeb.OnboardingLiveTest do
 
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
+  import Swoosh.TestAssertions
 
   alias Grana.Accounts
 
@@ -118,5 +119,109 @@ defmodule GranaWeb.OnboardingLiveTest do
       })
 
     assert redirected_to(conn) == ~p"/onboarding"
+  end
+
+  describe "etapas que exigem dados" do
+    use Mimic
+
+    @smtp %{
+      "smtp_host" => "smtp.exemplo.com",
+      "smtp_port" => "587",
+      "smtp_username" => "grana",
+      "smtp_password" => "segredo",
+      "smtp_tls" => "always",
+      "smtp_from_name" => "Grana",
+      "smtp_from_address" => "grana@exemplo.com"
+    }
+
+    setup do
+      original = System.get_env("CLOAK_KEY")
+      System.put_env("CLOAK_KEY", "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
+
+      on_exit(fn ->
+        if original,
+          do: System.put_env("CLOAK_KEY", original),
+          else: System.delete_env("CLOAK_KEY")
+      end)
+    end
+
+    test "SMTP: o botão só envia o teste, sem salvar", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 1)
+
+      assert has_element?(lv, "#smtp-test", "Enviar teste")
+      refute render(lv) =~ "Enviar teste e salvar"
+
+      html = lv |> form("#smtp-form", user: @smtp) |> render_submit(%{"intent" => "test"})
+
+      assert html =~ "Email de teste enviado"
+      assert_email_sent(subject: "Teste de email — Grana")
+      refute Accounts.smtp_configured?()
+      assert has_element?(lv, "#smtp-form")
+    end
+
+    test "SMTP: Continuar testa, salva e avança", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 1)
+
+      assert has_element?(lv, ~s|button#onboarding-next[form="smtp-form"]|)
+      lv |> form("#smtp-form", user: @smtp) |> render_submit()
+
+      assert Accounts.smtp_configured?()
+      assert has_element?(lv, "#ai_form")
+    end
+
+    test "SMTP: sem preencher não avança (só com Pular)", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 1)
+
+      lv |> form("#smtp-form", user: %{smtp_host: ""}) |> render_submit()
+
+      assert has_element?(lv, "#smtp-form")
+      refute Accounts.smtp_configured?()
+      advance(lv, 1)
+      assert has_element?(lv, "#ai_form")
+    end
+
+    test "SMTP falhando no teste não salva nem avança", %{conn: conn} do
+      expect(Grana.Mailer, :send_email, fn _email, _config -> {:error, :econnrefused} end)
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 1)
+
+      html = lv |> form("#smtp-form", user: @smtp) |> render_submit()
+
+      assert html =~ "nada foi salvo"
+      assert has_element?(lv, "#smtp-form")
+    end
+
+    test "LLM: sem chave não avança e mostra o erro", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 2)
+
+      lv |> form("#ai_form", user: %{ai_model: "gemini-2.5-flash"}) |> render_submit()
+
+      assert has_element?(lv, "#ai-api-key-error", "informe a chave")
+      assert has_element?(lv, "#ai_form")
+    end
+
+    test "Open Finance: Continuar fica bloqueado até ter credenciais", %{conn: conn, user: user} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 3)
+
+      assert has_element?(lv, "button#onboarding-next[disabled]")
+      assert has_element?(lv, "#onboarding-skip")
+
+      Grana.OpenFinanceFixtures.with_pluggy_credentials(user)
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 3)
+      refute has_element?(lv, "button#onboarding-next[disabled]")
+    end
+
+    test "Importar: Continuar fica bloqueado até enviar um arquivo", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/onboarding")
+      advance(lv, 4)
+
+      assert has_element?(lv, "button#onboarding-next[disabled]")
+    end
   end
 end

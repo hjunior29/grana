@@ -35,10 +35,13 @@ defmodule GranaWeb.SmtpHooks do
     {:halt, assign(socket, :smtp_show_form, !socket.assigns.smtp_show_form)}
   end
 
-  defp handle_event("smtp_save", %{"user" => params}, socket) do
+  defp handle_event("smtp_save", %{"user" => params} = all, socket) do
     user = socket.assigns.current_scope.user
 
     cond do
+      all["intent"] == "test" ->
+        {:halt, test_only(socket, user, params)}
+
       socket.assigns.smtp_source == :env ->
         {:halt, put_flash(socket, :error, "O SMTP já vem do .env.")}
 
@@ -58,7 +61,8 @@ defmodule GranaWeb.SmtpHooks do
              |> put_flash(
                :info,
                "Email de teste enviado e SMTP salvo. O login agora pede um código por email."
-             )}
+             )
+             |> tap(fn _ -> send(self(), :smtp_saved) end)}
 
           {:error, changeset} ->
             {:halt,
@@ -86,6 +90,22 @@ defmodule GranaWeb.SmtpHooks do
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
+
+  defp test_only(socket, user, params) do
+    case Accounts.send_smtp_test(user, params) do
+      :ok ->
+        put_flash(
+          socket,
+          :info,
+          "Email de teste enviado para #{user.email}. Confira a caixa de entrada."
+        )
+
+      {:error, changeset} ->
+        socket
+        |> assign(:smtp_form, to_form(scrub_secret(changeset)))
+        |> assign(:smtp_show_form, true)
+    end
+  end
 
   # O changeset de erro carrega o usuário real e os params digitados; a senha, nem a
   # salva nem a digitada, volta para a tela.
