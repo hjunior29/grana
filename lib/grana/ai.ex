@@ -81,7 +81,12 @@ defmodule Grana.AI do
     end
   end
 
-  # Nome em branco = o rótulo do tipo ("OpenAI", "Google Gemini"...).
+  # Gemini, OpenAI e Anthropic se chamam pelo próprio rótulo; só os compatíveis (que
+  # podem ser vários serviços diferentes) têm nome livre, e em branco cai no rótulo.
+  defp default_name(%{"kind" => kind} = attrs) when kind != "openai_compatible" do
+    if @labels[kind], do: Map.put(attrs, "name", @labels[kind]), else: attrs
+  end
+
   defp default_name(attrs) do
     if String.trim(attrs["name"] || "") == "",
       do: Map.put(attrs, "name", @labels[attrs["kind"]] || ""),

@@ -127,7 +127,10 @@ defmodule GranaWeb.AiSettingsHooks do
             params: Map.put(changeset.params || %{}, "api_key", "")
         }
 
-        {:halt, assign(socket, :ai_form, to_form(scrubbed, as: :provider))}
+        {:halt,
+         socket
+         |> assign(:ai_form, to_form(scrubbed, as: :provider))
+         |> flash_duplicate(changeset, params)}
     end
   end
 
@@ -178,4 +181,20 @@ defmodule GranaWeb.AiSettingsHooks do
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
+
+  # O nome não é editável nos tipos fixos, então o erro de nome repetido não teria onde aparecer.
+  defp flash_duplicate(socket, changeset, %{"kind" => kind}) when kind != "openai_compatible" do
+    if Keyword.has_key?(changeset.errors, :name) and
+         not Keyword.has_key?(changeset.errors, :api_key) do
+      put_flash(
+        socket,
+        :error,
+        "#{AI.label(kind)} já está cadastrado. Remova o existente para trocar a chave."
+      )
+    else
+      socket
+    end
+  end
+
+  defp flash_duplicate(socket, _changeset, _params), do: socket
 end

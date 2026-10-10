@@ -89,13 +89,33 @@ defmodule Grana.AITest do
     test "o segundo provedor não troca o padrão", %{user: user} do
       stub(AI.Models, :list, fn _ -> {:ok, @models} end)
 
-      {:ok, first, _, user} =
-        AI.add_provider(user, %{"kind" => "openai", "name" => "A", "api_key" => "1"})
-
-      {:ok, _second, _, user} =
-        AI.add_provider(user, %{"kind" => "openai", "name" => "B", "api_key" => "2"})
+      {:ok, first, _, user} = AI.add_provider(user, %{"kind" => "openai", "api_key" => "1"})
+      {:ok, _second, _, user} = AI.add_provider(user, %{"kind" => "anthropic", "api_key" => "2"})
 
       assert user.ai_provider == "db:#{first.id}"
+    end
+
+    test "o nome só é livre nos compatíveis; nos demais vale o rótulo do tipo", %{user: user} do
+      stub(AI.Models, :list, fn _ -> {:ok, @models} end)
+
+      {:ok, openai, _, user} =
+        AI.add_provider(user, %{"kind" => "openai", "name" => "Meu nome", "api_key" => "k"})
+
+      assert openai.name == "OpenAI"
+
+      {:ok, local, _, _} =
+        AI.add_provider(user, %{
+          "kind" => "openai_compatible",
+          "name" => "Ollama",
+          "base_url" => "http://localhost:11434/v1"
+        })
+
+      assert local.name == "Ollama"
+
+      {:ok, unnamed, _, _} =
+        AI.add_provider(user, %{"kind" => "openai_compatible", "base_url" => "http://x/v1"})
+
+      assert unnamed.name == "Compatível com a API da OpenAI"
     end
 
     test "falha da API vira erro no campo certo e nada é gravado", %{user: user} do
