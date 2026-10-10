@@ -1,11 +1,9 @@
 defmodule Grana.Workers.InactivityReminderWorker do
   @moduledoc """
-  Cron worker that checks for inactive users (no uploads in 30+ days)
-  and sends them a friendly reminder email.
-
-  Runs every 5 minutes via Oban Cron. Checks completed jobs to avoid
-  sending duplicate emails to the same user within a 7-day window.
-  Results are stored in job meta for inspection in the Oban dashboard.
+  Cron que lembra o dono da instância de atualizar os extratos quando faz mais de
+  30 dias sem upload. Só roda com SMTP efetivo, no máximo um lembrete a cada 5 dias
+  (`users.inactivity_reminded_at`). O resultado fica no meta do job, visível no
+  painel do Oban.
   """
   use Oban.Worker, queue: :notifications, max_attempts: 2
 
@@ -13,100 +11,68 @@ defmodule Grana.Workers.InactivityReminderWorker do
 
   import Ecto.Query
 
-  alias Grana.Repo
-  alias Grana.Accounts.User
+  alias Grana.Accounts
   alias Grana.Accounts.UserNotifier
   alias Grana.Banking.BankStatement
+  alias Grana.Repo
 
-  # @inactivity_days 0  # descomente para testar
   @inactivity_days 30
   @cooldown_days 5
 
   @impl Oban.Worker
   def perform(job) do
-    cutoff = DateTime.utc_now() |> DateTime.add(-@inactivity_days, :day)
-    inactive_users = fetch_inactive_users(cutoff)
-    already_notified = recently_notified_emails()
-
-    {skipped, to_notify} =
-      Enum.split_with(inactive_users, fn user ->
-        MapSet.member?(already_notified, user.email)
-      end)
-
-    results =
-      Enum.map(to_notify, fn user ->
-        case UserNotifier.deliver_inactivity_reminder(user) do
-          {:ok, _email} ->
-            Logger.info("InactivityReminder: sent to #{user.email}")
-            %{email: user.email, status: "sent"}
-
-          {:error, reason} ->
-            Logger.warning("InactivityReminder: failed #{user.email}: #{inspect(reason)}")
-            %{email: user.email, status: "failed", error: inspect(reason)}
-        end
-      end)
-
-    sent = Enum.count(results, &(&1.status == "sent"))
-    failed = Enum.count(results, &(&1.status == "failed"))
-
-    meta = %{
-      inactive_users_found: length(inactive_users),
-      already_notified_skipped: length(skipped),
-      emails_sent: sent,
-      emails_failed: failed,
-      details: results
-    }
+    outcome = remind(Accounts.get_owner(), Accounts.smtp_configured?())
 
     Oban.Job
     |> Repo.get(job.id)
-    |> Ecto.Changeset.change(%{meta: Map.merge(job.meta, meta)})
+    |> Ecto.Changeset.change(%{meta: Map.merge(job.meta, %{"outcome" => to_string(outcome)})})
     |> Repo.update()
 
-    Logger.info(
-      "InactivityReminder: #{length(inactive_users)} inactive, #{length(skipped)} skipped, #{sent} sent, #{failed} failed"
-    )
-
+    Logger.info("InactivityReminder: #{outcome}")
     :ok
   end
 
-  # Busca emails que já receberam reminder nos últimos @cooldown_days
-  # verificando os jobs completados deste worker no Oban.
-  defp recently_notified_emails do
-    since = DateTime.utc_now() |> DateTime.add(-@cooldown_days, :day)
+  defp remind(nil, _smtp?), do: :no_owner
+  defp remind(_owner, false), do: :smtp_not_configured
 
-    from(j in "oban_jobs",
-      where: j.worker == "Grana.Workers.InactivityReminderWorker",
-      where: j.state == "completed",
-      where: j.completed_at >= ^since,
-      select: j.meta
-    )
-    |> Repo.all()
-    |> Enum.flat_map(fn meta ->
-      case meta do
-        %{"details" => details} when is_list(details) ->
-          details
-          |> Enum.filter(&(&1["status"] == "sent"))
-          |> Enum.map(& &1["email"])
+  defp remind(owner, true) do
+    now = DateTime.utc_now(:second)
 
-        _ ->
-          []
-      end
-    end)
-    |> MapSet.new()
+    cond do
+      not inactive?(owner, now) -> :active
+      recently_reminded?(owner, now) -> :cooldown
+      true -> send_reminder(owner, now)
+    end
   end
 
-  defp fetch_inactive_users(cutoff) do
-    latest_bank =
-      from(bs in BankStatement,
-        where: bs.user_id == parent_as(:user).id,
-        select: max(bs.inserted_at)
+  # Sem nenhum upload, conta a partir da criação da conta.
+  defp inactive?(owner, now) do
+    last_upload =
+      Repo.one(
+        from bs in BankStatement, where: bs.user_id == ^owner.id, select: max(bs.inserted_at)
       )
 
-    from(u in User,
-      as: :user,
-      where: not is_nil(u.confirmed_at),
-      where: subquery(latest_bank) < ^cutoff or is_nil(subquery(latest_bank))
-    )
-    |> Repo.all()
+    reference = last_upload || owner.inserted_at
+    DateTime.diff(now, reference |> as_utc(), :day) >= @inactivity_days
+  end
+
+  defp as_utc(%NaiveDateTime{} = naive), do: DateTime.from_naive!(naive, "Etc/UTC")
+  defp as_utc(%DateTime{} = datetime), do: datetime
+
+  defp recently_reminded?(%{inactivity_reminded_at: nil}, _now), do: false
+
+  defp recently_reminded?(%{inactivity_reminded_at: at}, now),
+    do: DateTime.diff(now, at, :day) < @cooldown_days
+
+  defp send_reminder(owner, now) do
+    case UserNotifier.deliver_inactivity_reminder(owner) do
+      {:ok, _email} ->
+        owner |> Ecto.Changeset.change(inactivity_reminded_at: now) |> Repo.update!()
+        :sent
+
+      {:error, reason} ->
+        Logger.warning("InactivityReminder: falha no envio: #{inspect(reason)}")
+        :failed
+    end
   end
 end

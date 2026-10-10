@@ -531,7 +531,7 @@ defmodule GranaWeb.OpenFinanceComponents do
         connection: connection,
         cards: cards,
         banks: banks,
-        alerts: alerts(assigns.accounts)
+        alerts: Grana.OpenFinance.Alerts.list(assigns.accounts)
       )
 
     ~H"""
@@ -616,35 +616,11 @@ defmodule GranaWeb.OpenFinanceComponents do
         class="mt-auto pt-2 border-t border-base-content/5 space-y-1 text-xs"
       >
         <li :for={alert <- @alerts} class="flex items-start gap-1.5 text-warning">
-          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert}
+          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert.message}
         </li>
       </ul>
     </div>
     """
-  end
-
-  # Só o que pede ação: fatura com valor a pagar vencendo em até 5 dias, saldo negativo.
-  defp alerts(accounts) do
-    today = Date.utc_today()
-
-    Enum.flat_map(accounts, fn account ->
-      cond do
-        (Account.credit_card?(account) and positive?(account.balance) and
-           account.balance_due_date) &&
-            Date.diff(account.balance_due_date, today) in 0..5 ->
-          days = Date.diff(account.balance_due_date, today)
-          when_text = if days == 0, do: "vence hoje", else: "vence em #{days} dia(s)"
-
-          ["Fatura #{card_name(account)} #{when_text}: #{format_money(account.balance)}"]
-
-        (not Account.credit_card?(account) and account.balance) &&
-            Decimal.negative?(account.balance) ->
-          ["Saldo negativo na #{String.downcase(account_kind(account))}"]
-
-        true ->
-          []
-      end
-    end)
   end
 
   # Uso real do limite: o que já está comprometido (fatura aberta, fechada a pagar,
@@ -674,16 +650,8 @@ defmodule GranaWeb.OpenFinanceComponents do
   defp zero?(%Decimal{} = value), do: Decimal.equal?(value, 0)
   defp zero?(_value), do: true
 
-  defp account_kind(%Account{subtype: "SAVINGS_ACCOUNT"}), do: "Poupança"
-  defp account_kind(%Account{}), do: "Conta corrente"
-
-  # "VISA INFINITE PRIME" → "Visa Infinite Prime"; "platinum" → "Platinum".
-  defp card_name(%Account{} = card) do
-    (card.marketing_name || card.name || "Cartão")
-    |> String.downcase()
-    |> String.split()
-    |> Enum.map_join(" ", &String.capitalize/1)
-  end
+  defp account_kind(account), do: Account.kind_label(account)
+  defp card_name(card), do: Account.card_name(card)
 
   defp last4(number), do: String.slice(number, -4, 4)
 
@@ -784,37 +752,7 @@ defmodule GranaWeb.OpenFinanceComponents do
   end
 
   @doc "Formata valores monetários (`R$ 1.234,56`; outras moedas com o código)."
-  def format_money(amount, currency \\ "BRL")
-  def format_money(nil, _currency), do: "—"
-
-  def format_money(%Decimal{} = amount, currency) do
-    sign = if Decimal.negative?(amount), do: "-", else: ""
-    symbol = if currency in [nil, "BRL"], do: "R$", else: currency
-    "#{sign}#{symbol} #{br_number(amount)}"
-  end
-
-  defp br_number(amount) do
-    [int_part, dec_part] =
-      amount
-      |> Decimal.abs()
-      |> Decimal.round(2)
-      |> Decimal.to_string(:normal)
-      |> String.split(".")
-      |> case do
-        [int_part] -> [int_part, "00"]
-        parts -> parts
-      end
-
-    int_part =
-      int_part
-      |> String.reverse()
-      |> String.to_charlist()
-      |> Enum.chunk_every(3)
-      |> Enum.join(".")
-      |> String.reverse()
-
-    "#{int_part},#{String.pad_trailing(dec_part, 2, "0")}"
-  end
+  def format_money(amount, currency \\ "BRL"), do: Grana.Money.format(amount, currency)
 
   @doc "Data no formato brasileiro (dd/mm/aaaa)."
   def format_date(nil), do: "—"

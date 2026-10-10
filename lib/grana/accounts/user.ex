@@ -23,6 +23,18 @@ defmodule Grana.Accounts.User do
     field :pluggy_client_secret, Grana.Encrypted.Binary, redact: true
     field :pluggy_webhook_secret, Grana.Encrypted.Binary, redact: true
 
+    # SMTP salvo pela tela (a senha é cifrada e só de escrita). O ambiente tem
+    # precedência; ver Accounts.smtp_config/0.
+    field :smtp_host, :string
+    field :smtp_port, :integer
+    field :smtp_username, :string
+    field :smtp_password, Grana.Encrypted.Binary, redact: true
+    field :smtp_tls, :string
+    field :smtp_from_name, :string
+    field :smtp_from_address, :string
+
+    field :inactivity_reminded_at, :utc_datetime
+
     # Preenchido ao concluir (ou pular) o onboarding; base_url é a origem usada
     # nos links enviados por email quando não há PUBLIC_URL.
     field :onboarded_at, :utc_datetime
@@ -197,6 +209,35 @@ defmodule Grana.Accounts.User do
       ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       message: "deve ser o Client ID (UUID) da aplicação"
     )
+  end
+
+  @smtp_tls_modes ~w(always if_available never)
+
+  @doc """
+  Changeset do SMTP. A senha é só de escrita: em branco significa "manter".
+  """
+  def smtp_settings_changeset(user, attrs \\ %{}) do
+    user
+    |> cast(attrs, [
+      :smtp_host,
+      :smtp_port,
+      :smtp_username,
+      :smtp_password,
+      :smtp_tls,
+      :smtp_from_name,
+      :smtp_from_address
+    ])
+    |> keep_secret_when_blank(:smtp_password)
+    |> update_change(:smtp_host, &trim/1)
+    |> update_change(:smtp_username, &trim/1)
+    |> update_change(:smtp_from_address, &trim/1)
+    |> validate_required([:smtp_host, :smtp_port, :smtp_tls, :smtp_from_address])
+    |> validate_number(:smtp_port, greater_than: 0, less_than: 65_536)
+    |> validate_inclusion(:smtp_tls, @smtp_tls_modes)
+    |> validate_format(:smtp_from_address, ~r/^[^@,;\s]+@[^@,;\s]+$/,
+      message: "deve ser um email válido"
+    )
+    |> validate_length(:smtp_from_name, max: 80)
   end
 
   @doc """

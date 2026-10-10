@@ -1,9 +1,99 @@
 defmodule Grana.Accounts.UserNotifier do
   import Swoosh.Email
 
+  alias Grana.Accounts.User
   alias Grana.Mailer
 
   # --- Public API ---
+
+  @doc "Email de teste enviado ao salvar o SMTP; usa a configuração candidata."
+  def deliver_smtp_test(%User{} = user, smtp_config) do
+    deliver(
+      user.email,
+      "Teste de email — Grana",
+      email_html(
+        "Email configurado!",
+        "<p>Se você recebeu esta mensagem, o Grana consegue enviar emails por este servidor.</p><p>A partir de agora, o login passa a pedir um código de 6 dígitos enviado para este endereço.</p>",
+        nil,
+        nil,
+        "Você recebeu este email porque configurou o SMTP no Grana."
+      ),
+      email_text(
+        "Email configurado!",
+        "Se você recebeu esta mensagem, o Grana consegue enviar emails por este servidor.\n\nA partir de agora, o login passa a pedir um código de 6 dígitos enviado para este endereço.",
+        nil,
+        "Você recebeu este email porque configurou o SMTP no Grana."
+      ),
+      smtp_config
+    )
+  end
+
+  def deliver_two_factor_code(%User{} = user, code) do
+    deliver(
+      user.email,
+      "#{code} é o seu código de acesso — Grana",
+      email_html(
+        "Seu código de acesso",
+        """
+        <p>Use o código abaixo para concluir o login no Grana:</p>
+        <p style="margin:16px 0;font-size:32px;font-weight:700;letter-spacing:8px;color:#18181b;">#{code}</p>
+        """,
+        nil,
+        nil,
+        "O código vale por 10 minutos. Se não foi você, ignore este email e troque sua senha."
+      ),
+      email_text(
+        "Seu código de acesso",
+        "Use o código abaixo para concluir o login no Grana:\n\n#{code}",
+        nil,
+        "O código vale por 10 minutos. Se não foi você, ignore este email e troque sua senha."
+      )
+    )
+  end
+
+  def deliver_reset_password_instructions(%User{} = user, url) do
+    deliver(
+      user.email,
+      "Recuperação de senha — Grana",
+      email_html(
+        "Recuperar senha",
+        "<p>Recebemos um pedido para redefinir a senha da sua conta Grana.</p><p>Clique no botão abaixo para escolher uma nova senha:</p>",
+        url,
+        "Redefinir senha",
+        "O link expira em 30 minutos. Se você não pediu, ignore este email — sua senha continua a mesma."
+      ),
+      email_text(
+        "Recuperar senha",
+        "Recebemos um pedido para redefinir a senha da sua conta Grana.\n\nAcesse o link abaixo para escolher uma nova senha:",
+        url,
+        "O link expira em 30 minutos. Se você não pediu, ignore este email."
+      )
+    )
+  end
+
+  @doc "Resumo diário com os alertas financeiros do Open Finance (lista de textos)."
+  def deliver_financial_alerts(%User{} = user, alerts) when alerts != [] do
+    items = Enum.map_join(alerts, "", &"<li>#{Plug.HTML.html_escape(&1)}</li>")
+    url = Grana.Accounts.public_base_url(user) <> "/dashboard"
+
+    deliver(
+      user.email,
+      "Alertas financeiros de hoje — Grana",
+      email_html(
+        "Alertas de hoje",
+        "<p>Pontos de atenção nas suas contas conectadas:</p><ul>#{items}</ul>",
+        url,
+        "Abrir o Grana",
+        "Você recebe este resumo porque o Open Finance e o email estão configurados no Grana."
+      ),
+      email_text(
+        "Alertas de hoje",
+        Enum.map_join(alerts, "\n", &"- #{&1}"),
+        url,
+        "Você recebe este resumo porque o Open Finance e o email estão configurados no Grana."
+      )
+    )
+  end
 
   @doc """
   Deliver instructions to update a user email.
@@ -36,7 +126,7 @@ defmodule Grana.Accounts.UserNotifier do
   Deliver a friendly reminder to inactive users to come back and update their finances.
   """
   def deliver_inactivity_reminder(user) do
-    app_url = GranaWeb.Endpoint.url()
+    app_url = Grana.Accounts.public_base_url(user)
 
     deliver(
       user.email,
@@ -46,24 +136,24 @@ defmodule Grana.Accounts.UserNotifier do
         """
         <p>Olá!</p>
         <p>Percebemos que faz mais de <strong>30 dias</strong> que você não atualiza seus dados financeiros no <strong>Grana</strong>.</p>
-        <p>Manter seus extratos e investimentos em dia é essencial para ter uma visão clara das suas finanças — e leva apenas alguns minutinhos! \u{23F1}\u{FE0F}</p>
+        <p>Manter seus extratos e faturas em dia é essencial para ter uma visão clara das suas finanças — e leva apenas alguns minutinhos! \u{23F1}\u{FE0F}</p>
         <p>Que tal dar uma passadinha e enviar seus últimos extratos? Assim você continua no controle do seu dinheiro. \u{1F4B0}</p>
         """,
         app_url,
         "Atualizar meus dados",
-        "Você recebeu este email porque tem uma conta no Grana. Se não deseja mais receber lembretes, basta ignorar esta mensagem."
+        "Você recebeu este lembrete porque sua instância do Grana está com o email configurado."
       ),
       email_text(
         "Sentimos sua falta!",
         """
         Percebemos que faz mais de 30 dias que você não atualiza seus dados financeiros no Grana.
 
-        Manter seus extratos e investimentos em dia é essencial para ter uma visão clara das suas finanças — e leva apenas alguns minutinhos!
+        Manter seus extratos e faturas em dia é essencial para ter uma visão clara das suas finanças — e leva apenas alguns minutinhos!
 
         Que tal dar uma passadinha e enviar seus últimos extratos?
         """,
         app_url,
-        "Você recebeu este email porque tem uma conta no Grana. Se não deseja mais receber lembretes, basta ignorar esta mensagem."
+        "Você recebeu este lembrete porque sua instância do Grana está com o email configurado."
       )
     )
   end
@@ -72,25 +162,17 @@ defmodule Grana.Accounts.UserNotifier do
 
   # --- Delivery ---
 
-  defp deliver(recipient, subject, html, text) do
-    {from_name, from_address} = mail_from()
-
+  defp deliver(recipient, subject, html, text, smtp_config \\ nil) do
     email =
       new()
       |> to(recipient)
-      |> from({from_name, from_address})
       |> subject(subject)
       |> html_body(html)
       |> text_body(text)
 
-    with {:ok, _metadata} <- Mailer.deliver(email, Mailer.smtp_config()) do
+    with {:ok, _metadata} <- Mailer.send_email(email, smtp_config) do
       {:ok, email}
     end
-  end
-
-  defp mail_from do
-    config = Application.get_env(:grana, :mail_from, [])
-    {Keyword.get(config, :name, "Grana"), Keyword.get(config, :address, "noreply@example.com")}
   end
 
   # --- HTML Template ---
@@ -126,27 +208,7 @@ defmodule Grana.Accounts.UserNotifier do
                   </div>
                 </td>
               </tr>
-              <!-- CTA -->
-              <tr>
-                <td style="padding:8px 32px 28px;" align="center">
-                  <table role="presentation" cellpadding="0" cellspacing="0">
-                    <tr>
-                      <td style="background-color:#8B7CB8;border-radius:8px;">
-                        <a href="#{url}" target="_blank" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">#{button_text}</a>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <!-- URL fallback -->
-              <tr>
-                <td style="padding:0 32px 24px;">
-                  <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.5;">Se o botão não funcionar, copie e cole este link no navegador:</p>
-                  <p style="margin:6px 0 0;font-size:12px;word-break:break-all;">
-                    <a href="#{url}" style="color:#7C6DB0;text-decoration:underline;">#{url}</a>
-                  </p>
-                </td>
-              </tr>
+              #{cta_html(url, button_text)}
               <!-- Divider -->
               <tr>
                 <td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e4e4e7;margin:0;"></td>
@@ -174,6 +236,32 @@ defmodule Grana.Accounts.UserNotifier do
     """
   end
 
+  defp cta_html(nil, _button_text), do: ""
+
+  defp cta_html(url, button_text) do
+    """
+    <tr>
+      <td style="padding:8px 32px 28px;" align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background-color:#8B7CB8;border-radius:8px;">
+              <a href="#{url}" target="_blank" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">#{button_text}</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0 32px 24px;">
+        <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.5;">Se o botão não funcionar, copie e cole este link no navegador:</p>
+        <p style="margin:6px 0 0;font-size:12px;word-break:break-all;">
+          <a href="#{url}" style="color:#7C6DB0;text-decoration:underline;">#{url}</a>
+        </p>
+      </td>
+    </tr>
+    """
+  end
+
   # --- Text fallback ---
 
   defp email_text(heading, content, url, footer_note) do
@@ -182,9 +270,7 @@ defmodule Grana.Accounts.UserNotifier do
     ========================================
 
     #{content}
-
-    #{url}
-
+    #{if url, do: "\n" <> url <> "\n"}
     ----------------------------------------
     #{footer_note}
 

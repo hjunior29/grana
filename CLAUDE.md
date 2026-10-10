@@ -517,7 +517,7 @@ And **never** do this:
 
 - **Nunca modificar `lib/` para facilitar testes.** Os testes devem se adaptar ao código existente.
 - Proibido: adicionar parâmetros de DI, expor `defp → def`, branches `if Mix.env() == :test`, `@doc false` para testes.
-- Mocks via **Mimic** (`async: false` obrigatório). Módulos mockáveis: `Req`, `Grana.AI.Provider`, `Grana.AI.Providers.Gemini`, `Grana.Investments`, `Grana.Accounts.UserNotifier`, `Grana.PlatformImport`, `Grana.OpenFinance.Pluggy`.
+- Mocks via **Mimic** (`async: false` obrigatório). Módulos mockáveis: `Req`, `Grana.AI.Provider`, `Grana.AI.Providers.Gemini`, `Grana.Investments`, `Grana.Accounts.UserNotifier`, `Grana.PlatformImport`, `Grana.OpenFinance.Pluggy`, `Grana.Mailer`.
 - Piso de cobertura atual: **80%** (definido em `coveralls.json`).
 
 ### Convenções de código

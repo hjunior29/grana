@@ -76,7 +76,7 @@ defmodule Grana.AccountsTest do
 
   describe "deliver_user_update_email_instructions/3" do
     setup do
-      %{user: user_fixture()}
+      %{user: user_fixture() |> smtp_fixture()}
     end
 
     test "sends token through notification", %{user: user} do
@@ -95,7 +95,7 @@ defmodule Grana.AccountsTest do
 
   describe "update_user_email/2" do
     setup do
-      user = unconfirmed_user_fixture()
+      user = unconfirmed_user_fixture() |> smtp_fixture()
       email = unique_user_email()
 
       token =

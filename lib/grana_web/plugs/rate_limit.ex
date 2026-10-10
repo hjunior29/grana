@@ -8,6 +8,8 @@ defmodule GranaWeb.RateLimit do
   Rate limits:
   - `:login` - 5 requests per minute per IP
   - `:setup_code` - 5 requests per minute per IP
+  - `:two_factor` - 10 requests per minute per IP
+  - `:password_reset` - 3 requests per minute per IP
   """
 
   import Plug.Conn
@@ -15,7 +17,9 @@ defmodule GranaWeb.RateLimit do
 
   @rate_limits %{
     login: {5, 60_000},
-    setup_code: {5, 60_000}
+    setup_code: {5, 60_000},
+    two_factor: {10, 60_000},
+    password_reset: {3, 60_000}
   }
 
   # --- Plug interface (for controller routes) ---
@@ -113,4 +117,5 @@ defmodule GranaWeb.RateLimit do
 
   defp redirect_path(:login), do: "/users/log-in"
   defp redirect_path(:setup_code), do: "/setup"
+  defp redirect_path(:two_factor), do: "/users/log-in/code"
 end

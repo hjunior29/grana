@@ -132,9 +132,13 @@ defmodule GranaWeb.Router do
     live_session :current_user,
       on_mount: [{GranaWeb.SetupGate, :setup_complete}, {GranaWeb.UserAuth, :mount_current_scope}] do
       live "/users/log-in", UserLive.Login, :new
+      live "/users/log-in/code", UserLive.TwoFactor, :new
+      live "/users/reset-password", UserLive.ForgotPassword, :new
+      live "/users/reset-password/:token", UserLive.ResetPassword, :edit
     end
 
     post "/users/log-in", UserSessionController, :create
+    post "/users/log-in/code", UserSessionController, :verify_code
     delete "/users/log-out", UserSessionController, :delete
   end
 end

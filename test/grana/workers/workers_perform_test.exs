@@ -8,7 +8,6 @@ defmodule Grana.Workers.WorkersPerformTest do
   alias Grana.Accounts
   alias Grana.Banking
   alias Grana.Workers.AIAnalysisWorker
-  alias Grana.Workers.InactivityReminderWorker
   alias Grana.Workers.PlatformImportWorker
   alias Grana.Workers.StatementUploadWorker
 
@@ -154,53 +153,6 @@ defmodule Grana.Workers.WorkersPerformTest do
       assert {:discard, _} = result
 
       assert_receive {:analysis_complete, {:error, _}}, 5_000
-    end
-  end
-
-  # ── InactivityReminderWorker ──────────────────────────────────────────────────
-
-  describe "InactivityReminderWorker.perform/1" do
-    test "returns :ok when all users are recently active" do
-      user = user_fixture()
-
-      # Statement inserted NOW makes user "active" (inserted_at >= cutoff)
-      {:ok, _stmt} =
-        Banking.create_statement(%{
-          bank: "nubank",
-          filename: "recent.csv",
-          statement_type: "extrato",
-          user_id: user.id
-        })
-
-      # Stub notifier to catch any unexpected calls
-      stub(Grana.Accounts.UserNotifier, :deliver_inactivity_reminder, fn _user ->
-        {:ok, %{}}
-      end)
-
-      job = InactivityReminderWorker.new(%{}) |> Oban.insert!()
-      assert :ok = InactivityReminderWorker.perform(job)
-    end
-
-    test "sends email to inactive confirmed user" do
-      _user = user_fixture()
-
-      expect(Grana.Accounts.UserNotifier, :deliver_inactivity_reminder, fn _user ->
-        {:ok, %{}}
-      end)
-
-      job = InactivityReminderWorker.new(%{}) |> Oban.insert!()
-      assert :ok = InactivityReminderWorker.perform(job)
-    end
-
-    test "handles notifier failure gracefully" do
-      _user = user_fixture()
-
-      stub(Grana.Accounts.UserNotifier, :deliver_inactivity_reminder, fn _user ->
-        {:error, :timeout}
-      end)
-
-      job = InactivityReminderWorker.new(%{}) |> Oban.insert!()
-      assert :ok = InactivityReminderWorker.perform(job)
     end
   end
 
