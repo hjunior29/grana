@@ -39,7 +39,6 @@ end
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 config :grana, :admin_email, System.get_env("ADMIN_EMAIL")
-config :grana, :brapi_token, System.get_env("BRAPI_TOKEN")
 config :grana, :roadmap_url, System.get_env("ROADMAP_URL")
 
 # Cache (Grana.Cache / Cachex). Em dev e prod o cache roda 100% em memória (ETS).

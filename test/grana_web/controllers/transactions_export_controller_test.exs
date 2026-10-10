@@ -1,9 +1,7 @@
 defmodule GranaWeb.TransactionsExportControllerTest do
   use GranaWeb.ConnCase
 
-  import Grana.AccountsFixtures
   alias Grana.BankingFixtures
-  alias Grana.InvestmentsFixtures
 
   setup :register_and_log_in_user
 
@@ -115,80 +113,5 @@ defmodule GranaWeb.TransactionsExportControllerTest do
       conn = get(conn, ~p"/transactions/export?category_id=#{cat.id}")
       assert conn.status == 200
     end
-  end
-
-  describe "GET /transactions/export/investments" do
-    test "returns CSV file for authenticated user with no investments", %{conn: conn} do
-      conn = get(conn, ~p"/transactions/export/investments")
-
-      assert conn.status == 200
-      assert get_resp_header(conn, "content-type") == ["text/csv; charset=utf-8"]
-      [cd] = get_resp_header(conn, "content-disposition")
-      assert cd =~ "investimentos_"
-      assert cd =~ ".csv"
-    end
-
-    test "returns CSV containing investment data", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4 EXPORTTEST",
-        total_amount: "500.00"
-      })
-
-      conn = get(conn, ~p"/transactions/export/investments")
-
-      assert conn.status == 200
-      assert conn.resp_body =~ "PETR4 EXPORTTEST"
-    end
-
-    test "accepts search filter", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "VALE3 ONLY",
-        total_amount: "200.00"
-      })
-
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4 OTHER",
-        total_amount: "300.00"
-      })
-
-      conn = get(conn, ~p"/transactions/export/investments?search=VALE3")
-
-      assert conn.status == 200
-      assert conn.resp_body =~ "VALE3 ONLY"
-      refute conn.resp_body =~ "PETR4 OTHER"
-    end
-
-    test "accepts single operation filter", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "FUNDO DIV",
-        total_amount: "100.00",
-        operation: "dividendo"
-      })
-
-      conn = get(conn, ~p"/transactions/export/investments?operation=dividendo")
-      assert conn.status == 200
-      assert conn.resp_body =~ "FUNDO DIV"
-    end
-
-    test "accepts operation filter with comma-separated list", %{conn: conn} do
-      conn = get(conn, ~p"/transactions/export/investments?operation=dividendo,jcp")
-      assert conn.status == 200
-    end
-
-    test "accepts all filter for operation" do
-      conn = build_conn()
-
-      conn =
-        conn
-        |> setup_conn_with_user()
-        |> get(~p"/transactions/export/investments?operation=all")
-
-      assert conn.status == 200
-    end
-  end
-
-  defp setup_conn_with_user(conn) do
-    user = user_fixture()
-    log_in_user(conn, user)
   end
 end

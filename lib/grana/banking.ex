@@ -759,16 +759,6 @@ defmodule Grana.Banking do
     "transf "
   ]
 
-  # Créditos no extrato que representam a liquidação em conta de um provento da
-  # B3 (dividendo/JCP/rendimento). NÃO inclui "rentab" — esse é o rendimento do
-  # produto do próprio banco, que não existe na B3 e nunca deve ser deduplicado.
-  @b3_income_patterns [
-    "pgto de rendimento",
-    "dividendo",
-    "provento",
-    "jcp"
-  ]
-
   def detect_internal_transfers(user_id) do
     Repo.transaction(fn ->
       # 1) Reset all
@@ -788,11 +778,7 @@ defmodule Grana.Banking do
       #     Cobre o caso de só uma conta importada (a outra ponta não existe).
       mark_identity_transfers(user_id)
 
-      # 4) Mark investment income that already landed as a B3 provento (avoids
-      #    counting the same rendimento twice: bank credit + B3 provento).
-      mark_investment_income_settlements(user_id)
-
-      # 5) Apply learned per-counterparty rules LAST: "internal" força interna e
+      # 4) Apply learned per-counterparty rules LAST: "internal" força interna e
       #    "external" sobrepõe a heurística (correção manual do usuário vence).
       apply_internal_transfer_rules(user_id)
     end)
@@ -1008,67 +994,6 @@ defmodule Grana.Banking do
   end
 
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
-
-  # Marca créditos de rendimento no extrato que correspondem a um provento já
-  # registrado na B3 (mesmo valor, mesmo dia). Reusa is_internal_transfer: o
-  # crédito é só a liquidação em conta de um provento — o valor é contado na B3,
-  # não como receita bancária. Só marca quando o provento de fato existe; sem a
-  # B3 importada, o crédito continua contando normalmente.
-  defp mark_investment_income_settlements(user_id) do
-    extrato_stmt_ids =
-      BankStatement
-      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "extrato")
-      |> select([bs], bs.id)
-
-    candidates =
-      Transaction
-      |> where(
-        [t],
-        t.user_id == ^user_id and t.type == "credit" and t.is_internal_transfer == false
-      )
-      |> where([t], t.bank_statement_id in subquery(extrato_stmt_ids))
-      |> Repo.all()
-      |> Enum.filter(fn t ->
-        desc = String.downcase(t.description)
-        Enum.any?(@b3_income_patterns, &String.contains?(desc, &1))
-      end)
-
-    matched_ids = find_settlement_matches(candidates, Grana.Investments.list_proventos(user_id))
-
-    if matched_ids != [] do
-      Transaction
-      |> where([t], t.id in ^matched_ids)
-      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
-    end
-  end
-
-  defp find_settlement_matches(_candidates, []), do: []
-
-  defp find_settlement_matches(candidates, proventos) do
-    proventos_by_key = Enum.group_by(proventos, &settlement_key(&1.date, &1.amount))
-
-    # MapSet evita que dois créditos casem com o mesmo provento.
-    {matched_ids, _used} =
-      Enum.reduce(candidates, {[], MapSet.new()}, fn credit, {ids, used} ->
-        bucket = Map.get(proventos_by_key, settlement_key(credit.date, credit.amount), [])
-
-        match =
-          Enum.find(bucket, fn p ->
-            not MapSet.member?(used, p.id) and
-              Decimal.equal?(Decimal.abs(p.amount), Decimal.abs(credit.amount))
-          end)
-
-        case match do
-          nil -> {ids, used}
-          p -> {[credit.id | ids], MapSet.put(used, p.id)}
-        end
-      end)
-
-    matched_ids
-  end
-
-  # Mesma data + mesmo valor (em centavos). Janela de data = mesmo dia.
-  defp settlement_key(date, amount), do: {date, transfer_amount_key(amount)}
 
   # Category Rules
 

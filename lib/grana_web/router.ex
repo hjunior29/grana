@@ -92,7 +92,6 @@ defmodule GranaWeb.Router do
 
     post "/users/update-password", UserSessionController, :update_password
     get "/transactions/export", TransactionsExportController, :export
-    get "/transactions/export/investments", TransactionsExportController, :export_investments
   end
 
   scope "/", GranaWeb do

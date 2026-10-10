@@ -4,7 +4,6 @@ defmodule GranaWeb.CalendarLiveTest do
   import Phoenix.LiveViewTest
 
   alias Grana.Banking
-  alias Grana.Investments
 
   setup :register_and_log_in_user
 
@@ -14,7 +13,7 @@ defmodule GranaWeb.CalendarLiveTest do
     assert html =~ "Ainda não há dados importados"
   end
 
-  test "renderiza o heatmap com dados de extrato, fatura e investimentos", %{
+  test "renderiza o heatmap com dados de extrato e fatura", %{
     conn: conn,
     user: user
   } do
@@ -67,33 +66,11 @@ defmodule GranaWeb.CalendarLiveTest do
       }
     ])
 
-    inst = Investments.ensure_b3_institution(user.id)
-
-    {:ok, stmt} =
-      Investments.create_statement(%{
-        filename: "b3.xlsx",
-        user_id: user.id,
-        institution_id: inst.id,
-        status: "completed"
-      })
-
-    Investments.bulk_insert_transactions([
-      %{
-        date: ~D[2026-03-15],
-        asset_name: "FII EXEMPLO",
-        asset_type: "fii",
-        operation: "rendimento",
-        total_amount: Decimal.new("5.00"),
-        user_id: user.id,
-        statement_id: stmt.id
-      }
-    ])
-
     {:ok, view, html} = live(conn, ~p"/upload?tab=calendario")
     assert html =~ "Calendário de Importações"
     assert html =~ "2026"
-    assert html =~ ~s(aria-label="Mar/2026 - 3 uploads - Extrato, Fatura, Investimentos")
-    assert html =~ ~s(data-calendar-uploads="3 uploads")
+    assert html =~ ~s(aria-label="Mar/2026 - 2 uploads - Extrato, Fatura")
+    assert html =~ ~s(data-calendar-uploads="2 uploads")
     assert has_element?(view, ".grana-calendar-card")
     assert has_element?(view, "#calendar-heatmap.grana-calendar-heatmap")
     assert has_element?(view, ".grana-calendar-cell.calendar-count-3")

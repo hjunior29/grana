@@ -1466,19 +1466,18 @@ html {
     align-items: end;
   }
 
-  /* Linha 1 (16 cols): busca(6) + fontes(3) + movimentos(3) + origem(2) + classificação(2). */
+  /* Linha 1 (16 cols): busca(6) + movimentos(4) + origem(3) + classificação(3). */
   .transactions-filter-search {
     grid-column: span 6;
   }
 
-  .transactions-filter-source,
   .transactions-filter-movement {
-    grid-column: span 3;
+    grid-column: span 4;
   }
 
   .transactions-filter-origin,
   .transactions-filter-kind {
-    grid-column: span 2;
+    grid-column: span 3;
   }
 
   /* Linha 2 (16 cols): datas(3+3) + valores(3+3) + transferências internas(2) + limpar(2). */

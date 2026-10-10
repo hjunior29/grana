@@ -85,14 +85,13 @@ config :error_tracker,
 config :grana, Oban,
   engine: Oban.Engines.Lite,
   repo: Grana.Repo,
-  queues: [uploads: 2, ai_analysis: 1, quotes: 1, notifications: 1],
+  queues: [uploads: 2, ai_analysis: 1, notifications: 1],
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     Oban.Plugins.Lifeline,
     {Oban.Plugins.Cron,
      crontab: [
-       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications},
-       {"*/30 * * * *", Grana.Workers.QuoteFetcher, queue: :quotes}
+       {"*/10 * * * *", Grana.Workers.InactivityReminderWorker, queue: :notifications}
      ]}
   ]
 

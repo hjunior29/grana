@@ -17,7 +17,6 @@ defmodule Grana.Workers.InactivityReminderWorker do
   alias Grana.Accounts.User
   alias Grana.Accounts.UserNotifier
   alias Grana.Banking.BankStatement
-  alias Grana.Investments.Statement, as: InvestmentStatement
 
   # @inactivity_days 0  # descomente para testar
   @inactivity_days 30
@@ -103,18 +102,10 @@ defmodule Grana.Workers.InactivityReminderWorker do
         select: max(bs.inserted_at)
       )
 
-    latest_investment =
-      from(is in InvestmentStatement,
-        where: is.user_id == parent_as(:user).id,
-        select: max(is.inserted_at)
-      )
-
     from(u in User,
       as: :user,
       where: not is_nil(u.confirmed_at),
-      where:
-        (subquery(latest_bank) < ^cutoff or is_nil(subquery(latest_bank))) and
-          (subquery(latest_investment) < ^cutoff or is_nil(subquery(latest_investment)))
+      where: subquery(latest_bank) < ^cutoff or is_nil(subquery(latest_bank))
     )
     |> Repo.all()
   end

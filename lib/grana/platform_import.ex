@@ -21,8 +21,6 @@ defmodule Grana.PlatformImport do
   alias Grana.Repo
   alias Grana.Banking
   alias Grana.Banking.BankStatement
-  alias Grana.Investments
-  alias Grana.Investments.{Constants, Institution}
 
   @doc """
   Detecta o formato e importa. Devolve `{:ok, %{transaction_count: n}}` ou
@@ -33,12 +31,11 @@ defmodule Grana.PlatformImport do
   def process(content, user_id, filename, _opts) do
     case parse(content) do
       {:banking, rows} -> import_banking(rows, filename, user_id)
-      {:investments, rows} -> import_investments(rows, filename, user_id)
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @doc "Detecta o formato e devolve `{:banking | :investments, linhas}` ou `{:error, _}`."
+  @doc "Detecta o formato e devolve `{:banking, linhas}` ou `{:error, _}`."
   def parse(content) do
     case parse_rows(content) do
       [] ->
@@ -47,10 +44,10 @@ defmodule Grana.PlatformImport do
       [header | rows] ->
         cols = header |> Enum.with_index() |> Map.new(fn {h, i} -> {norm(h), i} end)
 
-        cond do
-          investments_header?(cols) -> {:investments, parse_investments(cols, rows)}
-          banking_header?(cols) -> {:banking, parse_banking(cols, rows)}
-          true -> {:error, "Cabeçalho não reconhecido. Use um CSV exportado pelo Grana."}
+        if banking_header?(cols) do
+          {:banking, parse_banking(cols, rows)}
+        else
+          {:error, "Cabeçalho não reconhecido. Use um CSV exportado pelo Grana."}
         end
     end
   end
@@ -58,10 +55,6 @@ defmodule Grana.PlatformImport do
   defp banking_header?(cols) do
     Map.has_key?(cols, "categoria") or
       (Map.has_key?(cols, "tipo") and not Map.has_key?(cols, "ativo"))
-  end
-
-  defp investments_header?(cols) do
-    Map.has_key?(cols, "ativo") and Map.has_key?(cols, "operacao")
   end
 
   # ── Banking ────────────────────────────────────────────────────────────────
@@ -216,134 +209,6 @@ defmodule Grana.PlatformImport do
     |> Enum.frequencies()
   end
 
-  # ── Investments ──────────────────────────────────────────────────────────────
-
-  defp parse_investments(cols, rows) do
-    rows
-    |> Enum.map(fn row ->
-      date = parse_date(at(cols, row, "data"))
-      asset_name = blank_to_nil(at(cols, row, "ativo"))
-      total = parse_decimal(at(cols, row, "valor total"))
-
-      if date && asset_name && total do
-        %{
-          date: date,
-          asset_name: asset_name,
-          asset_ticker: blank_to_nil(at(cols, row, "ticker")),
-          asset_type: asset_type_from_label(at(cols, row, "tipo ativo")),
-          operation: operation_from_label(at(cols, row, "operacao")),
-          quantity: parse_decimal(at(cols, row, "quantidade")) || Decimal.new(0),
-          unit_price: parse_decimal(at(cols, row, "preco unit.")) || Decimal.new(0),
-          total_amount: total,
-          fees: parse_decimal(at(cols, row, "taxas")) || Decimal.new(0),
-          identifier: blank_to_nil(at(cols, row, "identificador")),
-          original_description: blank_to_nil(at(cols, row, "descricao original")),
-          institution_name: blank_to_nil(at(cols, row, "instituicao")) || "Importado"
-        }
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp import_investments([], _filename, _user_id),
-    do: {:error, "Nenhuma transação válida no arquivo."}
-
-  defp import_investments(rows, filename, user_id) do
-    count =
-      rows
-      |> Enum.group_by(& &1.institution_name)
-      |> Enum.map(fn {inst_name, group} ->
-        inst = get_or_create_institution(user_id, inst_name)
-        import_investment_group(user_id, inst, group, filename)
-      end)
-      |> Enum.sum()
-
-    # Proventos importados podem casar com créditos do extrato — reconcilia.
-    Banking.detect_internal_transfers(user_id)
-    {:ok, %{transaction_count: count}}
-  end
-
-  defp import_investment_group(user_id, inst, rows, filename) do
-    {period_start, period_end} = period(rows)
-    stmt = get_or_create_inv_statement(user_id, inst.id, filename, period_start, period_end)
-
-    entries =
-      rows
-      |> Enum.map(fn r ->
-        %{
-          date: r.date,
-          asset_name: r.asset_name,
-          asset_ticker: r.asset_ticker,
-          asset_type: r.asset_type,
-          operation: r.operation,
-          quantity: r.quantity,
-          unit_price: r.unit_price,
-          total_amount: r.total_amount,
-          fees: r.fees,
-          identifier: r.identifier,
-          original_description: r.original_description,
-          user_id: user_id,
-          statement_id: stmt.id,
-          institution_id: inst.id
-        }
-      end)
-      |> dedup(user_id, &inv_fingerprint/1, &existing_inv_fingerprints/3)
-
-    {count, _} = Investments.bulk_insert_transactions(entries)
-    Investments.update_statement(stmt, %{status: "completed", total_transactions: count})
-    count
-  end
-
-  defp get_or_create_institution(user_id, name) do
-    slug = Institution.Slug.slugify(name)
-
-    case Investments.get_institution_by_slug(slug, user_id) do
-      nil ->
-        case Investments.create_institution(%{name: name, slug: slug, user_id: user_id}) do
-          {:ok, inst} -> inst
-          _ -> Investments.get_institution_by_slug(slug, user_id)
-        end
-
-      inst ->
-        inst
-    end
-  end
-
-  defp get_or_create_inv_statement(user_id, institution_id, filename, ps, pe) do
-    attrs = %{
-      filename: filename,
-      user_id: user_id,
-      institution_id: institution_id,
-      period_start: ps,
-      period_end: pe,
-      status: "processing"
-    }
-
-    case Investments.create_statement(attrs) do
-      {:ok, stmt} ->
-        stmt
-
-      {:error, _changeset} ->
-        Repo.one(
-          from(s in Grana.Investments.Statement,
-            where:
-              s.user_id == ^user_id and s.institution_id == ^institution_id and
-                s.filename == ^filename and s.period_start == ^ps and s.period_end == ^pe
-          )
-        )
-    end
-  end
-
-  defp inv_fingerprint(%{date: date, asset_name: name, operation: op, total_amount: amount}) do
-    {date, norm(name), op, money_key(amount)}
-  end
-
-  defp existing_inv_fingerprints(user_id, date_from, date_to) do
-    Investments.list_transactions(user_id, date_from: date_from, date_to: date_to)
-    |> Enum.map(&inv_fingerprint/1)
-    |> Enum.frequencies()
-  end
-
   # ── Dedup (compartilhado) ─────────────────────────────────────────────────────
 
   # Remove entradas que já existem no banco (mesma impressão digital), comparando
@@ -480,24 +345,6 @@ defmodule Grana.PlatformImport do
 
   defp money_key(amount) do
     amount |> Decimal.abs() |> Decimal.round(2) |> Decimal.to_string(:normal)
-  end
-
-  defp asset_type_from_label(label) do
-    from_label(label, Constants.asset_types(), &Constants.asset_type_label/1)
-  end
-
-  defp operation_from_label(label) do
-    from_label(label, Constants.operations(), &Constants.operation_label/1)
-  end
-
-  # Aceita tanto o rótulo ("Ações", "Compra") quanto o código ("acao", "compra").
-  defp from_label(label, codes, label_fun) do
-    key = norm(label)
-
-    cond do
-      key in codes -> key
-      true -> Enum.find(codes, &(norm(label_fun.(&1)) == key)) || "outro"
-    end
   end
 
   defp norm(nil), do: nil

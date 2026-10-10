@@ -4,25 +4,15 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
   import Phoenix.LiveViewTest
 
   alias Grana.BankingFixtures
-  alias Grana.InvestmentsFixtures
   alias Grana.Banking
 
   setup :register_and_log_in_user
 
   describe "switch_tab" do
-    test "switch to banking tab filters banking transactions", %{conn: conn} do
+    test "switch to extrato tab filters transactions", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/transactions")
 
-      render_click(view, "switch_tab", %{"tab" => "banking"})
-
-      html = render(view)
-      assert html =~ "Transações"
-    end
-
-    test "switch to investments tab filters investment transactions", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/transactions")
-
-      render_click(view, "switch_tab", %{"tab" => "investments"})
+      render_click(view, "switch_tab", %{"tab" => "extrato"})
 
       html = render(view)
       assert html =~ "Transações"
@@ -379,36 +369,6 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
     end
   end
 
-  describe "investment transactions" do
-    test "shows investment transactions when filter is set", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        operation: "compra",
-        total_amount: "100.00"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/transactions?source=investments")
-
-      assert html =~ "Transações"
-    end
-
-    test "investment transactions with institution and asset type filters render", %{
-      conn: conn,
-      user: user
-    } do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        asset_ticker: "PETR4",
-        asset_type: "acao",
-        operation: "compra",
-        total_amount: "500.00"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/transactions?source=investments")
-      assert html =~ "Transações"
-    end
-  end
-
   describe "statement filter navigation" do
     test "navigating with statement_id shows statement info", %{conn: conn, user: user} do
       Banking.ensure_default_categories(user.id)
@@ -470,56 +430,15 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
         date: today
       })
 
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        total_amount: "500.00",
-        operation: "compra"
-      })
-
       {:ok, _view, html} = live(conn, ~p"/transactions")
       assert html =~ "Transações"
     end
   end
 
-  describe "investment operation types in summary" do
+  describe "banking transaction kinds in summary" do
     setup %{user: user} do
       Banking.ensure_default_categories(user.id)
       :ok
-    end
-
-    test "investment venda shows in transactions list", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "VALE3",
-        asset_ticker: "VALE3",
-        operation: "venda",
-        total_amount: "1000.00"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/transactions?source=investments")
-      assert html =~ "Transações"
-    end
-
-    test "investment dividendo shows proventos in summary", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "HGLG11",
-        asset_ticker: "HGLG11",
-        operation: "dividendo",
-        total_amount: "50.00"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/transactions?source=investments")
-      assert html =~ "Transações"
-    end
-
-    test "investment taxa shows fees in summary", %{conn: conn, user: user} do
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        operation: "taxa",
-        total_amount: "5.00"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/transactions?source=investments")
-      assert html =~ "Transações"
     end
 
     test "internal transfer banking transaction is excluded from expenses", %{
@@ -560,12 +479,6 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
 
       BankingFixtures.transaction_fixture(user, %{description: "LOJA A", amount: "-30.00"})
       BankingFixtures.transaction_fixture(user, %{description: "LOJA B", amount: "-20.00"})
-
-      InvestmentsFixtures.transaction_fixture(user, %{
-        asset_name: "PETR4",
-        operation: "compra",
-        total_amount: "500.00"
-      })
 
       :ok
     end
