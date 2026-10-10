@@ -52,9 +52,16 @@ defmodule Grana.Cache do
   @doc """
   Devolve o valor cacheado para `(namespace, user_id, filters)` ou computa com
   `fun`, guarda e devolve. Cai no `fun.()` direto se o cache estiver desligado.
+
+  Opções:
+
+    * `:ttl_seconds` - validade desta entrada (padrão: a configurada).
+    * `:cache_if` - função que decide se o resultado entra no cache (padrão: sempre);
+      útil para não guardar erros.
   """
-  @spec get_or_store(String.t(), integer(), term(), (-> result)) :: result when result: var
-  def get_or_store(namespace, user_id, filters, fun)
+  @spec get_or_store(String.t(), integer(), term(), (-> result), keyword()) :: result
+        when result: var
+  def get_or_store(namespace, user_id, filters, fun, opts \\ [])
       when is_binary(namespace) and is_function(fun, 0) do
     if enabled?() do
       key = build_key(namespace, user_id, filters)
@@ -65,7 +72,7 @@ defmodule Grana.Cache do
 
         :miss ->
           value = fun.()
-          do_put(key, user_id, value)
+          if cache?(value, opts), do: do_put(key, user_id, value, opts[:ttl_seconds])
           value
 
         :error ->
@@ -125,9 +132,10 @@ defmodule Grana.Cache do
     end)
   end
 
-  defp do_put(key, user_id, value) do
-    ttl = ttl_seconds()
-    ttl_ms = ttl * 1000
+  defp cache?(value, opts), do: Keyword.get(opts, :cache_if, fn _ -> true end).(value)
+
+  defp do_put(key, user_id, value, ttl) do
+    ttl_ms = (ttl || ttl_seconds()) * 1000
     idx = index_key(user_id)
 
     safe(fn ->
