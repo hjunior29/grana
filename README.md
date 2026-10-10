@@ -13,8 +13,18 @@ O Grana pode ler saldos, cartões e transações direto dos seus bancos pelo
 [Open Finance Brasil](https://openfinancebrasil.org.br), via [Pluggy](https://pluggy.ai).
 O caminho é o de **uso pessoal** da Pluggy (gratuito, até 5 conexões, sem uso comercial):
 você autoriza seus bancos no **Meu Pluggy** e o Grana lê esses dados pelo conector MeuPluggy.
-Por enquanto os dados aparecem na aba **Open Finance** do Dashboard, separados das faturas e
-extratos importados.
+
+O Open Finance tem dois papéis, e **os uploads continuam sendo o histórico oficial**:
+
+- **Estado atual**: o bloco *Hoje*, no topo do Resumo do Dashboard, mostra saldos, faturas
+  abertas, limites e vencimentos.
+- **Fonte para os períodos sem upload**: o que nenhum extrato/fatura importado cobre (por
+  exemplo, o mês que ainda não fechou) entra como se fosse um extrato/fatura do próprio
+  banco, marcado como "Open Finance", e aparece em todo o sistema. Quando você importa o
+  arquivo daquele período, **o upload vence** e os dados do Open Finance saem dele.
+
+A Pluggy é lida no máximo uma vez por hora (o Meu Pluggy atualiza uma vez por dia), ao
+abrir o Dashboard ou as Transações — não há botão de sincronizar.
 
 1. Defina uma chave própria de criptografia no `.env` **antes** de salvar qualquer segredo
    (sem ela o Grana usa a chave de desenvolvimento, que é pública neste repositório):
@@ -35,10 +45,9 @@ extratos importados.
    (`GEMINI_API_KEY`).
 5. Clique em *Conectar via Meu Pluggy*, entre com sua conta do Meu Pluggy e escolha um banco.
    Repita para cada banco. (Também dá para colar o `itemId` de um item criado na página *Demo*
-   do dashboard, ou testar com o *Sandbox*.)
+   do dashboard.)
 
-O Meu Pluggy atualiza os dados uma vez por dia; o Grana sincroniza a cada 6h e no botão
-*Sincronizar*. Para receber as atualizações na hora, exponha o Grana em uma URL HTTPS
+Opcional: para o Grana saber assim que o Meu Pluggy atualizar, exponha o Grana em uma URL HTTPS
 pública (ex.: `ngrok http 4000`) e defina `PLUGGY_WEBHOOK_URL=https://seu-dominio/webhooks/pluggy`
 no `.env`. Não cadastre o webhook pelo dashboard da Pluggy: ele não aceita o header secreto que
 autentica as chamadas. O próprio Grana registra o webhook pela API na próxima sincronização
