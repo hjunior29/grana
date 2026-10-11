@@ -283,15 +283,13 @@ defmodule GranaWeb.TransactionsLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Transações</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">
-            Visualize e gerencie todas as suas transações em uma lista única
-          </p>
-        </div>
+        <.page_header
+          title="Transações"
+          subtitle="Visualize e gerencie todas as suas transações em uma lista única"
+        />
 
         <div :if={@statement_info} class="mb-4">
-          <div class="badge badge-lg badge-outline gap-2">
+          <.tag kind="neutro" class="gap-2 py-1">
             <img
               :if={@statement_info.logo}
               src={@statement_info.logo}
@@ -300,10 +298,15 @@ defmodule GranaWeb.TransactionsLive do
             />
             <.icon :if={!@statement_info.logo} name={@statement_info.icon} class="size-4" />
             {@statement_info.label}: {@statement_info.filename}
-            <button phx-click="clear_statement" class="btn btn-ghost btn-xs btn-circle">
+            <button
+              type="button"
+              phx-click="clear_statement"
+              class="ui-chip -mr-1 h-5 px-1"
+              aria-label="Remover filtro de extrato"
+            >
               <.icon name="hero-x-mark" class="size-3" />
             </button>
-          </div>
+          </.tag>
         </div>
 
         <div class="card bg-base-200 p-4 mb-6">
@@ -323,192 +326,231 @@ defmodule GranaWeb.TransactionsLive do
 
             <div class="transactions-filter-grid">
               <div class="transactions-filter-search">
-                <input
+                <.input
                   type="search"
                   name="search"
+                  label="Buscar"
+                  size="sm"
                   value={@filters.search}
-                  placeholder="Buscar transação ou categoria..."
-                  class="input input-bordered input-sm w-full"
+                  placeholder="Transação ou categoria"
                   phx-debounce="300"
                 />
               </div>
 
               <div class="transactions-filter-movement">
-                <select name="movement" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.movement == "all"}>Todos movimentos</option>
-                  <option value="expense" selected={@filters.movement == "expense"}>
-                    Despesas
-                  </option>
-                  <option value="income" selected={@filters.movement == "income"}>Receitas</option>
-                  <option value="bank_investment" selected={@filters.movement == "bank_investment"}>
-                    Investimentos
-                  </option>
-                </select>
+                <.input
+                  type="select"
+                  name="movement"
+                  label="Movimento"
+                  size="sm"
+                  value={@filters.movement}
+                  options={[
+                    {"Todos movimentos", "all"},
+                    {"Despesas", "expense"},
+                    {"Receitas", "income"},
+                    {"Investimentos", "bank_investment"}
+                  ]}
+                />
               </div>
 
               <div class="transactions-filter-origin">
-                <label class="text-xs opacity-50 mb-1 block">Origem</label>
-                <select name="origin" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.origin == "all"}>Todas origens</option>
-                  <option
-                    :for={bank <- @banks}
-                    value={"bank:#{bank}"}
-                    selected={@filters.origin == "bank:#{bank}"}
-                  >
-                    {String.capitalize(bank)}
-                  </option>
-                </select>
+                <.input
+                  type="select"
+                  name="origin"
+                  label="Origem"
+                  size="sm"
+                  value={@filters.origin}
+                  options={[
+                    {"Todas origens", "all"}
+                    | for(b <- @banks, do: {String.capitalize(b), "bank:#{b}"})
+                  ]}
+                />
               </div>
 
               <div class="transactions-filter-kind">
-                <label class="text-xs opacity-50 mb-1 block">Classificação</label>
-                <select name="kind" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.kind == "all"}>Todos os tipos</option>
-                  <option value="statement:extrato" selected={@filters.kind == "statement:extrato"}>
-                    Extrato
-                  </option>
-                  <option value="statement:fatura" selected={@filters.kind == "statement:fatura"}>
-                    Fatura
-                  </option>
-                  <option
-                    :for={cat <- @categories}
-                    value={"category:#{cat.id}"}
-                    selected={@filters.kind == "category:#{cat.id}"}
-                  >
-                    {cat.name}
-                  </option>
-                </select>
+                <.input
+                  type="select"
+                  name="kind"
+                  label="Classificação"
+                  size="sm"
+                  value={@filters.kind}
+                  options={
+                    [
+                      {"Todos os tipos", "all"},
+                      {"Extrato", "statement:extrato"},
+                      {"Fatura", "statement:fatura"}
+                    ] ++ for(cat <- @categories, do: {cat.name, "category:#{cat.id}"})
+                  }
+                />
               </div>
 
               <div class="transactions-filter-date-from">
-                <label class="text-xs opacity-50 mb-1 block">Data início</label>
-                <input
+                <.input
                   type="date"
                   name="date_from"
+                  label="Data início"
+                  size="sm"
                   value={@filters.date_from}
-                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="transactions-filter-date-to">
-                <label class="text-xs opacity-50 mb-1 block">Data fim</label>
-                <input
+                <.input
                   type="date"
                   name="date_to"
+                  label="Data fim"
+                  size="sm"
                   value={@filters.date_to}
-                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="transactions-filter-min">
-                <label class="text-xs opacity-50 mb-1 block">Valor mínimo</label>
-                <input
+                <.input
                   type="number"
                   name="amount_min"
+                  label="Valor mínimo"
+                  size="sm"
                   value={@filters.amount_min}
                   step="0.01"
                   placeholder="0,00"
-                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="transactions-filter-max">
-                <label class="text-xs opacity-50 mb-1 block">Valor máximo</label>
-                <input
+                <.input
                   type="number"
                   name="amount_max"
+                  label="Valor máximo"
+                  size="sm"
                   value={@filters.amount_max}
                   step="0.01"
                   placeholder="0,00"
-                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="transactions-filter-internal">
-                <label class="text-xs opacity-50 mb-1 block">Transferências internas</label>
-                <select name="internal" class="select select-bordered select-sm w-full">
-                  <option value="all" selected={@filters.internal == "all"}>Todas</option>
-                  <option value="hide" selected={@filters.internal == "hide"}>
-                    Ocultar internas
-                  </option>
-                  <option value="only" selected={@filters.internal == "only"}>Apenas internas</option>
-                </select>
+                <.input
+                  type="select"
+                  name="internal"
+                  label="Transferências internas"
+                  size="sm"
+                  value={@filters.internal}
+                  options={[
+                    {"Todas", "all"},
+                    {"Ocultar internas", "hide"},
+                    {"Apenas internas", "only"}
+                  ]}
+                />
               </div>
 
               <div class="transactions-filter-clear flex items-end justify-end">
-                <button type="button" phx-click="clear_filters" class="btn btn-error btn-xs">
+                <.button
+                  id="clear-filters"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="mb-2"
+                  phx-click="clear_filters"
+                >
                   Limpar filtros
-                </button>
+                </.button>
               </div>
             </div>
           </form>
         </div>
 
-        <div class="flex items-center gap-4 text-sm mb-3 flex-wrap">
-          <span :if={@total == 0} class="opacity-60">Nenhuma transação</span>
-          <span :if={@total > 1} class="opacity-60">{@total} transações</span>
-          <span :if={@total == 1} class="opacity-60">{@total} transação</span>
-          <span
-            :if={Decimal.compare(@summary.bank_expenses, 0) == :gt}
-            class="text-error font-medium"
-          >
-            Despesas: R$ {format_br_number(@summary.bank_expenses)}
+        <div class="ui-body mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span :if={@total == 0} class="ui-text-secondary">Nenhuma transação</span>
+          <span :if={@total > 1} class="ui-text-secondary">{@total} transações</span>
+          <span :if={@total == 1} class="ui-text-secondary">{@total} transação</span>
+          <span :if={Decimal.compare(@summary.bank_expenses, 0) == :gt} class="font-medium">
+            Despesas <.money value={@summary.bank_expenses} tone={:despesa} />
           </span>
-          <span
-            :if={Decimal.compare(@summary.bank_income, 0) == :gt}
-            class="text-success font-medium"
-          >
-            Receitas: R$ {format_br_number(@summary.bank_income)}
+          <span :if={Decimal.compare(@summary.bank_income, 0) == :gt} class="font-medium">
+            Receitas <.money value={@summary.bank_income} tone={:receita} />
           </span>
-          <span
-            :if={Decimal.compare(@summary.bank_investments, 0) == :gt}
-            class="text-info font-medium"
-          >
-            Investimentos: R$ {format_br_number(@summary.bank_investments)}
+          <span :if={Decimal.compare(@summary.bank_investments, 0) == :gt} class="font-medium">
+            Investimentos <.money value={@summary.bank_investments} tone={:investimento} />
           </span>
 
-          <div :if={@total > 0} class="flex gap-2 ml-auto">
-            <a
+          <div :if={@total > 0} class="ml-auto flex gap-2">
+            <.button
+              id="export-csv"
               href={"/transactions/export?#{banking_export_query(@filters)}"}
-              class="btn btn-sm gap-1"
+              variant="secondary"
+              size="sm"
+              icon="hero-arrow-down-tray"
             >
-              <.icon name="hero-arrow-down-tray" class="size-4" /> Exportar CSV
-            </a>
+              Exportar CSV
+            </.button>
           </div>
         </div>
 
         <div
           :if={MapSet.size(@selected_ids) > 0}
-          class="flex items-center gap-x-4 gap-y-2 flex-wrap bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4"
+          id="bulk-bar"
+          class="ui-rounded-box mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 border border-primary/20 bg-primary/10 px-4 py-3"
         >
-          <span class="text-sm font-medium whitespace-nowrap">
+          <span class="ui-body mb-2 whitespace-nowrap font-medium">
             {MapSet.size(@selected_ids)} bancária(s) selecionada(s)
           </span>
-          <form phx-submit="bulk-apply" class="flex items-end gap-x-3 gap-y-2 flex-wrap">
-            <label class="flex flex-col gap-1">
-              <span class="text-xs opacity-60">Categoria</span>
-              <select name="category_id" class="select select-bordered select-sm">
-                <option :for={cat <- @categories} value={cat.id}>{cat.name}</option>
-              </select>
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-xs opacity-60">Recorrência</span>
-              <select name="mode" class="select select-bordered select-sm">
-                <option value="fixed">Fixa</option>
-                <option value="variable">Variável</option>
-              </select>
-            </label>
-            <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+          <form phx-submit="bulk-apply" class="flex flex-wrap items-end gap-x-3 gap-y-2">
+            <.input
+              type="select"
+              name="category_id"
+              label="Categoria"
+              size="sm"
+              value={nil}
+              options={for cat <- @categories, do: {cat.name, cat.id}}
+            />
+            <.input
+              type="select"
+              name="mode"
+              label="Recorrência"
+              size="sm"
+              value="fixed"
+              options={[{"Fixa", "fixed"}, {"Variável", "variable"}]}
+            />
+            <div class="mb-2">
+              <.button variant="primary" size="sm" loading="Aplicando…">Aplicar</.button>
+            </div>
           </form>
-          <button phx-click="clear-selection" class="btn btn-ghost btn-sm ml-auto">Limpar</button>
+          <div class="mb-2 ml-auto">
+            <.button type="button" variant="ghost" size="sm" phx-click="clear-selection">
+              Limpar seleção
+            </.button>
+          </div>
         </div>
 
-        <div :if={@transactions == []} class="text-center py-16">
-          <.icon name="hero-document-magnifying-glass" class="size-16 mx-auto mb-4 opacity-20" />
-          <h2 class="text-xl font-semibold mb-2">Nenhuma transação encontrada</h2>
-          <p class="opacity-60 mb-6">Importe dados bancários ou de investimento para começar</p>
-          <.link navigate={~p"/upload"} class="btn btn-primary">
-            <.icon name="hero-cloud-arrow-up" class="size-5" /> Upload
+        <.empty_state
+          :if={@transactions == []}
+          id="transactions-empty"
+          icon="hero-document-magnifying-glass"
+          title="Nenhuma transação encontrada"
+          text="Importe dados bancários ou de investimento para começar."
+        >
+          <:action>
+            <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
+              Importar extratos
+            </.button>
+          </:action>
+        </.empty_state>
+
+        <div :if={@transactions != []} class="mb-3 flex flex-wrap items-center gap-1 sm:hidden">
+          <span class="ui-caption mr-1">Ordenar</span>
+          <.link
+            :for={
+              {field, label} <- [{"date", "Data"}, {"description", "Transação"}, {"amount", "Valor"}]
+            }
+            patch={sort_url(@filters, field)}
+            class={["ui-chip", @filters.sort_by == field && "ui-chip-active"]}
+          >
+            {label}
+            <.icon
+              :if={@filters.sort_by == field}
+              name={sort_icon(@filters.sort_dir)}
+              class="size-3"
+            />
           </.link>
         </div>
 
@@ -517,12 +559,13 @@ defmodule GranaWeb.TransactionsLive do
           class="transactions-table-shell card bg-base-200 overflow-x-auto"
         >
           <table id="transactions-table" class="table">
-            <thead>
+            <thead class="hidden sm:table-header-group">
               <tr>
                 <th class="w-8">
                   <input
                     type="checkbox"
                     class="checkbox checkbox-xs"
+                    aria-label="Selecionar todas"
                     checked={all_selected?(@transactions, @selected_ids)}
                     phx-click="toggle-select-all"
                   />
@@ -546,27 +589,65 @@ defmodule GranaWeb.TransactionsLive do
                 id={"transaction-#{row.id}"}
                 class={[
                   "hover",
-                  row.source == :banking && row.raw.is_internal_transfer && "opacity-50"
+                  row.source == :banking && row.raw.is_internal_transfer && "ui-text-tertiary"
                 ]}
               >
-                <td>
+                <td class="ui-txn-select">
                   <input
                     :if={row.selectable?}
                     type="checkbox"
                     class="checkbox checkbox-xs"
+                    aria-label="Selecionar transação"
                     checked={MapSet.member?(@selected_ids, row.raw_id)}
                     phx-click="toggle-select"
                     phx-value-id={row.raw_id}
                   />
-                  <span :if={!row.selectable?} class="text-xs opacity-30">—</span>
+                  <span :if={!row.selectable?} class="ui-text-tertiary">—</span>
                 </td>
-                <td class="text-sm whitespace-nowrap">{Calendar.strftime(row.date, "%d/%m/%Y")}</td>
-                <td class="text-sm max-w-xs">{render_title_cell(assigns, row)}</td>
-                <td>{render_origin_cell(row)}</td>
-                <td class="text-center">{render_kind_cell(assigns, row)}</td>
-                <td class="text-center">{render_recurring_column(assigns, row)}</td>
-                <td class={["text-right text-sm font-medium whitespace-nowrap", amount_class(row)]}>
-                  {format_row_amount(row)}
+                <td
+                  class="ui-txn-date ui-body whitespace-nowrap"
+                  phx-click={toggle_row(row)}
+                >
+                  <span class="sm:hidden">{Calendar.strftime(row.date, "%d/%m")}</span>
+                  <span class="hidden sm:inline">{Calendar.strftime(row.date, "%d/%m/%Y")}</span>
+                </td>
+                <td class="ui-txn-title ui-body max-w-xs">{render_title_cell(assigns, row)}</td>
+                <td class="ui-txn-detail">
+                  <span class="ui-caption sm:hidden">Origem</span>
+                  {render_origin_cell(row)}
+                  <button
+                    :if={
+                      row.source == :banking and not row.raw.is_internal_transfer and
+                        transfer_like?(row.raw.description)
+                    }
+                    type="button"
+                    phx-click="toggle-internal"
+                    phx-value-id={row.raw_id}
+                    phx-value-internal="true"
+                    class="ui-tag ui-tag-neutro mt-2 cursor-pointer sm:hidden"
+                  >
+                    Marcar como interna
+                  </button>
+                </td>
+                <td class="ui-txn-detail text-center">
+                  <span class="ui-caption sm:hidden">Classificação</span>
+                  {render_kind_cell(assigns, row)}
+                </td>
+                <td class="ui-txn-detail text-center">
+                  <span class="ui-caption sm:hidden">Recorrência</span>
+                  {render_recurring_column(assigns, row)}
+                </td>
+                <td class="ui-txn-amount text-right" phx-click={toggle_row(row)}>
+                  <.money
+                    value={signed_amount(row)}
+                    tone={:auto}
+                    sign
+                    class="ui-body font-medium"
+                  />
+                  <.icon
+                    name="hero-chevron-down"
+                    class="ui-txn-chevron ui-text-tertiary ml-1 size-3 sm:hidden"
+                  />
                 </td>
               </tr>
             </tbody>
@@ -589,7 +670,7 @@ defmodule GranaWeb.TransactionsLive do
             >
               {p}
             </.link>
-            <span :if={p == :dots} class="px-2 opacity-40">...</span>
+            <span :if={p == :dots} class="ui-text-tertiary px-2">…</span>
           </span>
           <.link
             :if={@page < @total_pages}
@@ -613,11 +694,13 @@ defmodule GranaWeb.TransactionsLive do
     <div class="flex items-center gap-2">
       <span
         class={[
-          "cursor-pointer hover:opacity-70",
+          "cursor-pointer hover:text-primary",
           !MapSet.member?(@expanded_ids, @row.raw_id) && "truncate"
         ]}
-        phx-click="toggle-description"
-        phx-value-id={@row.raw_id}
+        phx-click={
+          JS.push("toggle-description", value: %{id: @row.raw_id})
+          |> JS.toggle_class("ui-row-open", to: "#transaction-#{@row.id}")
+        }
         title={
           if !MapSet.member?(@expanded_ids, @row.raw_id),
             do: @row.raw.original_description || @row.raw.description
@@ -631,7 +714,7 @@ defmodule GranaWeb.TransactionsLive do
         phx-click="toggle-internal"
         phx-value-id={@row.raw_id}
         phx-value-internal="false"
-        class="badge badge-xs badge-ghost shrink-0 opacity-60 cursor-pointer hover:opacity-100"
+        class="ui-tag ui-tag-neutro shrink-0 cursor-pointer"
         title="Transferência interna (fora dos totais). Clique para marcar como externa."
       >
         interna
@@ -642,7 +725,7 @@ defmodule GranaWeb.TransactionsLive do
         phx-click="toggle-internal"
         phx-value-id={@row.raw_id}
         phx-value-internal="true"
-        class="badge badge-xs badge-ghost shrink-0 opacity-30 cursor-pointer hover:opacity-100"
+        class="ui-tag ui-tag-neutro ui-text-tertiary hidden shrink-0 cursor-pointer sm:inline-flex"
         title="Marcar como transferência interna (entre suas contas)"
       >
         marcar interna
@@ -655,20 +738,12 @@ defmodule GranaWeb.TransactionsLive do
     assigns = %{txn: txn}
 
     ~H"""
-    <span :if={@txn.bank_statement} class="badge badge-outline gap-1 h-auto whitespace-nowrap">
-      <div
-        :if={@txn.bank_statement.source == "open_finance"}
-        class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0 grid place-items-center"
-        title="Período sem upload: dado lido via Open Finance"
-      >
-        <GranaWeb.OpenFinanceComponents.open_finance_logo class="size-3" />
-      </div>
-      <div class="w-4 h-4 rounded-full overflow-hidden bg-base-300 shrink-0">
-        <img src={bank_logo(@txn.bank_statement.bank)} alt="" />
-      </div>
-      {String.capitalize(@txn.bank_statement.bank)}
-      <span class="opacity-50">({statement_type_label(@txn.bank_statement.statement_type)})</span>
-    </span>
+    <.source_chip
+      :if={@txn.bank_statement}
+      bank={@txn.bank_statement.bank}
+      type={@txn.bank_statement.statement_type}
+      open_finance={@txn.bank_statement.source == "open_finance"}
+    />
     """
   end
 
@@ -688,7 +763,7 @@ defmodule GranaWeb.TransactionsLive do
         aria-label="Categoria"
         title="Alterar categoria"
         class={[
-          "select select-bordered select-sm w-full max-w-44",
+          "select select-sm w-full max-w-44",
           !@row.raw.category && "select-warning"
         ]}
       >
@@ -727,14 +802,14 @@ defmodule GranaWeb.TransactionsLive do
           name="mode"
           aria-label="Recorrência da despesa"
           title="Alterar recorrência"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
         >
           <option value="fixed" selected={@recurring.status == "fixed"}>Fixa</option>
           <option value="variable" selected={@recurring.status == "variable"}>Variável</option>
         </select>
       </form>
 
-      <span :if={!@recurring.editable} class="inline-flex w-full justify-center text-xs opacity-30">
+      <span :if={!@recurring.editable} class="ui-text-tertiary inline-flex w-full justify-center">
         —
       </span>
     </div>
@@ -749,7 +824,7 @@ defmodule GranaWeb.TransactionsLive do
       <.link
         patch={sort_url(@filters, @field)}
         class={[
-          "inline-flex items-center gap-1 rounded-md transition hover:text-primary",
+          "inline-flex items-center gap-1 transition hover:text-primary",
           @class == "text-right" && "justify-end w-full",
           @class == "text-center" && "justify-center w-full"
         ]}
@@ -1015,20 +1090,10 @@ defmodule GranaWeb.TransactionsLive do
   defp statement_type_label("extrato"), do: "Extrato"
   defp statement_type_label(_type), do: "Bancário"
 
-  defp format_row_amount(%{raw: txn}), do: format_amount(txn)
+  defp signed_amount(%{raw: %{type: "credit", amount: amount}}), do: Decimal.abs(amount)
+  defp signed_amount(%{raw: %{amount: amount}}), do: amount |> Decimal.abs() |> Decimal.negate()
 
-  defp amount_class(%{raw: %{type: "credit"}}), do: "text-success"
-  defp amount_class(%{raw: _txn}), do: "text-error"
-
-  defp format_amount(txn) do
-    prefix =
-      case txn.type do
-        "credit" -> "+ "
-        _ -> "- "
-      end
-
-    "#{prefix}R$ #{format_br_number(txn.amount)}"
-  end
+  defp toggle_row(row), do: JS.toggle_class("ui-row-open", to: "#transaction-#{row.id}")
 
   defp transfer_like?(description), do: Grana.Banking.TransferIdentity.transfer?(description)
 
@@ -1038,20 +1103,6 @@ defmodule GranaWeb.TransactionsLive do
 
   defp recurring_flash("fixed"), do: "Despesa marcada como fixa"
   defp recurring_flash("variable"), do: "Despesa marcada como variável"
-
-  defp format_br_number(amount) do
-    str = amount |> Decimal.round(2) |> Decimal.abs() |> Decimal.to_string(:normal)
-    [int_part, dec_part] = String.split(str, ".")
-    dec_part = String.pad_trailing(dec_part, 2, "0")
-
-    int_part
-    |> String.reverse()
-    |> String.to_charlist()
-    |> Enum.chunk_every(3)
-    |> Enum.join(".")
-    |> String.reverse()
-    |> Kernel.<>(",#{dec_part}")
-  end
 
   # ── Generic helpers ──
 

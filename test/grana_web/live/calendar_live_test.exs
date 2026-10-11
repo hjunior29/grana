@@ -9,7 +9,7 @@ defmodule GranaWeb.CalendarLiveTest do
 
   test "mostra estado vazio quando não há dados", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/upload?tab=calendario")
-    assert html =~ "Calendário de Importações"
+    assert html =~ "Calendário de importações"
     assert html =~ "Ainda não há dados importados"
   end
 
@@ -67,7 +67,7 @@ defmodule GranaWeb.CalendarLiveTest do
     ])
 
     {:ok, view, html} = live(conn, ~p"/upload?tab=calendario")
-    assert html =~ "Calendário de Importações"
+    assert html =~ "Calendário de importações"
     assert html =~ "2026"
     assert html =~ ~s(aria-label="Mar/2026 - 2 uploads - Extrato, Fatura")
     assert html =~ ~s(data-calendar-uploads="2 uploads")

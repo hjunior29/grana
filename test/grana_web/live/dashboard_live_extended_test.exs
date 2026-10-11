@@ -14,7 +14,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
     test "switch to recurring tab renders fixed expenses", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard?tab=recurring")
       html = render(view)
-      assert html =~ "Despesas Fixas" or html =~ "Nenhuma"
+      assert html =~ "Despesas fixas" or html =~ "Nenhuma"
     end
 
     test "switch back to overview tab", %{conn: conn} do
@@ -24,7 +24,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "switch_tab", %{"tab" => "overview"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -35,7 +35,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_year", %{"year" => "2025"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -46,7 +46,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_month", %{"month" => "all"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_month specific month filters data", %{conn: conn} do
@@ -55,7 +55,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_month", %{"month" => "1"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -66,7 +66,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_bank", %{"bank" => "nubank"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_type filters by transaction kind", %{conn: conn} do
@@ -75,7 +75,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_type", %{"type" => "extrato"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_txn_type filters by credit/debit", %{conn: conn} do
@@ -84,7 +84,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_txn_type", %{"txn_type" => "debit"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "toggle-category toggles nil category filter", %{conn: conn} do
@@ -93,7 +93,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "toggle-category", %{"id" => "nil"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "toggle-category toggles specific category filter", %{conn: conn, user: user} do
@@ -105,7 +105,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "toggle-category", %{"id" => to_string(cat.id)})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "reset-categories clears category filters", %{conn: conn} do
@@ -114,7 +114,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "reset-categories", %{})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -125,7 +125,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "rec_set_window", %{"window" => "3"})
 
       html = render(view)
-      assert html =~ "Dashboard" or html =~ "Despesas"
+      assert html =~ "Painel" or html =~ "Despesas"
     end
 
     test "rec_select_bank filters recurring by bank", %{conn: conn} do
@@ -134,7 +134,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "rec_select_bank", %{"bank" => "nubank"})
 
       html = render(view)
-      assert html =~ "Dashboard" or html =~ "Despesas"
+      assert html =~ "Painel" or html =~ "Despesas"
     end
 
     test "rec_select_type filters recurring by statement type", %{conn: conn} do
@@ -143,7 +143,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "rec_select_type", %{"type" => "extrato"})
 
       html = render(view)
-      assert html =~ "Dashboard" or html =~ "Despesas"
+      assert html =~ "Painel" or html =~ "Despesas"
     end
   end
 
@@ -154,7 +154,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_view_total", %{})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -180,7 +180,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
 
       {:ok, _view, html} = live(conn, ~p"/dashboard")
 
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -217,7 +217,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
 
     test "renders dashboard with transaction data", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_year with data shows filtered results", %{conn: conn} do
@@ -227,7 +227,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_year", %{"year" => to_string(year)})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_month all with data shows totals", %{conn: conn} do
@@ -236,7 +236,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_month", %{"month" => "all"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "toggle-category with actual category ID", %{conn: conn, user: user} do
@@ -248,7 +248,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "toggle-category", %{"id" => to_string(cat.id)})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_bank with nubank filter", %{conn: conn} do
@@ -258,7 +258,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_bank", %{"bank" => "all"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_view_total toggles between month and total", %{conn: conn} do
@@ -268,7 +268,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_view_total", %{})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -298,7 +298,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_view_total", %{})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_year then select_month navigates view modes", %{conn: conn} do
@@ -310,7 +310,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_month", %{"month" => to_string(Date.utc_today().month)})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_bank with actual transactions", %{conn: conn} do
@@ -319,7 +319,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_bank", %{"bank" => "nubank"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_txn_type credit filters income", %{conn: conn} do
@@ -328,7 +328,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_txn_type", %{"txn_type" => "credit"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_txn_type debit with data", %{conn: conn} do
@@ -337,7 +337,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_txn_type", %{"txn_type" => "debit"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -363,7 +363,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
 
     test "dashboard month view renders goals progress when goals exist with data", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_view_total then back to month shows goals", %{conn: conn} do
@@ -373,12 +373,12 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_month", %{"month" => to_string(Date.utc_today().month)})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "daily spending chart renders in month view", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -403,7 +403,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_view_total", %{})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_year then all months shows year view", %{conn: conn} do
@@ -415,7 +415,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       render_click(view, "select_month", %{"month" => "all"})
 
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -436,7 +436,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
 
     test "shows uncategorized alert when transactions lack category", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -464,20 +464,20 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
 
     test "renders income stat card with income data", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "balance card renders with income > 0", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "select_txn_type credit shows income filter active", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
       render_click(view, "select_txn_type", %{"txn_type" => "credit"})
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -509,14 +509,14 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
 
     test "renders investment stat card with investment category transactions", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "monthly chart renders with income and expense data", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard")
       render_click(view, "select_view_total", %{})
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 
@@ -539,7 +539,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
     test "recurring tab with fixed expenses renders items", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard?tab=recurring")
       html = render(view)
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
 
     test "recurring tab shows rec_category for transactions with category", %{
@@ -560,7 +560,7 @@ defmodule GranaWeb.DashboardLiveExtendedTest do
       end
 
       {:ok, _view, html} = live(conn, ~p"/dashboard?tab=recurring")
-      assert html =~ "Dashboard"
+      assert html =~ "Painel"
     end
   end
 end

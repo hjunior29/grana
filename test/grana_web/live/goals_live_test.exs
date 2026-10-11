@@ -16,7 +16,7 @@ defmodule GranaWeb.GoalsLiveTest do
 
   test "shows Nova Meta button", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/goals")
-    assert html =~ "Nova Meta"
+    assert html =~ "Nova meta"
   end
 
   test "redirects unauthenticated users" do
@@ -30,7 +30,7 @@ defmodule GranaWeb.GoalsLiveTest do
 
       html = render_click(view, "show_form", %{})
 
-      assert html =~ "Nova Meta"
+      assert html =~ "Nova meta"
     end
 
     test "hide_form closes the modal", %{conn: conn} do
@@ -39,8 +39,8 @@ defmodule GranaWeb.GoalsLiveTest do
       render_click(view, "show_form", %{})
       html = render_click(view, "hide_form", %{})
 
-      # Form modal is closed; "Editar Meta" header won't be present
-      refute html =~ "Editar Meta"
+      # Form modal is closed; "Editar meta" header won't be present
+      refute html =~ "Editar meta"
       assert html =~ "Metas"
     end
 
@@ -106,7 +106,7 @@ defmodule GranaWeb.GoalsLiveTest do
 
       html = render_click(view, "edit_goal", %{"id" => to_string(goal.id)})
 
-      assert html =~ "Editar Meta"
+      assert html =~ "Editar meta"
     end
 
     test "updates existing goal", %{conn: conn, user: user} do

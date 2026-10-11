@@ -285,10 +285,6 @@ defmodule GranaWeb.AnalysisLive do
     |> Enum.sort()
   end
 
-  defp bank_logo("nubank"), do: ~p"/images/nubank-logo.png"
-  defp bank_logo("bradesco"), do: ~p"/images/bradesco-logo.png"
-  defp bank_logo(_), do: ~p"/images/logo-32.png"
-
   defp source_label("extrato"), do: "Extrato"
   defp source_label("fatura"), do: "Fatura"
   defp source_label(_), do: nil
@@ -311,19 +307,19 @@ defmodule GranaWeb.AnalysisLive do
 
   defp score_color(nota) when is_number(nota) do
     cond do
-      nota >= 8 -> "text-success bg-success/15 border-success/30"
+      nota >= 8 -> "ui-money-receita bg-(--ui-receita)/15 border-(--ui-receita)/30"
       nota >= 6 -> "text-info bg-info/15 border-info/30"
       nota >= 4 -> "text-warning bg-warning/15 border-warning/30"
-      true -> "text-error bg-error/15 border-error/30"
+      true -> "ui-money-despesa bg-(--ui-despesa)/15 border-(--ui-despesa)/30"
     end
   end
 
   defp score_color(_), do: "text-info bg-info/15 border-info/30"
 
-  defp ponto_icon("positivo"), do: {"hero-check-circle", "text-success"}
-  defp ponto_icon("negativo"), do: {"hero-x-circle", "text-error"}
+  defp ponto_icon("positivo"), do: {"hero-check-circle", "ui-money-receita"}
+  defp ponto_icon("negativo"), do: {"hero-x-circle", "ui-money-despesa"}
   defp ponto_icon("dica"), do: {"hero-light-bulb", "text-warning"}
-  defp ponto_icon(_), do: {"hero-minus-circle", "opacity-50"}
+  defp ponto_icon(_), do: {"hero-minus-circle", "ui-text-tertiary"}
 
   defp format_datetime_br(dt) do
     dt
@@ -345,138 +341,25 @@ defmodule GranaWeb.AnalysisLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Análise</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">
-            Insights inteligentes sobre suas finanças
-          </p>
-        </div>
+        <.page_header title="Análise" subtitle="Insights inteligentes sobre suas finanças" />
 
         <%!-- Filters --%>
-        <div :if={@available_years != []} class="mb-4 sm:mb-6 space-y-2">
-          <%!-- Row 1: Year + Month --%>
-          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-            <div class="flex gap-1">
-              <button
-                :for={y <- @available_years}
-                phx-click="select_year"
-                phx-value-year={y}
-                class={[
-                  "btn btn-xs sm:btn-sm",
-                  (y == @filters.year && "btn-primary") || "btn-ghost"
-                ]}
-              >
-                {y}
-              </button>
-            </div>
-            <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
-            <div class="flex flex-wrap gap-1">
-              <button
-                phx-click="select_month"
-                phx-value-month="all"
-                class={["btn btn-xs", (@filters.month == 0 && "btn-primary") || "btn-ghost"]}
-              >
-                Ano
-              </button>
-              <button
-                :for={m <- months_for_year(@available_months, @filters.year)}
-                phx-click="select_month"
-                phx-value-month={m}
-                class={[
-                  "btn btn-xs",
-                  (@filters.month == m && "btn-primary") || "btn-ghost"
-                ]}
-              >
-                {Banking.month_name_short(m)}
-              </button>
-            </div>
-          </div>
-
-          <%!-- Row 2: Bank + Source + Txn Type --%>
-          <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-            <div :if={@banks != []} class="flex items-center gap-1">
-              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
-              <button
-                phx-click="select_bank"
-                phx-value-bank="all"
-                class={["btn btn-xs", (@filters.bank == "all" && "btn-primary") || "btn-ghost"]}
-              >
-                Todos
-              </button>
-              <button
-                :for={b <- @banks}
-                phx-click="select_bank"
-                phx-value-bank={b}
-                class={["btn btn-xs gap-1", (@filters.bank == b && "btn-primary") || "btn-ghost"]}
-              >
-                <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
-                <span class="hidden sm:inline">{String.capitalize(b)}</span>
-              </button>
-            </div>
-            <div class="flex items-center gap-1">
-              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
-              <button
-                phx-click="select_source"
-                phx-value-source="all"
-                class={[
-                  "btn btn-xs",
-                  (@filters.statement_type == "all" && "btn-primary") || "btn-ghost"
-                ]}
-              >
-                Todas
-              </button>
-              <button
-                phx-click="select_source"
-                phx-value-source="extrato"
-                class={[
-                  "btn btn-xs gap-1",
-                  (@filters.statement_type == "extrato" && "btn-primary") || "btn-ghost"
-                ]}
-              >
-                <.icon name="hero-banknotes" class="size-3" />
-                <span class="hidden sm:inline">Extrato</span>
-              </button>
-              <button
-                phx-click="select_source"
-                phx-value-source="fatura"
-                class={[
-                  "btn btn-xs gap-1",
-                  (@filters.statement_type == "fatura" && "btn-primary") || "btn-ghost"
-                ]}
-              >
-                <.icon name="hero-credit-card" class="size-3" />
-                <span class="hidden sm:inline">Fatura</span>
-              </button>
-            </div>
-            <div class="flex items-center gap-1">
-              <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
-              <button
-                phx-click="select_txn_type"
-                phx-value-txn_type="all"
-                class={["btn btn-xs", (@filters.type == "all" && "btn-primary") || "btn-ghost"]}
-              >
-                Todas
-              </button>
-              <button
-                phx-click="select_txn_type"
-                phx-value-txn_type="debit"
-                class={["btn btn-xs", (@filters.type == "debit" && "btn-primary") || "btn-ghost"]}
-              >
-                Despesas
-              </button>
-              <button
-                phx-click="select_txn_type"
-                phx-value-txn_type="credit"
-                class={["btn btn-xs", (@filters.type == "credit" && "btn-primary") || "btn-ghost"]}
-              >
-                Receitas
-              </button>
-            </div>
-          </div>
-        </div>
+        <.filter_bar :if={@available_years != []} id="analysis-filters">
+          <.period_filter
+            years={@available_years}
+            selected_year={@filters.year}
+            months={months_for_year(@available_months, @filters.year)}
+            selected_month={if @filters.month != 0, do: @filters.month}
+            all_months_active={@filters.month == 0}
+            all_months_label="Ano"
+          />
+          <.bank_filter banks={@banks} selected={@filters.bank} />
+          <.source_filter selected={@filters.statement_type} event="select_source" param="source" />
+          <.movement_filter selected={@filters.type} />
+        </.filter_bar>
 
         <%!-- Prompt + Analyze --%>
-        <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-8">
+        <div class="card bg-base-200 mb-6 p-4 sm:mb-8 sm:p-6">
           <.form for={@prompt_form} phx-submit="analyze" phx-change="update_prompt" novalidate>
             <div class="mb-3 sm:mb-4">
               <.input
@@ -488,50 +371,53 @@ defmodule GranaWeb.AnalysisLive do
               />
             </div>
 
-            <div class="flex flex-wrap gap-1.5 mb-3">
-              <button
+            <div class="mb-3 flex flex-wrap gap-1.5">
+              <.chip
                 :for={
-                  chip <- [
+                  suggestion <- [
                     "Onde posso economizar?",
                     "Qual categoria cresceu mais?",
                     "Como estão meus gastos fixos?",
                     "Resumo do mês"
                   ]
                 }
-                type="button"
+                class="ui-chip-outline"
                 phx-click="set_chip"
-                phx-value-text={chip}
-                class="btn btn-xs btn-outline btn-primary rounded-full font-normal"
+                phx-value-text={suggestion}
               >
-                {chip}
-              </button>
+                {suggestion}
+              </.chip>
             </div>
 
-            <button
-              type="submit"
-              class="btn btn-primary btn-sm sm:btn-md gap-2 w-full sm:w-auto"
+            <.button
+              id="analyze-button"
+              variant="primary"
+              size="sm"
+              icon={if !@loading, do: "hero-sparkles"}
+              class="w-full sm:w-auto"
               disabled={@loading}
             >
-              <.icon :if={!@loading} name="hero-sparkles" class="size-4" />
-              {if @loading, do: "Analisando...", else: "Analisar com IA"}
-            </button>
+              {if @loading, do: "Analisando…", else: "Analisar com IA"}
+            </.button>
           </.form>
         </div>
 
         <%!-- Loading --%>
-        <div :if={@loading} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div :if={@loading} id="analysis-loading" class="card bg-base-200 mb-6 p-4 sm:p-6">
           <div class="flex items-center gap-3">
-            <span class="loading loading-spinner loading-sm text-primary" />
-            <span class="text-sm opacity-60">Analisando seus dados com IA...</span>
+            <.tag kind="pendente">Em andamento</.tag>
+            <span class="ui-body ui-text-secondary">Analisando seus dados com IA…</span>
           </div>
         </div>
 
         <%!-- Empty State --%>
-        <div :if={@analyses == [] and !@loading} class="text-center py-10 sm:py-16">
-          <.icon name="hero-sparkles" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
-          <h2 class="text-lg sm:text-xl font-semibold mb-2">Nenhuma análise ainda</h2>
-          <p class="opacity-60 text-sm">Configure os filtros e clique em "Analisar com IA"</p>
-        </div>
+        <.empty_state
+          :if={@analyses == [] and !@loading}
+          id="analysis-empty"
+          icon="hero-sparkles"
+          title="Nenhuma análise ainda"
+          text={~s(Configure os filtros e clique em "Analisar com IA".)}
+        />
 
         <%!-- Analyses grouped by year --%>
         <div :if={@analyses != []} class="space-y-4 sm:space-y-6">
@@ -544,12 +430,12 @@ defmodule GranaWeb.AnalysisLive do
               <.icon
                 name="hero-chevron-down"
                 class={[
-                  "size-4 opacity-40 group-hover:opacity-70 transition-transform duration-250 ease-out",
+                  "size-4 ui-text-tertiary group-hover:text-base-content transition-transform duration-250 ease-out",
                   MapSet.member?(@collapsed_years, year) && "-rotate-90"
                 ]}
               />
               <h3 class="text-lg font-bold">{year}</h3>
-              <span class="badge badge-sm badge-ghost">{length(year_analyses)}</span>
+              <span class="ui-tag ui-tag-neutro">{length(year_analyses)}</span>
             </button>
 
             <div class={[
@@ -575,12 +461,12 @@ defmodule GranaWeb.AnalysisLive do
                             <.icon
                               name="hero-chevron-down"
                               class={[
-                                "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
+                                "size-3.5 ui-text-tertiary shrink-0 transition-transform duration-200",
                                 !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
                               ]}
                             />
                             <span class={[
-                              "inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg text-xs sm:text-sm font-bold border shrink-0",
+                              "inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 ui-rounded-box text-xs sm:text-sm font-bold border shrink-0",
                               score_color(analysis.result_json["nota"])
                             ]}>
                               {format_score(analysis.result_json["nota"])}
@@ -593,7 +479,7 @@ defmodule GranaWeb.AnalysisLive do
                                 {analysis.result_json["titulo"]}
                               </h4>
                               <div class="flex flex-wrap items-center gap-1 mt-0.5">
-                                <span class="text-[10px] sm:text-xs opacity-40">
+                                <span class="ui-caption sm:text-xs">
                                   {format_datetime_br(analysis.inserted_at)}
                                 </span>
                                 <span
@@ -601,13 +487,13 @@ defmodule GranaWeb.AnalysisLive do
                                     analysis.filters_json["month"] &&
                                       analysis.filters_json["month"] != 0
                                   }
-                                  class="badge badge-xs badge-ghost"
+                                  class="ui-tag ui-tag-neutro"
                                 >
                                   {Banking.month_name(analysis.filters_json["month"])}
                                 </span>
                                 <span
                                   :if={analysis.filters_json["month"] == 0}
-                                  class="badge badge-xs badge-ghost"
+                                  class="ui-tag ui-tag-neutro"
                                 >
                                   Ano todo
                                 </span>
@@ -616,19 +502,19 @@ defmodule GranaWeb.AnalysisLive do
                                     analysis.filters_json["bank"] &&
                                       analysis.filters_json["bank"] != "all"
                                   }
-                                  class="badge badge-xs badge-ghost"
+                                  class="ui-tag ui-tag-neutro"
                                 >
                                   {String.capitalize(analysis.filters_json["bank"])}
                                 </span>
                                 <span
                                   :if={source_label(analysis.filters_json["statement_type"])}
-                                  class="badge badge-xs badge-ghost"
+                                  class="ui-tag ui-tag-neutro"
                                 >
                                   {source_label(analysis.filters_json["statement_type"])}
                                 </span>
                                 <span
                                   :if={type_label(analysis.filters_json["type"])}
-                                  class="badge badge-xs badge-ghost"
+                                  class="ui-tag ui-tag-neutro"
                                 >
                                   {type_label(analysis.filters_json["type"])}
                                 </span>
@@ -637,7 +523,7 @@ defmodule GranaWeb.AnalysisLive do
                           </div>
                           <p
                             :if={analysis.prompt && analysis.prompt != ""}
-                            class="text-xs opacity-30 italic mt-1 truncate ml-11 sm:ml-13"
+                            class="text-xs ui-text-tertiary italic mt-1 truncate ml-11 sm:ml-13"
                             title={analysis.prompt}
                           >
                             "{analysis.prompt}"
@@ -646,7 +532,7 @@ defmodule GranaWeb.AnalysisLive do
                         <button
                           phx-click="confirm_delete"
                           phx-value-id={analysis.id}
-                          class="btn btn-ghost btn-xs text-error shrink-0 opacity-40 hover:opacity-100"
+                          class="btn btn-ghost btn-xs text-error shrink-0"
                         >
                           <.icon name="hero-trash" class="size-4" />
                         </button>
@@ -662,7 +548,7 @@ defmodule GranaWeb.AnalysisLive do
                       ]}>
                         <div class="overflow-hidden">
                           <div class="mt-3">
-                            <p class="text-xs sm:text-sm opacity-80 mb-3 sm:mb-4">
+                            <p class="text-xs sm:text-sm ui-text-secondary mb-3 sm:mb-4">
                               {analysis.result_json["resumo"]}
                             </p>
 
@@ -675,21 +561,17 @@ defmodule GranaWeb.AnalysisLive do
                                   name={elem(ponto_icon(ponto["tipo"]), 0)}
                                   class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
                                 />
-                                <span class="opacity-80">{ponto["texto"]}</span>
+                                <span class="ui-text-secondary">{ponto["texto"]}</span>
                               </div>
                             </div>
 
-                            <div
-                              :if={analysis.result_json["alerta"]}
-                              class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
-                            >
-                              <.icon name="hero-exclamation-triangle" class="size-4" />
-                              <span>{analysis.result_json["alerta"]}</span>
-                            </div>
+                            <.notice :if={analysis.result_json["alerta"]} tone={:warning} class="mb-3">
+                              {analysis.result_json["alerta"]}
+                            </.notice>
 
                             <div
                               :if={analysis.result_json["resposta"]}
-                              class="bg-primary/5 border border-primary/10 rounded-lg p-2.5 sm:p-3"
+                              class="bg-primary/5 border border-primary/10 ui-rounded-box p-2.5 sm:p-3"
                             >
                               <div class="flex items-center gap-1.5 mb-1">
                                 <.icon
@@ -698,7 +580,7 @@ defmodule GranaWeb.AnalysisLive do
                                 />
                                 <span class="text-xs font-medium text-primary">Resposta</span>
                               </div>
-                              <p class="text-xs sm:text-sm opacity-80">
+                              <p class="text-xs sm:text-sm ui-text-secondary">
                                 {analysis.result_json["resposta"]}
                               </p>
                             </div>
@@ -720,7 +602,7 @@ defmodule GranaWeb.AnalysisLive do
                             <.icon
                               name="hero-chevron-down"
                               class={[
-                                "size-3.5 opacity-40 shrink-0 transition-transform duration-200",
+                                "size-3.5 ui-text-tertiary shrink-0 transition-transform duration-200",
                                 !MapSet.member?(@expanded_analyses, analysis.id) && "-rotate-90"
                               ]}
                             />
@@ -732,7 +614,7 @@ defmodule GranaWeb.AnalysisLive do
                           <div class="flex flex-wrap gap-1 ml-5">
                             <span
                               :if={analysis.filters_json["year"]}
-                              class="badge badge-xs badge-ghost"
+                              class="ui-tag ui-tag-neutro"
                             >
                               {analysis.filters_json["year"]}
                             </span>
@@ -740,7 +622,7 @@ defmodule GranaWeb.AnalysisLive do
                               :if={
                                 analysis.filters_json["month"] && analysis.filters_json["month"] != 0
                               }
-                              class="badge badge-xs badge-ghost"
+                              class="ui-tag ui-tag-neutro"
                             >
                               {Banking.month_name(analysis.filters_json["month"])}
                             </span>
@@ -749,7 +631,7 @@ defmodule GranaWeb.AnalysisLive do
                                 analysis.filters_json["bank"] &&
                                   analysis.filters_json["bank"] != "all"
                               }
-                              class="badge badge-xs badge-ghost"
+                              class="ui-tag ui-tag-neutro"
                             >
                               {String.capitalize(analysis.filters_json["bank"])}
                             </span>
@@ -758,7 +640,7 @@ defmodule GranaWeb.AnalysisLive do
                         <button
                           phx-click="confirm_delete"
                           phx-value-id={analysis.id}
-                          class="btn btn-ghost btn-xs text-error opacity-40 hover:opacity-100"
+                          class="btn btn-ghost btn-xs text-error"
                         >
                           <.icon name="hero-trash" class="size-4" />
                         </button>
@@ -774,7 +656,7 @@ defmodule GranaWeb.AnalysisLive do
                       ]}>
                         <div class="overflow-hidden">
                           <div class="mt-3">
-                            <p class="text-xs sm:text-sm mb-3 opacity-80">
+                            <p class="text-xs sm:text-sm mb-3 ui-text-secondary">
                               {analysis.result_json["resumo"]}
                             </p>
 
@@ -787,27 +669,23 @@ defmodule GranaWeb.AnalysisLive do
                                   name="hero-light-bulb"
                                   class="size-4 text-warning shrink-0 mt-0.5"
                                 />
-                                <span class="opacity-80">{insight}</span>
+                                <span class="ui-text-secondary">{insight}</span>
                               </div>
                             </div>
 
-                            <div
-                              :if={analysis.result_json["alerta"]}
-                              class="alert alert-warning text-xs sm:text-sm py-2 mb-3"
-                            >
-                              <.icon name="hero-exclamation-triangle" class="size-4" />
-                              <span>{analysis.result_json["alerta"]}</span>
-                            </div>
+                            <.notice :if={analysis.result_json["alerta"]} tone={:warning} class="mb-3">
+                              {analysis.result_json["alerta"]}
+                            </.notice>
 
                             <div
                               :if={analysis.result_json["dica"]}
-                              class="flex items-start gap-2 text-xs sm:text-sm bg-success/10 rounded-lg p-3"
+                              class="flex items-start gap-2 text-xs sm:text-sm bg-(--ui-receita)/10 ui-rounded-box p-3"
                             >
                               <.icon
                                 name="hero-check-circle"
-                                class="size-4 text-success shrink-0 mt-0.5"
+                                class="ui-money-receita size-4 shrink-0 mt-0.5"
                               />
-                              <span class="opacity-80">{analysis.result_json["dica"]}</span>
+                              <span class="ui-text-secondary">{analysis.result_json["dica"]}</span>
                             </div>
                           </div>
                         </div>
@@ -820,77 +698,23 @@ defmodule GranaWeb.AnalysisLive do
           </div>
         </div>
 
-        <%!-- API Key Alert Modal --%>
-        <dialog
+        <.ai_required_modal
           :if={@show_api_key_alert}
-          class="modal modal-open"
-          phx-window-keydown="dismiss_api_alert"
-          phx-key="Escape"
-        >
-          <div class="modal-box">
-            <h3 class="text-lg font-bold">Provedor de IA não configurado</h3>
-            <p class="py-4 opacity-70">
-              Para usar funcionalidades de IA, você precisa cadastrar um provedor de IA (Gemini, OpenAI, Claude ou compatível).
-            </p>
-            <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
-              <li>
-                Crie uma chave no provedor que preferir:
-                <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">
-                  Google Gemini
-                </a>
-                ·
-                <a
-                  href="https://platform.openai.com/api-keys"
-                  target="_blank"
-                  class="link link-primary"
-                >
-                  OpenAI
-                </a>
-                ·
-                <a
-                  href="https://console.anthropic.com/settings/keys"
-                  target="_blank"
-                  class="link link-primary"
-                >
-                  Claude
-                </a>
-              </li>
-              <li>Cadastre o provedor em Configurações → LLM</li>
-            </ol>
-            <div class="modal-action">
-              <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>
-              <.link navigate={~p"/users/settings"} class="btn btn-primary">
-                Ir para Configurações
-              </.link>
-            </div>
-          </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="dismiss_api_alert">close</button>
-          </form>
-        </dialog>
+          reason="A análise usa IA para ler os seus dados e gerar os insights."
+        />
 
-        <%!-- Delete Confirmation Modal --%>
-        <dialog
+        <.confirm_modal
           :if={@delete_target}
           id="delete_analysis_modal"
-          class="modal modal-open"
-          phx-window-keydown="cancel_delete"
-          phx-key="Escape"
+          open
+          title="Remover análise"
+          confirm="Remover"
+          loading="Removendo…"
+          on_confirm={JS.push("delete_analysis")}
+          on_cancel={JS.push("cancel_delete")}
         >
-          <div class="modal-box">
-            <h3 class="text-lg font-bold">Remover análise</h3>
-            <p class="py-4 opacity-70">
-              Tem certeza que deseja remover esta análise? Esta ação é permanente.
-            </p>
-            <div class="modal-action">
-              <button phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
-              <button phx-click="delete_analysis" class="btn btn-error">Remover</button>
-            </div>
-          </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="cancel_delete">close</button>
-          </form>
-        </dialog>
+          Tem certeza que deseja remover esta análise? Esta ação é permanente.
+        </.confirm_modal>
       </div>
     </Layouts.app>
     """

@@ -7,13 +7,13 @@ defmodule GranaWeb.DashboardLiveTest do
 
   test "renders dashboard page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/dashboard")
-    assert html =~ "Dashboard"
+    assert html =~ "Painel"
     assert html =~ "Nenhuma transação encontrada"
   end
 
   test "shows upload button when no transactions", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/dashboard")
-    assert html =~ "Upload"
+    assert html =~ "Importar"
   end
 
   test "shows period selector description", %{conn: conn} do
@@ -31,7 +31,7 @@ defmodule GranaWeb.DashboardLiveTest do
 
     test "renderiza a sub-aba de despesas fixas", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/dashboard?tab=recurring")
-      assert html =~ "Despesas Fixas"
+      assert html =~ "Despesas fixas"
       assert html =~ "Nenhuma despesa encontrada"
     end
 

@@ -83,20 +83,23 @@ defmodule GranaWeb.CategoriesLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
-          <div class="text-center sm:text-left">
-            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Categorias</h1>
-            <p class="text-xs sm:text-sm opacity-60 mt-1">
-              Gerencie as categorias de suas transações
-            </p>
-          </div>
-          <button phx-click="new_category" class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="size-4" /> Nova Categoria
-          </button>
-        </div>
+        <.page_header title="Categorias" subtitle="Gerencie as categorias de suas transações">
+          <:actions>
+            <.button
+              id="new-category"
+              type="button"
+              variant="primary"
+              size="sm"
+              icon="hero-plus"
+              phx-click="new_category"
+            >
+              Nova categoria
+            </.button>
+          </:actions>
+        </.page_header>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div :for={cat <- @categories} class="card bg-base-200 p-4">
+          <div :for={cat <- @categories} id={"category-#{cat.id}"} class="card bg-base-200 p-4">
             <div class="flex items-center gap-3 mb-3">
               <div
                 class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
@@ -107,214 +110,172 @@ defmodule GranaWeb.CategoriesLive do
                 </span>
               </div>
               <div class="flex-1 min-w-0">
-                <h3 class="font-semibold truncate" title={cat.name}>{cat.name}</h3>
-                <div class="flex gap-3 text-xs opacity-60">
+                <h3 class="ui-body font-semibold truncate" title={cat.name}>{cat.name}</h3>
+                <div class="ui-help flex gap-3">
                   <span>{get_stat(cat.id, @stats, :transaction_count)} transações</span>
                   <span>{get_stat(cat.id, @stats, :rule_count)} regras</span>
                 </div>
               </div>
-              <div :if={cat.kind == "investment"} class="badge badge-sm badge-info shrink-0">
-                Investimento
-              </div>
-              <div :if={cat.kind == "income"} class="badge badge-sm badge-success shrink-0">
-                Receita
-              </div>
-              <div
-                :if={cat.is_system && cat.kind == "expense"}
-                class="badge badge-sm badge-ghost shrink-0"
-              >
+              <.tag :if={cat.kind == "investment"} kind="neutro" class="shrink-0">
+                <span class="size-1.5 rounded-full bg-(--ui-investimento)"></span> Investimento
+              </.tag>
+              <.tag :if={cat.kind == "income"} kind="neutro" class="shrink-0">
+                <span class="size-1.5 rounded-full bg-(--ui-receita)"></span> Receita
+              </.tag>
+              <.tag :if={cat.is_system && cat.kind == "expense"} kind="neutro" class="shrink-0">
                 Sistema
-              </div>
+              </.tag>
             </div>
             <div class="flex gap-2 justify-end">
-              <button
+              <.button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="hero-pencil"
                 phx-click="edit_category"
                 phx-value-id={cat.id}
-                class="btn btn-ghost btn-xs"
               >
-                <.icon name="hero-pencil" class="size-3" /> Editar
-              </button>
-              <button
+                Editar
+              </.button>
+              <.button
                 :if={!cat.is_system}
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="hero-trash"
+                class="text-error"
                 phx-click="confirm_delete"
                 phx-value-id={cat.id}
-                class="btn btn-ghost btn-xs text-error"
               >
-                <.icon name="hero-trash" class="size-3" /> Remover
-              </button>
+                Remover
+              </.button>
             </div>
           </div>
         </div>
       </div>
 
-      <%!-- Create/Edit Modal --%>
-      <dialog
+      <.form_modal
         :if={@form_mode}
         id="category_modal"
-        class="modal modal-open"
-        phx-window-keydown="cancel_form"
-        phx-key="Escape"
+        title={if @form_mode == :new, do: "Nova categoria", else: "Editar categoria"}
+        form={@form}
+        form_id="category-form"
+        on_submit="save_category"
+        on_cancel={JS.push("cancel_form")}
+        box_class="max-w-2xl"
       >
-        <div class="modal-box category-modal-box max-w-2xl">
-          <h3 class="text-lg font-bold">
-            {if @form_mode == :new, do: "Nova Categoria", else: "Editar Categoria"}
-          </h3>
-          <.form
-            for={@form}
-            id="category-form"
-            phx-submit="save_category"
-            class="category-form"
-            novalidate
-          >
-            <div class="form-control">
-              <label class="label category-field-label"><span class="label-text">Nome</span></label>
-              <input
-                type="text"
-                name="category[name]"
-                value={@form[:name].value}
-                class={"input input-bordered w-full #{if @form.errors[:name], do: "input-error"}"}
-                placeholder="Nome da categoria"
-                autofocus
-                phx-debounce="100"
-              />
-              <p :if={@form.errors[:name]} class="text-error text-xs mt-1">
-                {translate_error(@form.errors[:name])}
-              </p>
-            </div>
+        <div class="flex flex-col gap-6">
+          <.input
+            field={@form[:name]}
+            type="text"
+            label="Nome"
+            placeholder="Nome da categoria"
+            autofocus
+            phx-debounce="100"
+          />
 
-            <input type="hidden" name="category[icon]" value={@form_icon} />
-            <input type="hidden" name="category[color]" value={@form_color} />
-            <input type="hidden" name="category[kind]" value={@form_kind} />
+          <input type="hidden" name="category[icon]" value={@form_icon} />
+          <input type="hidden" name="category[color]" value={@form_color} />
+          <input type="hidden" name="category[kind]" value={@form_kind} />
 
-            <div class="form-control">
-              <label class="label category-field-label"><span class="label-text">Ícone</span></label>
-              <div class="category-icon-grid">
-                <button
-                  :for={icon <- available_icons()}
-                  type="button"
-                  phx-click="select_icon"
-                  phx-value-icon={icon}
-                  class={[
-                    "btn btn-sm btn-square",
-                    if(@form_icon == icon, do: "btn-primary", else: "btn-ghost")
-                  ]}
-                >
-                  <.icon name={icon} class="size-4" />
-                </button>
-              </div>
-            </div>
-
-            <div class="form-control">
-              <label class="label category-field-label"><span class="label-text">Cor</span></label>
-              <div class="category-color-grid">
-                <button
-                  :for={color <- available_colors()}
-                  type="button"
-                  phx-click="select_color"
-                  phx-value-color={color}
-                  class={[
-                    "category-color-swatch rounded-full cursor-pointer border-2 transition-all",
-                    if(@form_color == color,
-                      do: "border-base-content scale-110",
-                      else: "border-transparent"
-                    )
-                  ]}
-                  style={"background-color: #{color}"}
-                >
-                </button>
-              </div>
-            </div>
-
-            <div class="form-control">
-              <label class="label category-field-label"><span class="label-text">Tipo</span></label>
-              <div class="category-kind-grid">
-                <button
-                  :for={
-                    {value, label} <- [
-                      {"expense", "Despesa"},
-                      {"investment", "Investimento"},
-                      {"income", "Receita"}
-                    ]
-                  }
-                  type="button"
-                  phx-click="select_kind"
-                  phx-value-kind={value}
-                  class={[
-                    "btn btn-sm flex-1",
-                    cond do
-                      @form_kind == value && value == "expense" -> "btn-error"
-                      @form_kind == value && value == "investment" -> "btn-info"
-                      @form_kind == value && value == "income" -> "btn-success"
-                      true -> "btn-ghost"
-                    end
-                  ]}
-                >
-                  {label}
-                </button>
-              </div>
-            </div>
-
-            <div class="category-preview-panel flex items-center gap-3 bg-base-300 rounded-lg">
-              <div
-                class="w-10 h-10 rounded-full flex items-center justify-center"
-                style={"background-color: #{@form_color}20"}
+          <div>
+            <span class="ui-label">Ícone</span>
+            <div class="category-icon-grid">
+              <.button
+                :for={icon <- available_icons()}
+                type="button"
+                variant={if(@form_icon == icon, do: "primary", else: "ghost")}
+                size="sm"
+                class="btn-square"
+                phx-click="select_icon"
+                phx-value-icon={icon}
               >
-                <span class="flex" style={"color: #{@form_color}"}>
-                  <.icon name={@form_icon} class="size-5" />
-                </span>
-              </div>
-              <span class="font-medium">
-                {if @form[:name].value in [nil, ""], do: "Pré-visualização", else: @form[:name].value}
+                <.icon name={icon} class="size-4" />
+              </.button>
+            </div>
+          </div>
+
+          <div>
+            <span class="ui-label">Cor</span>
+            <div class="category-color-grid">
+              <button
+                :for={color <- available_colors()}
+                type="button"
+                phx-click="select_color"
+                phx-value-color={color}
+                aria-label={"Cor #{color}"}
+                class={[
+                  "category-color-swatch rounded-full cursor-pointer border-2 transition-all",
+                  if(@form_color == color,
+                    do: "border-base-content scale-110",
+                    else: "border-transparent"
+                  )
+                ]}
+                style={"background-color: #{color}"}
+              >
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <span class="ui-label">Tipo</span>
+            <.chip_group>
+              <.chip
+                :for={
+                  {value, label} <- [
+                    {"expense", "Despesa"},
+                    {"investment", "Investimento"},
+                    {"income", "Receita"}
+                  ]
+                }
+                active={@form_kind == value}
+                phx-click="select_kind"
+                phx-value-kind={value}
+              >
+                {label}
+              </.chip>
+            </.chip_group>
+          </div>
+
+          <div class="category-preview-panel ui-rounded-box flex items-center gap-3 bg-base-300">
+            <div
+              class="w-10 h-10 rounded-full flex items-center justify-center"
+              style={"background-color: #{@form_color}20"}
+            >
+              <span class="flex" style={"color: #{@form_color}"}>
+                <.icon name={@form_icon} class="size-5" />
               </span>
             </div>
-
-            <div class="modal-action">
-              <button type="button" phx-click="cancel_form" class="btn btn-ghost">
-                Cancelar
-              </button>
-              <button type="submit" class="btn btn-primary">Salvar</button>
-            </div>
-          </.form>
-        </div>
-        <form method="dialog" class="modal-backdrop">
-          <button type="button" phx-click="cancel_form">close</button>
-        </form>
-      </dialog>
-
-      <%!-- Delete Confirmation Modal --%>
-      <dialog
-        :if={@delete_target}
-        id="delete_modal"
-        class="modal modal-open"
-        phx-window-keydown="cancel_delete"
-        phx-key="Escape"
-      >
-        <div class="modal-box">
-          <h3 class="text-lg font-bold">Remover categoria</h3>
-          <p class="py-4 opacity-70">
-            Tem certeza que deseja remover a categoria <span class="font-semibold">{@delete_target.name}</span>?
-          </p>
-          <p
-            :if={get_stat(@delete_target.id, @stats, :transaction_count) > 0}
-            class="text-sm opacity-60 mb-2"
-          >
-            {get_stat(@delete_target.id, @stats, :transaction_count)} transações ficarão sem categoria.
-          </p>
-          <p
-            :if={get_stat(@delete_target.id, @stats, :rule_count) > 0}
-            class="text-sm opacity-60 mb-2"
-          >
-            {get_stat(@delete_target.id, @stats, :rule_count)} regras serão removidas.
-          </p>
-          <div class="modal-action">
-            <button phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
-            <button phx-click="delete" class="btn btn-error">Remover</button>
+            <span class="ui-body font-medium">
+              {if @form[:name].value in [nil, ""], do: "Pré-visualização", else: @form[:name].value}
+            </span>
           </div>
         </div>
-        <form method="dialog" class="modal-backdrop">
-          <button type="button" phx-click="cancel_delete">close</button>
-        </form>
-      </dialog>
+      </.form_modal>
+
+      <.confirm_modal
+        :if={@delete_target}
+        id="delete_modal"
+        open
+        title="Remover categoria"
+        confirm="Remover"
+        loading="Removendo…"
+        on_confirm={JS.push("delete")}
+        on_cancel={JS.push("cancel_delete")}
+      >
+        <p>
+          Tem certeza que deseja remover a categoria <span class="font-semibold">{@delete_target.name}</span>?
+        </p>
+        <p
+          :if={get_stat(@delete_target.id, @stats, :transaction_count) > 0}
+          class="ui-help mt-2"
+        >
+          {get_stat(@delete_target.id, @stats, :transaction_count)} transações ficarão sem categoria.
+        </p>
+        <p :if={get_stat(@delete_target.id, @stats, :rule_count) > 0} class="ui-help mt-2">
+          {get_stat(@delete_target.id, @stats, :rule_count)} regras serão removidas.
+        </p>
+      </.confirm_modal>
     </Layouts.app>
     """
   end
@@ -381,8 +342,8 @@ defmodule GranaWeb.CategoriesLive do
 
         msg =
           if socket.assigns.form_mode == :new,
-            do: "Categoria criada!",
-            else: "Categoria atualizada!"
+            do: "Categoria criada.",
+            else: "Categoria atualizada."
 
         socket =
           socket
@@ -421,7 +382,7 @@ defmodule GranaWeb.CategoriesLive do
           |> assign(:categories, categories)
           |> assign(:stats, stats)
           |> assign(:delete_target, nil)
-          |> put_flash(:info, "Categoria removida")
+          |> put_flash(:info, "Categoria removida.")
 
         {:noreply, socket}
 
@@ -429,7 +390,7 @@ defmodule GranaWeb.CategoriesLive do
         socket =
           socket
           |> assign(:delete_target, nil)
-          |> put_flash(:error, "Categorias do sistema não podem ser removidas")
+          |> put_flash(:error, "Categorias do sistema não podem ser removidas.")
 
         {:noreply, socket}
     end
