@@ -370,6 +370,21 @@ defmodule GranaWeb.UiComponents do
     """
   end
 
+  @doc ~S|Contagem com milhar e singular/plural: `count_label(1671, "transação", "transações")`.|
+  def count_label(1, singular, _plural), do: "1 #{singular}"
+
+  def count_label(n, _singular, plural) do
+    formatted = n |> Integer.to_string() |> String.replace(~r/\B(?=(\d{3})+(?!\d))/, ".")
+    "#{formatted} #{plural}"
+  end
+
+  @doc "Percentual com vírgula decimal; acima de 999% vira \">999%\"."
+  def format_pct(pct) when pct > 999, do: ">999%"
+
+  def format_pct(pct) do
+    "#{pct |> Kernel.*(1.0) |> Float.round(1) |> Float.to_string() |> String.replace(".", ",")}%"
+  end
+
   def show_modal(js \\ %JS{}, id), do: JS.add_class(js, "modal-open", to: "##{id}")
   def hide_modal(js \\ %JS{}, id), do: JS.remove_class(js, "modal-open", to: "##{id}")
 

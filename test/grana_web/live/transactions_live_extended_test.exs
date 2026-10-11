@@ -84,10 +84,12 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
 
       {:ok, view, _html} = live(conn, ~p"/transactions")
 
-      render_click(view, "toggle-description", %{"id" => "banking-#{txn.id}"})
+      selector = "#transaction-banking-#{txn.id} span[title='MERCADO LIVRE']"
+      assert has_element?(view, "#{selector}.truncate")
 
-      html = render(view)
-      assert html =~ "MERCADO LIVRE"
+      view |> element(selector) |> render_click()
+
+      refute has_element?(view, "#{selector}.truncate")
     end
 
     test "collapses when toggled again", %{conn: conn, user: user} do

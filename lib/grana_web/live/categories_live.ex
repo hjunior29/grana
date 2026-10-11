@@ -112,8 +112,14 @@ defmodule GranaWeb.CategoriesLive do
               <div class="flex-1 min-w-0">
                 <h3 class="ui-body font-semibold truncate" title={cat.name}>{cat.name}</h3>
                 <div class="ui-help flex gap-3">
-                  <span>{get_stat(cat.id, @stats, :transaction_count)} transações</span>
-                  <span>{get_stat(cat.id, @stats, :rule_count)} regras</span>
+                  <span>
+                    {count_label(
+                      get_stat(cat.id, @stats, :transaction_count),
+                      "transação",
+                      "transações"
+                    )}
+                  </span>
+                  <span>{count_label(get_stat(cat.id, @stats, :rule_count), "regra", "regras")}</span>
                 </div>
               </div>
               <.tag :if={cat.kind == "investment"} kind="neutro" class="shrink-0">
@@ -187,6 +193,8 @@ defmodule GranaWeb.CategoriesLive do
                 variant={if(@form_icon == icon, do: "primary", else: "ghost")}
                 size="sm"
                 class="btn-square"
+                aria-label={"Ícone " <> String.replace_prefix(icon, "hero-", "")}
+                aria-pressed={to_string(@form_icon == icon)}
                 phx-click="select_icon"
                 phx-value-icon={icon}
               >
@@ -270,10 +278,18 @@ defmodule GranaWeb.CategoriesLive do
           :if={get_stat(@delete_target.id, @stats, :transaction_count) > 0}
           class="ui-help mt-2"
         >
-          {get_stat(@delete_target.id, @stats, :transaction_count)} transações ficarão sem categoria.
+          {count_label(
+            get_stat(@delete_target.id, @stats, :transaction_count),
+            "transação ficará",
+            "transações ficarão"
+          )} sem categoria.
         </p>
         <p :if={get_stat(@delete_target.id, @stats, :rule_count) > 0} class="ui-help mt-2">
-          {get_stat(@delete_target.id, @stats, :rule_count)} regras serão removidas.
+          {count_label(
+            get_stat(@delete_target.id, @stats, :rule_count),
+            "regra será removida",
+            "regras serão removidas"
+          )}.
         </p>
       </.confirm_modal>
     </Layouts.app>

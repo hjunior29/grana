@@ -309,7 +309,23 @@ defmodule GranaWeb.TransactionsLive do
           </.tag>
         </div>
 
-        <div class="card bg-base-200 p-4 mb-6">
+        <div class="mb-3 sm:hidden">
+          <.button
+            id="transactions-filters-toggle"
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon="hero-funnel"
+            phx-click={JS.toggle_class("hidden", to: "#transactions-filters-card")}
+          >
+            Filtros
+          </.button>
+        </div>
+
+        <div
+          id="transactions-filters-card"
+          class={["card bg-base-200 p-4 mb-6", !filtered?(@filters) && "hidden sm:block"]}
+        >
           <form id="transactions-filters" phx-change="apply_filters" phx-submit="apply_filters">
             <input
               :if={@filters.statement_id}
@@ -371,7 +387,7 @@ defmodule GranaWeb.TransactionsLive do
                 <.input
                   type="select"
                   name="kind"
-                  label="Classificação"
+                  label="Tipo ou categoria"
                   size="sm"
                   value={@filters.kind}
                   options={
@@ -492,7 +508,9 @@ defmodule GranaWeb.TransactionsLive do
           class="ui-rounded-box mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 border border-primary/20 bg-primary/10 px-4 py-3"
         >
           <span class="ui-body mb-2 whitespace-nowrap font-medium">
-            {MapSet.size(@selected_ids)} bancária(s) selecionada(s)
+            {MapSet.size(@selected_ids)} {if MapSet.size(@selected_ids) == 1,
+              do: "selecionada",
+              else: "selecionadas"}
           </span>
           <form phx-submit="bulk-apply" class="flex flex-wrap items-end gap-x-3 gap-y-2">
             <.input
@@ -501,6 +519,7 @@ defmodule GranaWeb.TransactionsLive do
               label="Categoria"
               size="sm"
               value={nil}
+              prompt="Manter"
               options={for cat <- @categories, do: {cat.name, cat.id}}
             />
             <.input
@@ -508,7 +527,8 @@ defmodule GranaWeb.TransactionsLive do
               name="mode"
               label="Recorrência"
               size="sm"
-              value="fixed"
+              value={nil}
+              prompt="Manter"
               options={[{"Fixa", "fixed"}, {"Variável", "variable"}]}
             />
             <div class="mb-2">
@@ -523,10 +543,24 @@ defmodule GranaWeb.TransactionsLive do
         </div>
 
         <.empty_state
-          :if={@transactions == []}
+          :if={@transactions == [] && filtered?(@filters)}
           id="transactions-empty"
           icon="hero-document-magnifying-glass"
-          title="Nenhuma transação encontrada"
+          title="Nada com esses filtros"
+          text="Tente outros termos ou limpe os filtros."
+        >
+          <:action>
+            <.button type="button" variant="secondary" size="sm" phx-click="clear_filters">
+              Limpar filtros
+            </.button>
+          </:action>
+        </.empty_state>
+
+        <.empty_state
+          :if={@transactions == [] && !filtered?(@filters)}
+          id="transactions-empty"
+          icon="hero-document-magnifying-glass"
+          title="Nenhuma transação ainda"
           text="Importe dados bancários ou de investimento para começar."
         >
           <:action>
@@ -602,7 +636,10 @@ defmodule GranaWeb.TransactionsLive do
                     phx-click="toggle-select"
                     phx-value-id={row.raw_id}
                   />
-                  <span :if={!row.selectable?} class="ui-text-tertiary">—</span>
+                  <span :if={row.selectable?} class="ui-caption sm:hidden">
+                    Selecionar para ação em lote
+                  </span>
+                  <span :if={!row.selectable?} class="ui-text-tertiary hidden sm:inline">—</span>
                 </td>
                 <td
                   class="ui-txn-date ui-body whitespace-nowrap"
@@ -698,7 +735,7 @@ defmodule GranaWeb.TransactionsLive do
           !MapSet.member?(@expanded_ids, @row.raw_id) && "truncate"
         ]}
         phx-click={
-          JS.push("toggle-description", value: %{id: @row.raw_id})
+          JS.push("toggle-description", value: %{id: to_string(@row.raw_id)})
           |> JS.toggle_class("ui-row-open", to: "#transaction-#{@row.id}")
         }
         title={
@@ -841,6 +878,13 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   # ── Filters and URLs ──
+
+  defp filtered?(filters) do
+    filters
+    |> Map.drop([:sort_by, :sort_dir])
+    |> Map.values()
+    |> Enum.any?(&(&1 not in [nil, "", "all"]))
+  end
 
   defp build_filters(params) do
     tab_source = tab_to_source(params["tab"])

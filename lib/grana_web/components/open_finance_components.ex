@@ -307,10 +307,10 @@ defmodule GranaWeb.OpenFinanceComponents do
           size="sm"
           icon="hero-trash"
           class="btn-square text-error"
-          title="Remover conexão"
+          title={"Remover conexão #{@connection.connector_name}"}
           phx-click={show_modal("remove-connection-modal-#{@connection.id}")}
         >
-          <span class="sr-only">Remover conexão</span>
+          <span class="sr-only">Remover conexão {@connection.connector_name}</span>
         </.button>
       </:actions>
       <.notice :if={@connection.sync_error} tone={:error}>{@connection.sync_error}</.notice>
