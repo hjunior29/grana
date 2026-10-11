@@ -7,14 +7,11 @@ defmodule GranaWeb.UserLive.ResetPassword do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm space-y-4">
-        <div class="text-center">
-          <.header>
-            <p>Nova senha</p>
-            <:subtitle>Escolha uma senha nova para a sua conta.</:subtitle>
-          </.header>
-        </div>
-
+      <.auth_card
+        id="reset-password-card"
+        title="Nova senha"
+        subtitle="Escolha uma senha nova para a sua conta."
+      >
         <.form for={@form} id="reset_password_form" phx-change="validate" phx-submit="save" novalidate>
           <.input
             field={@form[:password]}
@@ -27,15 +24,13 @@ defmodule GranaWeb.UserLive.ResetPassword do
           <.input
             field={@form[:password_confirmation]}
             type="password"
-            label="Confirmar"
+            label="Confirmar nova senha"
             autocomplete="new-password"
             required
           />
-          <.button class="btn btn-primary w-full" phx-disable-with="Salvando...">
-            Redefinir senha
-          </.button>
+          <.button variant="primary" class="w-full" loading="Salvando…">Redefinir senha</.button>
         </.form>
-      </div>
+      </.auth_card>
     </Layouts.app>
     """
   end

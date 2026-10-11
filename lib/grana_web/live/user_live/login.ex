@@ -5,20 +5,7 @@ defmodule GranaWeb.UserLive.Login do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm space-y-4">
-        <div class="text-center">
-          <.header>
-            <p>Entrar</p>
-            <:subtitle>
-              <%= if @current_scope do %>
-                Confirme sua senha para realizar ações sensíveis na sua conta.
-              <% else %>
-                Entre na sua instância do Grana.
-              <% end %>
-            </:subtitle>
-          </.header>
-        </div>
-
+      <.auth_card id="login-card" title="Entrar" subtitle={subtitle(@current_scope)}>
         <.form
           for={@form}
           id="login_form_password"
@@ -43,7 +30,7 @@ defmodule GranaWeb.UserLive.Login do
             label="Senha"
             autocomplete="current-password"
           />
-          <label class="flex items-center gap-2 cursor-pointer mb-4">
+          <label class="mb-4 flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               name={@form[:remember_me].name}
@@ -51,26 +38,27 @@ defmodule GranaWeb.UserLive.Login do
               checked
               class="checkbox checkbox-sm checkbox-primary"
             />
-            <span class="text-sm">Manter conectado</span>
+            <span class="ui-body">Manter conectado</span>
           </label>
-          <.button class="btn btn-primary w-full">
-            Entrar
-          </.button>
+          <.button variant="primary" class="w-full" loading="Entrando…">Entrar</.button>
         </.form>
-
-        <div :if={!@current_scope} class="text-center text-sm">
+        <:footer>
           <.link
+            :if={!@current_scope}
             id="forgot-password-link"
             navigate={~p"/users/reset-password"}
-            class="link link-hover opacity-70"
+            class="link link-hover"
           >
             Esqueci a senha
           </.link>
-        </div>
-      </div>
+        </:footer>
+      </.auth_card>
     </Layouts.app>
     """
   end
+
+  defp subtitle(nil), do: "Entre na sua instância do Grana."
+  defp subtitle(_scope), do: "Confirme sua senha para realizar ações sensíveis na sua conta."
 
   @impl true
   def mount(_params, _session, socket) do

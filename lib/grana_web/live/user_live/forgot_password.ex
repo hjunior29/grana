@@ -7,20 +7,11 @@ defmodule GranaWeb.UserLive.ForgotPassword do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm space-y-4">
-        <div class="text-center">
-          <.header>
-            <p>Esqueci a senha</p>
-            <:subtitle>
-              <%= if @smtp? do %>
-                Informe seu email e enviaremos um link para escolher uma nova senha.
-              <% else %>
-                Esta instância não tem email configurado, então o link é gerado no servidor.
-              <% end %>
-            </:subtitle>
-          </.header>
-        </div>
-
+      <.auth_card
+        id="forgot-password-card"
+        title="Esqueci a senha"
+        subtitle={subtitle(@smtp?)}
+      >
         <.form :if={@smtp?} for={@form} id="forgot_password_form" phx-submit="send">
           <.input
             field={@form[:email]}
@@ -30,28 +21,33 @@ defmodule GranaWeb.UserLive.ForgotPassword do
             required
             phx-mounted={JS.focus()}
           />
-          <.button class="btn btn-primary w-full" phx-disable-with="Enviando...">
-            Enviar link
-          </.button>
+          <.button variant="primary" class="w-full" loading="Enviando…">Enviar link</.button>
         </.form>
-
-        <div :if={!@smtp?} id="reset-instructions" class="rounded-xl bg-base-200 p-4 text-sm">
+        <div :if={!@smtp?} id="reset-instructions" class="ui-rounded-box ui-body bg-base-100/60 p-4">
           <p class="mb-2">No servidor onde o Grana roda, execute:</p>
-          <pre class="overflow-x-auto rounded bg-base-100 p-2 text-xs" phx-no-curly-interpolation>sudo -u grana /opt/grana/bin/grana-reset-password</pre>
-          <p class="mt-3 mb-2">ou, com Docker:</p>
-          <pre class="overflow-x-auto rounded bg-base-100 p-2 text-xs" phx-no-curly-interpolation>docker exec -u nobody grana /app/bin/grana-reset-password</pre>
-          <p class="mt-3 opacity-70">Abra o link impresso para definir a nova senha.</p>
+          <pre
+            class="ui-rounded-field ui-help overflow-x-auto bg-base-100 p-2"
+            phx-no-curly-interpolation
+          >sudo -u grana /opt/grana/bin/grana-reset-password</pre>
+          <p class="mb-2 mt-3">ou, com Docker:</p>
+          <pre
+            class="ui-rounded-field ui-help overflow-x-auto bg-base-100 p-2"
+            phx-no-curly-interpolation
+          >docker exec -u nobody grana /app/bin/grana-reset-password</pre>
+          <p class="ui-text-secondary mt-3">Abra o link impresso para definir a nova senha.</p>
         </div>
-
-        <div class="text-center text-sm">
-          <.link navigate={~p"/users/log-in"} class="link link-hover opacity-70">
-            Voltar ao login
-          </.link>
-        </div>
-      </div>
+        <:footer>
+          <.link navigate={~p"/users/log-in"} class="link link-hover">Voltar ao login</.link>
+        </:footer>
+      </.auth_card>
     </Layouts.app>
     """
   end
+
+  defp subtitle(true), do: "Informe seu email e enviaremos um link para escolher uma nova senha."
+
+  defp subtitle(false),
+    do: "Esta instância não tem email configurado, então o link é gerado no servidor."
 
   @impl true
   def mount(_params, _session, socket) do

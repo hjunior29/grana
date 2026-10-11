@@ -58,7 +58,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       {:ok, lv, _html} = live(conn, ~p"/onboarding")
       advance(lv, 2)
 
-      assert has_element?(lv, "#onboarding h1", "LLM")
+      assert has_element?(lv, "#onboarding h1", "Inteligência artificial")
       assert has_element?(lv, "#ai-no-providers")
       assert has_element?(lv, "button#onboarding-next[disabled]")
 
@@ -94,7 +94,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       html = render_async(lv)
 
       refute html =~ "sk-do-env"
-      assert has_element?(lv, "#ai-provider-env\\:openai .badge", ".env")
+      assert has_element?(lv, "#ai-provider-env\\:openai .ui-tag", ".env")
       refute has_element?(lv, "button#onboarding-next[disabled]")
     end
   end
