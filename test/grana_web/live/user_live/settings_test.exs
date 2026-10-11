@@ -129,7 +129,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
         })
 
       assert result =~ "Alterar email"
-      assert result =~ "must have the @ sign and no spaces"
+      assert result =~ "deve ter um @ e não pode ter espaços"
     end
 
     test "renders errors with invalid data (phx-submit)", %{conn: conn, user: user} do

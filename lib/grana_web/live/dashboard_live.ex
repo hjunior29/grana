@@ -168,6 +168,17 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, socket}
   end
 
+  def handle_event("clear_filters", _params, socket) do
+    socket =
+      socket
+      |> assign(:selected_bank, "all")
+      |> assign(:selected_type, "all")
+      |> assign(:selected_txn_type, "all")
+      |> load_banking_data()
+
+    {:noreply, socket}
+  end
+
   def handle_event("select_txn_type", %{"txn_type" => txn_type}, socket) do
     socket =
       socket
@@ -258,6 +269,13 @@ defmodule GranaWeb.DashboardLive do
       }
     end)
     |> Jason.encode!()
+  end
+
+  defp banking_filtered?(assigns) do
+    Enum.any?(
+      [assigns.selected_bank, assigns.selected_type, assigns.selected_txn_type],
+      &(&1 != "all")
+    )
   end
 
   defp load_banking_data(socket) do
@@ -573,14 +591,14 @@ defmodule GranaWeb.DashboardLive do
       <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4">
         <.stat_tile
           id="rec-fixed-avg"
-          label="Fixas por mês"
+          label="Média de fixas por mês"
           value={format_currency(@rec_analysis.avg_fixed)}
           tone={:fixa}
           caption={"#{length(@rec_analysis.fixed)} recorrente(s)"}
         />
         <.stat_tile
           id="rec-variable-avg"
-          label="Variáveis por mês"
+          label="Média de variáveis por mês"
           value={format_currency(@rec_analysis.avg_variable)}
           tone={:variavel}
           caption={"#{@rec_analysis.total_months} meses analisados"}
@@ -632,7 +650,7 @@ defmodule GranaWeb.DashboardLive do
             </div>
             <div class="shrink-0 text-right">
               <.money value={item.avg_amount} class="ui-body font-medium" />
-              <div class="ui-caption">por mês</div>
+              <div class="ui-caption">valor típico</div>
             </div>
             <.icon name="hero-chevron-right" class="ui-text-tertiary size-4 shrink-0" />
           </.link>
@@ -682,7 +700,21 @@ defmodule GranaWeb.DashboardLive do
     </.filter_bar>
 
     <.empty_state
-      :if={@summary.transaction_count == 0}
+      :if={@summary.transaction_count == 0 && banking_filtered?(assigns)}
+      id="dashboard-empty"
+      icon="hero-chart-bar"
+      title="Nada com esses filtros"
+      text="Tente outro período ou limpe os filtros de banco, fonte e tipo."
+    >
+      <:action>
+        <.button type="button" variant="secondary" size="sm" phx-click="clear_filters">
+          Limpar filtros
+        </.button>
+      </:action>
+    </.empty_state>
+
+    <.empty_state
+      :if={@summary.transaction_count == 0 && !banking_filtered?(assigns)}
       id="dashboard-empty"
       icon="hero-chart-bar"
       title="Nenhuma transação encontrada"
@@ -734,7 +766,7 @@ defmodule GranaWeb.DashboardLive do
           muted={@summary.investment_count == 0}
           caption={
             if @summary.investment_count == 0,
-              do: "Sem investimentos no período",
+              do: "Nenhum no período",
               else: "#{@summary.investment_count} transações"
           }
           navigate={
@@ -801,11 +833,11 @@ defmodule GranaWeb.DashboardLive do
           </.link>
         </:aside>
         <div class="flex flex-col gap-3">
-          <div :for={gp <- @goals_progress} class="flex items-center gap-3">
-            <span class="ui-help w-20 truncate sm:w-24" title={goal_short_label(gp.goal)}>
+          <div :for={gp <- @goals_progress} class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span class="ui-help w-28 shrink-0 truncate" title={goal_short_label(gp.goal)}>
               {goal_short_label(gp.goal)}
             </span>
-            <div class="flex-1">
+            <div class="min-w-16 flex-1">
               <div class="h-2.5 w-full rounded-full bg-base-300">
                 <div
                   class={"h-2.5 rounded-full transition-all #{goal_bar_color(gp.status)}"}
@@ -816,8 +848,8 @@ defmodule GranaWeb.DashboardLive do
             <span class="ui-help whitespace-nowrap">
               {format_currency(gp.current)} / {format_currency(gp.target)}
             </span>
-            <span class={"ui-help w-10 text-right font-bold #{goal_text_color(gp.status)}"}>
-              {gp.pct}%
+            <span class={"ui-help w-14 shrink-0 text-right font-bold #{goal_text_color(gp.status)}"}>
+              {format_pct(gp.pct)}
             </span>
           </div>
         </div>

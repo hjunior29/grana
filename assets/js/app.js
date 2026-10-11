@@ -387,18 +387,19 @@ const DailyChart = {
     const padding = {top: 20, right: 10, bottom: 30, left: 10}
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
-    const barWidth = Math.max(4, (chartWidth / data.length) - 2)
+    const slot = chartWidth / data.length
+    const barWidth = Math.min(40, Math.max(4, slot - 2))
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-48 mb-4">`
 
     data.forEach((item, i) => {
       const barHeight = (item.value / maxVal) * chartHeight
-      const x = padding.left + (i * (chartWidth / data.length)) + 1
+      const x = padding.left + i * slot + (slot - barWidth) / 2
       const y = padding.top + chartHeight - barHeight
 
       const urlAttr = item.url ? ` data-day-url="${escapeHtml(item.url)}"` : ""
       const barFill = this.el.dataset.barFill || "fill-(--ui-despesa)"
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${escapeHtml(item.date)}" data-day-value="${item.value}"${urlAttr}></rect>`
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} hover:brightness-110 transition-opacity cursor-pointer" data-day-date="${escapeHtml(item.date)}" data-day-value="${item.value}"${urlAttr}></rect>`
 
       if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
         svg += `<text x="${x + barWidth / 2}" y="${height - 5}" text-anchor="middle" class="fill-base-content text-[8px] opacity-40">${escapeHtml(item.date)}</text>`
@@ -549,7 +550,7 @@ const IncomeExpensesChart = {
     const chartHeight = height - padding.top - padding.bottom
     const groupWidth = chartWidth / data.length
     const barGap = 3
-    const barWidth = Math.max(8, (groupWidth - barGap) * 0.42)
+    const barWidth = Math.min(56, Math.max(8, (groupWidth - barGap) * 0.42))
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-80 sm:h-96">`
 
@@ -566,8 +567,8 @@ const IncomeExpensesChart = {
       const incFill = this.el.dataset.incomeFill || "fill-(--ui-receita)"
       const expFill = this.el.dataset.expensesFill || "fill-(--ui-despesa)"
       const safeLabel = escapeHtml(item.label)
-      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
-      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
+      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} hover:brightness-110 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
+      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} hover:brightness-110 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
       svg += `<text x="${groupX + groupWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${safeLabel}</text>`
     })
 
@@ -613,17 +614,18 @@ const ProjectionChart = {
     const padding = {top: 20, right: 10, bottom: 35, left: 10}
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
-    const barWidth = Math.max(8, (chartWidth / data.length) - 4)
+    const slot = chartWidth / data.length
+    const barWidth = Math.min(48, Math.max(8, slot - 4))
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-56">`
 
     data.forEach((item, i) => {
       const barHeight = (item.value / maxVal) * chartHeight
-      const x = padding.left + (i * (chartWidth / data.length)) + 2
+      const x = padding.left + i * slot + (slot - barWidth) / 2
       const y = padding.top + chartHeight - barHeight
 
       const safeLabel = escapeHtml(item.label)
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-(--ui-despesa) opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-(--ui-despesa) hover:brightness-110 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
       svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${safeLabel}</text>`
     })
 
@@ -854,39 +856,46 @@ const CurrencyInput = {
     this.hiddenInput = this.el.querySelector("input[type=hidden]")
     this.display = this.el.querySelector("input[data-currency-display]")
 
-    // Initialize from existing value
     if (this.hiddenInput.value) {
-      const cents = Math.round(parseFloat(this.hiddenInput.value) * 100)
-      if (cents > 0) this.display.value = this.formatCents(cents)
+      const [reais, centavos = ""] = parseFloat(this.hiddenInput.value).toFixed(2).split(".")
+      if (parseFloat(this.hiddenInput.value) > 0) this.display.value = this.format(reais, centavos)
     }
 
     this.display.addEventListener("input", (e) => {
-      const digits = e.target.value.replace(/\D/g, "")
-      const cents = parseInt(digits || "0", 10)
-      if (cents === 0) {
+      const raw = e.target.value.replace(/[^\d,]/g, "")
+      const [reais, ...rest] = raw.split(",")
+      const hasComma = rest.length > 0
+      const centavos = rest.join("").slice(0, 2)
+      const intPart = reais.replace(/^0+(?=\d)/g, "")
+
+      if (intPart === "" && !hasComma) {
         this.display.value = ""
         this.hiddenInput.value = ""
-      } else {
-        this.display.value = this.formatCents(cents)
-        this.hiddenInput.value = (cents / 100).toFixed(2)
+        return
       }
+
+      this.display.value = this.format(intPart || "0", hasComma ? centavos : null)
+      this.hiddenInput.value = `${intPart || "0"}.${centavos.padEnd(2, "0")}`
     })
 
     this.display.addEventListener("keydown", (e) => {
-      // Allow: backspace, delete, tab, escape, enter, arrows
-      if ([8, 9, 13, 27, 46, 37, 39].includes(e.keyCode)) return
-      // Block non-digit keys (allow numpad too)
-      if ((e.keyCode < 48 || e.keyCode > 57) && (e.keyCode < 96 || e.keyCode > 105)) {
+      if (e.ctrlKey || e.metaKey) return
+      if (e.key.length > 1) return
+      if (e.key === "." || e.key === ",") {
         e.preventDefault()
+        if (!this.display.value.includes(",")) {
+          this.display.value += ","
+          this.display.dispatchEvent(new Event("input", {bubbles: true}))
+        }
+        return
       }
+      if (!/\d/.test(e.key)) e.preventDefault()
     })
   },
 
-  formatCents(cents) {
-    const reais = Math.floor(cents / 100)
-    const centavos = (cents % 100).toString().padStart(2, "0")
-    const formatted = reais.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-    return formatted + "," + centavos
+  format(reais, centavos) {
+    const formatted = reais.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+    return centavos === null ? formatted : `${formatted},${centavos}`
   }
 }
 

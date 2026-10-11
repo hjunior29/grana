@@ -267,7 +267,10 @@ defmodule GranaWeb.UploadLive do
         socket
         |> assign(:delete_target, nil)
         |> assign(:selected_ids, MapSet.new())
-        |> put_flash(:info, "#{length(ids)} extrato(s) removido(s)")
+        |> put_flash(
+          :info,
+          "#{count_label(length(ids), "extrato removido", "extratos removidos")}"
+        )
         |> reload_statements()
 
       _ ->
@@ -704,7 +707,9 @@ defmodule GranaWeb.UploadLive do
 
         <div :if={@tab == "historico"}>
           <div class="mb-4 flex items-center justify-between">
-            <span class="ui-body ui-text-secondary">{@total} extrato(s)</span>
+            <span class="ui-body ui-text-secondary">
+              {count_label(@total, "extrato", "extratos")}
+            </span>
           </div>
 
           <.empty_state
@@ -728,9 +733,12 @@ defmodule GranaWeb.UploadLive do
           </.empty_state>
 
           <div :if={@stmt_list != []}>
-            <div :if={MapSet.size(@selected_ids) > 0} class="mb-4 flex items-center gap-3">
+            <div class={[
+              "mb-4 flex h-8 items-center gap-3",
+              MapSet.size(@selected_ids) == 0 && "invisible"
+            ]}>
               <span class="ui-body ui-text-secondary">
-                {MapSet.size(@selected_ids)} selecionado(s)
+                {count_label(MapSet.size(@selected_ids), "selecionado", "selecionados")}
               </span>
               <.button
                 id="bulk-delete"
@@ -893,7 +901,9 @@ defmodule GranaWeb.UploadLive do
             </p>
             <p :if={match?({:bulk, _}, @delete_target)}>
               Tem certeza que deseja remover
-              <span class="font-semibold">{elem(@delete_target, 1)} extrato(s)</span>
+              <span class="font-semibold">
+                {count_label(elem(@delete_target, 1), "extrato", "extratos")}
+              </span>
               e todas as transações associadas? Esta ação é permanente.
             </p>
           </.confirm_modal>
@@ -1101,6 +1111,12 @@ defmodule GranaWeb.UploadLive do
             title={entry.client_name}
             subtitle={format_bytes(entry.client_size)}
           >
+            <p
+              :for={err <- upload_errors(@uploads.statements, entry)}
+              class="ui-help text-error"
+            >
+              {upload_error_to_string(err)}
+            </p>
             <:leading><.icon name="hero-document-text" class="size-5 shrink-0" /></:leading>
             <:actions>
               <.button
@@ -1127,7 +1143,9 @@ defmodule GranaWeb.UploadLive do
           :if={!@processing}
           variant="primary"
           class="w-full sm:w-auto"
-          disabled={@uploads.statements.entries == []}
+          disabled={
+            @uploads.statements.entries == [] or Enum.any?(@uploads.statements.entries, &(!&1.valid?))
+          }
         >
           {@submit}
         </.button>

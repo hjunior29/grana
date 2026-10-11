@@ -10,7 +10,15 @@ defmodule GranaWeb.TransactionsLiveTest do
   test "renders transactions page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/transactions")
     assert html =~ "Transações"
-    assert html =~ "Nenhuma transação encontrada"
+    assert html =~ "Nenhuma transação ainda"
+  end
+
+  test "busca sem resultado oferece limpar filtros em vez de importar", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/transactions?search=zzzzqqq")
+
+    assert has_element?(view, "#transactions-empty", "Nada com esses filtros")
+    assert has_element?(view, "#transactions-empty button", "Limpar filtros")
+    refute has_element?(view, "#transactions-empty a[href='/upload']")
   end
 
   test "shows page description", %{conn: conn} do

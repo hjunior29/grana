@@ -97,7 +97,7 @@ defmodule Grana.Accounts.User do
       changeset
       |> validate_required([:email])
       |> validate_format(:email, ~r/^[^@,;\s]+@[^@,;\s]+$/,
-        message: "must have the @ sign and no spaces"
+        message: "deve ter um @ e não pode ter espaços"
       )
       |> validate_length(:email, max: 160)
 

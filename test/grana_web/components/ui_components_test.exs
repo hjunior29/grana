@@ -316,4 +316,18 @@ defmodule GranaWeb.UiComponentsTest do
     assert doc |> LazyHTML.text() =~ "Ler PDFs usa IA."
     assert count(doc, "a[href='/users/settings']") == 1
   end
+
+  test "format_pct usa vírgula e limita acima de 999%" do
+    assert GranaWeb.UiComponents.format_pct(0.0) == "0,0%"
+    assert GranaWeb.UiComponents.format_pct(34.04) == "34,0%"
+    assert GranaWeb.UiComponents.format_pct(989_494.0) == ">999%"
+  end
+
+  test "count_label pluraliza e separa milhares" do
+    assert GranaWeb.UiComponents.count_label(1, "regra", "regras") == "1 regra"
+    assert GranaWeb.UiComponents.count_label(0, "regra", "regras") == "0 regras"
+
+    assert GranaWeb.UiComponents.count_label(1671, "transação", "transações") ==
+             "1.671 transações"
+  end
 end

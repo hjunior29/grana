@@ -73,7 +73,7 @@ defmodule GranaWeb.Layouts do
             </li>
             <li>
               <details class="dropdown dropdown-end">
-                <summary class="btn btn-md btn-ghost list-none">
+                <summary class="btn btn-md btn-ghost list-none" aria-label="Conta">
                   <.icon name="hero-user-circle" class="size-5" />
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
@@ -96,7 +96,7 @@ defmodule GranaWeb.Layouts do
         <%!-- Mobile hamburger menu --%>
         <div :if={@current_scope && !@hide_nav} class="flex md:hidden flex-none">
           <details class="dropdown dropdown-end">
-            <summary class="btn btn-ghost btn-sm px-2">
+            <summary class="btn btn-ghost btn-sm px-2" aria-label="Menu">
               <.icon name="hero-bars-3" class="size-5" />
             </summary>
             <ul class="dropdown-content menu bg-base-200 rounded-box w-52 p-2 shadow-xl z-50 mt-2">
@@ -165,7 +165,7 @@ defmodule GranaWeb.Layouts do
       id={@id}
       phx-hook="NotificationStack"
       aria-live="polite"
-      class="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-3 pointer-events-none"
+      class="fixed right-4 top-20 z-50 flex flex-col gap-3 pointer-events-none"
     >
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
@@ -211,6 +211,8 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
+        aria-label="Tema do sistema"
+        title="Tema do sistema"
         phx-click={set_preference("phx:set-theme", "theme", "system", @persist)}
         data-phx-theme="system"
       >
@@ -222,6 +224,8 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
+        aria-label="Tema claro"
+        title="Tema claro"
         phx-click={set_preference("phx:set-theme", "theme", "light", @persist)}
         data-phx-theme="light"
       >
@@ -230,6 +234,8 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
+        aria-label="Tema escuro"
+        title="Tema escuro"
         phx-click={set_preference("phx:set-theme", "theme", "dark", @persist)}
         data-phx-theme="dark"
       >

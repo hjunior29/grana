@@ -2791,7 +2791,11 @@ html {
 
 /* Botão destrutivo com contraste nos dois temas */
 .btn.btn-error.btn-soft {
-  color: color-mix(in oklch, var(--color-error) 80%, var(--color-base-content));
+  color: color-mix(in oklch, var(--color-error) 80%, black);
+}
+
+[data-theme="dark"] .btn.btn-error.btn-soft {
+  color: color-mix(in oklch, var(--color-error) 55%, white);
 }
 
 /* Campos do .env: leitura, sem aparência de desabilitado */
@@ -2905,6 +2909,14 @@ html {
 
   .ui-txn-select {
     display: none;
+  }
+
+  .ui-row-open .ui-txn-select {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .ui-txn-date {

@@ -188,10 +188,15 @@ defmodule GranaWeb.GoalsLive do
         </div>
 
         <%!-- Suggestions --%>
-        <div :if={@suggestions != [] and @goals_progress == []} class="mb-6 space-y-3">
+        <% suggestions =
+          Enum.reject(
+            @suggestions,
+            &(&1.type in Enum.map(@goals_progress, fn gp -> gp.goal.type end))
+          ) %>
+        <div :if={suggestions != []} class="mb-6 space-y-3">
           <h2 class="ui-section-title">Sugestões baseadas no seu histórico</h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div :for={s <- @suggestions} class="card bg-base-200 p-4">
+            <div :for={s <- suggestions} class="card bg-base-200 p-4">
               <div class="flex items-center gap-2 mb-2">
                 <.icon name={FinancialGoal.type_icon(s.type)} class="size-5 text-primary" />
                 <span class="ui-body font-medium">{FinancialGoal.type_label(s.type)}</span>
@@ -307,7 +312,7 @@ defmodule GranaWeb.GoalsLive do
 
             <div class="ui-help flex justify-between">
               <span>{status_label(gp.status)}</span>
-              <span class={"font-medium #{status_color(gp.status)}"}>{gp.pct}%</span>
+              <span class={"font-medium #{status_color(gp.status)}"}>{format_pct(gp.pct)}</span>
             </div>
           </div>
         </div>
@@ -366,7 +371,7 @@ defmodule GranaWeb.GoalsLive do
             />
 
             <div>
-              <span class="ui-label">Valor alvo (R$)</span>
+              <label for="goal-target-display" class="ui-label">Valor alvo (R$)</label>
               <div
                 id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"}
                 phx-hook="CurrencyInput"
@@ -378,11 +383,13 @@ defmodule GranaWeb.GoalsLive do
                   value={if @editing_goal, do: @editing_goal.target_value, else: ""}
                 />
                 <input
+                  id="goal-target-display"
                   type="text"
-                  inputmode="numeric"
+                  inputmode="decimal"
+                  autocomplete="off"
                   data-currency-display
                   class={["input w-full", @form.errors[:target_value] && "input-error"]}
-                  placeholder="Ex: 4.000,00"
+                  placeholder="Ex: 4000 ou 4.000,50"
                 />
               </div>
               <p :if={@form.errors[:target_value]} class="ui-body mt-1 text-error">
@@ -402,7 +409,7 @@ defmodule GranaWeb.GoalsLive do
           on_confirm={JS.push("delete_goal")}
           on_cancel={JS.push("cancel_delete")}
         >
-          Esta ação não pode ser desfeita.
+          Remover {delete_goal_label(@goals_progress, @delete_target)}? Esta ação não pode ser desfeita.
         </.confirm_modal>
       </div>
     </Layouts.app>
@@ -410,6 +417,13 @@ defmodule GranaWeb.GoalsLive do
   end
 
   # ── Helpers ──
+
+  defp delete_goal_label(goals_progress, id) do
+    case Enum.find(goals_progress, &(&1.goal.id == id)) do
+      nil -> "esta meta"
+      gp -> "“" <> FinancialGoal.type_label(gp.goal.type) <> "”"
+    end
+  end
 
   defp has_unique_error?(%Ecto.Changeset{} = changeset) do
     Enum.any?(changeset.errors, fn {_field, {_msg, opts}} ->
