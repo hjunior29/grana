@@ -114,4 +114,24 @@ defmodule GranaWeb.TransactionsExportControllerTest do
       assert conn.status == 200
     end
   end
+
+  describe "GET /transactions/export com pesquisa avançada" do
+    test "exporta só o que casa com a busca", %{conn: conn, user: user} do
+      BankingFixtures.transaction_fixture(user, %{description: "UBER TRIP", amount: "-25.00"})
+      BankingFixtures.transaction_fixture(user, %{description: "FARMACIA", amount: "-30.00"})
+
+      conn = get(conn, ~p"/transactions/export?#{%{q: "uber OR padaria", sort_by: "amount"}}")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "UBER TRIP"
+      refute conn.resp_body =~ "FARMACIA"
+    end
+
+    test "busca inválida responde 400 com o motivo", %{conn: conn} do
+      conn = get(conn, ~p"/transactions/export?#{%{q: "(uber"}}")
+
+      assert conn.status == 400
+      assert conn.resp_body =~ "Faltou fechar um parêntese"
+    end
+  end
 end

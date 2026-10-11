@@ -12,7 +12,9 @@ defmodule Grana.Banking do
     TransferIdentity,
     KeywordCategorizer,
     AIAnalysis,
-    FinancialGoal
+    FinancialGoal,
+    SavedSearch,
+    Search
   }
 
   # Categories
@@ -311,6 +313,52 @@ defmodule Grana.Banking do
     |> build_transactions_query(opts)
     |> Repo.all()
   end
+
+  @doc """
+  Transações que casam com a pesquisa avançada (`Grana.Banking.Search`). `opts` aceita os
+  mesmos `:sort_by` e `:sort_dir` de `list_transactions/2`.
+  """
+  def search_transactions(user_id, %Search{} = search, opts \\ []) do
+    transactions = list_transactions(user_id, Keyword.take(opts, [:sort_by, :sort_dir]))
+
+    recurring =
+      if Search.uses_recurrence?(search),
+        do: recurring_statuses(user_id, transactions),
+        else: %{}
+
+    Search.filter(search, transactions, recurring)
+  end
+
+  # Saved searches
+
+  def list_saved_searches(user_id) do
+    SavedSearch
+    |> where([s], s.user_id == ^user_id)
+    |> Repo.all()
+    |> Enum.sort_by(&Search.fold(&1.name))
+  end
+
+  def get_saved_search(user_id, id) do
+    Repo.get_by(SavedSearch, id: id, user_id: user_id)
+  end
+
+  def change_saved_search(%SavedSearch{} = saved_search, attrs \\ %{}) do
+    SavedSearch.changeset(saved_search, attrs)
+  end
+
+  def create_saved_search(user_id, attrs) do
+    %SavedSearch{user_id: user_id}
+    |> SavedSearch.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_saved_search(%SavedSearch{} = saved_search, attrs) do
+    saved_search
+    |> SavedSearch.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_saved_search(%SavedSearch{} = saved_search), do: Repo.delete(saved_search)
 
   @doc """
   Análise de despesas fixas (recorrentes) vs variáveis.
