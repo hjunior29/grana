@@ -397,7 +397,7 @@ const DailyChart = {
       const y = padding.top + chartHeight - barHeight
 
       const urlAttr = item.url ? ` data-day-url="${escapeHtml(item.url)}"` : ""
-      const barFill = this.el.dataset.barFill || "fill-primary"
+      const barFill = this.el.dataset.barFill || "fill-(--ui-despesa)"
       svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${escapeHtml(item.date)}" data-day-value="${item.value}"${urlAttr}></rect>`
 
       if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
@@ -563,8 +563,8 @@ const IncomeExpensesChart = {
       const incUrl = item.income_url ? ` data-ie-url="${escapeHtml(item.income_url)}"` : ""
       const expUrl = item.expenses_url ? ` data-ie-url="${escapeHtml(item.expenses_url)}"` : ""
 
-      const incFill = this.el.dataset.incomeFill || "fill-success"
-      const expFill = this.el.dataset.expensesFill || "fill-error"
+      const incFill = this.el.dataset.incomeFill || "fill-(--ui-receita)"
+      const expFill = this.el.dataset.expensesFill || "fill-(--ui-despesa)"
       const safeLabel = escapeHtml(item.label)
       svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
       svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
@@ -574,8 +574,8 @@ const IncomeExpensesChart = {
     svg += `</svg>`
     const incLabel = this.el.dataset.incomeLabel || "Receitas"
     const expLabel = this.el.dataset.expensesLabel || "Despesas"
-    const incColor = this.el.dataset.incomeColor || "bg-success/70"
-    const expColor = this.el.dataset.expensesColor || "bg-error/70"
+    const incColor = this.el.dataset.incomeColor || "bg-(--ui-receita)"
+    const expColor = this.el.dataset.expensesColor || "bg-(--ui-despesa)"
     svg += `<div class="flex justify-center gap-6 text-xs opacity-60 mt-1"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm ${incColor}"></span> ${incLabel}</span><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm ${expColor}"></span> ${expLabel}</span></div>`
 
     const existing = this.el.querySelector(".chart-svg")
@@ -623,7 +623,7 @@ const ProjectionChart = {
       const y = padding.top + chartHeight - barHeight
 
       const safeLabel = escapeHtml(item.label)
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-(--ui-despesa) opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
       svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${safeLabel}</text>`
     })
 
@@ -700,21 +700,18 @@ const DropZone = {
     this.el.addEventListener("dragenter", (e) => {
       e.preventDefault()
       counter++
-      this.el.classList.add("border-success", "bg-success/5", "scale-[1.01]")
-      this.el.classList.remove("border-base-content/20")
+      this.el.classList.add("ui-dropzone-active")
     })
     this.el.addEventListener("dragover", (e) => e.preventDefault())
     this.el.addEventListener("dragleave", () => {
       counter--
       if (counter === 0) {
-        this.el.classList.remove("border-success", "bg-success/5", "scale-[1.01]")
-        this.el.classList.add("border-base-content/20")
+        this.el.classList.remove("ui-dropzone-active")
       }
     })
     this.el.addEventListener("drop", () => {
       counter = 0
-      this.el.classList.remove("border-success", "bg-success/5", "scale-[1.01]")
-      this.el.classList.add("border-base-content/20")
+      this.el.classList.remove("ui-dropzone-active")
     })
   }
 }

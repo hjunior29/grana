@@ -86,6 +86,8 @@ defmodule GranaWeb do
       import Phoenix.HTML
       # Core UI components
       import GranaWeb.CoreComponents
+      import GranaWeb.UiComponents
+      import GranaWeb.FilterComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

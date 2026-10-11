@@ -61,9 +61,9 @@ defmodule GranaWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap shadow-lg",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "ui-notice ui-toast w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap shadow-lg",
+        @kind == :info && "ui-notice-info",
+        @kind == :error && "ui-notice-error"
       ]}>
         <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
         <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
@@ -73,7 +73,7 @@ defmodule GranaWeb.CoreComponents do
         </div>
         <div class="flex-1" />
         <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+          <.icon name="hero-x-mark" class="ui-text-tertiary size-5 group-hover:text-base-content" />
         </button>
       </div>
     </div>
@@ -89,32 +89,73 @@ defmodule GranaWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
-  attr :class, :any
-  attr :variant, :string, values: ~w(primary)
+  attr :rest, :global,
+    include: ~w(href navigate patch method download name value disabled form type target)
+
+  attr :class, :any, default: nil
+  attr :variant, :string, values: ~w(primary secondary ghost danger)
+  attr :size, :string, values: ~w(sm md), default: "md"
+  attr :icon, :string, default: nil
+
+  attr :loading, :string,
+    default: nil,
+    doc: "texto (com spinner) enquanto o envio ou clique executa"
+
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
-
-    assigns =
-      assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
-      end)
+    assigns = assign(assigns, :classes, button_classes(assigns))
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
-      <.link class={@class} {@rest}>
-        {render_slot(@inner_block)}
+      <.link class={@classes} {@rest}>
+        <.button_content icon={@icon} loading={@loading}>{render_slot(@inner_block)}</.button_content>
       </.link>
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
-        {render_slot(@inner_block)}
+      <button class={@classes} {@rest}>
+        <.button_content icon={@icon} loading={@loading}>{render_slot(@inner_block)}</.button_content>
       </button>
       """
     end
+  end
+
+  # Sem variante, `class` substitui tudo (uso antigo); com variante, `class` só acrescenta.
+  defp button_classes(%{variant: variant, size: size, class: class}) when is_binary(variant) do
+    ["btn", variant_class(variant), size == "sm" && "btn-sm", class]
+  end
+
+  defp button_classes(%{class: nil, size: size}) do
+    ["btn", "btn-primary btn-soft", size == "sm" && "btn-sm"]
+  end
+
+  defp button_classes(%{class: class}), do: class
+
+  defp variant_class("primary"), do: "btn-primary"
+  defp variant_class("secondary"), do: nil
+  defp variant_class("ghost"), do: "btn-ghost"
+  defp variant_class("danger"), do: "btn-error btn-soft"
+
+  attr :icon, :string, default: nil
+  attr :loading, :string, default: nil
+  slot :inner_block, required: true
+
+  defp button_content(%{loading: nil} = assigns) do
+    ~H"""
+    <.icon :if={@icon} name={@icon} class="size-4" />{render_slot(@inner_block)}
+    """
+  end
+
+  defp button_content(assigns) do
+    ~H"""
+    <span class="inline-flex items-center gap-2 phx-submit-loading:hidden phx-click-loading:hidden">
+      <.icon :if={@icon} name={@icon} class="size-4" />{render_slot(@inner_block)}
+    </span>
+    <span class="hidden items-center gap-2 phx-submit-loading:inline-flex phx-click-loading:inline-flex">
+      <span class="loading loading-spinner loading-xs"></span>{@loading}
+    </span>
+    """
   end
 
   @doc """
@@ -178,6 +219,12 @@ defmodule GranaWeb.CoreComponents do
   attr :class, :any, default: nil, doc: "the input class to use over defaults"
   attr :error_class, :any, default: nil, doc: "the input error class to use over defaults"
 
+  attr :size, :string, values: ~w(md sm), default: "md", doc: "sm para controles densos"
+
+  attr :tag, :string,
+    default: nil,
+    doc: "tag de estado ao lado do rótulo (ver `GranaWeb.UiComponents.tag/1`)"
+
   attr :rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
                 multiple pattern placeholder readonly required rows size step)
@@ -236,11 +283,14 @@ defmodule GranaWeb.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <.field_label :if={@label} label={@label} tag={@tag} />
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[
+            @class || ["w-full select", @size == "sm" && "select-sm"],
+            @errors != [] && (@error_class || "select-error")
+          ]}
           multiple={@multiple}
           {@rest}
         >
@@ -257,7 +307,7 @@ defmodule GranaWeb.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <.field_label :if={@label} label={@label} tag={@tag} />
         <textarea
           id={@id}
           name={@name}
@@ -278,14 +328,14 @@ defmodule GranaWeb.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <.field_label :if={@label} label={@label} tag={@tag} />
         <input
           type={@type}
           name={@name}
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
           class={[
-            @class || "w-full input",
+            @class || ["w-full input", @size == "sm" && "input-sm"],
             @errors != [] && (@error_class || "input-error")
           ]}
           {@rest}
@@ -296,10 +346,19 @@ defmodule GranaWeb.CoreComponents do
     """
   end
 
+  defp field_label(assigns) do
+    ~H"""
+    <span class="ui-label">
+      {@label}
+      <GranaWeb.UiComponents.tag :if={@tag} kind={@tag} />
+    </span>
+    """
+  end
+
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 text-sm text-error">
+    <p class="ui-body mt-1 text-error">
       {render_slot(@inner_block)}
     </p>
     """
