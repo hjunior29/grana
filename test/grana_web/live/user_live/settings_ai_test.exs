@@ -70,7 +70,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     assert html =~ "OpenAI cadastrado"
     refute html =~ "sk-segredo"
     assert has_element?(lv, "#ai-provider-list", "OpenAI")
-    assert has_element?(lv, "#ai-provider-list .badge", "chave salva")
+    assert has_element?(lv, "#ai-provider-list .ui-tag", "salvo no Grana")
 
     user = Accounts.get_user!(user.id)
 
@@ -137,6 +137,8 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     html = add_openai(lv)
 
     assert html =~ "OpenAI já está cadastrado"
+    assert has_element?(lv, "#ai-provider-form", "já está cadastrado")
+    refute has_element?(lv, "#flash-error")
   end
 
   test "o padrão mostra os modelos vindos da API e salva a escolha", %{conn: conn, user: user} do
@@ -250,7 +252,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
     [provider] = Grana.Repo.all(ProviderConfig)
 
-    lv |> element("#ai-remove-#{provider.id}") |> render_click()
+    lv |> element("#ai-remove-modal-#{provider.id}-confirm") |> render_click()
 
     assert has_element?(lv, "#ai-no-providers")
     assert Grana.Repo.all(ProviderConfig) == []
@@ -272,7 +274,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
       html = html <> render_async(lv)
 
       refute html =~ "AIza-do-env"
-      assert has_element?(lv, "#ai-provider-env\\:gemini .badge", ".env")
+      assert has_element?(lv, "#ai-provider-env\\:gemini .ui-tag", ".env")
       refute has_element?(lv, "#ai-provider-env\\:gemini button")
 
       user = Accounts.get_user!(user.id)

@@ -16,6 +16,7 @@ defmodule GranaWeb.BackupHooks do
       |> assign(:restore_context, context)
       |> assign(:restore_stage, :idle)
       |> assign(:restore_analysis, nil)
+      |> assign(:restore_upload_error, nil)
       |> assign(:restore_form, restore_form(%{}))
       |> allow_upload(:backup,
         accept: :any,
@@ -29,7 +30,8 @@ defmodule GranaWeb.BackupHooks do
 
   defp restore_form(params), do: to_form(params, as: :restore)
 
-  defp handle_event("restore_validate_upload", _params, socket), do: {:halt, socket}
+  defp handle_event("restore_validate_upload", _params, socket),
+    do: {:halt, assign(socket, :restore_upload_error, nil)}
 
   defp handle_event("restore_analyze", _params, socket) do
     discard(socket.assigns.restore_analysis)
@@ -56,7 +58,8 @@ defmodule GranaWeb.BackupHooks do
          |> put_flash(:error, error_message(reason))}
 
       [] ->
-        {:halt, put_flash(socket, :error, "Escolha o arquivo de backup (.db) primeiro.")}
+        {:halt,
+         assign(socket, :restore_upload_error, "Escolha o arquivo de backup (.db) primeiro.")}
     end
   end
 

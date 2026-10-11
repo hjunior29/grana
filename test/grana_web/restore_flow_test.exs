@@ -167,6 +167,8 @@ defmodule GranaWeb.RestoreFlowTest do
 
       html = lv |> form("#restore-upload-form") |> render_submit()
       assert html =~ "Escolha o arquivo"
+      assert has_element?(lv, "#restore-upload-error")
+      refute has_element?(lv, "#flash-error")
     end
 
     test "cancelar volta ao envio e apaga o temporário", %{conn: conn, binary: binary} do

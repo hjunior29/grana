@@ -69,7 +69,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     lv |> element("#smtp-replace") |> render_click()
     assert has_element?(lv, "#smtp-form")
 
-    lv |> element("#smtp-remove") |> render_click()
+    lv |> element("#smtp-remove-modal-confirm") |> render_click()
     assert has_element?(lv, "#smtp-none")
     refute Accounts.smtp_configured?()
   end
@@ -90,8 +90,8 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
     assert has_element?(lv, "#smtp-env")
-    assert has_element?(lv, "#smtp-env-host[disabled][value=SMTP_HOST]")
-    assert has_element?(lv, "#smtp-env-password[disabled][value=SMTP_PASSWORD]")
+    assert has_element?(lv, "#smtp-env-host[readonly][value=SMTP_HOST]")
+    assert has_element?(lv, "#smtp-env-password[readonly][value=SMTP_PASSWORD]")
     refute render(lv) =~ "env.example.com"
     assert has_element?(lv, "#smtp-env label span", ".env")
     refute has_element?(lv, "#smtp-form")
@@ -122,7 +122,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
     assert {:error, {:redirect, %{to: "/users/log-in"}}} =
-             lv |> element("#smtp-remove") |> render_click()
+             lv |> element("#smtp-remove-modal-confirm") |> render_click()
 
     assert Accounts.smtp_configured?()
   end
