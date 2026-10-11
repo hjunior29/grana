@@ -22,7 +22,7 @@ defmodule GranaWeb.SetupLive do
               "flex size-8 items-center justify-center rounded-full text-sm font-semibold transition-colors",
               if(step_reached?(@step, step),
                 do: "bg-primary text-primary-content",
-                else: "bg-base-200 opacity-60"
+                else: "ui-text-tertiary bg-base-200"
               )
             ]}
           >
@@ -32,149 +32,166 @@ defmodule GranaWeb.SetupLive do
 
         <%= case @step do %>
           <% :code -> %>
-            <div id="setup-code-step" class="card bg-base-200 p-6 sm:p-8">
-              <div class="mb-4 flex items-center gap-3">
-                <.icon name="hero-key" class="size-6 text-primary" />
-                <h1 class="text-2xl font-bold tracking-tight">Configuração inicial</h1>
+            <div id="setup-code-step">
+              <.page_header title="Configuração inicial">
+                <:actions><.icon name="hero-key" class="size-6 text-primary" /></:actions>
+              </.page_header>
+              <div class="card bg-base-200 p-6 sm:p-8">
+                <p class="ui-body ui-text-secondary mb-5">
+                  Esta instância ainda não tem dono. Para provar que você tem acesso ao servidor,
+                  digite o código impresso no log do Grana, em
+                  <code class="ui-rounded-field bg-base-100 px-1">journalctl -u grana -f</code>
+                  ou <code class="ui-rounded-field bg-base-100 px-1">docker logs grana</code>.
+                </p>
+                <.form for={@code_form} id="setup-code-form" phx-submit="verify_code">
+                  <.input
+                    field={@code_form[:code]}
+                    type="text"
+                    label="Código do setup"
+                    placeholder="XXXX-XXXX"
+                    autocomplete="off"
+                    autocapitalize="characters"
+                    phx-mounted={JS.focus()}
+                  />
+                  <.button variant="primary" class="w-full" loading="Verificando…">
+                    Continuar
+                  </.button>
+                </.form>
               </div>
-              <p class="mb-5 text-sm opacity-70">
-                Esta instância ainda não tem dono. Para provar que você tem acesso ao servidor,
-                digite o código impresso no log do Grana — em
-                <code class="rounded bg-base-100 px-1">journalctl -u grana -f</code>
-                ou <code class="rounded bg-base-100 px-1">docker logs grana</code>.
-              </p>
-              <.form for={@code_form} id="setup-code-form" phx-submit="verify_code">
-                <.input
-                  field={@code_form[:code]}
-                  type="text"
-                  label="Código do setup"
-                  placeholder="XXXX-XXXX"
-                  autocomplete="off"
-                  autocapitalize="characters"
-                  phx-mounted={JS.focus()}
-                />
-                <.button class="btn btn-primary w-full" phx-disable-with="Verificando...">
-                  Continuar
-                </.button>
-              </.form>
             </div>
           <% :welcome -> %>
-            <div id="setup-welcome-step" class="card bg-base-200 p-6 sm:p-8">
-              <h1 class="mb-1 text-2xl font-bold tracking-tight">Bem-vindo ao Grana</h1>
-              <p class="mb-6 text-sm opacity-70">
-                Suas finanças, no seu servidor. Veja em 30 segundos como tudo funciona:
-              </p>
-              <ul class="mb-6 flex flex-col gap-4">
-                <li :for={item <- how_it_works()} class="flex gap-3">
-                  <.icon name={item.icon} class="mt-0.5 size-6 shrink-0 text-primary" />
-                  <div>
-                    <p class="font-semibold">{item.title}</p>
-                    <p class="text-sm opacity-70">{item.text}</p>
-                  </div>
-                </li>
-              </ul>
-              <button
-                id="setup-continue"
-                type="button"
-                phx-click="goto_choice"
-                class="btn btn-primary w-full"
-              >
-                Continuar <.icon name="hero-arrow-right" class="size-4" />
-              </button>
+            <div id="setup-welcome-step">
+              <.page_header
+                title="Bem-vindo ao Grana"
+                subtitle="Suas finanças, no seu servidor. Veja em 30 segundos como tudo funciona."
+              />
+              <div class="card bg-base-200 p-6 sm:p-8">
+                <ul class="mb-6 flex flex-col gap-4">
+                  <li :for={item <- how_it_works()} class="flex gap-3">
+                    <.icon name={item.icon} class="mt-0.5 size-6 shrink-0 text-primary" />
+                    <div>
+                      <p class="ui-body font-semibold">{item.title}</p>
+                      <p class="ui-body ui-text-secondary">{item.text}</p>
+                    </div>
+                  </li>
+                </ul>
+                <.button
+                  id="setup-continue"
+                  type="button"
+                  variant="primary"
+                  class="w-full"
+                  phx-click="goto_choice"
+                >
+                  Continuar <.icon name="hero-arrow-right" class="size-4" />
+                </.button>
+              </div>
             </div>
           <% :choice -> %>
-            <div id="setup-choice-step" class="card bg-base-200 p-6 sm:p-8">
-              <h1 class="mb-1 text-2xl font-bold tracking-tight">Como quer começar?</h1>
-              <p class="mb-5 text-sm opacity-70">
-                Comece do zero ou traga os dados de outra instalação.
-              </p>
-              <div class="flex flex-col gap-3">
-                <button
-                  id="setup-new-install"
-                  type="button"
-                  phx-click="goto_account"
-                  class="btn btn-primary justify-start"
-                >
-                  <.icon name="hero-sparkles" class="size-5" /> Nova instalação
-                </button>
-                <button
-                  id="setup-restore"
-                  type="button"
-                  phx-click="goto_restore"
-                  class="btn justify-start"
-                >
-                  <.icon name="hero-archive-box-arrow-down" class="size-5" /> Restaurar um backup
-                </button>
+            <div id="setup-choice-step">
+              <.page_header
+                title="Como quer começar?"
+                subtitle="Comece do zero ou traga os dados de outra instalação."
+              />
+              <div class="card bg-base-200 p-6 sm:p-8">
+                <div class="flex flex-col gap-3">
+                  <.button
+                    id="setup-new-install"
+                    type="button"
+                    variant="primary"
+                    class="justify-start"
+                    icon="hero-sparkles"
+                    phx-click="goto_account"
+                  >
+                    Nova instalação
+                  </.button>
+                  <.button
+                    id="setup-restore"
+                    type="button"
+                    variant="secondary"
+                    class="justify-start"
+                    icon="hero-archive-box-arrow-down"
+                    phx-click="goto_restore"
+                  >
+                    Restaurar um backup
+                  </.button>
+                </div>
               </div>
             </div>
           <% :restore -> %>
-            <div id="setup-restore-step" class="card bg-base-200 p-6 sm:p-8">
-              <h1 class="mb-1 text-2xl font-bold tracking-tight">Restaurar um backup</h1>
-              <p class="mb-5 text-sm opacity-70">
-                Envie o arquivo <code>.db</code> baixado em Configurações → Backup.
-              </p>
-              <BackupComponents.restore_panel
-                stage={@restore_stage}
-                uploads={@uploads}
-                analysis={@restore_analysis}
-                form={@restore_form}
+            <div id="setup-restore-step">
+              <.page_header
+                title="Restaurar um backup"
+                subtitle="Envie o arquivo .db baixado em Configurações → Backup."
               />
-              <button
-                :if={@restore_stage == :idle}
-                id="setup-restore-back"
-                type="button"
-                phx-click="goto_choice"
-                class="btn btn-ghost btn-sm mt-4"
-              >
-                Voltar
-              </button>
+              <div class="card bg-base-200 p-6 sm:p-8">
+                <BackupComponents.restore_panel
+                  stage={@restore_stage}
+                  uploads={@uploads}
+                  analysis={@restore_analysis}
+                  form={@restore_form}
+                  upload_error={@restore_upload_error}
+                />
+                <div :if={@restore_stage == :idle} class="mt-4">
+                  <.button
+                    id="setup-restore-back"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="goto_choice"
+                  >
+                    Voltar
+                  </.button>
+                </div>
+              </div>
             </div>
           <% :account -> %>
-            <div id="setup-account-step" class="card bg-base-200 p-6 sm:p-8">
-              <h1 class="mb-1 text-2xl font-bold tracking-tight">Sua conta</h1>
-              <p class="mb-5 text-sm opacity-70">
-                Você será o único usuário desta instância.
-              </p>
-              <.form
-                for={@form}
-                id="setup-account-form"
-                action={~p"/users/log-in"}
-                method="post"
-                phx-change="validate"
-                phx-submit="save"
-                phx-trigger-action={@trigger_submit}
-                novalidate
-              >
-                <.input
-                  field={@form[:name]}
-                  type="text"
-                  label="Nome"
-                  autocomplete="name"
-                  phx-mounted={JS.focus()}
-                />
-                <.input
-                  field={@form[:email]}
-                  type="email"
-                  label="Email"
-                  autocomplete="username"
-                />
-                <.input
-                  field={@form[:password]}
-                  type="password"
-                  label="Senha"
-                  autocomplete="new-password"
-                />
-                <.input
-                  field={@form[:password_confirmation]}
-                  type="password"
-                  label="Confirmar senha"
-                  autocomplete="new-password"
-                />
-                <input type="hidden" name="user[remember_me]" value="true" />
-                <.button class="btn btn-primary w-full" phx-disable-with="Criando...">
-                  Criar conta e entrar
-                </.button>
-              </.form>
+            <div id="setup-account-step">
+              <.page_header
+                title="Sua conta"
+                subtitle="Você será o único usuário desta instância."
+              />
+              <div class="card bg-base-200 p-6 sm:p-8">
+                <.form
+                  for={@form}
+                  id="setup-account-form"
+                  action={~p"/users/log-in"}
+                  method="post"
+                  phx-change="validate"
+                  phx-submit="save"
+                  phx-trigger-action={@trigger_submit}
+                  novalidate
+                >
+                  <.input
+                    field={@form[:name]}
+                    type="text"
+                    label="Nome"
+                    autocomplete="name"
+                    phx-mounted={JS.focus()}
+                  />
+                  <.input
+                    field={@form[:email]}
+                    type="email"
+                    label="Email"
+                    autocomplete="username"
+                  />
+                  <.input
+                    field={@form[:password]}
+                    type="password"
+                    label="Senha"
+                    autocomplete="new-password"
+                  />
+                  <.input
+                    field={@form[:password_confirmation]}
+                    type="password"
+                    label="Confirmar senha"
+                    autocomplete="new-password"
+                  />
+                  <input type="hidden" name="user[remember_me]" value="true" />
+                  <.button variant="primary" class="w-full" loading="Criando…">
+                    Criar conta e entrar
+                  </.button>
+                </.form>
+              </div>
             </div>
         <% end %>
       </div>

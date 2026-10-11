@@ -13,7 +13,7 @@ defmodule GranaWeb.OnboardingLive do
   @steps [
     %{id: :appearance, title: "Aparência", icon: "hero-paint-brush"},
     %{id: :smtp, title: "Email", icon: "hero-envelope"},
-    %{id: :ai, title: "LLM", icon: "hero-sparkles"},
+    %{id: :ai, title: "Inteligência artificial", icon: "hero-sparkles"},
     %{id: :open_finance, title: "Open Finance", icon: "hero-link"},
     %{id: :done, title: "Pronto", icon: "hero-check-circle"}
   ]
@@ -32,7 +32,7 @@ defmodule GranaWeb.OnboardingLive do
               "flex size-8 items-center justify-center rounded-full transition-colors",
               if(step_index(step.id) <= step_index(@step),
                 do: "bg-primary text-primary-content",
-                else: "bg-base-200 opacity-60"
+                else: "ui-text-tertiary bg-base-200"
               )
             ]}
           >
@@ -44,14 +44,14 @@ defmodule GranaWeb.OnboardingLive do
           <% :appearance -> %>
             <.step_card title="Aparência" subtitle="Escolha o tema e o estilo visual do Grana.">
               <div class="mb-5 flex items-center justify-between gap-4">
-                <p class="text-sm">Tema</p>
+                <p class="ui-body">Tema</p>
                 <Layouts.theme_toggle persist />
               </div>
               <div class="flex flex-col gap-3">
-                <p class="text-sm">Estilo visual</p>
-                <Layouts.visual_style_toggle persist />
+                <p class="ui-body">Estilo visual</p>
+                <Layouts.visual_style_toggle persist grid />
               </div>
-              <p class="mt-4 text-xs opacity-60">Você pode mudar isso depois em Configurações.</p>
+              <p class="ui-help mt-4">Você pode mudar isso depois em Configurações.</p>
             </.step_card>
           <% :smtp -> %>
             <AccountComponents.smtp_card
@@ -64,7 +64,7 @@ defmodule GranaWeb.OnboardingLive do
             />
           <% :ai -> %>
             <.step_card
-              title="LLM"
+              title="Inteligência artificial"
               subtitle="Cadastre um provedor (Gemini, OpenAI, Claude ou compatível) para categorizar gastos e gerar análises."
             >
               <AiComponents.providers_panel
@@ -92,49 +92,67 @@ defmodule GranaWeb.OnboardingLive do
               item_form={@open_finance_item_form}
             />
           <% :done -> %>
-            <.step_card title="Tudo pronto!" subtitle="Seu Grana está configurado.">
-              <p class="mb-4 text-sm opacity-70">
+            <.step_card title="Tudo pronto" subtitle="Seu Grana está configurado.">
+              <p class="ui-body ui-text-secondary mb-4">
                 Envie seus primeiros extratos e faturas na tela de Uploads para começar a ver o painel.
               </p>
-              <button id="onboarding-finish" phx-click="finish" class="btn btn-primary w-full">
+              <.button
+                id="onboarding-finish"
+                type="button"
+                variant="primary"
+                class="w-full"
+                phx-click="finish"
+              >
                 Ir para o painel <.icon name="hero-arrow-right" class="size-4" />
-              </button>
+              </.button>
             </.step_card>
         <% end %>
 
         <div class="mt-4 flex items-center justify-between">
-          <button
+          <.button
             :if={@step != :appearance}
             id="onboarding-back"
+            type="button"
+            variant="ghost"
+            size="sm"
+            icon="hero-arrow-left"
             phx-click="back"
-            class="btn btn-ghost btn-sm"
           >
-            <.icon name="hero-arrow-left" class="size-4" /> Voltar
-          </button>
+            Voltar
+          </.button>
           <span :if={@step == :appearance}></span>
           <div :if={@step != :done} class="flex gap-2">
-            <button id="onboarding-skip" phx-click="next" class="btn btn-ghost btn-sm">
+            <.button
+              id="onboarding-skip"
+              type="button"
+              variant="ghost"
+              size="sm"
+              phx-click="next"
+            >
               Pular
-            </button>
+            </.button>
             <%!-- Etapas com formulário: o Continuar envia o form (salva) antes de avançar. --%>
-            <button
+            <.button
               :if={continue_mode(assigns) == :submit}
               id="onboarding-next"
               type="submit"
               form={submit_form_id(@step)}
-              class="btn btn-primary btn-sm"
+              variant="primary"
+              size="sm"
             >
               Continuar
-            </button>
-            <button
+            </.button>
+            <.button
               :if={continue_mode(assigns) != :submit}
               id="onboarding-next"
-              phx-click="next"
+              type="button"
+              variant="primary"
+              size="sm"
               disabled={continue_mode(assigns) == :blocked}
-              class="btn btn-primary btn-sm"
+              phx-click="next"
             >
               Continuar
-            </button>
+            </.button>
           </div>
         </div>
       </div>
@@ -148,10 +166,11 @@ defmodule GranaWeb.OnboardingLive do
 
   defp step_card(assigns) do
     ~H"""
-    <div class="card bg-base-200 p-6 sm:p-8">
-      <h1 class="text-2xl font-bold tracking-tight">{@title}</h1>
-      <p :if={@subtitle} class="mb-5 mt-1 text-sm opacity-70">{@subtitle}</p>
-      {render_slot(@inner_block)}
+    <div>
+      <.page_header title={@title} subtitle={@subtitle} />
+      <div class="card bg-base-200 p-6 sm:p-8">
+        {render_slot(@inner_block)}
+      </div>
     </div>
     """
   end
