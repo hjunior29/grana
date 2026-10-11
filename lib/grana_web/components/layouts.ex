@@ -54,7 +54,7 @@ defmodule GranaWeb.Layouts do
         <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">
           <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
             <li>
-              <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
+              <.link navigate={~p"/dashboard"} class="text-sm">Painel</.link>
             </li>
             <li>
               <.link navigate={~p"/analysis"} class="text-sm">Análise</.link>
@@ -69,7 +69,7 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/goals"} class="text-sm">Metas</.link>
             </li>
             <li>
-              <.link navigate={~p"/upload"} class="text-sm">Uploads</.link>
+              <.link navigate={~p"/upload"} class="text-sm">Importar</.link>
             </li>
             <li>
               <details class="dropdown dropdown-end">
@@ -77,7 +77,7 @@ defmodule GranaWeb.Layouts do
                   <.icon name="hero-user-circle" class="size-5" />
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
-                  <li class="px-3 py-2 text-xs opacity-50">{@current_scope.user.email}</li>
+                  <li class="ui-help px-3 py-2">{@current_scope.user.email}</li>
                   <li>
                     <.link navigate={~p"/users/settings"}>
                       <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
@@ -102,7 +102,7 @@ defmodule GranaWeb.Layouts do
             <ul class="dropdown-content menu bg-base-200 rounded-box w-52 p-2 shadow-xl z-50 mt-2">
               <li>
                 <.link navigate={~p"/dashboard"}>
-                  <.icon name="hero-chart-bar" class="size-4" /> Dashboard
+                  <.icon name="hero-chart-bar" class="size-4" /> Painel
                 </.link>
               </li>
               <li>
@@ -127,11 +127,11 @@ defmodule GranaWeb.Layouts do
               </li>
               <li>
                 <.link navigate={~p"/upload"}>
-                  <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
+                  <.icon name="hero-cloud-arrow-up" class="size-4" /> Importar
                 </.link>
               </li>
-              <hr class="my-1 opacity-30" />
-              <li class="py-1 text-xs opacity-50">{@current_scope.user.email}</li>
+              <hr class="my-1 border-base-content/10" />
+              <li class="ui-help py-1">{@current_scope.user.email}</li>
               <li>
                 <.link navigate={~p"/users/settings"}>
                   <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
@@ -172,7 +172,7 @@ defmodule GranaWeb.Layouts do
 
       <div
         id="connection-error"
-        class="hidden alert alert-warning shadow-lg pointer-events-auto text-sm"
+        class="ui-notice ui-notice-warning ui-toast pointer-events-auto hidden shadow-lg"
         phx-disconnected={
           JS.show(
             to: "#connection-error",
@@ -188,7 +188,7 @@ defmodule GranaWeb.Layouts do
         }
       >
         <.icon name="hero-arrow-path" class="size-4 motion-safe:animate-spin" />
-        <span>{gettext("Reconectando...")}</span>
+        <span>Reconectando…</span>
       </div>
     </div>
     """
@@ -214,7 +214,10 @@ defmodule GranaWeb.Layouts do
         phx-click={set_preference("phx:set-theme", "theme", "system", @persist)}
         data-phx-theme="system"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon
+          name="hero-computer-desktop-micro"
+          class="ui-text-secondary size-4 hover:text-base-content"
+        />
       </button>
 
       <button
@@ -222,7 +225,7 @@ defmodule GranaWeb.Layouts do
         phx-click={set_preference("phx:set-theme", "theme", "light", @persist)}
         data-phx-theme="light"
       >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-sun-micro" class="ui-text-secondary size-4 hover:text-base-content" />
       </button>
 
       <button
@@ -230,17 +233,24 @@ defmodule GranaWeb.Layouts do
         phx-click={set_preference("phx:set-theme", "theme", "dark", @persist)}
         data-phx-theme="dark"
       >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-moon-micro" class="ui-text-secondary size-4 hover:text-base-content" />
       </button>
     </div>
     """
   end
 
   attr :persist, :boolean, default: false
+  attr :grid, :boolean, default: false, doc: "opções em 2 colunas, com prévia menor"
 
   def visual_style_toggle(assigns) do
     ~H"""
-    <div id="visual-style-toggle" class="visual-style-toggle" role="group" aria-label="Estilo visual">
+    <div
+      id="visual-style-toggle"
+      class="visual-style-toggle"
+      data-grid={@grid && "true"}
+      role="group"
+      aria-label="Estilo visual"
+    >
       <button
         type="button"
         class="visual-style-option"

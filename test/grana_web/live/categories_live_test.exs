@@ -31,7 +31,7 @@ defmodule GranaWeb.CategoriesLiveTest do
 
       html = view |> element("button[phx-click=new_category]") |> render_click()
 
-      assert html =~ "Nova Categoria"
+      assert html =~ "Nova categoria"
     end
 
     test "cancel_form closes the modal", %{conn: conn} do
@@ -118,7 +118,7 @@ defmodule GranaWeb.CategoriesLiveTest do
 
       html = render_click(view, "edit_category", %{"id" => to_string(cat.id)})
 
-      assert html =~ "Editar Categoria"
+      assert html =~ "Editar categoria"
     end
 
     test "save_category updates category name", %{conn: conn, user: user} do
