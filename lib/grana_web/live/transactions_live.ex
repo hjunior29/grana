@@ -2,6 +2,7 @@ defmodule GranaWeb.TransactionsLive do
   use GranaWeb, :live_view
 
   alias Grana.Banking
+  alias Grana.Banking.Search
   alias Grana.OpenFinance
 
   @per_page 50
@@ -19,6 +20,9 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:banks, Banking.available_banks(user_id))
       |> assign(:expanded_ids, MapSet.new())
       |> assign(:selected_ids, MapSet.new())
+      |> assign(:saved_searches, Banking.list_saved_searches(user_id))
+      |> assign(:save_form, nil)
+      |> assign(:delete_saved, nil)
 
     # Meses sem upload vêm do Open Finance; relê se a última leitura passou de 1h.
     if connected?(socket) do
@@ -44,11 +48,15 @@ defmodule GranaWeb.TransactionsLive do
     user_id = socket.assigns.current_scope.user.id
     filters = build_filters(params)
     page = parse_int(params["page"], 1)
+    {search, search_error} = parse_search(filters)
 
     socket =
       socket
       |> assign(:filters, filters)
+      |> assign(:search, search)
+      |> assign(:search_error, search_error)
       |> assign(:page, page)
+      |> assign_current_saved()
       |> load_transactions(user_id)
 
     {:noreply, socket}
@@ -71,6 +79,73 @@ defmodule GranaWeb.TransactionsLive do
       |> Map.put(:sort_dir, socket.assigns.filters.sort_dir)
 
     {:noreply, push_patch(socket, to: transactions_url(next))}
+  end
+
+  def handle_event("advanced_mode", _params, socket) do
+    %{filters: filters, categories: categories} = socket.assigns
+
+    {:noreply,
+     push_patch(socket, to: advanced_url(filters, simple_to_query(filters, categories)))}
+  end
+
+  def handle_event("run_search", %{"q" => q} = params, socket) do
+    q = String.trim(q)
+    filters = socket.assigns.filters
+    socket = push_patch(socket, to: advanced_url(filters, q, filters.saved))
+
+    case {params["intent"], Search.parse(q)} do
+      {"save", {:ok, _search}} -> {:noreply, open_save_form(socket, q)}
+      {"update", {:ok, _search}} -> {:noreply, update_current_saved(socket, q)}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("save_search", %{"saved_search" => attrs}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    case Banking.create_saved_search(user_id, attrs) do
+      {:ok, saved} ->
+        socket =
+          socket
+          |> assign(:save_form, nil)
+          |> assign(:saved_searches, Banking.list_saved_searches(user_id))
+          |> put_flash(:info, "Busca salva.")
+          |> push_patch(to: advanced_url(socket.assigns.filters, saved.query, saved.id))
+
+        {:noreply, socket}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :save_form, to_form(changeset, action: :insert))}
+    end
+  end
+
+  def handle_event("cancel_save_search", _params, socket) do
+    {:noreply, assign(socket, :save_form, nil)}
+  end
+
+  def handle_event("confirm_delete_saved", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    {:noreply,
+     assign(socket, :delete_saved, Banking.get_saved_search(user_id, parse_int(id, -1)))}
+  end
+
+  def handle_event("cancel_delete_saved", _params, socket) do
+    {:noreply, assign(socket, :delete_saved, nil)}
+  end
+
+  def handle_event("delete_saved_search", _params, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    {:ok, _} = Banking.delete_saved_search(socket.assigns.delete_saved)
+
+    socket =
+      socket
+      |> assign(:delete_saved, nil)
+      |> assign(:saved_searches, Banking.list_saved_searches(user_id))
+      |> assign_current_saved()
+      |> put_flash(:info, "Busca removida.")
+
+    {:noreply, socket}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -230,7 +305,7 @@ defmodule GranaWeb.TransactionsLive do
   defp load_transactions(socket, user_id) do
     %{filters: filters, page: page} = socket.assigns
 
-    banking_transactions = Banking.list_transactions(user_id, banking_opts(filters))
+    banking_transactions = fetch_transactions(socket.assigns, user_id)
 
     all_rows =
       banking_transactions
@@ -253,6 +328,60 @@ defmodule GranaWeb.TransactionsLive do
     |> assign(:recurring_statuses, Banking.recurring_statuses(user_id, visible_banking))
     |> assign(:statement_info, statement_info(filters, user_id))
     |> assign(:selected_ids, MapSet.new())
+  end
+
+  defp fetch_transactions(%{filters: %{mode: "advanced"}, search: nil}, _user_id), do: []
+
+  defp fetch_transactions(%{filters: %{mode: "advanced"} = filters, search: search}, user_id) do
+    Banking.search_transactions(user_id, search,
+      sort_by: filters.sort_by,
+      sort_dir: filters.sort_dir
+    )
+  end
+
+  defp fetch_transactions(%{filters: filters}, user_id) do
+    Banking.list_transactions(user_id, banking_opts(filters))
+  end
+
+  defp parse_search(%{mode: "advanced", q: q}) do
+    case Search.parse(q) do
+      {:ok, search} -> {search, nil}
+      {:error, message} -> {nil, message}
+    end
+  end
+
+  defp parse_search(_filters), do: {nil, nil}
+
+  # A busca salva aberta: a do link (`saved`) ou, sem ele, a que tem exatamente esta busca.
+  defp assign_current_saved(socket) do
+    %{saved_searches: saved, filters: filters} = socket.assigns
+    id = parse_int_opt(filters.saved)
+
+    current =
+      if filters.mode == "advanced",
+        do: Enum.find(saved, &(&1.id == id)) || Enum.find(saved, &(&1.query == filters.q))
+
+    assign(socket, :current_saved, current)
+  end
+
+  defp open_save_form(socket, q) do
+    form =
+      %Banking.SavedSearch{}
+      |> Banking.change_saved_search(%{"query" => q})
+      |> to_form()
+
+    assign(socket, :save_form, form)
+  end
+
+  defp update_current_saved(%{assigns: %{current_saved: nil}} = socket, _q), do: socket
+
+  defp update_current_saved(socket, q) do
+    %{current_saved: saved, current_scope: scope} = socket.assigns
+    {:ok, updated} = Banking.update_saved_search(saved, %{"query" => q})
+
+    socket
+    |> assign(:saved_searches, Banking.list_saved_searches(scope.user.id))
+    |> put_flash(:info, ~s(Busca "#{updated.name}" atualizada.))
   end
 
   defp banking_opts(filters) do
@@ -286,9 +415,42 @@ defmodule GranaWeb.TransactionsLive do
         <.page_header
           title="Transações"
           subtitle="Visualize e gerencie todas as suas transações em uma lista única"
+        >
+          <:actions>
+            <.button
+              :if={!advanced?(@filters)}
+              id="advanced-search-open"
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon="hero-command-line"
+              phx-click="advanced_mode"
+            >
+              Pesquisa avançada
+            </.button>
+            <.button
+              :if={advanced?(@filters)}
+              id="advanced-search-close"
+              patch={~p"/transactions"}
+              variant="ghost"
+              size="sm"
+              icon="hero-funnel"
+            >
+              Voltar aos filtros
+            </.button>
+          </:actions>
+        </.page_header>
+
+        <.advanced_search
+          :if={advanced?(@filters)}
+          filters={@filters}
+          search={@search}
+          search_error={@search_error}
+          saved_searches={@saved_searches}
+          current_saved={@current_saved}
         />
 
-        <div :if={@statement_info} class="mb-4">
+        <div :if={@statement_info && !advanced?(@filters)} class="mb-4">
           <.tag kind="neutro" class="gap-2 py-1">
             <img
               :if={@statement_info.logo}
@@ -309,7 +471,7 @@ defmodule GranaWeb.TransactionsLive do
           </.tag>
         </div>
 
-        <div class="mb-3 sm:hidden">
+        <div :if={!advanced?(@filters)} class="mb-3 sm:hidden">
           <.button
             id="transactions-filters-toggle"
             type="button"
@@ -323,6 +485,7 @@ defmodule GranaWeb.TransactionsLive do
         </div>
 
         <div
+          :if={!advanced?(@filters)}
           id="transactions-filters-card"
           class={["card bg-base-200 p-4 mb-6", !filtered?(@filters) && "hidden sm:block"]}
         >
@@ -475,7 +638,7 @@ defmodule GranaWeb.TransactionsLive do
           </form>
         </div>
 
-        <div class="ui-body mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div :if={!@search_error} class="ui-body mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <span :if={@total == 0} class="ui-text-secondary">Nenhuma transação</span>
           <span :if={@total > 1} class="ui-text-secondary">{@total} transações</span>
           <span :if={@total == 1} class="ui-text-secondary">{@total} transação</span>
@@ -492,7 +655,7 @@ defmodule GranaWeb.TransactionsLive do
           <div :if={@total > 0} class="ml-auto flex gap-2">
             <.button
               id="export-csv"
-              href={"/transactions/export?#{banking_export_query(@filters)}"}
+              href={export_href(@filters)}
               variant="secondary"
               size="sm"
               icon="hero-arrow-down-tray"
@@ -543,7 +706,7 @@ defmodule GranaWeb.TransactionsLive do
         </div>
 
         <.empty_state
-          :if={@transactions == [] && filtered?(@filters)}
+          :if={@transactions == [] && filtered?(@filters) && !advanced?(@filters)}
           id="transactions-empty"
           icon="hero-document-magnifying-glass"
           title="Nada com esses filtros"
@@ -555,6 +718,14 @@ defmodule GranaWeb.TransactionsLive do
             </.button>
           </:action>
         </.empty_state>
+
+        <.empty_state
+          :if={@transactions == [] && advanced?(@filters) && @filters.q != "" && !@search_error}
+          id="transactions-empty"
+          icon="hero-document-magnifying-glass"
+          title="Nada com essa busca"
+          text="Revise os termos ou confira a sintaxe acima."
+        />
 
         <.empty_state
           :if={@transactions == [] && !filtered?(@filters)}
@@ -718,7 +889,292 @@ defmodule GranaWeb.TransactionsLive do
           </.link>
         </div>
       </div>
+
+      <.form_modal
+        :if={@save_form}
+        id="save-search-modal"
+        title="Salvar busca"
+        form={@save_form}
+        on_submit="save_search"
+        on_cancel={JS.push("cancel_save_search")}
+        submit="Salvar busca"
+      >
+        <.input
+          field={@save_form[:name]}
+          label="Nome"
+          placeholder="Transporte por aplicativo"
+          maxlength="60"
+          autocomplete="off"
+        />
+        <.input field={@save_form[:query]} type="hidden" />
+        <p class="ui-help">
+          Busca: <code class="ui-query-code">{@save_form[:query].value}</code>
+        </p>
+      </.form_modal>
+
+      <.confirm_modal
+        :if={@delete_saved}
+        id="delete-saved-search-modal"
+        open
+        title="Remover busca"
+        confirm="Remover"
+        loading="Removendo…"
+        on_confirm={JS.push("delete_saved_search")}
+        on_cancel={JS.push("cancel_delete_saved")}
+      >
+        A busca "{@delete_saved.name}" sai da lista. As transações não mudam.
+      </.confirm_modal>
     </Layouts.app>
+    """
+  end
+
+  # ── Pesquisa avançada ──
+
+  @examples [
+    "(uber OR 99 OR cabify) AND type:expense",
+    "category:alimentacao AND date>=today-3m",
+    "recurrence:fixed NOT internal:true",
+    "description:pix* AND amount > 1000",
+    "month:dec..feb AND type:expense",
+    "installments>=10"
+  ]
+
+  # Os nomes e valores são os do banco; a explicação fica em português.
+  @fields_help [
+    {"description", "contém o texto (descrição e original)"},
+    {"category", "nome igual ao da categoria"},
+    {"bank", "nubank, bradesco…"},
+    {"statement_type", "extrato ou fatura"},
+    {"source", "upload ou open_finance"},
+    {"type", "credit ou debit; ou income, expense e investment, como nos totais"},
+    {"amount", "sem sinal: amount > 100, amount:50..200"},
+    {"date", "dia, mês, ano ou relativo: date:2026-03, date>=today-90d"},
+    {"year month day", "número; month aceita nome: month:dec..feb, day:1..5"},
+    {"installments", "número de parcelas (1 à vista): installments>1"},
+    {"internal", "true ou false (transferência entre suas contas)"},
+    {"recurrence", "fixed ou variable"}
+  ]
+
+  attr :filters, :map, required: true
+  attr :search, :any, required: true
+  attr :search_error, :string, required: true
+  attr :saved_searches, :list, required: true
+  attr :current_saved, :any, required: true
+
+  defp advanced_search(assigns) do
+    assigns =
+      assigns
+      |> assign(:examples, @examples)
+      |> assign(:fields_help, @fields_help)
+
+    ~H"""
+    <div
+      id="advanced-search"
+      class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]"
+    >
+      <.card
+        id="advanced-search-card"
+        icon="hero-command-line"
+        title="Pesquisa avançada"
+        description="Combine termos e campos com AND, OR e NOT, como numa base científica."
+        spaced={false}
+        class="min-w-0"
+      >
+        <div>
+          <form id="advanced-search-form" phx-submit="run_search">
+            <.input
+              type="textarea"
+              id="advanced-search-query"
+              name="q"
+              value={@filters.q}
+              rows="3"
+              class="textarea ui-query-editor w-full"
+              phx-hook=".QueryEditor"
+              aria-label="Busca"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              placeholder="(uber OR 99) AND category:transporte NOT bank:nubank"
+            />
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".QueryEditor">
+              export default {
+                mounted() {
+                  this.el.addEventListener("keydown", (e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault()
+                      this.el.form.requestSubmit()
+                    }
+                  })
+                }
+              }
+            </script>
+            <div class="flex flex-wrap items-center gap-2">
+              <.button
+                id="advanced-search-submit"
+                variant="primary"
+                size="sm"
+                icon="hero-magnifying-glass"
+                name="intent"
+                value="run"
+              >
+                Buscar
+              </.button>
+              <span class="ui-caption hidden sm:inline">ou Ctrl+Enter</span>
+              <div class="ml-auto flex flex-wrap gap-2">
+                <.button
+                  :if={@current_saved && @current_saved.query != @filters.q}
+                  id="update-saved-search"
+                  variant="ghost"
+                  size="sm"
+                  icon="hero-arrow-path"
+                  name="intent"
+                  value="update"
+                >
+                  Atualizar "{@current_saved.name}"
+                </.button>
+                <.button
+                  id="save-search"
+                  variant="secondary"
+                  size="sm"
+                  icon="hero-bookmark"
+                  name="intent"
+                  value="save"
+                >
+                  Salvar busca
+                </.button>
+              </div>
+            </div>
+          </form>
+
+          <.notice :if={@search_error} id="advanced-search-error" tone={:error} class="mt-4">
+            {@search_error}
+          </.notice>
+
+          <p
+            :if={@search && @search.ast && @search.canonical != squish(@filters.q)}
+            id="advanced-search-canonical"
+            class="ui-help mt-4"
+          >
+            Como o Grana leu: <code class="ui-query-code">{@search.canonical}</code>
+          </p>
+        </div>
+
+        <details id="advanced-search-help" phx-update="ignore" class="ui-query-help group">
+          <summary class="ui-label flex cursor-pointer select-none list-none items-center gap-1 [&::-webkit-details-marker]:hidden">
+            <.icon
+              name="hero-chevron-right"
+              class="size-4 transition-transform group-open:rotate-90"
+            /> Sintaxe e exemplos
+          </summary>
+          <div class="mt-4 grid gap-6 md:grid-cols-2">
+            <div class="flex flex-col gap-4">
+              <div>
+                <p class="ui-section-title mb-2">Operadores</p>
+                <ul class="ui-help flex flex-col gap-1">
+                  <li>
+                    <code class="ui-query-code">AND</code> ou só um espaço: os dois termos
+                  </li>
+                  <li>
+                    <code class="ui-query-code">OR</code>: qualquer um deles
+                  </li>
+                  <li>
+                    <code class="ui-query-code">NOT</code>: tira o que vem depois
+                  </li>
+                  <li>
+                    <code class="ui-query-code">( )</code>
+                    agrupam. Sem eles, NOT vale antes de AND, e AND antes de OR.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <p class="ui-section-title mb-2">Texto</p>
+                <ul class="ui-help flex flex-col gap-1">
+                  <li>
+                    <code class="ui-query-code">uber</code>
+                    contém, sem diferenciar maiúsculas e acentos
+                  </li>
+                  <li>
+                    <code class="ui-query-code">"posto shell"</code> palavra ou frase inteira
+                  </li>
+                  <li>
+                    <code class="ui-query-code">pix*</code>
+                    começa com; <code class="ui-query-code">*</code>
+                    é qualquer sequência e <code class="ui-query-code">?</code>
+                    um caractere
+                  </li>
+                  <li>
+                    <code class="ui-query-code">/^pix .*silva$/</code> expressão regular
+                  </li>
+                  <li>Termo sem campo procura na descrição e na categoria.</li>
+                </ul>
+              </div>
+            </div>
+            <div>
+              <p class="ui-section-title mb-2">Campos</p>
+              <dl class="ui-help grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                <%= for {field, text} <- @fields_help do %>
+                  <dt>
+                    <code
+                      :for={name <- String.split(field)}
+                      class="ui-query-code mr-1 whitespace-nowrap"
+                    >
+                      {name}
+                    </code>
+                  </dt>
+                  <dd>{text}</dd>
+                <% end %>
+              </dl>
+            </div>
+          </div>
+          <div class="mt-6">
+            <p class="ui-section-title mb-2">Exemplos</p>
+            <div class="flex flex-wrap gap-2">
+              <.link
+                :for={example <- @examples}
+                patch={advanced_url(@filters, example)}
+                class="ui-chip ui-chip-outline ui-query-chip"
+              >
+                {example}
+              </.link>
+            </div>
+          </div>
+        </details>
+      </.card>
+
+      <.card id="saved-searches" icon="hero-bookmark" title="Buscas salvas" spaced={false}>
+        <ul :if={@saved_searches != []} class="-my-1 flex flex-col gap-1">
+          <li
+            :for={saved <- @saved_searches}
+            id={"saved-search-#{saved.id}"}
+            class="flex items-start gap-1"
+          >
+            <.link
+              patch={advanced_url(@filters, saved.query, saved.id)}
+              class={[
+                "ui-saved-search min-w-0 flex-1",
+                @current_saved && @current_saved.id == saved.id && "ui-saved-search-active"
+              ]}
+            >
+              <span class="ui-body block truncate font-medium">{saved.name}</span>
+              <span class="ui-query-preview block truncate">{saved.query}</span>
+            </.link>
+            <button
+              type="button"
+              phx-click="confirm_delete_saved"
+              phx-value-id={saved.id}
+              class="btn btn-ghost btn-sm btn-square mt-1"
+              aria-label={"Remover a busca #{saved.name}"}
+              title="Remover"
+            >
+              <.icon name="hero-trash" class="size-4" />
+            </button>
+          </li>
+        </ul>
+        <p :if={@saved_searches == []} id="saved-searches-empty" class="ui-help">
+          Salve as buscas que você repete na análise. Elas ficam aqui para rodar de novo com um clique.
+        </p>
+      </.card>
+    </div>
     """
   end
 
@@ -879,9 +1335,90 @@ defmodule GranaWeb.TransactionsLive do
 
   # ── Filters and URLs ──
 
+  defp advanced?(filters), do: filters.mode == "advanced"
+
+  defp squish(text), do: text |> String.split() |> Enum.join(" ")
+
+  defp advanced_url(filters, q, saved \\ nil) do
+    transactions_url(%{
+      mode: "advanced",
+      q: q,
+      saved: saved,
+      sort_by: filters.sort_by,
+      sort_dir: filters.sort_dir
+    })
+  end
+
+  defp export_href(%{mode: "advanced"} = filters) do
+    "/transactions/export?" <>
+      build_query_string(%{q: filters.q, sort_by: filters.sort_by, sort_dir: filters.sort_dir})
+  end
+
+  defp export_href(filters), do: "/transactions/export?#{banking_export_query(filters)}"
+
+  # Traduz os filtros simples para a sintaxe da pesquisa avançada, para não perder o que já
+  # estava filtrado ao trocar de modo.
+  defp simple_to_query(filters, categories) do
+    [
+      search_clause(filters.search),
+      movement_clause(filters.movement),
+      origin_clause(filters.origin),
+      kind_clause(filters.kind, categories),
+      range_clause("date", filters.date_from, filters.date_to),
+      range_clause("amount", filters.amount_min, filters.amount_max),
+      internal_clause(filters.internal),
+      if(filters.filter == "uncategorized", do: ~s(category:"Sem Categoria"))
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" AND ")
+  end
+
+  defp search_clause(term) do
+    case String.trim(term) do
+      "" -> nil
+      term -> query_value(term)
+    end
+  end
+
+  defp movement_clause("expense"), do: "type:debit"
+  defp movement_clause("income"), do: "type:credit"
+  defp movement_clause("bank_investment"), do: "type:investment"
+  defp movement_clause(_movement), do: nil
+
+  defp origin_clause("bank:" <> bank), do: "bank:" <> query_value(bank)
+  defp origin_clause(_origin), do: nil
+
+  defp kind_clause("statement:" <> type, _categories),
+    do: "statement_type:" <> query_value(type)
+
+  defp kind_clause("category:" <> id, categories) do
+    case Enum.find(categories, &(to_string(&1.id) == id)) do
+      nil -> nil
+      category -> "category:" <> query_value(category.name)
+    end
+  end
+
+  defp kind_clause(_kind, _categories), do: nil
+
+  defp range_clause(_field, "", ""), do: nil
+  defp range_clause(field, from, ""), do: "#{field}>=#{from}"
+  defp range_clause(field, "", to), do: "#{field}<=#{to}"
+  defp range_clause(field, from, to), do: "#{field}:#{from}..#{to}"
+
+  defp internal_clause("hide"), do: "internal:false"
+  defp internal_clause("only"), do: "internal:true"
+  defp internal_clause(_internal), do: nil
+
+  defp query_value(value) do
+    if Regex.match?(~r/^[\p{L}\p{N}_.\-]+$/u, value) and
+         value not in ["AND", "OR", "NOT"],
+       do: value,
+       else: ~s("#{String.replace(value, ~s("), "")}")
+  end
+
   defp filtered?(filters) do
     filters
-    |> Map.drop([:sort_by, :sort_dir])
+    |> Map.drop([:sort_by, :sort_dir, :mode, :saved])
     |> Map.values()
     |> Enum.any?(&(&1 not in [nil, "", "all"]))
   end
@@ -913,8 +1450,16 @@ defmodule GranaWeb.TransactionsLive do
       statement_id: statement_id,
       statement_source: statement_source,
       sort_by: normalize_sort_by(params["sort_by"]),
-      sort_dir: normalize_sort_dir(params["sort_dir"])
+      sort_dir: normalize_sort_dir(params["sort_dir"]),
+      q: params["q"] || "",
+      mode: normalize_mode(params),
+      saved: params["saved"]
     }
+  end
+
+  defp normalize_mode(params) do
+    if params["mode"] == "advanced" or String.trim(params["q"] || "") != "",
+      do: "advanced"
   end
 
   defp normalize_source(source) when source in ["all", "banking"], do: source
