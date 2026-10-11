@@ -133,7 +133,7 @@ defmodule GranaWeb.AiSettingsHooks do
          |> assign(:ai_form, provider_form(%{}))
          |> assign(:ai_show_form, false)
          |> assign_ai()
-         |> put_flash(:info, "#{provider.name} cadastrado. Os modelos vieram direto da API.")}
+         |> put_flash(:info, "#{provider.name} cadastrado. Modelos carregados da API.")}
 
       {:error, changeset} ->
         # A chave digitada não volta para a tela.
@@ -144,9 +144,7 @@ defmodule GranaWeb.AiSettingsHooks do
         }
 
         {:halt,
-         socket
-         |> assign(:ai_form, to_form(scrubbed, as: :provider))
-         |> flash_duplicate(changeset, params)}
+         assign(socket, :ai_form, to_form(duplicate_error(scrubbed, params), as: :provider))}
     end
   end
 
@@ -192,25 +190,31 @@ defmodule GranaWeb.AiSettingsHooks do
        |> assign_ai()
        |> put_flash(:info, "Padrão salvo: #{model}.")}
     else
-      {:halt, put_flash(socket, :error, "Escolha o provedor e o modelo.")}
+      form =
+        to_form(%{"provider" => ref, "model" => model},
+          as: :default,
+          errors: [model: {"Escolha o provedor e o modelo.", []}]
+        )
+
+      {:halt, assign(socket, :ai_default_form, form)}
     end
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
 
-  # O nome não é editável nos tipos fixos, então o erro de nome repetido não teria onde aparecer.
-  defp flash_duplicate(socket, changeset, %{"kind" => kind}) when kind != "openai_compatible" do
+  # O nome não é editável nos tipos fixos, então o erro de nome repetido aparece no campo Tipo.
+  defp duplicate_error(changeset, %{"kind" => kind}) when kind != "openai_compatible" do
     if Keyword.has_key?(changeset.errors, :name) and
          not Keyword.has_key?(changeset.errors, :api_key) do
-      put_flash(
-        socket,
-        :error,
+      Ecto.Changeset.add_error(
+        changeset,
+        :kind,
         "#{AI.label(kind)} já está cadastrado. Remova o existente para trocar a chave."
       )
     else
-      socket
+      changeset
     end
   end
 
-  defp flash_duplicate(socket, _changeset, _params), do: socket
+  defp duplicate_error(changeset, _params), do: changeset
 end

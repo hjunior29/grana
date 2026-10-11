@@ -13,8 +13,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
         |> log_in_user(user_fixture())
         |> live(~p"/users/settings")
 
-      assert html =~ "Alterar Email"
-      assert html =~ "Salvar Senha"
+      assert html =~ "Alterar email"
+      assert html =~ "Salvar senha"
     end
 
     test "renders visual style preferences", %{conn: conn} do
@@ -52,7 +52,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
 
       # Ver a página não força mais reautenticação (antes parecia um logout).
       {:ok, lv, html} = live(conn, ~p"/users/settings")
-      assert html =~ "Alterar Email"
+      assert html =~ "Alterar email"
 
       # Mas uma ação sensível (trocar email) sem sudo mode redireciona para reautenticar.
       assert {:error, {:redirect, %{to: path}}} =
@@ -80,7 +80,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
         |> form("#email_form", %{"user" => %{"email" => new_email}})
         |> render_submit()
 
-      assert result =~ "Email alterado com sucesso"
+      assert result =~ "Email alterado."
       assert Accounts.get_user_by_email(new_email)
       refute Accounts.get_user_by_email(user.email)
     end
@@ -96,7 +96,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
         |> form("#email_form", %{"user" => %{"email" => new_email}})
         |> render_submit()
 
-      assert result =~ "Um link de confirmação foi enviado"
+      assert result =~ "Link de confirmação enviado"
       assert Accounts.get_user_by_email(user.email)
     end
 
@@ -113,7 +113,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
         })
         |> render_submit()
 
-      assert result =~ "Um link de confirmação foi enviado"
+      assert result =~ "Link de confirmação enviado"
       assert Accounts.get_user_by_email(user.email)
     end
 
@@ -128,7 +128,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
           "user" => %{"email" => "with spaces"}
         })
 
-      assert result =~ "Alterar Email"
+      assert result =~ "Alterar email"
       assert result =~ "must have the @ sign and no spaces"
     end
 
@@ -142,7 +142,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
         })
         |> render_submit()
 
-      assert result =~ "Alterar Email"
+      assert result =~ "Alterar email"
       assert result =~ "did not change"
     end
   end
@@ -194,7 +194,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
           }
         })
 
-      assert result =~ "Salvar Senha"
+      assert result =~ "Salvar senha"
       assert result =~ "should be at least 12 character(s)"
       assert result =~ "does not match password"
     end
@@ -212,7 +212,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
         })
         |> render_submit()
 
-      assert result =~ "Salvar Senha"
+      assert result =~ "Salvar senha"
       assert result =~ "should be at least 12 character(s)"
       assert result =~ "does not match password"
     end
@@ -237,7 +237,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/settings"
       assert %{"info" => message} = flash
-      assert message == "Email alterado com sucesso."
+      assert message == "Email alterado."
       refute Accounts.get_user_by_email(user.email)
       assert Accounts.get_user_by_email(email)
 
@@ -300,7 +300,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
       lv |> element("#show-reset-modal") |> render_click()
       assert has_element?(lv, "#reset-form")
       assert has_element?(lv, "#reset-progress", "Apagando todos os dados")
-      assert has_element?(lv, ~s|#confirm-reset[phx-disable-with="Apagando..."]|)
+      assert has_element?(lv, "#confirm-reset")
 
       render_click(lv, "cancel_reset", %{})
       refute has_element?(lv, "#reset-modal")
@@ -316,6 +316,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
         |> render_submit()
 
       assert html =~ "Digite APAGAR"
+      assert has_element?(lv, "#reset-form", "Digite APAGAR para confirmar.")
+      refute has_element?(lv, "#flash-error")
       assert Accounts.get_user!(user.id)
     end
 
@@ -329,6 +331,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
         |> render_submit()
 
       assert html =~ "Senha incorreta"
+      assert has_element?(lv, "#reset-form", "Senha incorreta.")
+      refute has_element?(lv, "#flash-error")
       assert Accounts.get_user!(user.id)
     end
 

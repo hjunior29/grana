@@ -60,7 +60,7 @@ defmodule GranaWeb.SmtpHooks do
              |> assign_smtp()
              |> put_flash(
                :info,
-               "Email de teste enviado e SMTP salvo. O login agora pede um código por email."
+               "SMTP salvo. O login agora pede um código por email."
              )
              |> tap(fn _ -> send(self(), :smtp_saved) end)}
 

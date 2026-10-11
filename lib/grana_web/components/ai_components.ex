@@ -16,7 +16,7 @@ defmodule GranaWeb.AiComponents do
     assigns = assign(assigns, :model_state, assigns.models[assigns.selected_ref])
 
     ~H"""
-    <div id="ai-providers">
+    <div id="ai-providers" class="flex flex-col gap-6">
       <%!-- Padrão: provedor + modelo usados nas análises e categorizações --%>
       <.form
         :if={@providers != []}
@@ -24,122 +24,110 @@ defmodule GranaWeb.AiComponents do
         id="ai-default-form"
         phx-change="ai_default_change"
         phx-submit="ai_save_default"
-        class="mb-5 grid grid-cols-1 gap-3 md:grid-cols-2"
+        class="grid grid-cols-1 gap-x-3 md:grid-cols-2"
       >
-        <div>
-          <label class="mb-1 block text-sm font-medium" for="ai-default-provider">Provedor</label>
-          <select
-            id="ai-default-provider"
-            name="default[provider]"
-            class="select select-bordered w-full"
-          >
-            <option
-              :for={provider <- @providers}
-              value={ref(provider)}
-              selected={ref(provider) == @selected_ref}
-            >
-              {provider.name}
-            </option>
-          </select>
-        </div>
-        <div>
-          <label class="mb-1 block text-sm font-medium" for="ai-default-model">Modelo</label>
-          <%= case @model_state do %>
-            <% {:ok, models} -> %>
-              <select
-                id="ai-default-model"
-                name="default[model]"
-                class="select select-bordered w-full"
-              >
-                <option
-                  :if={@default_model not in [nil | Enum.map(models, & &1.id)]}
-                  value={@default_model}
-                  selected
-                >
-                  {@default_model}
-                </option>
-                <option
-                  :for={model <- models}
-                  value={model.id}
-                  selected={model.id == @default_form[:model].value}
-                >
-                  {model.name}
-                </option>
-              </select>
-            <% {:error, message} -> %>
-              <p id="ai-models-error" class="rounded-lg bg-error/10 px-3 py-2 text-xs text-error">
-                {message}
-              </p>
-            <% _ -> %>
+        <.input
+          id="ai-default-provider"
+          type="select"
+          name="default[provider]"
+          label="Provedor"
+          value={@selected_ref}
+          options={Enum.map(@providers, &{&1.name, ref(&1)})}
+        />
+        <%= case @model_state do %>
+          <% {:ok, models} -> %>
+            <.input
+              id="ai-default-model"
+              field={@default_form[:model]}
+              type="select"
+              label="Modelo"
+              value={@default_form[:model].value || @default_model}
+              options={model_options(models, @default_model)}
+            />
+          <% {:error, message} -> %>
+            <div>
+              <span class="ui-label">Modelo</span>
+              <.notice id="ai-models-error" tone={:error}>{message}</.notice>
+            </div>
+          <% _ -> %>
+            <div>
+              <span class="ui-label">Modelo</span>
               <div
                 id="ai-models-loading"
-                class="flex h-12 items-center gap-2 rounded-lg bg-base-100/60 px-3 text-sm opacity-70"
+                class="ui-rounded-field ui-body ui-text-secondary flex h-10 items-center gap-2 bg-base-100/60 px-3"
               >
                 <span class="loading loading-spinner loading-xs"></span> Carregando modelos…
               </div>
-          <% end %>
-        </div>
-        <div class="md:col-span-2">
-          <.button class="btn btn-primary btn-sm" phx-disable-with="Salvando...">
+            </div>
+        <% end %>
+        <div class="mt-2 flex flex-col gap-3 md:col-span-2 sm:flex-row sm:items-center">
+          <.button variant="primary" size="sm" class="w-full sm:w-auto" loading="Salvando…">
             Salvar padrão
           </.button>
-          <span class="ml-2 text-xs opacity-50">
-            Modelo usado em análises, categorização e leitura de PDFs.
-          </span>
+          <p class="ui-help">Modelo usado em análises, categorização e leitura de PDFs.</p>
         </div>
       </.form>
 
       <%!-- Provedores cadastrados --%>
-      <h4 class="mb-2 text-sm font-medium opacity-70">Provedores</h4>
-      <p :if={@providers == []} id="ai-no-providers" class="mb-3 text-sm opacity-60">
-        Nenhum provedor ainda. Cadastre o primeiro abaixo (Gemini, OpenAI, Claude ou qualquer
-        serviço compatível) ou defina <code>GEMINI_API_KEY</code>, <code>OPENAI_API_KEY</code>
-        ou <code>ANTHROPIC_API_KEY</code>
-        no ambiente.
-      </p>
-      <ul :if={@providers != []} id="ai-provider-list" class="mb-3 divide-y divide-base-content/10">
-        <li
-          :for={provider <- @providers}
-          id={"ai-provider-#{ref(provider)}"}
-          class="flex items-center justify-between gap-3 py-2 text-sm"
-        >
-          <span class="min-w-0">
-            <span class="font-medium">{provider.name}</span>
-            <span class="block truncate text-xs opacity-50">
-              {AI.label(provider.kind)}<span :if={provider.base_url}> · {provider.base_url}</span>
-            </span>
-          </span>
-          <span class="flex shrink-0 items-center gap-2">
-            <span :if={provider.source == :env} class="badge badge-info badge-soft badge-sm">
-              .env
-            </span>
-            <span :if={provider.source == :database} class="badge badge-success badge-soft badge-sm">
-              chave salva
-            </span>
-            <button
-              :if={provider.source == :database}
-              id={"ai-remove-#{provider.id}"}
-              type="button"
-              phx-click="ai_remove_provider"
-              phx-value-id={provider.id}
-              data-confirm={"Remover #{provider.name}? A chave salva será apagada."}
-              class="btn btn-ghost btn-xs text-error/80"
-            >
-              Remover
-            </button>
-          </span>
-        </li>
-      </ul>
+      <.section title="Provedores">
+        <.empty_state
+          :if={@providers == []}
+          id="ai-no-providers"
+          icon="hero-cpu-chip"
+          title="Nenhum provedor ainda"
+          text="Cadastre o primeiro abaixo (Gemini, OpenAI, Claude ou qualquer serviço compatível) ou defina GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY no ambiente."
+        />
+        <ul :if={@providers != []} id="ai-provider-list" class="divide-y divide-base-content/10">
+          <.item_row
+            :for={provider <- @providers}
+            id={"ai-provider-#{ref(provider)}"}
+            title={provider.name}
+            subtitle={provider_subtitle(provider)}
+          >
+            <:tags>
+              <.tag :if={provider.source == :env} kind="env" />
+              <.tag :if={provider.source == :database} kind="salvo" />
+            </:tags>
+            <:actions>
+              <.button
+                :if={provider.source == :database}
+                id={"ai-remove-#{provider.id}"}
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-error"
+                phx-click={show_modal("ai-remove-modal-#{provider.id}")}
+              >
+                Remover
+              </.button>
+            </:actions>
+          </.item_row>
+        </ul>
+        <%= for provider <- @providers, provider.source == :database do %>
+          <.confirm_modal
+            id={"ai-remove-modal-#{provider.id}"}
+            title={"Remover #{provider.name}?"}
+            confirm="Remover"
+            loading="Removendo…"
+            on_confirm={JS.push("ai_remove_provider", value: %{id: to_string(provider.id)})}
+          >
+            A chave salva será apagada.
+          </.confirm_modal>
+        <% end %>
 
-      <button
-        :if={!@show_form}
-        id="ai-add-provider"
-        type="button"
-        phx-click="ai_toggle_form"
-        class="btn btn-sm"
-      >
-        <.icon name="hero-plus" class="size-4" /> Adicionar provedor
-      </button>
+        <div :if={!@show_form} class="mt-3">
+          <.button
+            id="ai-add-provider"
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon="hero-plus"
+            phx-click="ai_toggle_form"
+          >
+            Adicionar provedor
+          </.button>
+        </div>
+      </.section>
 
       <.form
         :if={@show_form}
@@ -149,7 +137,7 @@ defmodule GranaWeb.AiComponents do
         phx-submit="ai_add_provider"
         autocomplete="off"
         data-form-type="other"
-        class="mt-2 grid grid-cols-1 gap-x-3 md:grid-cols-2"
+        class="grid grid-cols-1 gap-x-3 md:grid-cols-2"
       >
         <.input
           field={@form[:kind]}
@@ -187,20 +175,38 @@ defmodule GranaWeb.AiComponents do
             data-lpignore="true"
           />
         </div>
-        <div class="flex items-center gap-2 md:col-span-2">
-          <.button class="btn btn-primary btn-sm" phx-disable-with="Verificando...">
-            Verificar e adicionar
-          </.button>
-          <button type="button" phx-click="ai_toggle_form" class="btn btn-ghost btn-sm">
-            Cancelar
-          </button>
-          <span class="text-xs opacity-50">
-            A chave é conferida listando os modelos e guardada cifrada.
-          </span>
+        <div class="mt-2 flex flex-col gap-3 md:col-span-2 sm:flex-row sm:items-center">
+          <div class="flex shrink-0 gap-2">
+            <.button
+              variant="primary"
+              size="sm"
+              class="flex-1 sm:flex-none"
+              loading="Verificando…"
+            >
+              Verificar e adicionar
+            </.button>
+            <.button type="button" variant="ghost" size="sm" phx-click="ai_toggle_form">
+              Cancelar
+            </.button>
+          </div>
+          <p class="ui-help">A chave é conferida listando os modelos e guardada criptografada.</p>
         </div>
       </.form>
     </div>
     """
+  end
+
+  defp provider_subtitle(provider) do
+    [AI.label(provider.kind), provider.base_url] |> Enum.reject(&is_nil/1) |> Enum.join(" · ")
+  end
+
+  # Mantém o modelo salvo no select mesmo quando a API não o lista mais.
+  defp model_options(models, default_model) do
+    listed = Enum.map(models, &{&1.name, &1.id})
+
+    if default_model in [nil | Enum.map(models, & &1.id)],
+      do: listed,
+      else: [{default_model, default_model} | listed]
   end
 
   defp ref(provider), do: AI.ProviderConfig.ref(provider)
