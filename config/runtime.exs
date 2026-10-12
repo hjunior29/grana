@@ -96,27 +96,31 @@ end
 
 config :grana, GranaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
-# SMTP do ambiente: tem precedência sobre o salvo pela tela. Em dev só vale com
-# SMTP_IN_DEV=true (senão os emails vão para /dev/mailbox); em test nunca é lido.
+# SMTP do ambiente, campo a campo: cada variável definida vence o campo salvo pela tela,
+# e o que faltar pode ser preenchido lá. Em dev só vale com SMTP_IN_DEV=true (senão os
+# emails vão para /dev/mailbox); em test nunca é lido.
 if config_env() != :test and (config_env() != :dev or System.get_env("SMTP_IN_DEV") == "true") do
-  if smtp_host = System.get_env("SMTP_HOST") do
-    smtp_username = System.get_env("SMTP_USERNAME")
+  smtp_env =
+    [
+      host: "SMTP_HOST",
+      port: "SMTP_PORT",
+      username: "SMTP_USERNAME",
+      password: "SMTP_PASSWORD",
+      tls: "SMTP_TLS",
+      from_name: "MAIL_FROM_NAME",
+      from_address: "MAIL_FROM_ADDRESS"
+    ]
+    |> Enum.flat_map(fn {field, var} ->
+      case System.get_env(var) do
+        value when value in [nil, ""] -> []
+        value when field == :port -> [{field, String.to_integer(value)}]
+        value when field == :tls -> [{field, String.to_existing_atom(value)}]
+        value -> [{field, value}]
+      end
+    end)
+    |> Map.new()
 
-    config :grana, :smtp_env, %{
-      host: smtp_host,
-      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
-      username: smtp_username,
-      password: System.get_env("SMTP_PASSWORD"),
-      tls: String.to_existing_atom(System.get_env("SMTP_TLS") || "always"),
-      from_name: System.get_env("MAIL_FROM_NAME") || "Grana",
-      from_address:
-        System.get_env("MAIL_FROM_ADDRESS") ||
-          if(smtp_username && String.contains?(smtp_username, "@"),
-            do: smtp_username,
-            else: "noreply@example.com"
-          )
-    }
-  end
+  config :grana, :smtp_env, smtp_env
 end
 
 if config_env() == :prod do

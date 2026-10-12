@@ -403,6 +403,8 @@ defmodule GranaWeb.UserLive.SettingsTest do
       assert has_element?(lv, "#diagnostics-uptime")
       assert has_element?(lv, "#diagnostics-transactions")
       assert has_element?(lv, "#diagnostics-integrations li", "Provedores de IA")
+      assert has_element?(lv, "#integration-sources-legend .ui-tag-env")
+      assert has_element?(lv, "#integration-sources-legend .ui-tag-salvo")
       assert has_element?(lv, "#diagnostics-runtime", "Elixir")
       assert has_element?(lv, "#diagnostics-public-url")
       assert has_element?(lv, "#diagnostics-oban")

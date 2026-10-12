@@ -432,7 +432,7 @@ defmodule GranaWeb.TransactionsLive do
               :if={advanced?(@filters)}
               id="advanced-search-close"
               patch={~p"/transactions"}
-              variant="ghost"
+              variant="secondary"
               size="sm"
               icon="hero-funnel"
             >
@@ -504,7 +504,7 @@ defmodule GranaWeb.TransactionsLive do
             />
 
             <div class="transactions-filter-grid">
-              <div class="transactions-filter-search">
+              <div class="transactions-filter-search ui-private-name-field">
                 <.input
                   type="search"
                   name="search"
@@ -1195,11 +1195,11 @@ defmodule GranaWeb.TransactionsLive do
           |> JS.toggle_class("ui-row-open", to: "#transaction-#{@row.id}")
         }
         title={
-          if !MapSet.member?(@expanded_ids, @row.raw_id),
+          if !MapSet.member?(@expanded_ids, @row.raw_id) and !@current_scope.user.hide_names,
             do: @row.raw.original_description || @row.raw.description
         }
       >
-        {@row.raw.description}
+        <span class="ui-private-name">{@row.raw.description}</span>
       </span>
       <button
         :if={@row.raw.is_internal_transfer}

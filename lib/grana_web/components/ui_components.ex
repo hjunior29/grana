@@ -2,7 +2,8 @@ defmodule GranaWeb.UiComponents do
   @moduledoc """
   Componentes do padrão de design (ver `doc/DESIGN.md`): card, seção, tag, aviso,
   linha de item, tile de número, campo do `.env`, seletor de arquivo, modais,
-  estado vazio, cabeçalho de página, abas, filtros, dinheiro e chip de origem.
+  estado vazio, cabeçalho de página, abas, filtros, dinheiro (e texto com valores) e chip de
+  origem.
   """
   use Phoenix.Component
   use GranaWeb, :verified_routes
@@ -235,9 +236,9 @@ defmodule GranaWeb.UiComponents do
         !@muted && money_class(@tone)
       ]}
     >
-      {@value}
+      <.private_text text={@value} />
     </p>
-    <p :if={@caption} class="ui-caption truncate">{@caption}</p>
+    <p :if={@caption} class="ui-caption truncate"><.private_text text={@caption} /></p>
     """
   end
 
@@ -542,6 +543,31 @@ defmodule GranaWeb.UiComponents do
     """
   end
 
+  @doc """
+  Interruptor liga/desliga. É um botão (`role="switch"`): o clique vai por `phx-click` e
+  o estado (`checked`) vem do servidor.
+  """
+  attr :id, :string, required: true
+  attr :checked, :boolean, required: true
+  attr :label, :string, required: true, doc: "nome lido por leitores de tela"
+  attr :rest, :global
+
+  def switch(assigns) do
+    ~H"""
+    <button
+      id={@id}
+      type="button"
+      role="switch"
+      aria-checked={to_string(@checked)}
+      aria-label={@label}
+      class={["ui-switch", @checked && "ui-switch-on"]}
+      {@rest}
+    >
+      <span class="ui-switch-knob"></span>
+    </button>
+    """
+  end
+
   @doc "Opção de um filtro; o ativo fica na cor primária. Use `phx-click` e `phx-value-*`."
   attr :active, :boolean, default: false
   attr :class, :any, default: nil
@@ -576,9 +602,11 @@ defmodule GranaWeb.UiComponents do
     assigns = assign(assigns, :resolved_tone, resolve_tone(assigns.tone, assigns.value))
 
     ~H"""
-    <span class={["tabular-nums whitespace-nowrap", money_class(@resolved_tone), @class]} {@rest}>
-      {format_money(@value, @currency, @sign)}
-    </span>
+    <span
+      class={["ui-private tabular-nums whitespace-nowrap", money_class(@resolved_tone), @class]}
+      phx-no-format
+      {@rest}
+    >{format_money(@value, @currency, @sign)}</span>
     """
   end
 
@@ -602,6 +630,37 @@ defmodule GranaWeb.UiComponents do
   end
 
   defp format_money(value, currency, _sign), do: Grana.Money.format(value, currency)
+
+  # Como o `Grana.Money.format` escreve (e como a IA é instruída a escrever):
+  # "R$ 1.234,56", "-R$ 10", "+R$ 5,00", "USD 12,00".
+  @money_pattern ~r/[+-]?(?:R\$\s?-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?|\b[A-Z]{3} (?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})/u
+
+  @doc """
+  Texto que pode trazer valores em reais (montado com `Grana.Money.format` ou escrito
+  pela IA): cada valor fica num trecho `ui-private`, que "Ocultar valores" cobre.
+  """
+  attr :text, :any, required: true
+
+  def private_text(assigns) do
+    assigns = assign(assigns, :parts, money_parts(assigns.text))
+
+    ~H"""
+    <span
+      :for={{part, money?} <- @parts}
+      class={money? && "ui-private whitespace-nowrap"}
+      phx-no-format
+    >{part}</span>
+    """
+  end
+
+  # Com `include_captures`, o split alterna texto e valor: os ímpares são os valores.
+  defp money_parts(text) do
+    @money_pattern
+    |> Regex.split(to_string(text), include_captures: true)
+    |> Enum.with_index()
+    |> Enum.reject(fn {part, _index} -> part == "" end)
+    |> Enum.map(fn {part, index} -> {part, rem(index, 2) == 1} end)
+  end
 
   @doc """
   Origem de uma transação ou extrato: logo do banco, nome e tipo (Extrato ou Fatura); com

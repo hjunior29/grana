@@ -2,8 +2,19 @@ defmodule GranaWeb.AccountComponents do
   @moduledoc "Blocos de formulário de conta compartilhados por Configurações e Onboarding."
   use GranaWeb, :html
 
-  attr :source, :atom, required: true, doc: ":env, :database ou nil"
+  @smtp_fields [
+    host: {"Servidor", "SMTP_HOST"},
+    port: {"Porta", "SMTP_PORT"},
+    tls: {"Segurança", "SMTP_TLS"},
+    username: {"Usuário", "SMTP_USERNAME"},
+    password: {"Senha", "SMTP_PASSWORD"},
+    from_name: {"Nome do remetente", "MAIL_FROM_NAME"},
+    from_address: {"Email do remetente", "MAIL_FROM_ADDRESS"}
+  ]
+
+  attr :source, :atom, required: true, doc: ":env, :database, :mixed ou nil"
   attr :config, :map, default: nil
+  attr :env_fields, :list, default: [], doc: "campos que vêm do .env (`:host`, `:password`...)"
   attr :form, :any, required: true
   attr :show_form, :boolean, required: true
   attr :private_key, :boolean, required: true, doc: "CLOAK_KEY própria definida"
@@ -13,6 +24,14 @@ defmodule GranaWeb.AccountComponents do
     doc: "no onboarding: botão só envia o teste; o Continuar da etapa salva (form smtp-form)"
 
   def smtp_card(assigns) do
+    assigns =
+      assign(assigns,
+        form?: is_nil(assigns.source) or assigns.show_form,
+        env_vars:
+          for({field, {_label, var}} <- @smtp_fields, field in assigns.env_fields, do: var),
+        env_complete?: length(assigns.env_fields) == length(@smtp_fields)
+      )
+
     ~H"""
     <.card
       id="smtp-settings"
@@ -24,8 +43,8 @@ defmodule GranaWeb.AccountComponents do
         <.tag :if={@source} id="smtp-2fa" kind="ativo">2FA ativo</.tag>
         <.tag :if={!@source} id="smtp-2fa" kind="neutro">2FA desativado</.tag>
       </:aside>
-      <%= case @source do %>
-        <% :database -> %>
+      <%= cond do %>
+        <% @source in [:database, :mixed] -> %>
           <ul class="divide-y divide-base-content/10">
             <.item_row
               id="smtp-saved"
@@ -56,6 +75,9 @@ defmodule GranaWeb.AccountComponents do
               </:actions>
             </.item_row>
           </ul>
+          <p :if={@source == :mixed} id="smtp-env-caption" class="ui-help">
+            Completado pelo <.tag kind="env" />: {Enum.join(@env_vars, ", ")}.
+          </p>
           <.confirm_modal
             id="smtp-remove-modal"
             title="Remover o SMTP?"
@@ -63,25 +85,54 @@ defmodule GranaWeb.AccountComponents do
             loading="Removendo…"
             on_confirm={JS.push("smtp_remove")}
           >
-            O login volta a pedir só a senha e a recuperação por email deixa de funcionar.
+            <%= if @source == :mixed do %>
+              Apaga o que foi salvo nesta tela. O que vem do .env continua valendo.
+            <% else %>
+              O login volta a pedir só a senha e a recuperação por email deixa de funcionar.
+            <% end %>
           </.confirm_modal>
-        <% :env -> %>
+        <% @source == :env and not @show_form -> %>
           <div id="smtp-env" class="flex flex-col gap-2">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-              <.env_field id="smtp-env-host" label="Servidor" var="SMTP_HOST" />
-              <.env_field id="smtp-env-port" label="Porta" var="SMTP_PORT" />
-              <.env_field id="smtp-env-tls" label="Segurança" var="SMTP_TLS" />
-              <.env_field id="smtp-env-username" label="Usuário" var="SMTP_USERNAME" />
-              <.env_field id="smtp-env-password" label="Senha" secret var="SMTP_PASSWORD" />
-              <.env_field id="smtp-env-from-name" label="Nome do remetente" var="MAIL_FROM_NAME" />
-              <.env_field
-                id="smtp-env-from-address"
-                label="Email do remetente"
-                var="MAIL_FROM_ADDRESS"
-              />
+              <.smtp_env_field :for={field <- @env_fields} field={field} />
+            </div>
+            <div :if={!@env_complete?} class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <p class="ui-help">
+                O que não está no .env usa o padrão (porta 587, STARTTLS) ou pode ser completado
+                na tela.
+              </p>
+              <.button
+                id="smtp-complete"
+                type="button"
+                variant="secondary"
+                size="sm"
+                class="shrink-0"
+                phx-click="smtp_toggle_form"
+              >
+                Completar na tela
+              </.button>
             </div>
           </div>
-        <% nil -> %>
+        <% @source == :env -> %>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="ui-help">Complete na tela o que não está no .env.</p>
+            <.button
+              id="smtp-complete-cancel"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="shrink-0"
+              phx-click="smtp_toggle_form"
+            >
+              Cancelar
+            </.button>
+          </div>
+        <% @env_fields != [] -> %>
+          <.notice id="smtp-incomplete" tone={:warning} title="Falta o servidor">
+            O .env define parte do SMTP, mas não o <code>SMTP_HOST</code>. Preencha o servidor
+            abaixo ou complete o .env.
+          </.notice>
+        <% true -> %>
           <.empty_state
             id="smtp-none"
             icon="hero-envelope"
@@ -91,7 +142,7 @@ defmodule GranaWeb.AccountComponents do
       <% end %>
 
       <.notice
-        :if={(is_nil(@source) or (@source == :database and @show_form)) and !@private_key}
+        :if={@form? and !@private_key}
         id="smtp-cloak-key-warning"
         tone={:warning}
         title="Defina uma CLOAK_KEY antes"
@@ -102,7 +153,7 @@ defmodule GranaWeb.AccountComponents do
       </.notice>
 
       <.form
-        :if={(is_nil(@source) or (@source == :database and @show_form)) and @private_key}
+        :if={@form? and @private_key}
         for={@form}
         id="smtp-form"
         phx-submit="smtp_save"
@@ -110,9 +161,19 @@ defmodule GranaWeb.AccountComponents do
         data-form-type="other"
         class="grid grid-cols-1 sm:grid-cols-2 gap-x-3"
       >
-        <.input field={@form[:smtp_host]} type="text" label="Servidor" placeholder="smtp.exemplo.com" />
-        <.input field={@form[:smtp_port]} type="number" label="Porta" />
+        <.smtp_env_field :if={:host in @env_fields} field={:host} />
         <.input
+          :if={:host not in @env_fields}
+          field={@form[:smtp_host]}
+          type="text"
+          label="Servidor"
+          placeholder="smtp.exemplo.com"
+        />
+        <.smtp_env_field :if={:port in @env_fields} field={:port} />
+        <.input :if={:port not in @env_fields} field={@form[:smtp_port]} type="number" label="Porta" />
+        <.smtp_env_field :if={:tls in @env_fields} field={:tls} />
+        <.input
+          :if={:tls not in @env_fields}
           field={@form[:smtp_tls]}
           type="select"
           label="Segurança"
@@ -122,8 +183,17 @@ defmodule GranaWeb.AccountComponents do
             {"Nenhuma", "never"}
           ]}
         />
-        <.input field={@form[:smtp_username]} type="text" label="Usuário" autocomplete="off" />
+        <.smtp_env_field :if={:username in @env_fields} field={:username} />
         <.input
+          :if={:username not in @env_fields}
+          field={@form[:smtp_username]}
+          type="text"
+          label="Usuário"
+          autocomplete="off"
+        />
+        <.smtp_env_field :if={:password in @env_fields} field={:password} />
+        <.input
+          :if={:password not in @env_fields}
           field={@form[:smtp_password]}
           type="password"
           label="Senha"
@@ -131,13 +201,17 @@ defmodule GranaWeb.AccountComponents do
           data-1p-ignore="true"
           data-lpignore="true"
         />
+        <.smtp_env_field :if={:from_name in @env_fields} field={:from_name} />
         <.input
+          :if={:from_name not in @env_fields}
           field={@form[:smtp_from_name]}
           type="text"
           label="Nome do remetente"
           placeholder="Grana"
         />
+        <.smtp_env_field :if={:from_address in @env_fields} field={:from_address} />
         <.input
+          :if={:from_address not in @env_fields}
           field={@form[:smtp_from_address]}
           type="email"
           label="Email do remetente"
@@ -176,6 +250,23 @@ defmodule GranaWeb.AccountComponents do
         </div>
       </.form>
     </.card>
+    """
+  end
+
+  attr :field, :atom, required: true
+
+  defp smtp_env_field(assigns) do
+    {label, var} = Keyword.fetch!(@smtp_fields, assigns.field)
+
+    assigns =
+      assign(assigns,
+        id: "smtp-env-" <> String.replace(to_string(assigns.field), "_", "-"),
+        label: label,
+        var: var
+      )
+
+    ~H"""
+    <.env_field id={@id} label={@label} var={@var} secret={@field == :password} />
     """
   end
 end

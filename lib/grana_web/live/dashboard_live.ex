@@ -639,7 +639,9 @@ defmodule GranaWeb.DashboardLive do
             class="ui-rounded-box flex cursor-pointer items-center gap-3 px-2 py-2 transition-colors hover:bg-base-300"
           >
             <div class="min-w-0 flex-1">
-              <div class="ui-body truncate font-medium">{item.name}</div>
+              <div class="ui-body truncate font-medium">
+                <span class="ui-private-name">{item.name}</span>
+              </div>
               <div class="ui-help mt-0.5 flex items-center gap-2">
                 <.tag kind="neutro">{item.months_present}/{item.total_months} meses</.tag>
                 <span :if={item.typical_day}>dia {item.typical_day}</span>
@@ -846,7 +848,8 @@ defmodule GranaWeb.DashboardLive do
               </div>
             </div>
             <span class="ui-help whitespace-nowrap">
-              {format_currency(gp.current)} / {format_currency(gp.target)}
+              <span class="ui-private">{format_currency(gp.current)}</span>
+              / <span class="ui-private">{format_currency(gp.target)}</span>
             </span>
             <span class={"ui-help w-14 shrink-0 text-right font-bold #{goal_text_color(gp.status)}"}>
               {format_pct(gp.pct)}
@@ -1039,8 +1042,11 @@ defmodule GranaWeb.DashboardLive do
                 class="ui-rounded-box flex items-center gap-3 px-2 py-1 transition-colors hover:bg-base-300"
               >
                 <span class="ui-help w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="ui-body flex-1 truncate" title={txn.description}>
-                  {txn.description}
+                <span
+                  class="ui-body flex-1 truncate"
+                  title={!@current_scope.user.hide_names && txn.description}
+                >
+                  <span class="ui-private-name">{txn.description}</span>
                 </span>
                 <.category_icon :if={txn.category} category={txn.category} />
                 <.money
@@ -1071,8 +1077,11 @@ defmodule GranaWeb.DashboardLive do
                 class="ui-rounded-box flex items-center gap-3 px-2 py-1 transition-colors hover:bg-base-300"
               >
                 <span class="ui-help w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="ui-body flex-1 truncate" title={txn.description}>
-                  {txn.description}
+                <span
+                  class="ui-body flex-1 truncate"
+                  title={!@current_scope.user.hide_names && txn.description}
+                >
+                  <span class="ui-private-name">{txn.description}</span>
                 </span>
                 <.category_icon :if={txn.category} category={txn.category} />
                 <.money
@@ -1167,8 +1176,11 @@ defmodule GranaWeb.DashboardLive do
               </thead>
               <tbody>
                 <tr :for={txn <- @installment_summary.installments} class="hover">
-                  <td class="ui-body max-w-xs truncate" title={txn.description}>
-                    <.link navigate={txn_url(assigns, txn)} class="hover:underline">
+                  <td
+                    class="ui-body max-w-xs truncate"
+                    title={!@current_scope.user.hide_names && txn.description}
+                  >
+                    <.link navigate={txn_url(assigns, txn)} class="ui-private-name hover:underline">
                       {txn.description}
                     </.link>
                   </td>

@@ -33,14 +33,94 @@ defmodule Grana.AccountsSmtpTest do
       assert Accounts.smtp_configured?()
     end
 
-    test "o ambiente tem precedência" do
+    test "cada campo do ambiente vence o do banco; o resto vem do banco" do
       user_fixture() |> smtp_fixture()
-      Application.put_env(:grana, :smtp_env, %{host: "env.example.com", port: 25, tls: :never})
-      on_exit(fn -> Application.delete_env(:grana, :smtp_env) end)
+      put_smtp_env(%{host: "env.example.com", port: 25, tls: :never})
 
-      assert %{host: "env.example.com"} = Accounts.smtp_config()
+      assert %{host: "env.example.com", port: 25, tls: :never, username: "grana"} =
+               Accounts.smtp_config()
+
+      assert Accounts.smtp_source() == :mixed
+      assert Enum.sort(Accounts.smtp_env_fields()) == [:host, :port, :tls]
+      refute Accounts.smtp_env_complete?()
+    end
+
+    test "o banco completa o servidor que falta no ambiente" do
+      user_fixture() |> smtp_fixture(%{smtp_port: nil, smtp_password: nil})
+      put_smtp_env(%{port: 465, password: "do-env"})
+
+      assert %{host: "smtp.example.com", port: 465, password: "do-env"} = Accounts.smtp_config()
+      assert Accounts.smtp_source() == :mixed
+    end
+
+    test "sem servidor em lugar nenhum não há SMTP, mesmo com outros campos no ambiente" do
+      user_fixture()
+      put_smtp_env(%{port: 465, username: "eu@exemplo.com", password: "x"})
+
+      assert Accounts.smtp_config() == nil
+      assert Accounts.smtp_source() == nil
+    end
+
+    test "só o ambiente: o que falta usa o padrão" do
+      user_fixture()
+      put_smtp_env(%{host: "env.example.com", username: "eu@exemplo.com"})
+
+      assert %{port: 587, tls: :always, from_name: "Grana", from_address: "eu@exemplo.com"} =
+               Accounts.smtp_config()
+
       assert Accounts.smtp_source() == :env
     end
+
+    test "o ambiente completo ignora o que foi salvo" do
+      user_fixture() |> smtp_fixture()
+
+      put_smtp_env(%{
+        host: "env.example.com",
+        port: 25,
+        username: "env",
+        password: "env",
+        tls: :never,
+        from_name: "Env",
+        from_address: "env@example.com"
+      })
+
+      assert %{host: "env.example.com", username: "env"} = Accounts.smtp_config()
+      assert Accounts.smtp_source() == :env
+      assert Accounts.smtp_env_complete?()
+    end
+  end
+
+  describe "save_smtp_settings/2 com parte no ambiente" do
+    test "grava só o que não vem do ambiente e exige só isso" do
+      user = user_fixture()
+
+      put_smtp_env(%{
+        port: 587,
+        username: "env-user",
+        password: "env-secret",
+        tls: :always,
+        from_address: "env@example.com"
+      })
+
+      assert {:error, changeset} = Accounts.save_smtp_settings(user, %{})
+      assert Map.keys(errors_on(changeset)) == [:smtp_host]
+
+      assert {:ok, saved} =
+               Accounts.save_smtp_settings(user, %{
+                 "smtp_host" => "smtp.exemplo.com",
+                 "smtp_username" => "ignorado"
+               })
+
+      assert saved.smtp_host == "smtp.exemplo.com"
+      assert saved.smtp_username == nil
+      assert %{host: "smtp.exemplo.com", username: "env-user"} = Accounts.smtp_config()
+      assert Accounts.smtp_source() == :mixed
+    end
+  end
+
+  defp put_smtp_env(env) do
+    Application.put_env(:grana, :smtp_env, env)
+    on_exit(fn -> Application.delete_env(:grana, :smtp_env) end)
   end
 
   describe "save_smtp_settings/2" do

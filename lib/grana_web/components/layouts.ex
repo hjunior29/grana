@@ -21,7 +21,14 @@ defmodule GranaWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <div class="grana-app-shell min-h-screen flex flex-col">
+    <div
+      id="app-shell"
+      class={[
+        "grana-app-shell min-h-screen flex flex-col",
+        @current_scope && @current_scope.user.hide_values && "ui-hide-values",
+        @current_scope && @current_scope.user.hide_names && "ui-hide-names"
+      ]}
+    >
       <header class="grana-app-header navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-3 sm:px-6 lg:px-8 min-h-12">
         <div class="flex-1">
           <.link

@@ -56,6 +56,7 @@ defmodule GranaWeb.OnboardingLive do
           <% :smtp -> %>
             <AccountComponents.smtp_card
               source={@smtp_source}
+              env_fields={@smtp_env_fields}
               config={@smtp_config}
               form={@smtp_form}
               show_form={@smtp_show_form}
@@ -213,8 +214,8 @@ defmodule GranaWeb.OnboardingLive do
 
   defp continue_mode(%{step: :smtp} = assigns) do
     cond do
-      assigns.smtp_source == :env -> :next
-      assigns.smtp_source == :database and not assigns.smtp_show_form -> :next
+      assigns.smtp_source == :env and not assigns.smtp_show_form -> :next
+      assigns.smtp_source in [:database, :mixed] and not assigns.smtp_show_form -> :next
       assigns.smtp_private_key -> :submit
       true -> :blocked
     end
