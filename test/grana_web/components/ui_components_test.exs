@@ -244,6 +244,45 @@ defmodule GranaWeb.UiComponentsTest do
     assert text(doc, "#m2.ui-money-despesa") == "-R$ 10,00"
     assert text(doc, "#m3") == "—"
     assert count(doc, "#m4.ui-money-investimento") == 1
+    assert count(doc, ".ui-private") == 4
+  end
+
+  test "private_text marca só os valores em reais do texto" do
+    assigns = %{}
+
+    doc =
+      html(~H"""
+      <p id="t1">
+        <.private_text text="Gastou R$ 1.234,56 em mercado, -R$ 10 no Uber e +R$ 5,00 de volta." />
+      </p>
+      <p id="t2"><.private_text text="Fatura de USD 12,00 em 3 parcelas, 45% do limite." /></p>
+      <p id="t3"><.private_text text={nil} /></p>
+      """)
+
+    assert doc |> LazyHTML.query("#t1 .ui-private") |> Enum.map(&LazyHTML.text/1) ==
+             ["R$ 1.234,56", "-R$ 10", "+R$ 5,00"]
+
+    assert text(doc, "#t1") ==
+             "Gastou R$ 1.234,56 em mercado, -R$ 10 no Uber e +R$ 5,00 de volta."
+
+    assert text(doc, "#t2 .ui-private") == "USD 12,00"
+    assert text(doc, "#t2") =~ "45% do limite"
+    assert count(doc, "#t3 span") == 0
+  end
+
+  test "switch é um botão com o estado em aria-checked" do
+    assigns = %{}
+
+    doc =
+      html(~H"""
+      <.switch id="on" label="Ligado" checked phx-click="toggle" />
+      <.switch id="off" label="Desligado" checked={false} />
+      """)
+
+    assert count(doc, ~s|button#on.ui-switch-on[role="switch"][aria-checked="true"]|) == 1
+    assert count(doc, ~s|#on[phx-click="toggle"][aria-label="Ligado"]|) == 1
+    assert count(doc, ~s|#off[aria-checked="false"]|) == 1
+    assert count(doc, "#off.ui-switch-on") == 0
   end
 
   test "stat_tile aceita tom e legenda" do
@@ -255,6 +294,7 @@ defmodule GranaWeb.UiComponentsTest do
       )
 
     assert count(doc, "#s-value.ui-money-receita") == 1
+    assert text(doc, "#s-value .ui-private") == "R$ 1,00"
     assert doc |> LazyHTML.text() =~ "no mês"
   end
 

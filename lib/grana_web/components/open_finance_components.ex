@@ -570,7 +570,7 @@ defmodule GranaWeb.OpenFinanceComponents do
             {account_kind(account)}<span :if={account.number} class="ui-text-tertiary"> ••{last4(account.number)}</span>
           </span>
           <span class={[
-            "font-medium tabular-nums whitespace-nowrap",
+            "ui-private font-medium tabular-nums whitespace-nowrap",
             account.balance && Decimal.negative?(account.balance) && "ui-money-despesa"
           ]}>
             {format_money(account.balance, account.currency_code)}
@@ -589,7 +589,7 @@ defmodule GranaWeb.OpenFinanceComponents do
             </span>
             <span class="text-right whitespace-nowrap">
               <span class="ui-caption block leading-none">fatura atual</span>
-              <span class="font-medium tabular-nums">
+              <span class="ui-private font-medium tabular-nums">
                 {format_money(card.balance, card.currency_code)}
               </span>
             </span>
@@ -602,20 +602,17 @@ defmodule GranaWeb.OpenFinanceComponents do
             >
             </progress>
             <p class="ui-caption mt-0.5">
-              {round(limit_usage(card))}% do limite usado · disponível {format_money(
-                card.available_credit_limit,
-                card.currency_code
-              )} de {format_money(Account.effective_credit_limit(card), card.currency_code)}
+              {round(limit_usage(card))}% do limite usado · disponível
+              <.money value={card.available_credit_limit} currency={card.currency_code} /> de
+              <.money value={Account.effective_credit_limit(card)} currency={card.currency_code} />
             </p>
             <p
               :if={custom_limit?(card)}
               id={"today-card-#{card.id}-custom-limit"}
               class="ui-caption"
             >
-              limite ajustado por você no app · aprovado {format_money(
-                card.credit_limit,
-                card.currency_code
-              )}
+              limite ajustado por você no app · aprovado
+              <.money value={card.credit_limit} currency={card.currency_code} />
             </p>
           </div>
           <p :if={card.balance_due_date} class="ui-caption">
@@ -630,7 +627,8 @@ defmodule GranaWeb.OpenFinanceComponents do
         class="mt-auto pt-2 border-t border-base-content/5 space-y-1 text-xs"
       >
         <li :for={alert <- @alerts} class="flex items-start gap-1.5 text-warning">
-          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert.message}
+          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
+          <span><.private_text text={alert.message} /></span>
         </li>
       </ul>
     </div>

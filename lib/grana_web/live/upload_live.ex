@@ -819,7 +819,7 @@ defmodule GranaWeb.UploadLive do
                       />
                     </td>
                     <td class="ui-st-detail">
-                      <.link navigate={stmt.link} class="ui-body hover:underline">
+                      <.link navigate={stmt.link} class="ui-private-name ui-body hover:underline">
                         {stmt.filename}
                       </.link>
                     </td>
@@ -896,7 +896,7 @@ defmodule GranaWeb.UploadLive do
             on_cancel={JS.push("cancel_delete")}
           >
             <p :if={match?({:single, _}, @delete_target)}>
-              Tem certeza que deseja remover o extrato <span class="font-semibold">{elem(@delete_target, 1).filename}</span>?
+              Tem certeza que deseja remover o extrato <span class="ui-private-name font-semibold">{elem(@delete_target, 1).filename}</span>?
               Todas as {elem(@delete_target, 1).total_transactions} transações associadas serão removidas permanentemente.
             </p>
             <p :if={match?({:bulk, _}, @delete_target)}>
@@ -1166,7 +1166,9 @@ defmodule GranaWeb.UploadLive do
             <div class="flex items-center gap-2">
               <.tag kind="pendente">Processando…</.tag>
               <span class="ui-body">
-                <span :if={@progress_filename != ""} class="font-medium">{@progress_filename}</span>
+                <span :if={@progress_filename != ""} class="ui-private-name font-medium">
+                  {@progress_filename}
+                </span>
                 <span :if={@progress_total > 1} class="ui-text-secondary">
                   ({@progress_current}/{@progress_total})
                 </span>

@@ -266,6 +266,11 @@ function fmtBRL(val) {
   return "R$ " + val.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})
 }
 
+// Valor do app (não da landing): fica coberto quando "Ocultar valores" está ligado.
+function privateBRL(val) {
+  return `<span class="ui-private">${fmtBRL(val)}</span>`
+}
+
 function pct(val, total) {
   return total > 0 ? ((val / total) * 100).toFixed(1) : "0"
 }
@@ -299,7 +304,7 @@ const CategoryChart = {
       const name = target.dataset.catName
       const value = parseFloat(target.dataset.catValue)
       const total = parseFloat(target.dataset.catTotal)
-      showTooltip(this.el, e, `<strong>${escapeHtml(name)}</strong><br>${fmtBRL(value)} · ${pct(value, total)}%`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(name)}</strong><br>${privateBRL(value)} · ${pct(value, total)}%`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -345,7 +350,7 @@ const CategoryChart = {
 
     const formattedTotal = fmtBRL(total)
     svg += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" class="fill-base-content text-xs opacity-50">Total</text>`
-    svg += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" class="fill-base-content text-sm font-semibold">${formattedTotal}</text>`
+    svg += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" class="ui-private fill-base-content text-sm font-semibold">${formattedTotal}</text>`
     svg += `</svg>`
 
     const existing = this.el.querySelector(".chart-svg")
@@ -366,7 +371,7 @@ const DailyChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-day-date]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${fmtBRL(parseFloat(target.dataset.dayValue))}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${privateBRL(parseFloat(target.dataset.dayValue))}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -527,7 +532,7 @@ const IncomeExpensesChart = {
       const incomeLabel = this.el.dataset.incomeLabel || "Receitas"
       const expensesLabel = this.el.dataset.expensesLabel || "Despesas"
       const typeLabel = type === "income" ? incomeLabel : expensesLabel
-      showTooltip(this.el, e, `<strong>${escapeHtml(label)}</strong><br>${escapeHtml(typeLabel)}: ${fmtBRL(value)}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(label)}</strong><br>${escapeHtml(typeLabel)}: ${privateBRL(value)}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -597,7 +602,7 @@ const ProjectionChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-proj-label]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${fmtBRL(parseFloat(target.dataset.projValue))}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${privateBRL(parseFloat(target.dataset.projValue))}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
   },

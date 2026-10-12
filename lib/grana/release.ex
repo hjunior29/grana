@@ -66,7 +66,7 @@ defmodule Grana.Release do
 
           if Grana.Accounts.smtp_source() == :env do
             IO.puts(
-              "ATENÇÃO: ainda há SMTP no ambiente (SMTP_HOST...). Remova as variáveis e reinicie para desligar o 2FA."
+              "ATENÇÃO: ainda há SMTP no ambiente (SMTP_HOST). Remova a variável e reinicie para desligar o 2FA."
             )
           end
         end)

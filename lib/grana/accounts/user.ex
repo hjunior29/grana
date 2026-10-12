@@ -41,6 +41,8 @@ defmodule Grana.Accounts.User do
     # nos links enviados por email quando não há PUBLIC_URL.
     field :theme, :string, default: "system"
     field :visual_style, :string, default: "default"
+    field :hide_values, :boolean, default: false
+    field :hide_names, :boolean, default: false
 
     field :onboarded_at, :utc_datetime
     field :base_url, :string
@@ -68,7 +70,7 @@ defmodule Grana.Accounts.User do
 
   def preferences_changeset(user, attrs) do
     user
-    |> cast(attrs, [:theme, :visual_style])
+    |> cast(attrs, [:theme, :visual_style, :hide_values, :hide_names])
     |> validate_inclusion(:theme, @themes)
     |> validate_inclusion(:visual_style, @visual_styles)
   end
@@ -223,26 +225,20 @@ defmodule Grana.Accounts.User do
   end
 
   @smtp_tls_modes ~w(always if_available never)
+  @smtp_columns ~w(smtp_host smtp_port smtp_username smtp_password smtp_tls smtp_from_name smtp_from_address)a
 
   @doc """
-  Changeset do SMTP. A senha é só de escrita: em branco significa "manter".
+  Changeset do SMTP. A senha é só de escrita: em branco significa "manter". As colunas em
+  `env_columns` vêm do ambiente: ficam de fora e não são exigidas.
   """
-  def smtp_settings_changeset(user, attrs \\ %{}) do
+  def smtp_settings_changeset(user, attrs \\ %{}, env_columns \\ []) do
     user
-    |> cast(attrs, [
-      :smtp_host,
-      :smtp_port,
-      :smtp_username,
-      :smtp_password,
-      :smtp_tls,
-      :smtp_from_name,
-      :smtp_from_address
-    ])
+    |> cast(attrs, @smtp_columns -- env_columns)
     |> keep_secret_when_blank(:smtp_password)
     |> update_change(:smtp_host, &trim/1)
     |> update_change(:smtp_username, &trim/1)
     |> update_change(:smtp_from_address, &trim/1)
-    |> validate_required([:smtp_host, :smtp_port, :smtp_tls, :smtp_from_address])
+    |> validate_required([:smtp_host, :smtp_port, :smtp_tls, :smtp_from_address] -- env_columns)
     |> validate_number(:smtp_port, greater_than: 0, less_than: 65_536)
     |> validate_inclusion(:smtp_tls, @smtp_tls_modes)
     |> validate_format(:smtp_from_address, ~r/^[^@,;\s]+@[^@,;\s]+$/,

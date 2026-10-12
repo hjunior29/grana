@@ -202,7 +202,7 @@ defmodule GranaWeb.GoalsLive do
                 <span class="ui-body font-medium">{FinancialGoal.type_label(s.type)}</span>
               </div>
               <p class="ui-help mb-3">
-                Média dos últimos 3 meses: {format_currency(s.avg)}
+                Média dos últimos 3 meses: <span class="ui-private">{format_currency(s.avg)}</span>
               </p>
               <% v90 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.9)), 0) %>
               <% v80 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.8)), 0) %>
@@ -215,7 +215,7 @@ defmodule GranaWeb.GoalsLive do
                   phx-value-type={s.type}
                   phx-value-amount={Decimal.to_string(s.avg, :normal)}
                 >
-                  {format_currency(s.avg)}
+                  <span class="ui-private">{format_currency(s.avg)}</span>
                 </.button>
                 <.button
                   type="button"
@@ -225,7 +225,7 @@ defmodule GranaWeb.GoalsLive do
                   phx-value-type={s.type}
                   phx-value-amount={Decimal.to_string(v90, :normal)}
                 >
-                  {format_currency(v90)}
+                  <span class="ui-private">{format_currency(v90)}</span>
                 </.button>
                 <.button
                   type="button"
@@ -235,7 +235,7 @@ defmodule GranaWeb.GoalsLive do
                   phx-value-type={s.type}
                   phx-value-amount={Decimal.to_string(v80, :normal)}
                 >
-                  {format_currency(v80)}
+                  <span class="ui-private">{format_currency(v80)}</span>
                 </.button>
               </div>
             </div>
@@ -295,11 +295,11 @@ defmodule GranaWeb.GoalsLive do
             </div>
 
             <div class="flex items-end justify-between mb-2">
-              <span class={"text-lg sm:text-xl font-bold #{status_color(gp.status)}"}>
+              <span class={"ui-private text-lg sm:text-xl font-bold #{status_color(gp.status)}"}>
                 {format_currency(gp.current)}
               </span>
               <span class="ui-body ui-text-secondary">
-                / {format_currency(gp.target)}
+                / <span class="ui-private">{format_currency(gp.target)}</span>
               </span>
             </div>
 
@@ -388,7 +388,10 @@ defmodule GranaWeb.GoalsLive do
                   inputmode="decimal"
                   autocomplete="off"
                   data-currency-display
-                  class={["input w-full", @form.errors[:target_value] && "input-error"]}
+                  class={[
+                    "ui-private-input input w-full",
+                    @form.errors[:target_value] && "input-error"
+                  ]}
                   placeholder="Ex: 4000 ou 4.000,50"
                 />
               </div>

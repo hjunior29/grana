@@ -476,7 +476,7 @@ defmodule GranaWeb.AnalysisLive do
                                 class="font-semibold text-xs sm:text-sm truncate"
                                 title={analysis.result_json["titulo"]}
                               >
-                                {analysis.result_json["titulo"]}
+                                <.private_text text={analysis.result_json["titulo"]} />
                               </h4>
                               <div class="flex flex-wrap items-center gap-1 mt-0.5">
                                 <span class="ui-caption sm:text-xs">
@@ -549,7 +549,7 @@ defmodule GranaWeb.AnalysisLive do
                         <div class="overflow-hidden">
                           <div class="mt-3">
                             <p class="text-xs sm:text-sm ui-text-secondary mb-3 sm:mb-4">
-                              {analysis.result_json["resumo"]}
+                              <.private_text text={analysis.result_json["resumo"]} />
                             </p>
 
                             <div class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
@@ -561,12 +561,14 @@ defmodule GranaWeb.AnalysisLive do
                                   name={elem(ponto_icon(ponto["tipo"]), 0)}
                                   class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
                                 />
-                                <span class="ui-text-secondary">{ponto["texto"]}</span>
+                                <span class="ui-text-secondary">
+                                  <.private_text text={ponto["texto"]} />
+                                </span>
                               </div>
                             </div>
 
                             <.notice :if={analysis.result_json["alerta"]} tone={:warning} class="mb-3">
-                              {analysis.result_json["alerta"]}
+                              <.private_text text={analysis.result_json["alerta"]} />
                             </.notice>
 
                             <div
@@ -581,7 +583,7 @@ defmodule GranaWeb.AnalysisLive do
                                 <span class="text-xs font-medium text-primary">Resposta</span>
                               </div>
                               <p class="text-xs sm:text-sm ui-text-secondary">
-                                {analysis.result_json["resposta"]}
+                                <.private_text text={analysis.result_json["resposta"]} />
                               </p>
                             </div>
                           </div>
@@ -657,7 +659,7 @@ defmodule GranaWeb.AnalysisLive do
                         <div class="overflow-hidden">
                           <div class="mt-3">
                             <p class="text-xs sm:text-sm mb-3 ui-text-secondary">
-                              {analysis.result_json["resumo"]}
+                              <.private_text text={analysis.result_json["resumo"]} />
                             </p>
 
                             <div class="space-y-2 mb-3">
@@ -669,12 +671,14 @@ defmodule GranaWeb.AnalysisLive do
                                   name="hero-light-bulb"
                                   class="size-4 text-warning shrink-0 mt-0.5"
                                 />
-                                <span class="ui-text-secondary">{insight}</span>
+                                <span class="ui-text-secondary">
+                                  <.private_text text={insight} />
+                                </span>
                               </div>
                             </div>
 
                             <.notice :if={analysis.result_json["alerta"]} tone={:warning} class="mb-3">
-                              {analysis.result_json["alerta"]}
+                              <.private_text text={analysis.result_json["alerta"]} />
                             </.notice>
 
                             <div
@@ -685,7 +689,9 @@ defmodule GranaWeb.AnalysisLive do
                                 name="hero-check-circle"
                                 class="ui-money-receita size-4 shrink-0 mt-0.5"
                               />
-                              <span class="ui-text-secondary">{analysis.result_json["dica"]}</span>
+                              <span class="ui-text-secondary">
+                                <.private_text text={analysis.result_json["dica"]} />
+                              </span>
                             </div>
                           </div>
                         </div>

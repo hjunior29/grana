@@ -126,6 +126,7 @@ defmodule GranaWeb.UserLive.Settings do
 
         <AccountComponents.smtp_card
           source={@smtp_source}
+          env_fields={@smtp_env_fields}
           config={@smtp_config}
           form={@smtp_form}
           show_form={@smtp_show_form}
@@ -182,7 +183,7 @@ defmodule GranaWeb.UserLive.Settings do
           id="preferences-settings"
           icon="hero-paint-brush"
           title="Preferências"
-          description="Tema e estilo visual do app."
+          description="Tema, estilo visual e privacidade na tela."
         >
           <div class="flex items-center justify-between gap-4">
             <div>
@@ -198,6 +199,43 @@ defmodule GranaWeb.UserLive.Settings do
             </div>
             <Layouts.visual_style_toggle persist grid />
           </div>
+          <.section id="privacy-settings" title="Privacidade na tela" divider>
+            <p class="ui-help mb-4">
+              Para gravar ou compartilhar a tela: o que estiver oculto vira uma camada fosca em
+              todas as páginas, na hora.
+            </p>
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="ui-body">Ocultar valores</p>
+                <p class="ui-help">
+                  Valores em reais. Dá para ver se é receita ou despesa pela cor, mas não o número.
+                </p>
+              </div>
+              <.switch
+                id="hide-values-toggle"
+                label="Ocultar valores"
+                checked={@current_scope.user.hide_values}
+                phx-click="set_preference"
+                phx-value-hide_values={to_string(!@current_scope.user.hide_values)}
+              />
+            </div>
+            <div class="mt-4 flex items-center justify-between gap-4">
+              <div>
+                <p class="ui-body">Ocultar nomes</p>
+                <p class="ui-help">
+                  Descrições das transações (nomes de pessoas e lojas) e nomes dos arquivos de
+                  extrato.
+                </p>
+              </div>
+              <.switch
+                id="hide-names-toggle"
+                label="Ocultar nomes"
+                checked={@current_scope.user.hide_names}
+                phx-click="set_preference"
+                phx-value-hide_names={to_string(!@current_scope.user.hide_names)}
+              />
+            </div>
+          </.section>
         </.card>
 
         <.card
@@ -286,10 +324,30 @@ defmodule GranaWeb.UserLive.Settings do
                 subtitle={integration_detail(label, @diagnostics)}
               >
                 <:tags>
-                  <.tag kind={source_kind(source)}>{source_label(source)}</.tag>
+                  <%= if source == :mixed do %>
+                    <.tag kind="env" />
+                    <.tag kind="salvo" />
+                  <% else %>
+                    <.tag kind={source_kind(source)}>{source_label(source)}</.tag>
+                  <% end %>
                 </:tags>
               </.item_row>
             </ul>
+            <dl
+              id="integration-sources-legend"
+              class="mt-4 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-2"
+            >
+              <dt><.tag kind="env" /></dt>
+              <dd class="ui-help">
+                Vem do arquivo <code>.env</code>
+                do servidor. Tem prioridade sobre o que é salvo aqui e só muda editando o arquivo.
+              </dd>
+              <dt><.tag kind="salvo" /></dt>
+              <dd class="ui-help">
+                Configurado nesta tela e guardado no banco do Grana, com senhas e chaves
+                criptografadas.
+              </dd>
+            </dl>
           </.section>
 
           <.section title="Ambiente">
