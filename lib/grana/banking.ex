@@ -57,8 +57,10 @@ defmodule Grana.Banking do
   def category_stats(user_id) do
     Category
     |> where([c], is_nil(c.user_id) or c.user_id == ^user_id)
-    |> join(:left, [c], t in Transaction, on: t.category_id == c.id)
-    |> join(:left, [c, _t], r in CategoryRule, on: r.category_id == c.id)
+    |> join(:left, [c], t in Transaction, on: t.category_id == c.id and t.user_id == ^user_id)
+    |> join(:left, [c, _t], r in CategoryRule,
+      on: r.category_id == c.id and r.user_id == ^user_id
+    )
     |> group_by([c, _t, _r], c.id)
     |> select([c, t, r], %{
       category_id: c.id,
@@ -1416,7 +1418,7 @@ defmodule Grana.Banking do
         %{category: category, total: Decimal.max(Decimal.new(0), net), count: length(txns)}
       end)
       |> Enum.reject(fn %{total: t} -> Decimal.compare(t, 0) == :eq end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(& &1.total, {:desc, Decimal})
 
     # Pre-compute only the top debits/credits instead of returning (and holding
     # in LiveView assigns) the full transaction list, which can be thousands of rows.
@@ -1432,7 +1434,7 @@ defmodule Grana.Banking do
       |> Enum.map(fn {category, txns} ->
         %{category: category, total: sum_abs(txns), count: length(txns)}
       end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(& &1.total, {:desc, Decimal})
 
     %{
       total_income: total_income,
@@ -1455,7 +1457,7 @@ defmodule Grana.Banking do
   defp top_n_by_amount(transactions, type, limit) do
     transactions
     |> Enum.filter(&(&1.type == type))
-    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
+    |> Enum.sort_by(&Decimal.abs(&1.amount), {:desc, Decimal})
     |> Enum.take(limit)
   end
 
