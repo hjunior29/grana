@@ -1246,6 +1246,19 @@ defmodule GranaWeb.DashboardLive do
         <% true -> %>
       <% end %>
 
+      <%!-- Cash flow --%>
+      <.card
+        :if={
+          @selected_txn_type == "all" and (@summary.income_count > 0 or @summary.expense_count > 0)
+        }
+        id="cash-flow-card"
+        title="Fluxo de caixa"
+        spaced={false}
+        class="mb-6"
+      >
+        <div id="cash-flow-chart" phx-hook="CashFlowChart" data-flow={cash_flow_data(assigns)}></div>
+      </.card>
+
       <%!-- Installments --%>
       <div
         :if={
@@ -1492,6 +1505,76 @@ defmodule GranaWeb.DashboardLive do
       }
     end)
     |> Jason.encode!()
+  end
+
+  # Sankey data: income (and a deficit, when expenses go past it) flows into the period's
+  # cash and out to the expense categories, investments and what is left.
+  @flow_categories 8
+
+  defp cash_flow_data(assigns) do
+    summary = assigns.summary
+    balance = to_float(summary.balance)
+
+    sources =
+      flow_nodes(summary.income_by_category, assigns, "credit", "var(--ui-receita)") ++
+        if(balance < 0,
+          do: [%{name: "Déficit", value: -balance, color: "var(--ui-despesa)", kind: "deficit"}],
+          else: []
+        )
+
+    targets =
+      flow_nodes(summary.by_category, assigns, "debit", "var(--ui-despesa)") ++
+        if(Decimal.compare(summary.total_investments, 0) == :gt,
+          do: [
+            %{
+              name: "Investimentos",
+              value: to_float(summary.total_investments),
+              color: "var(--color-info)",
+              kind: "investment",
+              url: transactions_url(assigns, %{type: "investment"})
+            }
+          ],
+          else: []
+        ) ++
+        if(balance > 0,
+          do: [%{name: "Sobra", value: balance, color: "var(--ui-receita)", kind: "surplus"}],
+          else: []
+        )
+
+    Jason.encode!(%{sources: sources, targets: targets})
+  end
+
+  defp flow_nodes(by_category, assigns, type, fallback_color) do
+    {top, rest} = Enum.split(by_category, @flow_categories)
+
+    nodes =
+      Enum.map(top, fn item ->
+        url_extra =
+          if item.category, do: %{category_id: item.category.id}, else: %{filter: "uncategorized"}
+
+        %{
+          name: if(item.category, do: item.category.name, else: "Sem categoria"),
+          value: to_float(item.total),
+          color:
+            if(item.category && item.category.color,
+              do: item.category.color,
+              else: fallback_color
+            ),
+          kind: "category",
+          url: transactions_url(assigns, Map.put(url_extra, :type, type))
+        }
+      end)
+
+    case rest do
+      [] ->
+        nodes
+
+      rest ->
+        total = Enum.reduce(rest, Decimal.new(0), &Decimal.add(&2, &1.total))
+
+        nodes ++
+          [%{name: "Outras categorias", value: to_float(total), color: "#9CA3AF", kind: "other"}]
+    end
   end
 
   defp daily_chart_data(assigns) do

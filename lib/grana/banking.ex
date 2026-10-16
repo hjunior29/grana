@@ -1426,12 +1426,21 @@ defmodule Grana.Banking do
     top_expenses = top_n_by_amount(expense_debits, "debit", 15)
     top_income = top_n_by_amount(income_txns, "credit", 15)
 
+    income_by_category =
+      income_txns
+      |> Enum.group_by(& &1.category)
+      |> Enum.map(fn {category, txns} ->
+        %{category: category, total: sum_abs(txns), count: length(txns)}
+      end)
+      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+
     %{
       total_income: total_income,
       total_expenses: total_expenses,
       total_investments: total_investments,
       balance: Decimal.sub(total_income, Decimal.add(total_expenses, total_investments)),
       by_category: by_category,
+      income_by_category: income_by_category,
       top_expenses: top_expenses,
       top_income: top_income,
       transaction_count: length(relevant),
