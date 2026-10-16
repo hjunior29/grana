@@ -38,9 +38,11 @@ defmodule GranaWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :grana
   end
 
-  plug Phoenix.LiveDashboard.RequestLogger,
-    param_key: "request_logger",
-    cookie_key: "request_logger"
+  if code_reloading? do
+    plug Phoenix.LiveDashboard.RequestLogger,
+      param_key: "request_logger",
+      cookie_key: "request_logger"
+  end
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
@@ -52,6 +54,23 @@ defmodule GranaWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug Plug.Session, @session_options
+  plug :rewrite_scheme_from_proxy
+  plug :session
   plug GranaWeb.Router
+
+  defp rewrite_scheme_from_proxy(conn, _) do
+    if Application.get_env(:grana, :trust_proxy_headers, false) do
+      Plug.RewriteOn.call(
+        conn,
+        Plug.RewriteOn.init([:x_forwarded_proto, :x_forwarded_host, :x_forwarded_port])
+      )
+    else
+      conn
+    end
+  end
+
+  defp session(conn, _) do
+    opts = Keyword.put(@session_options, :secure, conn.scheme == :https)
+    Plug.Session.call(conn, Plug.Session.init(opts))
+  end
 end

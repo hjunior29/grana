@@ -153,8 +153,6 @@ if config_env() == :prod do
     System.get_env("CLOAK_KEY") ||
       Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
 
-  System.put_env("CLOAK_KEY", cloak_key)
-
   config :grana, :cloak_key, cloak_key
 
   public_uri = public_url && URI.parse(public_url)
@@ -166,15 +164,20 @@ if config_env() == :prod do
       [host: "localhost"]
     end
 
+  listen_ip =
+    case :inet.parse_address(String.to_charlist(System.get_env("LISTEN_IP", "127.0.0.1"))) do
+      {:ok, ip} -> ip
+      _ -> raise "LISTEN_IP inválido"
+    end
+
+  port = String.to_integer(System.get_env("PORT", "4000"))
+
   config :grana, GranaWeb.Endpoint,
     url: endpoint_url,
     check_origin: :conn,
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0}
+      ip: listen_ip,
+      port: port
     ],
     secret_key_base: secret_key_base
 end
