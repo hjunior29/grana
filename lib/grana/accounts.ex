@@ -522,6 +522,13 @@ defmodule Grana.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
+  def update_user_password(user, current_password, attrs) do
+    user
+    |> User.password_changeset(attrs)
+    |> User.validate_current_password(current_password)
+    |> update_user_and_delete_all_tokens()
+  end
+
   def update_user_password(user, attrs) do
     user
     |> User.password_changeset(attrs)
