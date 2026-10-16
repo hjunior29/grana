@@ -8,6 +8,7 @@ defmodule GranaWeb.DashboardLive do
   alias Grana.OpenFinance
   alias GranaWeb.AnalysisComponents
   alias GranaWeb.OpenFinanceComponents
+  alias GranaWeb.SpendingCalendar
 
   on_mount GranaWeb.ModelChoicesHook
 
@@ -49,6 +50,7 @@ defmodule GranaWeb.DashboardLive do
       |> assign(:selected_type, "all")
       |> assign(:selected_txn_type, "all")
       |> assign(:excluded_categories, MapSet.new())
+      |> assign(:spending_view, "bars")
       |> load_banking_data()
       # Recurring-expenses state (lazy loaded on first tab switch)
       |> assign(:rec_loaded, false)
@@ -238,6 +240,11 @@ defmodule GranaWeb.DashboardLive do
 
   def handle_event("reset-categories", _params, socket) do
     {:noreply, assign(socket, :excluded_categories, MapSet.new())}
+  end
+
+  def handle_event("set_spending_view", %{"view" => view}, socket)
+      when view in ~w(bars calendar) do
+    {:noreply, assign(socket, :spending_view, view)}
   end
 
   # ── PubSub: Period analysis ──
@@ -1046,7 +1053,17 @@ defmodule GranaWeb.DashboardLive do
             title="Gastos diários"
             spaced={false}
           >
+            <:aside>
+              <SpendingCalendar.view_toggle id="daily-view" view={@spending_view} />
+            </:aside>
+            <SpendingCalendar.heat_grid
+              :if={@spending_view == "calendar"}
+              id="spending-calendar"
+              columns={~w(Dom Seg Ter Qua Qui Sex Sáb)}
+              rows={month_heat_rows(assigns)}
+            />
             <div
+              :if={@spending_view == "bars"}
               id="daily-chart"
               phx-hook="DailyChart"
               data-daily={daily_chart_data(assigns)}
@@ -1085,7 +1102,18 @@ defmodule GranaWeb.DashboardLive do
             title="Gastos por ano"
             spaced={false}
           >
+            <:aside>
+              <SpendingCalendar.view_toggle id="yearly-view" view={@spending_view} />
+            </:aside>
+            <SpendingCalendar.heat_grid
+              :if={@spending_view == "calendar"}
+              id="spending-calendar"
+              columns={Enum.map(1..12, &Banking.month_name_short/1)}
+              rows={total_heat_rows(assigns)}
+              row_labels
+            />
             <div
+              :if={@spending_view == "bars"}
               id="yearly-spending-chart"
               phx-hook="DailyChart"
               data-daily={yearly_spending_chart_data(assigns)}
@@ -1115,7 +1143,17 @@ defmodule GranaWeb.DashboardLive do
           />
         <% else %>
           <.card :if={@view_mode == "year"} title="Gastos mensais" spaced={false}>
+            <:aside>
+              <SpendingCalendar.view_toggle id="monthly-view" view={@spending_view} />
+            </:aside>
+            <SpendingCalendar.heat_grid
+              :if={@spending_view == "calendar"}
+              id="spending-calendar"
+              columns={Enum.map(1..12, &Banking.month_name_short/1)}
+              rows={year_heat_rows(assigns)}
+            />
             <div
+              :if={@spending_view == "bars"}
               id="monthly-spending-chart"
               phx-hook="DailyChart"
               data-daily={monthly_spending_chart_data(assigns)}
@@ -1576,6 +1614,88 @@ defmodule GranaWeb.DashboardLive do
           [%{name: "Outras categorias", value: to_float(total), color: "#9CA3AF", kind: "other"}]
     end
   end
+
+  # ── Calendar view of the spending charts ──
+
+  # Weeks of the month, Sunday first; each day shaded by its spending against the
+  # month's biggest day. Days still to come stay dim.
+  defp month_heat_rows(%{selected_year: year, selected_month: month} = assigns) do
+    first = Date.new!(year, month, 1)
+    today = Date.utc_today()
+    totals = Map.new(assigns.daily_spending, &{&1.date, to_float(&1.total)})
+    max = totals |> Map.values() |> Enum.max(fn -> 0.0 end)
+
+    days =
+      Enum.map(Date.range(first, Date.end_of_month(first)), fn date ->
+        label = Calendar.strftime(date, "%d/%m/%Y")
+        url = transactions_url(assigns, %{date_from: date, date_to: date, type: "debit"})
+        heat_cell(Map.get(totals, date), max, Date.after?(date, today), label, date.day, url)
+      end)
+
+    blanks = List.duplicate(blank_cell(), Date.day_of_week(first, :sunday) - 1)
+
+    (blanks ++ days)
+    |> Enum.chunk_every(7, 7, Stream.cycle([blank_cell()]))
+    |> Enum.map(&%{label: nil, cells: &1})
+  end
+
+  defp year_heat_rows(%{selected_year: year} = assigns) do
+    totals = Map.new(assigns.monthly_ie, &{&1.month, to_float(&1.expenses)})
+    [%{label: to_string(year), cells: month_cells(assigns, year, totals, max_of(totals))}]
+  end
+
+  defp total_heat_rows(assigns) do
+    by_year = Enum.group_by(assigns.monthly_ie, & &1.year)
+    max = assigns.monthly_ie |> Enum.map(&to_float(&1.expenses)) |> Enum.max(fn -> 0.0 end)
+
+    by_year
+    |> Enum.sort_by(fn {year, _} -> year end, :desc)
+    |> Enum.map(fn {year, items} ->
+      totals = Map.new(items, &{&1.month, to_float(&1.expenses)})
+      %{label: to_string(year), cells: month_cells(assigns, year, totals, max)}
+    end)
+  end
+
+  defp month_cells(assigns, year, totals, max) do
+    today = Date.utc_today()
+
+    Enum.map(1..12, fn month ->
+      from = Date.new!(year, month, 1)
+      label = "#{Banking.month_name_short(month)}/#{year}"
+
+      url =
+        transactions_url(assigns, %{
+          date_from: from,
+          date_to: Date.end_of_month(from),
+          type: "debit"
+        })
+
+      heat_cell(Map.get(totals, month), max, Date.after?(from, today), label, nil, url)
+    end)
+  end
+
+  defp max_of(totals), do: totals |> Map.values() |> Enum.max(fn -> 0.0 end)
+
+  defp heat_cell(_value, _max, true, label, caption, _url),
+    do: %{kind: :future, label: label, caption: caption, value: nil, intensity: nil, url: nil}
+
+  defp heat_cell(value, max, _future?, label, caption, url)
+       when is_number(value) and value > 0 and max > 0 do
+    %{
+      kind: :spend,
+      label: label,
+      caption: caption,
+      value: value,
+      intensity: Float.round(value / max, 3),
+      url: url
+    }
+  end
+
+  defp heat_cell(_value, _max, _future?, label, caption, _url),
+    do: %{kind: :empty, label: label, caption: caption, value: nil, intensity: nil, url: nil}
+
+  defp blank_cell,
+    do: %{kind: :blank, label: nil, caption: nil, value: nil, intensity: nil, url: nil}
 
   defp daily_chart_data(assigns) do
     assigns.daily_spending

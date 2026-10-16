@@ -2735,6 +2735,112 @@ html {
 .ui-tag-pendente { --ui-tone: var(--color-warning); }
 .ui-tag-erro { --ui-tone: var(--ui-despesa); }
 
+/* Alternância barras / calendário dos gráficos de gastos */
+.ui-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--grana-border);
+  border-radius: var(--radius-field);
+  background-color: color-mix(in oklch, var(--color-base-300) 60%, transparent);
+}
+
+.ui-view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: calc(var(--radius-field) - 2px);
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+.ui-view-toggle-btn:hover { color: var(--color-base-content); }
+
+.ui-view-toggle-btn.is-active {
+  background-color: var(--color-base-100);
+  color: var(--color-primary);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--color-base-content) 12%, transparent);
+}
+
+/* Calendário de gastos: tons do vermelho de despesa conforme o gasto */
+.ui-heat { display: flex; flex-direction: column; gap: 0.3rem; }
+.ui-heat-row { display: flex; gap: 0.3rem; align-items: stretch; }
+.ui-heat-head { margin-bottom: 0.1rem; }
+.ui-heat-column { flex: 1; min-width: 0; text-align: center; font-weight: 500; }
+.ui-heat-label {
+  flex: 0 0 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.25rem;
+  font-weight: 500;
+}
+
+.ui-heat-cell {
+  --heat: 0;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 1.4;
+  border: 1px solid var(--grana-calendar-empty-border);
+  border-radius: var(--radius-field);
+  background-color: var(--grana-calendar-empty);
+  transition: outline-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.ui-heat-spend,
+.ui-heat-swatch {
+  background-color: color-mix(
+    in oklab,
+    var(--ui-despesa) calc(12% + var(--heat) * 88%),
+    var(--grana-calendar-empty)
+  );
+  border-color: color-mix(in oklab, var(--ui-despesa) calc(var(--heat) * 60%), var(--grana-calendar-empty-border));
+}
+
+.ui-heat-spend { cursor: pointer; }
+
+.ui-heat-spend:hover,
+.ui-heat-empty:hover {
+  outline: 2px solid color-mix(in oklch, var(--color-base-content) 22%, transparent);
+  outline-offset: 2px;
+}
+
+.ui-heat-future {
+  background-color: var(--grana-calendar-future);
+  border-color: var(--grana-calendar-future-border);
+}
+
+.ui-heat-blank { visibility: hidden; }
+
+.ui-heat-caption {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.35rem;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+
+.ui-heat-cell.is-strong .ui-heat-caption { color: color-mix(in oklch, white 88%, transparent); }
+.ui-heat-future .ui-heat-caption { color: color-mix(in oklch, var(--color-base-content) 30%, transparent); }
+
+.ui-heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.ui-heat-swatch {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-field) / 2);
+}
+
 /* Fluxo de caixa (sankey) */
 .cf-chart { max-height: 36rem; }
 .cf-link {

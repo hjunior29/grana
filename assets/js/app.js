@@ -425,6 +425,24 @@ const DailyChart = {
   }
 }
 
+// Calendário de gastos do painel: só o tooltip e o clique; a grade vem do servidor.
+const SpendingCalendar = {
+  mounted() {
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-day-date]")
+      if (!target) return hideTooltip(this.el)
+      const value = target.dataset.dayValue
+      const amount = value ? privateBRL(parseFloat(value)) : "Sem gastos"
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${amount}`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-day-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.dayUrl})
+    })
+  }
+}
+
 const CalendarHeatmap = {
   mounted() {
     this.el.addEventListener("mousemove", (e) => {
@@ -1013,6 +1031,7 @@ const Hooks = {
   CategoryChart,
   DailyChart,
   CalendarHeatmap,
+  SpendingCalendar,
   IncomeExpensesChart,
   CashFlowChart,
   ProjectionChart,
