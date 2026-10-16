@@ -575,7 +575,7 @@ defmodule GranaWeb.UploadLive do
               </.button>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="transactions-table-shell card bg-base-200 overflow-x-auto">
               <table id="statements-table" class="table">
                 <thead>
                   <tr>

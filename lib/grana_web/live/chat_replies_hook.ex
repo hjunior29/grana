@@ -25,9 +25,8 @@ defmodule GranaWeb.ChatRepliesHook do
   defp handle_info({:chat_reply, _id, _event}, %{view: GranaWeb.ChatLive} = socket),
     do: {:cont, socket}
 
-  defp handle_info({:chat_reply, conversation_id, {kind, _} = event}, socket)
-       when kind in [:done, :error],
-       do: {:halt, assign(socket, :chat_notice, notice(socket, conversation_id, event))}
+  defp handle_info({:chat_reply, id, {kind, _}}, socket) when kind in [:done, :error],
+    do: {:halt, assign(socket, :chat_notice, %{conversation_id: id, kind: kind})}
 
   defp handle_info({:chat_reply, _id, _event}, socket), do: {:halt, socket}
   defp handle_info(_message, socket), do: {:cont, socket}
@@ -36,13 +35,4 @@ defmodule GranaWeb.ChatRepliesHook do
     do: {:halt, assign(socket, :chat_notice, nil)}
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
-
-  defp notice(socket, conversation_id, {kind, _}) do
-    user_id = socket.assigns.current_scope.user.id
-
-    case Chat.get_conversation(user_id, conversation_id) do
-      nil -> nil
-      conversation -> %{conversation_id: conversation_id, title: conversation.title, kind: kind}
-    end
-  end
 end

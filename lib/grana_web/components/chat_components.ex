@@ -16,7 +16,6 @@ defmodule GranaWeb.ChatComponents do
           <p class="font-semibold">
             {if @notice.kind == :done, do: "Resposta pronta", else: "O chat não conseguiu responder"}
           </p>
-          <p class="ui-private-name ui-help truncate">{@notice.title}</p>
           <.link
             id="chat-reply-toast-open"
             navigate={~p"/chat/#{@notice.conversation_id}"}

@@ -3232,6 +3232,20 @@ html {
   pointer-events: none;
 }
 
+/* Em texto cortado (truncate, overflow hidden), a placa não pode sair do elemento: fica
+   dentro, com o espaço vindo do padding. */
+.ui-hide-values .ui-private.truncate,
+.ui-hide-names .ui-private-name.truncate {
+  margin-inline: 0;
+  padding: 0.1em 0.15em;
+  clip-path: inset(0 round 0.45em);
+}
+
+.ui-hide-values .ui-private.truncate::after,
+.ui-hide-names .ui-private-name.truncate::after {
+  inset: 0;
+}
+
 /* Texto de SVG não tem ::after: é desfocado direto. */
 .ui-hide-values text.ui-private { filter: blur(4px); }
 
