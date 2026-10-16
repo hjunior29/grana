@@ -11,6 +11,7 @@ defmodule Grana.AI.ProviderConfig do
 
   @kinds ~w(gemini openai anthropic openai_compatible)
 
+  @derive {Inspect, except: [:api_key]}
   schema "ai_providers" do
     field :kind, :string
     field :name, :string
@@ -48,9 +49,46 @@ defmodule Grana.AI.ProviderConfig do
         do: validate_required(changeset, [:base_url], message: "informe o endereço da API"),
         else: changeset
 
-    validate_format(changeset, :base_url, ~r{^https?://[^\s]+$},
+    changeset
+    |> validate_format(:base_url, ~r{^https?://[^\s]+$},
       message: "deve começar com http:// ou https://"
     )
+    |> validate_safe_host()
+  end
+
+  defp validate_safe_host(changeset) do
+    validate_change(changeset, :base_url, fn :base_url, url ->
+      uri = URI.parse(url)
+
+      cond do
+        is_nil(uri.host) or uri.host == "" ->
+          [base_url: "endereço inválido"]
+
+        blocked_host?(uri.host) ->
+          [base_url: "endereço não permitido"]
+
+        true ->
+          []
+      end
+    end)
+  end
+
+  defp blocked_host?(host) do
+    down = String.downcase(host)
+
+    cond do
+      down in ["metadata.google.internal", "metadata", "instance-data"] ->
+        true
+
+      match?({:ok, {169, 254, _, _}}, :inet.parse_address(String.to_charlist(host))) ->
+        true
+
+      match?({:ok, {0, _, _, _}}, :inet.parse_address(String.to_charlist(host))) ->
+        true
+
+      true ->
+        false
+    end
   end
 
   # Serviços locais (Ollama, LM Studio) não pedem chave.
