@@ -77,6 +77,22 @@ defmodule GranaWeb.RateLimit do
   end
 
   @doc """
+  Direct rate check against an arbitrary bucket key with window in milliseconds and limit.
+  """
+  @spec check_rate(String.t(), pos_integer(), pos_integer()) :: :allow | :deny
+  def check_rate(bucket_key, window_ms, limit) do
+    if @skip_rate_limit do
+      :allow
+    else
+      case Hammer.check_rate(bucket_key, window_ms, limit) do
+        {:allow, _count} -> :allow
+        {:deny, _limit} -> :deny
+        {:error, _reason} -> :allow
+      end
+    end
+  end
+
+  @doc """
   IP do cliente do socket LiveView: `peer_data`, ou o último IP de
   X-Forwarded-For quando `TRUST_PROXY_HEADERS=true` (instância atrás de proxy).
   """
@@ -106,8 +122,14 @@ defmodule GranaWeb.RateLimit do
   end
 
   # Último IP de uma lista X-Forwarded-For (o appendado pelo proxy).
-  defp xff_last([value | _]) when is_binary(value) do
-    value |> String.split(",") |> List.last() |> to_string() |> String.trim() |> presence()
+  defp xff_last([_ | _] = values) do
+    values
+    |> List.last()
+    |> String.split(",")
+    |> List.last()
+    |> to_string()
+    |> String.trim()
+    |> presence()
   end
 
   defp xff_last(_), do: nil
