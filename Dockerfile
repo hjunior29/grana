@@ -92,6 +92,7 @@ RUN chown nobody /app && mkdir /data && chown nobody /data
 # set runner ENV
 ENV MIX_ENV="prod"
 ENV DATA_DIR=/data
+ENV LISTEN_IP=0.0.0.0
 VOLUME /data
 
 # Only copy the final release from the build stage
