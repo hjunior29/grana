@@ -40,17 +40,17 @@ defmodule GranaWeb.SmtpHooks do
     user = socket.assigns.current_scope.user
 
     cond do
-      all["intent"] == "test" ->
-        {:halt, test_only(socket, user, params)}
+      !Accounts.sudo_mode?(user) ->
+        {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
 
       Accounts.smtp_env_complete?() ->
         {:halt, put_flash(socket, :error, "O SMTP já vem todo do .env.")}
 
-      !Accounts.sudo_mode?(user) ->
-        {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
-
       !socket.assigns.smtp_private_key ->
         {:halt, put_flash(socket, :error, "Defina CLOAK_KEY no .env e reinicie o servidor.")}
+
+      all["intent"] == "test" ->
+        {:halt, test_only(socket, user, params)}
 
       true ->
         case Accounts.save_smtp_settings(user, params) do

@@ -21,7 +21,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
   setup %{conn: conn} do
     # O card só deixa salvar com CLOAK_KEY própria (como o da Pluggy).
     original = System.get_env("CLOAK_KEY")
-    System.put_env("CLOAK_KEY", "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
+    System.put_env("CLOAK_KEY", "kAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
 
     on_exit(fn ->
       if original, do: System.put_env("CLOAK_KEY", original), else: System.delete_env("CLOAK_KEY")
