@@ -500,7 +500,7 @@ defmodule Grana.OpenFinance do
         Date.add(min_date, -@boundary_days),
         Date.add(max_date, @boundary_days)
       )
-      |> Enum.group_by(fn {_date, amount} -> Decimal.abs(amount) end, &elem(&1, 0))
+      |> Enum.group_by(fn {_date, amount} -> cents(amount) end, &elem(&1, 0))
 
     {kept, _uploaded} =
       rows
@@ -525,7 +525,7 @@ defmodule Grana.OpenFinance do
 
   # Devolve as transações de upload sem a que casou com `row`, ou nil se nenhuma casar.
   defp find_upload_match(uploaded, row) do
-    key = Decimal.abs(row.amount)
+    key = cents(row.amount)
     dates = Map.get(uploaded, key, [])
 
     case Enum.find_index(dates, &(abs(Date.diff(&1, row.date)) <= @boundary_days)) do
@@ -533,6 +533,12 @@ defmodule Grana.OpenFinance do
       index -> Map.put(uploaded, key, List.delete_at(dates, index))
     end
   end
+
+  defp cents(%Decimal{} = amount) do
+    amount |> Decimal.abs() |> Decimal.mult(100) |> Decimal.round() |> Decimal.to_integer()
+  end
+
+  defp cents(nil), do: 0
 
   # Extrato: um por conta. Fatura: uma por fatura da Pluggy (id da fatura), para
   # o Grana atribuir o mês da fatura como faz com os uploads.

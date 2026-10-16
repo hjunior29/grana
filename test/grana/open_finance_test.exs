@@ -343,6 +343,12 @@ defmodule Grana.OpenFinanceTest do
         amount: "-42.00"
       })
 
+      transaction_fixture(user, %{
+        bank_statement_id: upload.id,
+        date: ~D[2026-09-30],
+        amount: "-42.50"
+      })
+
       stub_pluggy(item_payload(), [bank], %{
         bank["id"] => [
           transaction_payload(%{"description" => "DENTRO", "date" => "2026-09-15T12:00:00Z"}),
@@ -350,6 +356,12 @@ defmodule Grana.OpenFinanceTest do
             "description" => "MESMA COMPRA",
             "type" => "DEBIT",
             "amount" => 42,
+            "date" => "2026-10-02T12:00:00Z"
+          }),
+          transaction_payload(%{
+            "description" => "MESMA COMPRA CENTAVO ZERO",
+            "type" => "DEBIT",
+            "amount" => 42.5,
             "date" => "2026-10-02T12:00:00Z"
           }),
           transaction_payload(%{"description" => "DEPOIS", "date" => "2026-10-03T12:00:00Z"})
