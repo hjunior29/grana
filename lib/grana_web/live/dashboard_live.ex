@@ -171,9 +171,15 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, socket}
   end
 
-  def handle_event("chart-navigate", %{"url" => url}, socket) do
-    {:noreply, push_navigate(socket, to: url)}
+  def handle_event("chart-navigate", %{"url" => "/" <> _ = url}, socket) do
+    if String.starts_with?(url, "//") do
+      {:noreply, socket}
+    else
+      {:noreply, push_navigate(socket, to: url)}
+    end
   end
+
+  def handle_event("chart-navigate", _params, socket), do: {:noreply, socket}
 
   # ── Events: Banking Only ──
 
