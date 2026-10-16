@@ -518,7 +518,12 @@ defmodule GranaWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      chat_notice={@chat_notice}
+    >
       <div class="max-w-6xl mx-auto">
         <.page_header title="Painel" subtitle="Visão geral das suas finanças" />
 
@@ -561,7 +566,7 @@ defmodule GranaWeb.DashboardLive do
 
   defp render_recurring_tab(assigns) do
     ~H"""
-    <.filter_bar id="recurring-filters">
+    <.filter_bar :if={@available_years != []} id="recurring-filters">
       <.chip_group label="Janela">
         <.chip
           :for={{label, value} <- [{"6 meses", "6"}, {"12 meses", "12"}]}
@@ -577,13 +582,30 @@ defmodule GranaWeb.DashboardLive do
     </.filter_bar>
 
     <.empty_state
-      :if={@rec_analysis.total_months == 0}
+      :if={@available_years == []}
+      id="recurring-empty"
+      icon="hero-arrow-path"
+      title="Nenhuma transação encontrada"
+      text="Importe um extrato bancário para começar."
+    >
+      <:action>
+        <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
+          Importar extratos
+        </.button>
+      </:action>
+    </.empty_state>
+
+    <.empty_state
+      :if={@available_years != [] && @rec_analysis.total_months == 0}
       id="recurring-empty"
       icon="hero-arrow-path"
       title="Nenhuma despesa encontrada nesse período"
+      text="Tente uma janela maior ou outro banco e fonte."
     >
       <:action>
-        <.button navigate={~p"/upload"} variant="secondary" size="sm">Importar extratos</.button>
+        <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
+          Importar extratos
+        </.button>
       </:action>
     </.empty_state>
 

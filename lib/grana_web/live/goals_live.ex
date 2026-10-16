@@ -166,7 +166,12 @@ defmodule GranaWeb.GoalsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      chat_notice={@chat_notice}
+    >
       <div class="max-w-6xl mx-auto">
         <.page_header title="Metas" subtitle="Acompanhe seus objetivos financeiros">
           <:actions>
