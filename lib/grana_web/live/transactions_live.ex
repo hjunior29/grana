@@ -1,13 +1,17 @@
 defmodule GranaWeb.TransactionsLive do
   use GranaWeb, :live_view
 
+  alias Grana.Agents.SearchBuilder
   alias Grana.Banking
   alias Grana.Banking.Search
   alias Grana.OpenFinance
+  alias GranaWeb.AiComponents
 
   @per_page 50
   @sort_fields ~w(date description source kind amount)
   @sort_dirs ~w(asc desc)
+
+  on_mount GranaWeb.ModelChoicesHook
 
   @impl true
   def mount(_params, _session, socket) do
@@ -23,6 +27,8 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:saved_searches, Banking.list_saved_searches(user_id))
       |> assign(:save_form, nil)
       |> assign(:delete_saved, nil)
+      |> assign(:ai_request, "")
+      |> assign(:ai_search, nil)
 
     # Meses sem upload vêm do Open Finance; relê se a última leitura passou de 1h.
     if connected?(socket) do
@@ -32,6 +38,22 @@ defmodule GranaWeb.TransactionsLive do
 
     {:ok, socket}
   end
+
+  @impl true
+  def handle_async(:ai_search, {:ok, {:ok, result}}, socket),
+    do: {:noreply, assign(socket, :ai_search, result)}
+
+  def handle_async(:ai_search, {:ok, {:error, reason}}, socket),
+    do: {:noreply, assign(socket, :ai_search, {:error, ai_error(reason)})}
+
+  def handle_async(:ai_search, {:exit, _reason}, socket),
+    do: {:noreply, assign(socket, :ai_search, {:error, ai_error(:exit)})}
+
+  defp ai_error(:no_api_key),
+    do: "Cadastre um provedor de IA nas Configurações para pedir buscas à IA."
+
+  defp ai_error(reason) when is_binary(reason), do: reason
+  defp ai_error(_reason), do: "Não foi possível montar a busca. Tente de novo."
 
   @impl true
   def handle_info({:open_finance_synced, _connection_id}, socket) do
@@ -98,6 +120,26 @@ defmodule GranaWeb.TransactionsLive do
       {"update", {:ok, _search}} -> {:noreply, update_current_saved(socket, q)}
       _ -> {:noreply, socket}
     end
+  end
+
+  def handle_event("ai_search", %{"request" => request} = params, socket) do
+    request = String.trim(request)
+    user_id = socket.assigns.current_scope.user.id
+    choice = if params["model"] in [nil, ""], do: nil, else: params["model"]
+
+    if request == "" do
+      {:noreply, socket}
+    else
+      {:noreply,
+       socket
+       |> assign(:ai_request, request)
+       |> assign(:ai_search, :loading)
+       |> start_async(:ai_search, fn -> SearchBuilder.run(user_id, request, choice) end)}
+    end
+  end
+
+  def handle_event("dismiss_ai_search", _params, socket) do
+    {:noreply, assign(socket, :ai_search, nil)}
   end
 
   def handle_event("save_search", %{"saved_search" => attrs}, socket) do
@@ -410,7 +452,12 @@ defmodule GranaWeb.TransactionsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      chat_notice={@chat_notice}
+    >
       <div class="max-w-6xl mx-auto">
         <.page_header
           title="Transações"
@@ -448,6 +495,10 @@ defmodule GranaWeb.TransactionsLive do
           search_error={@search_error}
           saved_searches={@saved_searches}
           current_saved={@current_saved}
+          ai_request={@ai_request}
+          ai_search={@ai_search}
+          model_choices={@model_choices}
+          model_default={@model_defaults["search"]}
         />
 
         <div :if={@statement_info && !advanced?(@filters)} class="mb-4">
@@ -960,6 +1011,10 @@ defmodule GranaWeb.TransactionsLive do
   attr :search_error, :string, required: true
   attr :saved_searches, :list, required: true
   attr :current_saved, :any, required: true
+  attr :ai_request, :string, required: true
+  attr :ai_search, :any, required: true
+  attr :model_choices, :any, required: true
+  attr :model_default, :any, required: true
 
   defp advanced_search(assigns) do
     assigns =
@@ -981,6 +1036,13 @@ defmodule GranaWeb.TransactionsLive do
         class="min-w-0"
       >
         <div>
+          <.ai_search_box
+            request={@ai_request}
+            result={@ai_search}
+            model_choices={@model_choices}
+            model_default={@model_default}
+          />
+
           <form id="advanced-search-form" phx-submit="run_search">
             <.input
               type="textarea"
@@ -1004,6 +1066,11 @@ defmodule GranaWeb.TransactionsLive do
                       e.preventDefault()
                       this.el.form.requestSubmit()
                     }
+                  })
+                  this.el.addEventListener("grana:use-query", (e) => {
+                    this.el.value = e.detail.query
+                    this.el.focus()
+                    this.el.setSelectionRange(this.el.value.length, this.el.value.length)
                   })
                 }
               }
@@ -1174,6 +1241,97 @@ defmodule GranaWeb.TransactionsLive do
           Salve as buscas que você repete na análise. Elas ficam aqui para rodar de novo com um clique.
         </p>
       </.card>
+    </div>
+    """
+  end
+
+  attr :request, :string, required: true
+  attr :result, :any, required: true
+  attr :model_choices, :any, required: true
+  attr :model_default, :any, required: true
+
+  defp ai_search_box(assigns) do
+    ~H"""
+    <div id="ai-search" class="ui-ai-search mb-4">
+      <form id="ai-search-form" phx-submit="ai_search" class="ui-ai-search-bar">
+        <.icon name="hero-sparkles" class="size-4 shrink-0 text-primary" />
+        <input
+          id="ai-search-request"
+          type="text"
+          name="request"
+          value={@request}
+          placeholder="Peça à IA: gastos com delivery nos últimos 3 meses"
+          aria-label="Pedir a busca para a IA"
+          autocomplete="off"
+          class="ui-ai-search-input"
+        />
+        <AiComponents.model_picker
+          id="ai-search-model"
+          choices={@model_choices}
+          default={@model_default}
+        />
+        <button
+          id="ai-search-submit"
+          type="submit"
+          class="btn btn-primary btn-sm btn-square"
+          aria-label="Montar a busca"
+          disabled={@result == :loading}
+        >
+          <.icon name="hero-arrow-up" class="size-4" />
+        </button>
+      </form>
+
+      <p :if={@result == :loading} id="ai-search-loading" class="ui-help mt-2 flex items-center gap-2">
+        <span class="loading loading-spinner loading-xs"></span> Montando a busca…
+      </p>
+
+      <div :if={match?(%{kind: :query}, @result)} id="ai-search-result" class="ui-ai-search-result">
+        <button
+          id="ai-search-use"
+          type="button"
+          class="ui-ai-query"
+          title="Usar esta busca"
+          phx-click={
+            JS.dispatch("grana:use-query",
+              to: "#advanced-search-query",
+              detail: %{query: @result[:query]}
+            )
+          }
+        >
+          <code class="ui-query-code">{@result[:query]}</code>
+          <span class="ui-ai-query-action">
+            <.icon name="hero-arrow-down-left" class="size-3.5" /> Usar
+          </span>
+        </button>
+        <p class="ui-help mt-1.5 flex flex-wrap items-center gap-x-2">
+          <span>{@result[:explanation]}</span>
+          <span class="ui-caption">{@result[:ai_model]}</span>
+        </p>
+        <button
+          type="button"
+          class="ui-ai-search-close"
+          aria-label="Fechar sugestão"
+          phx-click="dismiss_ai_search"
+        >
+          <.icon name="hero-x-mark" class="size-4" />
+        </button>
+      </div>
+
+      <div :if={match?(%{kind: :text}, @result)} id="ai-search-text" class="ui-ai-search-result">
+        <p class="ui-body ui-text-secondary pr-6">{@result[:text]}</p>
+        <button
+          type="button"
+          class="ui-ai-search-close"
+          aria-label="Fechar resposta"
+          phx-click="dismiss_ai_search"
+        >
+          <.icon name="hero-x-mark" class="size-4" />
+        </button>
+      </div>
+
+      <.notice :if={match?({:error, _}, @result)} id="ai-search-error" tone={:error} class="mt-2">
+        {elem(@result, 1)}
+      </.notice>
     </div>
     """
   end

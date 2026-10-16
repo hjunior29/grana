@@ -110,13 +110,17 @@ defmodule GranaWeb.Router do
       on_mount: [
         {GranaWeb.SetupGate, :setup_complete},
         {GranaWeb.UserAuth, :require_authenticated},
-        GranaWeb.PreferencesHook
+        GranaWeb.PreferencesHook,
+        GranaWeb.ImportsHook,
+        GranaWeb.ChatRepliesHook
       ] do
       live "/onboarding", OnboardingLive, :index
       live "/dashboard", DashboardLive, :index
       live "/upload", UploadLive, :index
       live "/transactions", TransactionsLive, :index
       live "/analysis", AnalysisLive, :index
+      live "/chat", ChatLive, :index
+      live "/chat/:id", ChatLive, :show
       live "/categories", CategoriesLive, :index
       live "/goals", GoalsLive, :index
       live "/users/settings", UserLive.Settings, :edit

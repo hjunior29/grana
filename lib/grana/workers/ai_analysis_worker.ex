@@ -1,6 +1,7 @@
 defmodule Grana.Workers.AIAnalysisWorker do
   @moduledoc """
-  Oban worker for AI-powered financial analysis via Gemini.
+  Runs the analysis specialist (`Grana.Agents.Analyst`) and saves the result with the
+  provider and model that produced it.
   """
   use Oban.Worker,
     queue: :ai_analysis,
@@ -8,48 +9,46 @@ defmodule Grana.Workers.AIAnalysisWorker do
     unique: [
       period: 120,
       fields: [:worker, :args],
-      keys: [:user_id, :context, :filters, :custom_prompt],
+      keys: [:user_id, :context, :filters, :custom_prompt, :model],
       states: Oban.Job.states() -- [:cancelled, :discarded, :completed]
     ]
 
+  alias Grana.Agents.Analyst
   alias Grana.Banking
-  alias Grana.Banking.AIAnalyzer
 
   @impl Oban.Worker
   def perform(%Oban.Job{
         id: job_id,
-        args: %{
-          "user_id" => user_id,
-          "context" => context,
-          "filters" => filters,
-          "custom_prompt" => custom_prompt,
-          "topic" => topic
-        }
+        args:
+          %{
+            "user_id" => user_id,
+            "context" => context,
+            "filters" => filters,
+            "custom_prompt" => custom_prompt,
+            "topic" => topic
+          } = args
       }) do
     filters = atomize_keys(filters)
 
     result =
       case context do
-        "banking" ->
-          AIAnalyzer.analyze_with_filters(user_id, filters, custom_prompt)
-
-        other ->
-          {:error, "Contexto de análise inválido: #{inspect(other)}"}
+        "banking" -> Analyst.run(user_id, filters, custom_prompt, args["model"])
+        other -> {:error, "Contexto de análise inválido: #{inspect(other)}"}
       end
 
     case result do
-      {:ok, analysis_result} ->
-        filters_json = Map.put(filters, :context, context)
-
+      {:ok, %{analysis: analysis} = run} ->
         {:ok, _analysis} =
           Banking.create_ai_analysis(%{
             user_id: user_id,
             prompt: custom_prompt,
-            filters_json: filters_json,
-            result_json: analysis_result
+            filters_json: Map.put(filters, :context, context),
+            result_json: analysis,
+            ai_provider: run.ai_provider,
+            ai_model: run.ai_model
           })
 
-        update_job_meta(job_id, %{"analysis" => analysis_result})
+        update_job_meta(job_id, %{"analysis" => analysis})
 
         Phoenix.PubSub.broadcast(Grana.PubSub, topic, {:analysis_complete, :ok})
         :ok

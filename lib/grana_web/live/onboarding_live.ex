@@ -66,7 +66,7 @@ defmodule GranaWeb.OnboardingLive do
           <% :ai -> %>
             <.step_card
               title="Inteligência artificial"
-              subtitle="Cadastre um provedor (Gemini, OpenAI, Claude ou compatível) para categorizar gastos e gerar análises."
+              subtitle="Cadastre um provedor (Gemini, OpenAI, Claude ou compatível) para ler PDFs, categorizar, gerar análises e conversar com os seus dados no chat."
             >
               <AiComponents.providers_panel
                 providers={@ai_providers}

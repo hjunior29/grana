@@ -520,7 +520,11 @@ And **never** do this:
   (cacheado em `:persistent_term`) alimenta o `GranaWeb.SetupGate`, que redireciona tudo para
   `/setup` enquanto não há dono. O código de uso único do setup (`Grana.Setup`) vive em memória
   e é impresso no log.
-- IA: vários provedores por usuário (`Grana.AI`: Gemini, OpenAI, Anthropic e compatíveis), com modelos lidos da API de cada um (`Grana.AI.Models`), nunca de lista no código. O padrão fica em `users.ai_provider` ("env:<kind>" ou "db:<id>") e `users.ai_model`; chamadas passam por `Grana.AI.Provider` com a config de `Grana.AI.resolve_config/1`.
+- IA: vários provedores por usuário (`Grana.AI`: Gemini, OpenAI, Anthropic e compatíveis), com modelos lidos da API de cada um (`Grana.AI.Models`), nunca de lista no código, e curados com o catálogo aberto models.dev (`Grana.AI.Catalog`, cache de 1 dia): só texto→texto com ferramentas, o mais novo de cada família, nada com mais de um ano em relação ao modelo mais novo; sem catálogo, valem as heurísticas por palavra. O padrão geral fica em `users.ai_provider` ("env:<kind>" ou "db:<id>") e `users.ai_model`.
+- O chat responde em HTML (fragmento com tags fixas); `GranaWeb.ChatHTML` sanitiza (LazyHTML, dependência de runtime), traduz as classes do agente (`income`, `expense`, `muted`, `num`) para as do app e marca valores e nomes conhecidos (`Grana.Banking.PrivateNames`, montado das transações e cacheado por usuário) para o modo privacidade; `private_text` aceita `names` para o mesmo fim.
+- A resposta do chat roda em segundo plano (`Grana.Chat.Reply`, GenServer sob `Grana.Chat.ReplySupervisor`, eventos por PubSub em `Chat.subscribe/1`); `GranaWeb.ChatRepliesHook` mostra o aviso flutuante nas outras telas e `Chat.answer_in_progress/1` recompõe a tela ao voltar. Os especialistas de pesquisa e o chat exploram os dados antes de responder com `Grana.Agents.DataTools` (`list_merchants`, `preview_query`, sobre `Grana.Banking.Merchants`).
+- Arquitetura agêntica sobre o LangChain (`lib/grana/agents`): cada ação de IA é um especialista (`Grana.Agents.Specialist`): `SearchBuilder` ("search"), `Analyst` ("analysis"), `Processor` ("processing") e o `Coordinator` do chat ("chat"), que responde com as ferramentas determinísticas de `ChatTools` e delega aos especialistas que expõem `tool/1`. As telas chamam o especialista direto (intenção explícita); só o chat passa pelo coordenador. O modelo vem de `Grana.AI.resolve(user, especialista, escolha)`: escolha da chamada > padrão do especialista (`users.ai_specialists`) > padrão geral. A escolha é `"<ref>|<modelo>"` (`Grana.AI.choice/2`). Chains rodam por `Grana.AI.LLM` e o modelo do LangChain sai de `Grana.AI.ChatModel`. Análises e extratos processados por IA guardam `ai_provider`/`ai_model`.
+- Código novo em inglês (nomes, comentários, testes e prompts); textos da interface e respostas da IA em português.
 - Login por email + senha. Com SMTP efetivo (`Accounts.smtp_config/0`: ambiente > banco), todo
   login pede um código por email (2FA). `.env`/ambiente sempre tem precedência sobre o que a
   tela salva (SMTP, Gemini, Pluggy).
@@ -535,7 +539,7 @@ And **never** do this:
 
 - **Nunca modificar `lib/` para facilitar testes.** Os testes devem se adaptar ao código existente.
 - Proibido: adicionar parâmetros de DI, expor `defp → def`, branches `if Mix.env() == :test`, `@doc false` para testes.
-- Mocks via **Mimic** (`async: false` obrigatório). Módulos mockáveis: `Req`, `Grana.AI.Provider`, `Grana.AI.Providers.Gemini`, `Grana.Investments`, `Grana.Accounts.UserNotifier`, `Grana.PlatformImport`, `Grana.OpenFinance.Pluggy`, `Grana.Mailer`, `Grana.AI.Models`, `Grana.AI.Providers.OpenAI`, `Grana.AI.Providers.Anthropic`.
+- Mocks via **Mimic** (`async: false` obrigatório). Módulos mockáveis: `Req`, `Grana.Investments`, `Grana.Accounts.UserNotifier`, `Grana.PlatformImport`, `Grana.OpenFinance.Pluggy`, `Grana.Mailer`, `Grana.AI.Models` e os modelos do LangChain (`ChatGoogleAI`, `ChatOpenAI`, `ChatAnthropic`, `ChatOpenAICompatible`). Para simular a IA, use `Grana.LLMStub.script/1` (roteiriza as respostas no `call/3` do modelo, então o loop de ferramentas roda de verdade); em testes de LiveView, com `setup :set_mimic_global` e stub de `Grana.AI.Models.list/1`.
 - Piso de cobertura atual: **80%** (definido em `coveralls.json`).
 
 ### Convenções de código

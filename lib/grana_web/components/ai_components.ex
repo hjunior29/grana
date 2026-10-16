@@ -64,7 +64,7 @@ defmodule GranaWeb.AiComponents do
           <.button variant="primary" size="sm" class="w-full sm:w-auto" loading="Salvando…">
             Salvar padrão
           </.button>
-          <p class="ui-help">Modelo usado em análises, categorização e leitura de PDFs.</p>
+          <p class="ui-help">Padrão geral: vale para todo especialista sem um modelo próprio.</p>
         </div>
       </.form>
 
@@ -195,6 +195,109 @@ defmodule GranaWeb.AiComponents do
     </div>
     """
   end
+
+  @specialists [
+    {"search", "Pesquisa avançada", "Monta a busca a partir do que você pede em português."},
+    {"analysis", "Análise", "Gera as análises do mês ou do ano."},
+    {"processing", "Processamento", "Lê PDFs e categoriza o que as regras não pegaram."},
+    {"chat", "Chat", "Conduz a conversa e consulta os seus dados."}
+  ]
+
+  @doc "Default model of each specialist; blank follows the general default."
+  attr :choices, :any, required: true, doc: ":loading or the list of `Grana.AI.model_choices/1`"
+  attr :general, :any, default: nil, doc: "{provider, model} of the general default"
+  attr :values, :map, required: true, doc: "specialist => saved choice"
+
+  def specialists_panel(assigns) do
+    assigns = assign(assigns, :specialists, @specialists)
+
+    ~H"""
+    <.section id="ai-specialists" title="Modelo por especialista" divider>
+      <p class="ui-help -mt-1 mb-4">
+        Cada ação de IA tem um especialista. Escolha o modelo padrão de cada um; na hora de usar, dá para trocar só naquela vez.
+      </p>
+      <.form for={%{}} as={:specialists} id="ai-specialists-form" phx-submit="ai_save_specialists">
+        <div class="grid grid-cols-1 gap-x-4 gap-y-1 md:grid-cols-2">
+          <div :for={{key, label, help} <- @specialists} class="fieldset mb-2">
+            <label for={"ai-specialist-#{key}"} class="ui-label">{label}</label>
+            <select id={"ai-specialist-#{key}"} name={"specialists[#{key}]"} class="w-full select">
+              {Phoenix.HTML.Form.options_for_select(
+                specialist_options(@choices, @general, @values[key], key),
+                @values[key] || ""
+              )}
+            </select>
+            <p class="ui-help mt-1">{help}</p>
+          </div>
+        </div>
+        <div class="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <.button variant="primary" size="sm" class="w-full sm:w-auto" loading="Salvando…">
+            Salvar especialistas
+          </.button>
+          <p :if={@choices == :loading} class="ui-help flex items-center gap-2">
+            <span class="loading loading-spinner loading-xs"></span> Carregando modelos…
+          </p>
+        </div>
+      </.form>
+    </.section>
+    """
+  end
+
+  defp specialist_options(choices, general, saved, key) do
+    general_label =
+      case general do
+        {_provider, model} -> "Padrão geral · #{model}"
+        nil -> "Padrão geral"
+      end
+
+    [_default | groups] = picker_options(choices, nil, key == "processing")
+    listed = for {_provider, options} <- groups, {_label, value} <- options, do: value
+
+    # Keeps the saved choice selectable while the models load or when the API stops listing it.
+    saved_option =
+      if saved in [nil | listed],
+        do: [],
+        else: [{saved |> String.split("|", parts: 2) |> List.last(), saved}]
+
+    [{general_label, ""} | saved_option] ++ groups
+  end
+
+  @doc """
+  Compact AI model picker. The first option keeps the specialist default (`default`,
+  `{provider, model}`); the others are `Grana.AI.choice/2` values grouped by provider.
+  """
+  attr :id, :string, required: true
+  attr :name, :string, default: "model"
+  attr :choices, :any, required: true, doc: ":loading or the list of `Grana.AI.model_choices/1`"
+  attr :default, :any, default: nil
+  attr :value, :string, default: ""
+  attr :pdf, :boolean, default: false, doc: "only models that read PDF files (processing)"
+  attr :rest, :global
+
+  def model_picker(assigns) do
+    ~H"""
+    <label class="ui-model-picker" title="Modelo de IA">
+      <.icon name="hero-cpu-chip" class="size-4 shrink-0" />
+      <span class="sr-only">Modelo de IA</span>
+      <select id={@id} name={@name} {@rest}>
+        {Phoenix.HTML.Form.options_for_select(picker_options(@choices, @default, @pdf), @value)}
+      </select>
+    </label>
+    """
+  end
+
+  defp picker_options(choices, default, pdf?) do
+    groups =
+      for %{ref: ref, name: name, models: {:ok, models}} <- List.wrap(choices),
+          models = if(pdf?, do: AI.Models.for_pdf(models), else: models),
+          models != [] do
+        {name, Enum.map(models, &{&1.name, AI.choice(ref, &1.id)})}
+      end
+
+    [{default_label(default), ""} | groups]
+  end
+
+  defp default_label({_provider, model}), do: "Padrão · #{model}"
+  defp default_label(nil), do: "Padrão"
 
   defp provider_subtitle(provider) do
     [AI.label(provider.kind), provider.base_url] |> Enum.reject(&is_nil/1) |> Enum.join(" · ")

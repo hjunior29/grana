@@ -13,6 +13,7 @@ defmodule GranaWeb.AiSettingsHooks do
   alias Grana.Accounts
   alias Grana.AI
   alias Grana.AI.ProviderConfig
+  alias GranaWeb.ModelChoicesHook
 
   def on_mount(:default, _params, _session, socket) do
     socket =
@@ -39,6 +40,8 @@ defmodule GranaWeb.AiSettingsHooks do
 
     socket
     |> assign(:ai_providers, Enum.map(providers, &%{&1 | api_key: nil}))
+    |> assign(:ai_general, AI.describe(user, nil))
+    |> assign(:ai_specialists, user.ai_specialists)
     |> assign(:ai_selected_ref, selected)
     |> assign(:ai_default_model, model)
     |> assign(:ai_default_form, default_form(selected, model))
@@ -91,15 +94,21 @@ defmodule GranaWeb.AiSettingsHooks do
 
   defp handle_async(_name, _result, socket), do: {:cont, socket}
 
-  # Sem padrão salvo (ex.: só há provedor do ambiente), já grava o modelo sugerido.
+  # Sem padrão salvo (ex.: só há provedor do ambiente, ou o padrão apontava para um
+  # provedor removido), já grava o modelo sugerido. Trocar o provedor no select não conta:
+  # o padrão só muda em "Salvar padrão".
   defp ensure_default(socket, ref, {:ok, models}) do
     user = socket.assigns.current_scope.user
 
-    if is_nil(user.ai_model) or user.ai_provider != ref do
+    if is_nil(user.ai_model) or is_nil(AI.get_provider(user, user.ai_provider)) do
       case AI.get_provider(user, ref) do
         %ProviderConfig{kind: kind} ->
           {:ok, user} = AI.set_default(user, ref, Grana.AI.Models.suggest(kind, models))
-          socket |> assign(:current_scope, Accounts.Scope.for_user(user)) |> assign_ai()
+
+          socket
+          |> assign(:current_scope, Accounts.Scope.for_user(user))
+          |> assign_ai()
+          |> ModelChoicesHook.refresh()
 
         nil ->
           socket
@@ -133,6 +142,7 @@ defmodule GranaWeb.AiSettingsHooks do
          |> assign(:ai_form, provider_form(%{}))
          |> assign(:ai_show_form, false)
          |> assign_ai()
+         |> ModelChoicesHook.refresh()
          |> put_flash(:info, "#{provider.name} cadastrado. Modelos carregados da API.")}
 
       {:error, changeset} ->
@@ -157,6 +167,7 @@ defmodule GranaWeb.AiSettingsHooks do
      |> assign(:current_scope, Accounts.Scope.for_user(user))
      |> assign_ai()
      |> load_models()
+     |> ModelChoicesHook.refresh()
      |> put_flash(:info, "Provedor removido.")}
   end
 
@@ -188,6 +199,7 @@ defmodule GranaWeb.AiSettingsHooks do
        socket
        |> assign(:current_scope, Accounts.Scope.for_user(user))
        |> assign_ai()
+       |> ModelChoicesHook.refresh()
        |> put_flash(:info, "Padrão salvo: #{model}.")}
     else
       form =
@@ -198,6 +210,21 @@ defmodule GranaWeb.AiSettingsHooks do
 
       {:halt, assign(socket, :ai_default_form, form)}
     end
+  end
+
+  defp handle_event("ai_save_specialists", %{"specialists" => params}, socket) do
+    user =
+      Enum.reduce(AI.specialists(), socket.assigns.current_scope.user, fn key, user ->
+        {:ok, user} = AI.set_specialist_default(user, key, params[key])
+        user
+      end)
+
+    {:halt,
+     socket
+     |> assign(:current_scope, Accounts.Scope.for_user(user))
+     |> assign_ai()
+     |> ModelChoicesHook.refresh()
+     |> put_flash(:info, "Modelos dos especialistas salvos.")}
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}

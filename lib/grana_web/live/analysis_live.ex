@@ -1,7 +1,12 @@
 defmodule GranaWeb.AnalysisLive do
   use GranaWeb, :live_view
 
+  alias Grana.AI
   alias Grana.Banking
+  alias Grana.Banking.PrivateNames
+  alias GranaWeb.AiComponents
+
+  on_mount GranaWeb.ModelChoicesHook
 
   @impl true
   def mount(_params, _session, socket) do
@@ -30,6 +35,7 @@ defmodule GranaWeb.AnalysisLive do
     socket =
       socket
       |> assign(:page_title, "Análise")
+      |> assign(:private_names, PrivateNames.pattern(user_id))
       |> assign(:banks, banks)
       |> assign(:available_years, years)
       |> assign(:available_months, months)
@@ -45,6 +51,7 @@ defmodule GranaWeb.AnalysisLive do
         statement_type: "all"
       })
       |> assign(:custom_prompt, "")
+      |> assign(:model_choice, "")
       |> assign(:prompt_form, to_form(%{"prompt" => ""}))
       |> assign(:expanded_analyses, expanded_default(analyses))
       |> assign(:delete_target, nil)
@@ -86,47 +93,55 @@ defmodule GranaWeb.AnalysisLive do
     {:noreply, put_filter(socket, :type, txn_type)}
   end
 
-  def handle_event("update_prompt", %{"prompt" => prompt}, socket) do
+  def handle_event("update_prompt", %{"prompt" => prompt} = params, socket) do
     {:noreply,
      socket
      |> assign(:custom_prompt, prompt)
+     |> assign(:model_choice, params["model"] || socket.assigns.model_choice)
      |> assign(:prompt_form, to_form(%{"prompt" => prompt}))}
   end
 
-  def handle_event("analyze", _params, socket) do
+  def handle_event("analyze", params, socket) do
     %{current_scope: scope, custom_prompt: prompt, filters: filters} = socket.assigns
     context = "banking"
     custom_prompt = if prompt == "", do: nil, else: prompt
+    choice = if params["model"] in [nil, ""], do: nil, else: params["model"]
 
-    # Check for duplicate analysis in the last 2 minutes
-    if has_recent_duplicate?(socket.assigns.analyses, context, filters, custom_prompt) do
-      {:noreply,
-       put_flash(
-         socket,
-         :warning,
-         "Já existe uma análise recente com os mesmos filtros. Aguarde 2 minutos ou altere os filtros."
-       )}
+    with {:ok, config} <- AI.resolve(scope.user, "analysis", choice),
+         false <-
+           has_recent_duplicate?(
+             socket.assigns.analyses,
+             context,
+             filters,
+             custom_prompt,
+             config.model
+           ) do
+      topic = "analysis:#{scope.user.id}:#{System.unique_integer([:positive])}"
+      Phoenix.PubSub.subscribe(Grana.PubSub, topic)
+
+      %{
+        user_id: scope.user.id,
+        context: context,
+        filters: stringify_keys(filters),
+        custom_prompt: custom_prompt,
+        model: choice,
+        topic: topic
+      }
+      |> Grana.Workers.AIAnalysisWorker.new()
+      |> Oban.insert()
+
+      {:noreply, assign(socket, :loading, true)}
     else
-      case Grana.Accounts.get_user_ai_config(scope.user.id) do
-        {:error, :no_api_key} ->
-          {:noreply, assign(socket, :show_api_key_alert, true)}
+      {:error, :no_api_key} ->
+        {:noreply, assign(socket, :show_api_key_alert, true)}
 
-        {:ok, _config} ->
-          topic = "analysis:#{scope.user.id}:#{System.unique_integer([:positive])}"
-          Phoenix.PubSub.subscribe(Grana.PubSub, topic)
-
-          %{
-            user_id: scope.user.id,
-            context: context,
-            filters: stringify_keys(filters),
-            custom_prompt: custom_prompt,
-            topic: topic
-          }
-          |> Grana.Workers.AIAnalysisWorker.new()
-          |> Oban.insert()
-
-          {:noreply, assign(socket, :loading, true)}
-      end
+      true ->
+        {:noreply,
+         put_flash(
+           socket,
+           :info,
+           "Já existe uma análise recente com os mesmos filtros e modelo. Aguarde 2 minutos ou altere os filtros."
+         )}
     end
   end
 
@@ -259,7 +274,7 @@ defmodule GranaWeb.AnalysisLive do
     end
   end
 
-  defp has_recent_duplicate?(analyses, context, filters, custom_prompt) do
+  defp has_recent_duplicate?(analyses, context, filters, custom_prompt, model) do
     two_minutes_ago = DateTime.utc_now() |> DateTime.add(-120, :second)
     str_filters = stringify_keys(filters)
 
@@ -269,8 +284,9 @@ defmodule GranaWeb.AnalysisLive do
       same_year? = to_string(a.filters_json["year"]) == to_string(str_filters["year"])
       same_month? = to_string(a.filters_json["month"]) == to_string(str_filters["month"])
       same_prompt? = (a.prompt || nil) == (custom_prompt || nil)
+      same_model? = a.ai_model in [nil, model]
 
-      recent? and same_context? and same_year? and same_month? and same_prompt?
+      recent? and same_context? and same_year? and same_month? and same_prompt? and same_model?
     end)
   end
 
@@ -339,7 +355,12 @@ defmodule GranaWeb.AnalysisLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      chat_notice={@chat_notice}
+    >
       <div class="max-w-6xl mx-auto">
         <.page_header title="Análise" subtitle="Insights inteligentes sobre suas finanças" />
 
@@ -389,16 +410,24 @@ defmodule GranaWeb.AnalysisLive do
               </.chip>
             </div>
 
-            <.button
-              id="analyze-button"
-              variant="primary"
-              size="sm"
-              icon={if !@loading, do: "hero-sparkles"}
-              class="w-full sm:w-auto"
-              disabled={@loading}
-            >
-              {if @loading, do: "Analisando…", else: "Analisar com IA"}
-            </.button>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <.button
+                id="analyze-button"
+                variant="primary"
+                size="sm"
+                icon={if !@loading, do: "hero-sparkles"}
+                class="w-full sm:w-auto"
+                disabled={@loading}
+              >
+                {if @loading, do: "Analisando…", else: "Analisar com IA"}
+              </.button>
+              <AiComponents.model_picker
+                id="analysis-model"
+                choices={@model_choices}
+                default={@model_defaults["analysis"]}
+                value={@model_choice}
+              />
+            </div>
           </.form>
         </div>
 
@@ -476,11 +505,23 @@ defmodule GranaWeb.AnalysisLive do
                                 class="font-semibold text-xs sm:text-sm truncate"
                                 title={analysis.result_json["titulo"]}
                               >
-                                <.private_text text={analysis.result_json["titulo"]} />
+                                <.private_text
+                                  names={@private_names}
+                                  text={analysis.result_json["titulo"]}
+                                />
                               </h4>
                               <div class="flex flex-wrap items-center gap-1 mt-0.5">
                                 <span class="ui-caption sm:text-xs">
                                   {format_datetime_br(analysis.inserted_at)}
+                                </span>
+                                <span
+                                  :if={analysis.ai_model}
+                                  id={"analysis-model-#{analysis.id}"}
+                                  class="ui-caption inline-flex items-center gap-1 sm:text-xs"
+                                  title={"#{analysis.ai_provider} · #{analysis.ai_model}"}
+                                >
+                                  <.icon name="hero-cpu-chip" class="size-3.5" />
+                                  {analysis.ai_model}
                                 </span>
                                 <span
                                   :if={
@@ -549,7 +590,10 @@ defmodule GranaWeb.AnalysisLive do
                         <div class="overflow-hidden">
                           <div class="mt-3">
                             <p class="text-xs sm:text-sm ui-text-secondary mb-3 sm:mb-4">
-                              <.private_text text={analysis.result_json["resumo"]} />
+                              <.private_text
+                                names={@private_names}
+                                text={analysis.result_json["resumo"]}
+                              />
                             </p>
 
                             <div class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
@@ -562,13 +606,16 @@ defmodule GranaWeb.AnalysisLive do
                                   class={"size-4 shrink-0 mt-0.5 #{elem(ponto_icon(ponto["tipo"]), 1)}"}
                                 />
                                 <span class="ui-text-secondary">
-                                  <.private_text text={ponto["texto"]} />
+                                  <.private_text names={@private_names} text={ponto["texto"]} />
                                 </span>
                               </div>
                             </div>
 
                             <.notice :if={analysis.result_json["alerta"]} tone={:warning} class="mb-3">
-                              <.private_text text={analysis.result_json["alerta"]} />
+                              <.private_text
+                                names={@private_names}
+                                text={analysis.result_json["alerta"]}
+                              />
                             </.notice>
 
                             <div
@@ -583,7 +630,10 @@ defmodule GranaWeb.AnalysisLive do
                                 <span class="text-xs font-medium text-primary">Resposta</span>
                               </div>
                               <p class="text-xs sm:text-sm ui-text-secondary">
-                                <.private_text text={analysis.result_json["resposta"]} />
+                                <.private_text
+                                  names={@private_names}
+                                  text={analysis.result_json["resposta"]}
+                                />
                               </p>
                             </div>
                           </div>
@@ -659,7 +709,10 @@ defmodule GranaWeb.AnalysisLive do
                         <div class="overflow-hidden">
                           <div class="mt-3">
                             <p class="text-xs sm:text-sm mb-3 ui-text-secondary">
-                              <.private_text text={analysis.result_json["resumo"]} />
+                              <.private_text
+                                names={@private_names}
+                                text={analysis.result_json["resumo"]}
+                              />
                             </p>
 
                             <div class="space-y-2 mb-3">
@@ -672,13 +725,16 @@ defmodule GranaWeb.AnalysisLive do
                                   class="size-4 text-warning shrink-0 mt-0.5"
                                 />
                                 <span class="ui-text-secondary">
-                                  <.private_text text={insight} />
+                                  <.private_text names={@private_names} text={insight} />
                                 </span>
                               </div>
                             </div>
 
                             <.notice :if={analysis.result_json["alerta"]} tone={:warning} class="mb-3">
-                              <.private_text text={analysis.result_json["alerta"]} />
+                              <.private_text
+                                names={@private_names}
+                                text={analysis.result_json["alerta"]}
+                              />
                             </.notice>
 
                             <div
@@ -690,7 +746,10 @@ defmodule GranaWeb.AnalysisLive do
                                 class="ui-money-receita size-4 shrink-0 mt-0.5"
                               />
                               <span class="ui-text-secondary">
-                                <.private_text text={analysis.result_json["dica"]} />
+                                <.private_text
+                                  names={@private_names}
+                                  text={analysis.result_json["dica"]}
+                                />
                               </span>
                             </div>
                           </div>

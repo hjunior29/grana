@@ -89,13 +89,28 @@ defmodule Grana.Diagnostics do
     end
   end
 
-  # "Provedor · modelo" do padrão, ou quantos provedores há quando ainda não há padrão.
-  defp ai_default(user) do
-    providers = Grana.AI.list_providers(user)
+  @specialist_labels %{
+    "search" => "pesquisa",
+    "analysis" => "análise",
+    "processing" => "processamento",
+    "chat" => "chat"
+  }
 
-    case Grana.AI.get_provider(user, user.ai_provider) do
-      %{name: name} when is_binary(user.ai_model) -> "#{name} · #{user.ai_model}"
-      _ -> "#{length(providers)} provedor(es), sem padrão definido"
+  # "Provedor · modelo" do padrão geral e de cada especialista com modelo próprio, ou
+  # quantos provedores há quando ainda não há padrão.
+  defp ai_default(user) do
+    case Grana.AI.describe(user, nil) do
+      {name, model} ->
+        specialists =
+          for key <- Grana.AI.specialists(),
+              Grana.AI.specialist_choice(user, key),
+              {provider, model} = Grana.AI.describe(user, key),
+              do: "#{@specialist_labels[key]}: #{provider} · #{model}"
+
+        Enum.join(["geral: #{name} · #{model}" | specialists], " · ")
+
+      nil ->
+        "#{length(Grana.AI.list_providers(user))} provedor(es), sem padrão definido"
     end
   end
 

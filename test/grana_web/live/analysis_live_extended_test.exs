@@ -10,6 +10,15 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
   alias Grana.Banking
 
   setup :register_and_log_in_user
+  setup :set_mimic_global
+
+  setup do
+    stub(Grana.AI.Models, :list, fn _config ->
+      {:ok, [%{id: "gemini-test-model", name: "Gemini Test"}]}
+    end)
+
+    :ok
+  end
 
   describe "filter events" do
     test "select_year changes year filter", %{conn: conn} do
@@ -121,27 +130,6 @@ defmodule GranaWeb.AnalysisLiveExtendedTest do
 
       Banking.ensure_default_categories(user.id)
       transaction_fixture(user, %{description: "SUPERMERCADO", amount: "-100.00"})
-
-      stub(Grana.AI.Provider, :generate_content, fn _prompt, _config ->
-        {:ok,
-         %{
-           "candidates" => [
-             %{
-               "content" => %{"parts" => [%{"text" => "Você gastou R$ 100 em supermercado."}]},
-               "finishReason" => "STOP"
-             }
-           ]
-         }}
-      end)
-
-      stub(Grana.AI.Provider, :extract_text, fn body ->
-        get_in(body, ["candidates", Access.at(0), "content", "parts", Access.at(0), "text"])
-        |> to_string()
-      end)
-
-      stub(Grana.AI.Provider, :finish_reason, fn body ->
-        get_in(body, ["candidates", Access.at(0), "finishReason"])
-      end)
 
       {:ok, view, _html} = live(conn, ~p"/analysis")
 

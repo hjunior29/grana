@@ -601,5 +601,4 @@ defmodule Grana.Accounts do
   end
 
   # Provedor e modelo padrão da IA (ver Grana.AI): ambiente e cadastrados.
-  def get_user_ai_config(user_id), do: Grana.AI.resolve_config(user_id)
 end
