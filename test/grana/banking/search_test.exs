@@ -342,7 +342,7 @@ defmodule Grana.Banking.SearchTest do
       assert error("uber NOT") =~ "termina sem um termo"
       assert error("amount>") =~ ~s(Faltou o valor depois de "amount>")
       assert error(~s("")) =~ "aspas vazias"
-      assert error(String.duplicate("a", 2001)) =~ "2000 caracteres"
+      assert error(String.duplicate("a", 501)) =~ "500 caracteres"
     end
 
     test "campos e valores" do

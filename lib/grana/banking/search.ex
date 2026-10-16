@@ -19,7 +19,7 @@ defmodule Grana.Banking.Search do
 
   @type t :: %__MODULE__{source: String.t(), ast: term(), canonical: String.t()}
 
-  @max_length 2000
+  @max_length 500
 
   @fields %{
     "description" => :description,
@@ -426,10 +426,20 @@ defmodule Grana.Banking.Search do
     end
   end
 
+  @max_regex_length 120
+
+  defp text_matcher(_field, {:regex, source}) when byte_size(source) > @max_regex_length do
+    fail("Expressão regular muito longa (máx. #{@max_regex_length} caracteres).")
+  end
+
   defp text_matcher(_field, {:regex, source}) do
-    case Regex.compile(source, "iu") do
-      {:ok, regex} -> {:regex, regex}
-      {:error, _} -> fail("Expressão regular inválida: /#{source}/.")
+    if Regex.match?(~r/\([^)]*[*+{][^)]*\)[*+{?]/, source) do
+      fail("Expressão regular contém repetições aninhadas não permitidas.")
+    else
+      case Regex.compile(source, "iu") do
+        {:ok, regex} -> {:regex, regex}
+        {:error, _} -> fail("Expressão regular inválida: /#{source}/.")
+      end
     end
   end
 
@@ -460,6 +470,7 @@ defmodule Grana.Banking.Search do
   defp wildcard(term) do
     source =
       term
+      |> String.replace(~r/\*+/, "*")
       |> String.graphemes()
       |> Enum.map_join(fn
         "*" -> ".*"
