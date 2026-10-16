@@ -842,7 +842,17 @@ defmodule Grana.Banking.BankingContextTest do
           user_id: user.id
         })
 
-      %{uncat: uncat, extrato: extrato}
+      {:ok, fatura} =
+        Banking.create_statement(%{
+          bank: "nubank",
+          filename: "fat.csv",
+          statement_type: "fatura",
+          period_start: ~D[2026-01-01],
+          period_end: ~D[2026-02-28],
+          user_id: user.id
+        })
+
+      %{uncat: uncat, extrato: extrato, fatura: fatura}
     end
 
     test "marks 'pag fatura' debit on extrato as internal", %{

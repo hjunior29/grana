@@ -88,15 +88,28 @@ defmodule Grana.Agents.Processor do
 
   defp parse_transactions(text) do
     case decode(text, ~r/\[.*\]/s) do
-      {:ok, items} when is_list(items) -> found(items)
-      _ -> {:error, "Falha ao processar resposta da IA"}
+      {:ok, items} when is_list(items) ->
+        found(items)
+
+      _ ->
+        case decode(text, ~r/\{.*\}/s) do
+          {:ok, %{"transactions" => items} = document} when is_list(items) ->
+            with {:ok, transactions} <- found(items),
+                 :ok <- validate_document_total(transactions, document["document_total"]) do
+              {:ok, transactions}
+            end
+
+          _ ->
+            {:error, "Falha ao processar resposta da IA"}
+        end
     end
   end
 
   defp parse_document(text) do
     case decode(text, ~r/\{.*\}/s) do
       {:ok, %{"transactions" => items} = document} when is_list(items) ->
-        with {:ok, transactions} <- found(items) do
+        with {:ok, transactions} <- found(items),
+             :ok <- validate_document_total(transactions, document["document_total"]) do
           {:ok, transactions,
            %{
              detected_bank: detected_bank(document["bank"]),
@@ -109,13 +122,45 @@ defmodule Grana.Agents.Processor do
     end
   end
 
+  defp validate_document_total(transactions, total_val) when not is_nil(total_val) do
+    case to_decimal(total_val) do
+      %Decimal{} = expected_total ->
+        actual_total =
+          transactions
+          |> Enum.reduce(Decimal.new(0), fn t, acc ->
+            Decimal.add(acc, Decimal.abs(t.amount))
+          end)
+
+        diff = Decimal.abs(Decimal.sub(actual_total, expected_total))
+
+        if Decimal.compare(diff, Decimal.new("0.05")) == :gt do
+          {:error, "Total das transações diverge do total do documento"}
+        else
+          :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp validate_document_total(_transactions, _total_val), do: :ok
+
   defp detected_bank(bank) when is_binary(bank), do: bank |> String.trim() |> String.downcase()
   defp detected_bank(_bank), do: "desconhecido"
 
   defp found(items) do
-    case items |> Enum.map(&to_transaction/1) |> Enum.reject(&is_nil/1) do
-      [] -> {:error, "No transactions found in PDF"}
-      transactions -> {:ok, transactions}
+    transactions = Enum.map(items, &to_transaction/1)
+
+    cond do
+      transactions == [] or Enum.all?(transactions, &is_nil/1) ->
+        {:error, "No transactions found in PDF"}
+
+      Enum.any?(transactions, &is_nil/1) ->
+        {:error, "Transações contêm valores ou campos inválidos"}
+
+      true ->
+        {:ok, transactions}
     end
   end
 
@@ -131,8 +176,8 @@ defmodule Grana.Agents.Processor do
          "type" => type
        })
        when is_binary(date) and is_binary(description) and type in ["credit", "debit"] do
-    with {:ok, date} <- parse_date(date) do
-      value = to_decimal(amount)
+    with {:ok, date} <- parse_date(date),
+         %Decimal{} = value <- to_decimal(amount) do
       original = String.trim(description)
       {cleaned, current, total} = InstallmentParser.extract(original)
 
@@ -167,13 +212,15 @@ defmodule Grana.Agents.Processor do
   defp to_decimal(value) when is_integer(value), do: Decimal.new(value)
 
   defp to_decimal(value) when is_binary(value) do
-    case value |> normalize_number() |> Decimal.parse() do
-      {decimal, _rest} -> decimal
-      :error -> Decimal.new(0)
+    cleaned = Regex.replace(~r/[^\d.,\-]/, value, "")
+
+    case cleaned |> normalize_number() |> Decimal.parse() do
+      {decimal, ""} -> decimal
+      _ -> nil
     end
   end
 
-  defp to_decimal(_value), do: Decimal.new(0)
+  defp to_decimal(_value), do: nil
 
   # "1.234,56" or "1234,56" would otherwise stop at the comma and lose the cents.
   defp normalize_number(text) do

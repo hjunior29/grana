@@ -80,8 +80,9 @@ config :grana, GranaWeb.Gettext, default_locale: "pt_BR"
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :phoenix, :filter_parameters,
-  ~w(password secret api_key token code old_cloak_key smtp_password client_secret)
+config :phoenix,
+       :filter_parameters,
+       ~w(password secret api_key token code old_cloak_key smtp_password client_secret)
 
 # Configure ErrorTracker
 config :error_tracker,

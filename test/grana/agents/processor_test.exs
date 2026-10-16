@@ -137,6 +137,28 @@ defmodule Grana.Agents.ProcessorTest do
 
       assert {:error, "Falha ao processar resposta da IA"} =
                StatementProcessor.process("%PDF", "outro", "extrato", user.id, "c.pdf")
+
+      LLMStub.script([
+        pdf_reply([
+          txn("10/03/2026", "A", "10.00", "debit"),
+          txn("11/03/2026", "B", "invalido", "debit")
+        ])
+      ])
+
+      assert {:error, "Transações contêm valores ou campos inválidos"} =
+               StatementProcessor.process("%PDF", "nubank", "extrato", user.id, "d.pdf")
+
+      LLMStub.script([
+        Jason.encode!(%{
+          "bank" => "itau",
+          "document_type" => "extrato",
+          "document_total" => "500.00",
+          "transactions" => [txn("10/03/2026", "A", "100.00", "debit")]
+        })
+      ])
+
+      assert {:error, "Total das transações diverge do total do documento"} =
+               StatementProcessor.process("%PDF", "outro", "extrato", user.id, "e.pdf")
     end
 
     test "without a provider the PDF cannot be read", %{user: user} do

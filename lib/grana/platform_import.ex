@@ -142,13 +142,16 @@ defmodule Grana.PlatformImport do
           installment_total: r.installment_total,
           installment_group_id: nil,
           is_internal_transfer: r.is_internal_transfer,
-          internal_override: if(is_boolean(r.is_internal_transfer), do: r.is_internal_transfer, else: nil),
+          internal_override:
+            if(is_boolean(r.is_internal_transfer), do: r.is_internal_transfer, else: nil),
           bank_statement_id: stmt.id,
           user_id: user_id,
           category_id: Map.get(cat_map, norm(r.category_name), uncategorized_id)
         }
       end)
-      |> dedup(user_id, &banking_fingerprint/1, &existing_banking_fingerprints/3)
+      |> dedup(user_id, &banking_fingerprint/1, fn uid, f, t ->
+        existing_banking_fingerprints(uid, f, t, bank, stype)
+      end)
 
     {count, _} = Banking.bulk_insert_transactions(entries)
     Banking.update_statement(stmt, %{status: "completed", total_transactions: count})
@@ -219,8 +222,15 @@ defmodule Grana.PlatformImport do
     {date, norm(desc), money_key(amount)}
   end
 
-  defp existing_banking_fingerprints(user_id, date_from, date_to) do
-    Banking.list_transactions(user_id, date_from: date_from, date_to: date_to)
+  defp existing_banking_fingerprints(user_id, date_from, date_to, bank, statement_type) do
+    opts =
+      [date_from: date_from, date_to: date_to]
+      |> then(fn o -> if bank, do: Keyword.put(o, :bank, bank), else: o end)
+      |> then(fn o ->
+        if statement_type, do: Keyword.put(o, :statement_type, statement_type), else: o
+      end)
+
+    Banking.list_transactions(user_id, opts)
     |> Enum.map(&banking_fingerprint/1)
     |> Enum.frequencies()
   end

@@ -450,6 +450,7 @@ defmodule Grana.OpenFinance do
           store_statement(connection, local, type, key, rows, categorize, now)
         end)
       end)
+      |> Enum.reject(&is_nil/1)
 
     from(s in BankStatement,
       where:
@@ -546,48 +547,74 @@ defmodule Grana.OpenFinance do
   defp statement_key(row, "fatura"), do: row.bill_id || "aberta"
 
   defp store_statement(connection, account, type, key, rows, categorize, now) do
-    {period_start, period_end} = rows |> Enum.map(& &1.date) |> Enum.min_max_by(& &1, Date)
-    external_id = "#{account.pluggy_id}:#{key}"
+    fresh_periods = Banking.upload_periods(connection.user_id, connection.bank)
+    rows = reject_covered(rows, connection, type, fresh_periods)
 
-    attrs = %{
-      bank: connection.bank,
-      filename: "Open Finance · #{account_label(account)} · #{key}",
-      statement_type: type,
-      status: "completed",
-      period_start: period_start,
-      period_end: period_end,
-      total_transactions: length(rows)
-    }
+    if rows == [] do
+      nil
+    else
+      {period_start, period_end} = rows |> Enum.map(& &1.date) |> Enum.min_max_by(& &1, Date)
+      external_id = "#{account.pluggy_id}:#{key}"
 
-    statement =
-      case Repo.get_by(BankStatement,
-             open_finance_account_id: account.id,
-             external_id: external_id
-           ) do
-        nil ->
-          %BankStatement{
-            source: "open_finance",
-            external_id: external_id,
-            open_finance_account_id: account.id,
-            user_id: connection.user_id
-          }
+      attrs = %{
+        bank: connection.bank,
+        filename: "Open Finance · #{account_label(account)} · #{key}",
+        statement_type: type,
+        status: "completed",
+        period_start: period_start,
+        period_end: period_end,
+        total_transactions: length(rows)
+      }
 
-        statement ->
-          statement
-      end
-      |> Ecto.Changeset.change(attrs)
-      |> Repo.insert_or_update!()
+      statement =
+        case Repo.get_by(BankStatement,
+               open_finance_account_id: account.id,
+               external_id: external_id
+             ) do
+          nil ->
+            %BankStatement{
+              source: "open_finance",
+              external_id: external_id,
+              open_finance_account_id: account.id,
+              user_id: connection.user_id
+            }
 
-    upsert_transactions(rows, statement, connection.user_id, categorize, now)
+          statement ->
+            statement
+        end
+        |> Ecto.Changeset.change(attrs)
+        |> Repo.insert_or_update!()
 
-    external_ids = Enum.map(rows, & &1.external_id)
+      upsert_transactions(rows, statement, connection.user_id, categorize, now)
 
-    from(t in BankingTransaction,
-      where: t.bank_statement_id == ^statement.id and t.external_id not in ^external_ids
-    )
-    |> Repo.delete_all()
+      external_ids = Enum.map(rows, & &1.external_id)
 
-    statement.id
+      from(t in BankingTransaction,
+        where:
+          t.bank_statement_id == ^statement.id and
+            t.date >= ^period_start and
+            t.external_id not in ^external_ids
+      )
+      |> Repo.delete_all()
+
+      query =
+        from(t in BankingTransaction,
+          where: t.bank_statement_id == ^statement.id,
+          select: {min(t.date), max(t.date), count(t.id)}
+        )
+
+      {actual_start, actual_end, count} = Repo.one(query)
+
+      statement
+      |> Ecto.Changeset.change(%{
+        period_start: actual_start || period_start,
+        period_end: actual_end || period_end,
+        total_transactions: count
+      })
+      |> Repo.update!()
+
+      statement.id
+    end
   end
 
   defp account_label(account) do
