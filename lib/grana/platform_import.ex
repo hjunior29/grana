@@ -142,6 +142,7 @@ defmodule Grana.PlatformImport do
           installment_total: r.installment_total,
           installment_group_id: nil,
           is_internal_transfer: r.is_internal_transfer,
+          internal_override: if(is_boolean(r.is_internal_transfer), do: r.is_internal_transfer, else: nil),
           bank_statement_id: stmt.id,
           user_id: user_id,
           category_id: Map.get(cat_map, norm(r.category_name), uncategorized_id)

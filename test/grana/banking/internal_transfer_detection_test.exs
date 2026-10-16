@@ -85,4 +85,27 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
     assert :ok = Banking.detect_internal_transfers(ctx.user.id)
     refute internal?(mine.id, ctx.user.id)
   end
+
+  test "marcação manual sem contraparte (:single) sobrevive a novas detecções", ctx do
+    # TED sem nome ou CPF da contraparte extraível
+    txn = insert_txn(ctx, "TED ENVIADA 1234", "debit")
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    refute internal?(txn.id, ctx.user.id)
+
+    # Marca manualmente como interna -> :single
+    assert {:ok, :single} = Banking.set_transaction_internal(ctx.user.id, txn.id, true)
+    assert internal?(txn.id, ctx.user.id)
+
+    # Nova importação / sync re-executa detect_internal_transfers -> marcação é mantida!
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    assert internal?(txn.id, ctx.user.id)
+
+    # Se desmarcar manualmente como externa -> :single
+    assert {:ok, :single} = Banking.set_transaction_internal(ctx.user.id, txn.id, false)
+    refute internal?(txn.id, ctx.user.id)
+
+    # Nova detecção não volta a marcar
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    refute internal?(txn.id, ctx.user.id)
+  end
 end
