@@ -86,8 +86,10 @@ end
 
 # Encryption key for sensitive fields (API keys).
 # Generate with: :crypto.strong_rand_bytes(32) |> Base.encode64()
-if cloak_key = System.get_env("CLOAK_KEY") do
-  config :grana, :cloak_key, cloak_key
+if config_env() != :test do
+  if cloak_key = System.get_env("CLOAK_KEY") do
+    config :grana, :cloak_key, cloak_key
+  end
 end
 
 if System.get_env("PHX_SERVER") do
@@ -147,10 +149,13 @@ if config_env() == :prod do
 
   # Chave de cifragem das credenciais (Grana.Encrypted.Binary). Guarde-a junto dos
   # backups para poder levar as credenciais cifradas para outra instância.
-  config :grana,
-         :cloak_key,
-         System.get_env("CLOAK_KEY") ||
-           Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
+  cloak_key =
+    System.get_env("CLOAK_KEY") ||
+      Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
+
+  System.put_env("CLOAK_KEY", cloak_key)
+
+  config :grana, :cloak_key, cloak_key
 
   public_uri = public_url && URI.parse(public_url)
 
