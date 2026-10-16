@@ -14,12 +14,19 @@ defmodule Grana.Banking.Category do
     timestamps(type: :utc_datetime)
   end
 
+  @kinds ["expense", "investment", "income"]
+
   def changeset(category, attrs) do
+    user_id = category.user_id || attrs[:user_id] || attrs["user_id"]
+    allowed = if category.is_system, do: [:color, :icon], else: [:name, :icon, :color, :kind]
+
     category
-    |> cast(attrs, [:name, :icon, :color, :kind, :user_id])
+    |> Map.put(:user_id, user_id)
+    |> cast(attrs, allowed)
     |> validate_required([:name])
-    |> validate_inclusion(:kind, ["expense", "investment", "income"])
+    |> validate_inclusion(:kind, @kinds)
     |> validate_format(:color, ~r/^#[0-9A-Fa-f]{3,8}$/, message: "cor inválida")
+    |> validate_format(:icon, ~r/^hero-[a-z0-9-]+$/, message: "ícone inválido")
     |> unique_constraint([:name, :user_id])
   end
 

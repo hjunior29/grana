@@ -16,8 +16,11 @@ defmodule Grana.Banking.FinancialGoal do
   end
 
   def changeset(goal, attrs) do
+    user_id = goal.user_id || attrs[:user_id] || attrs["user_id"]
+
     goal
-    |> cast(attrs, [:type, :target_value, :active, :user_id, :category_id])
+    |> Map.put(:user_id, user_id)
+    |> cast(attrs, [:type, :target_value, :active, :category_id])
     |> validate_required([:type, :target_value, :user_id],
       message: "não pode ficar em branco"
     )
