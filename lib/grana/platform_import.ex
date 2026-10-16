@@ -59,11 +59,19 @@ defmodule Grana.PlatformImport do
 
   # ── Banking ────────────────────────────────────────────────────────────────
 
+  @formula_prefixes ["=", "+", "-", "@", "\t", "\r"]
+
+  defp unquote_formula("'" <> rest = val) do
+    if String.starts_with?(String.trim_leading(rest), @formula_prefixes), do: rest, else: val
+  end
+
+  defp unquote_formula(val), do: val
+
   defp parse_banking(cols, rows) do
     rows
     |> Enum.map(fn row ->
       date = parse_date(at(cols, row, "data"))
-      desc = at(cols, row, "descricao") || ""
+      desc = unquote_formula(at(cols, row, "descricao") || "")
       type = banking_type(at(cols, row, "tipo"))
       amount = parse_amount(at(cols, row, "valor"), type)
 
@@ -73,7 +81,8 @@ defmodule Grana.PlatformImport do
         %{
           date: date,
           description: desc,
-          original_description: blank_to_nil(at(cols, row, "descricao original")) || desc,
+          original_description:
+            unquote_formula(blank_to_nil(at(cols, row, "descricao original")) || desc),
           amount: amount,
           type: type,
           category_name: blank_to_nil(at(cols, row, "categoria")),
@@ -97,13 +106,15 @@ defmodule Grana.PlatformImport do
     cat_map = resolve_categories(user_id, rows)
     uncategorized_id = uncategorized_category_id(user_id)
 
-    count =
-      rows
-      |> Enum.group_by(fn r -> {r.bank, r.statement_type} end)
-      |> Enum.map(fn {{bank, stype}, group} ->
-        import_banking_group(user_id, bank, stype, group, filename, cat_map, uncategorized_id)
+    {:ok, count} =
+      Repo.transaction(fn ->
+        rows
+        |> Enum.group_by(fn r -> {r.bank, r.statement_type} end)
+        |> Enum.map(fn {{bank, stype}, group} ->
+          import_banking_group(user_id, bank, stype, group, filename, cat_map, uncategorized_id)
+        end)
+        |> Enum.sum()
       end)
-      |> Enum.sum()
 
     Grana.OpenFinance.uploads_changed(user_id)
     Banking.detect_internal_transfers(user_id)
