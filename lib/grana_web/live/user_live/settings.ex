@@ -86,6 +86,16 @@ defmodule GranaWeb.UserLive.Settings do
                   value={@current_email}
                 />
                 <.input
+                  field={@password_form[:current_password]}
+                  name="current_password"
+                  type="password"
+                  label="Senha atual"
+                  id="current_password_for_password"
+                  autocomplete="current-password"
+                  value={@current_password}
+                  required
+                />
+                <.input
                   field={@password_form[:password]}
                   type="password"
                   label="Nova senha"
@@ -514,6 +524,7 @@ defmodule GranaWeb.UserLive.Settings do
     socket =
       socket
       |> assign(:current_email, user.email)
+      |> assign(:current_password, nil)
       |> assign(:email_form, to_form(email_changeset))
       |> assign(:password_form, to_form(password_changeset))
       |> assign(:identity_form, to_form(identity_changeset))
@@ -558,6 +569,7 @@ defmodule GranaWeb.UserLive.Settings do
 
   def handle_event("validate_password", params, socket) do
     %{"user" => user_params} = params
+    current_password = params["current_password"] || user_params["current_password"]
 
     password_form =
       socket.assigns.current_scope.user
@@ -565,7 +577,7 @@ defmodule GranaWeb.UserLive.Settings do
       |> Map.put(:action, :validate)
       |> to_form()
 
-    {:noreply, assign(socket, password_form: password_form)}
+    {:noreply, assign(socket, password_form: password_form, current_password: current_password)}
   end
 
   def handle_event("update_password", params, socket) do
@@ -573,8 +585,14 @@ defmodule GranaWeb.UserLive.Settings do
 
     if Accounts.sudo_mode?(user) do
       %{"user" => user_params} = params
+      current_password = params["current_password"] || user_params["current_password"]
 
-      case Accounts.change_user_password(user, user_params) do
+      changeset =
+        user
+        |> Accounts.change_user_password(user_params)
+        |> Grana.Accounts.User.validate_current_password(current_password)
+
+      case changeset do
         %{valid?: true} = changeset ->
           {:noreply, assign(socket, trigger_submit: true, password_form: to_form(changeset))}
 
@@ -619,22 +637,35 @@ defmodule GranaWeb.UserLive.Settings do
 
   def handle_event("confirm_reset", %{"reset" => params}, socket) do
     user = socket.assigns.current_scope.user
+    bucket = "confirm_reset:user:#{user.id}"
 
-    cond do
-      params["confirmation"] != "APAGAR" ->
+    case GranaWeb.RateLimit.check_rate(bucket, :timer.minutes(15), 5) do
+      :allow ->
+        cond do
+          params["confirmation"] != "APAGAR" ->
+            {:noreply,
+             assign(
+               socket,
+               :reset_form,
+               reset_form(%{}, confirmation: "Digite APAGAR para confirmar.")
+             )}
+
+          not Grana.Accounts.User.valid_password?(user, params["password"] || "") ->
+            {:noreply,
+             assign(socket, :reset_form, reset_form(params, password: "Senha incorreta."))}
+
+          true ->
+            :ok = Grana.Backup.reset_all()
+            {:noreply, redirect(socket, to: ~p"/setup")}
+        end
+
+      :deny ->
         {:noreply,
          assign(
            socket,
            :reset_form,
-           reset_form(%{}, confirmation: "Digite APAGAR para confirmar.")
+           reset_form(params, password: "Muitas tentativas. Aguarde 15 minutos.")
          )}
-
-      not Grana.Accounts.User.valid_password?(user, params["password"] || "") ->
-        {:noreply, assign(socket, :reset_form, reset_form(params, password: "Senha incorreta."))}
-
-      true ->
-        :ok = Grana.Backup.reset_all()
-        {:noreply, redirect(socket, to: ~p"/setup")}
     end
   end
 

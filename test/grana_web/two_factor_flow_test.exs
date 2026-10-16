@@ -168,6 +168,7 @@ defmodule GranaWeb.TwoFactorFlowTest do
         conn
         |> log_in_user(user)
         |> post(~p"/users/update-password", %{
+          "current_password" => valid_user_password(),
           "user" => %{
             "password" => "outra senha longa",
             "password_confirmation" => "outra senha longa"

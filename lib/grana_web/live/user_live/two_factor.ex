@@ -55,15 +55,25 @@ defmodule GranaWeb.UserLive.TwoFactor do
 
   @impl true
   def handle_event("resend", _params, socket) do
-    case Accounts.deliver_two_factor_code(socket.assigns.user) do
-      {:ok, _email} ->
-        {:noreply, put_flash(socket, :info, "Enviamos um novo código.")}
+    user = socket.assigns.user
+    bucket = "resend_2fa:user:#{user.id}"
 
-      {:error, :cooldown} ->
-        {:noreply, put_flash(socket, :error, "Aguarde um minuto antes de pedir outro código.")}
+    case GranaWeb.RateLimit.check_rate(bucket, 60_000, 3) do
+      :allow ->
+        case Accounts.deliver_two_factor_code(user) do
+          {:ok, _email} ->
+            {:noreply, put_flash(socket, :info, "Enviamos um novo código.")}
 
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Não foi possível enviar o código por email.")}
+          {:error, :cooldown} ->
+            {:noreply,
+             put_flash(socket, :error, "Aguarde um minuto antes de pedir outro código.")}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Não foi possível enviar o código por email.")}
+        end
+
+      :deny ->
+        {:noreply, put_flash(socket, :error, "Muitas tentativas. Aguarde um minuto.")}
     end
   end
 

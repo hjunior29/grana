@@ -91,8 +91,9 @@ defmodule GranaWeb.UserSessionController do
     end
   end
 
-  def update_password(conn, %{"user" => user_params}) do
+  def update_password(conn, %{"user" => user_params} = params) do
     user = conn.assigns.current_scope.user
+    current_password = params["current_password"] || user_params["current_password"]
 
     cond do
       not Accounts.sudo_mode?(user) ->
@@ -101,7 +102,7 @@ defmodule GranaWeb.UserSessionController do
         |> redirect(to: ~p"/users/settings")
 
       true ->
-        case Accounts.update_user_password(user, user_params) do
+        case Accounts.update_user_password(user, current_password, user_params) do
           {:ok, {user, expired_tokens}} ->
             # disconnect all existing LiveViews with old sessions
             UserAuth.disconnect_sessions(expired_tokens)

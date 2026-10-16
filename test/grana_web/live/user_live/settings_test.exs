@@ -160,6 +160,7 @@ defmodule GranaWeb.UserLive.SettingsTest do
 
       form =
         form(lv, "#password_form", %{
+          "current_password" => valid_user_password(),
           "user" => %{
             "email" => user.email,
             "password" => new_password,
