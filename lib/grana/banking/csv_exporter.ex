@@ -78,13 +78,24 @@ defmodule Grana.Banking.CsvExporter do
 
   defp installment_label(_), do: ""
 
+  @formula_prefixes ["=", "+", "-", "@", "\t", "\r"]
+
+  defp escape_field(nil), do: ""
+
   defp escape_field(val) when is_binary(val) do
-    if String.contains?(val, [";", "\"", "\n"]) do
-      "\"" <> String.replace(val, "\"", "\"\"") <> "\""
+    sanitized =
+      if String.starts_with?(String.trim_leading(val), @formula_prefixes) do
+        "'" <> val
+      else
+        val
+      end
+
+    if String.contains?(sanitized, [";", "\"", "\n", "\r"]) do
+      "\"" <> String.replace(sanitized, "\"", "\"\"") <> "\""
     else
-      val
+      sanitized
     end
   end
 
-  defp escape_field(val), do: to_string(val)
+  defp escape_field(val), do: escape_field(to_string(val))
 end
