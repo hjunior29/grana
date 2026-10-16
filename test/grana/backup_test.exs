@@ -33,14 +33,31 @@ defmodule Grana.BackupTest do
   end
 
   describe "create/1" do
-    test "grava uma cópia consistente do banco", %{tmp_dir: tmp} do
-      user_fixture() |> then(&transaction_fixture(&1))
+    test "grava uma cópia consistente do banco limpando tokens e transitórios", %{tmp_dir: tmp} do
+      user = user_fixture()
+      transaction_fixture(user)
+      Grana.Accounts.generate_user_session_token(user)
       dest = Path.join(tmp, "copy.db")
 
       assert :ok = Backup.create(dest)
 
+      # O backup contém os dados principais
       assert {:ok, %{users: [%{transactions: 1}]} = analysis} = Backup.analyze(dest)
       Backup.discard(analysis.path)
+
+      # Mas não contém tokens de sessão ou jobs transitórios
+      {:ok, pid} =
+        Repo.start_link(
+          name: nil,
+          database: dest,
+          pool: DBConnection.ConnectionPool,
+          pool_size: 1,
+          journal_mode: :delete
+        )
+
+      Repo.put_dynamic_repo(pid)
+      assert Repo.query!("SELECT count(*) FROM users_tokens").rows == [[0]]
+      GenServer.stop(pid)
     end
 
     test "falha com erro legível quando o destino não existe", %{tmp_dir: tmp} do

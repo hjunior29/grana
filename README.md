@@ -101,9 +101,9 @@ quando não há nada no ambiente).
 | `TRUST_PROXY_HEADERS` | `true` atrás de proxy reverso (usa `X-Forwarded-For` no rate limit) |
 | `POOL_SIZE`, `CACHE_ENABLED`, `CACHE_TTL_SECONDS`, `SKIP_MIGRATIONS` | Ajustes finos |
 
-> **Guarde a `CLOAK_KEY`** (ou a pasta `$DATA_DIR/secrets/`) junto dos seus backups. Ela
+> **Guarde a `CLOAK_KEY`** em local seguro e **separada** do arquivo de backup (por exemplo, no seu gerenciador de senhas). Ela
 > decifra as credenciais salvas (chaves de IA, Pluggy, SMTP, CPF); sem ela, ao restaurar em outra
-> instância você precisa cadastrá-las de novo.
+> instância você precisa cadastrá-las de novo. Não guarde o arquivo `secrets/` no mesmo diretório público do backup.
 
 ## Inteligência artificial
 

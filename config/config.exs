@@ -80,10 +80,15 @@ config :grana, GranaWeb.Gettext, default_locale: "pt_BR"
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :phoenix, :filter_parameters,
+  ~w(password secret api_key token code old_cloak_key smtp_password client_secret)
+
 # Configure ErrorTracker
 config :error_tracker,
   repo: Grana.Repo,
-  otp_app: :grana
+  otp_app: :grana,
+  filter: Grana.ErrorTracker.Filter,
+  plugins: [{ErrorTracker.Plugins.Pruner, max_age: :timer.hours(24 * 7)}]
 
 # Configure Oban
 config :grana, Oban,

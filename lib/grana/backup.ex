@@ -25,10 +25,33 @@ defmodule Grana.Backup do
 
   ## Download
 
-  @doc "Grava uma cópia consistente do banco em `dest` (`VACUUM INTO`)."
+  @doc "Grava uma cópia consistente do banco em `dest` (`VACUUM INTO`), limpando dados transitórios."
   def create(dest) do
-    case Repo.query("VACUUM INTO ?", [dest]) do
-      {:ok, _} -> :ok
+    with {:ok, _} <- Repo.query("VACUUM INTO ?", [dest]),
+         :ok <-
+           with_temp_repo(dest, fn ->
+             %{rows: rows} =
+               Repo.query!("SELECT name FROM sqlite_master WHERE type = 'table'")
+
+             tables_to_clear =
+               rows
+               |> Enum.map(&hd/1)
+               |> Enum.filter(fn name ->
+                 name == "users_tokens" or
+                   (String.starts_with?(name, ["oban_", "error_tracker_"]) and
+                      not String.starts_with?(name, "sqlite_"))
+               end)
+
+             for table <- tables_to_clear do
+               Repo.query!(~s|DELETE FROM "#{table}"|)
+             end
+
+             Repo.query!("VACUUM")
+             :ok
+           end) do
+      :ok
+    else
+      {:error, error} when is_binary(error) -> {:error, error}
       {:error, error} -> {:error, Exception.message(error)}
     end
   end
