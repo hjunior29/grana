@@ -34,32 +34,36 @@ defmodule GranaWeb.BackupHooks do
     do: {:halt, assign(socket, :restore_upload_error, nil)}
 
   defp handle_event("restore_analyze", _params, socket) do
-    discard(socket.assigns.restore_analysis)
+    if authorized?(socket) do
+      discard(socket.assigns.restore_analysis)
 
-    results =
-      consume_uploaded_entries(socket, :backup, fn %{path: path}, _entry ->
-        {:ok, Backup.analyze(path)}
-      end)
+      results =
+        consume_uploaded_entries(socket, :backup, fn %{path: path}, _entry ->
+          {:ok, Backup.analyze(path)}
+        end)
 
-    case results do
-      [{:ok, analysis}] ->
-        first = hd(analysis.users)
+      case results do
+        [{:ok, analysis}] ->
+          first = hd(analysis.users)
 
-        {:halt,
-         socket
-         |> assign(:restore_stage, :options)
-         |> assign(:restore_analysis, analysis)
-         |> assign(:restore_form, restore_form(%{"user_id" => to_string(first.id)}))}
+          {:halt,
+           socket
+           |> assign(:restore_stage, :options)
+           |> assign(:restore_analysis, analysis)
+           |> assign(:restore_form, restore_form(%{"user_id" => to_string(first.id)}))}
 
-      [{:error, reason}] ->
-        {:halt,
-         socket
-         |> assign(:restore_stage, :idle)
-         |> put_flash(:error, error_message(reason))}
+        [{:error, reason}] ->
+          {:halt,
+           socket
+           |> assign(:restore_stage, :idle)
+           |> put_flash(:error, error_message(reason))}
 
-      [] ->
-        {:halt,
-         assign(socket, :restore_upload_error, "Escolha o arquivo de backup (.db) primeiro.")}
+        [] ->
+          {:halt,
+           assign(socket, :restore_upload_error, "Escolha o arquivo de backup (.db) primeiro.")}
+      end
+    else
+      {:halt, unauthorized(socket)}
     end
   end
 
@@ -150,6 +154,9 @@ defmodule GranaWeb.BackupHooks do
 
   defp error_message(reason) when reason in [:corrupted, :invalid_file],
     do: "O arquivo está corrompido ou não pôde ser lido."
+
+  defp error_message(:untrusted_objects),
+    do: "O arquivo contém objetos não permitidos (views ou triggers)."
 
   defp error_message(:not_grana_backup), do: "Este arquivo não parece um backup do Grana."
 
