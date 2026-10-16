@@ -128,11 +128,21 @@ defmodule Grana.Banking.Search do
     {:search_error, message} -> {:error, message}
   end
 
+  @filter_timeout_ms 2_000
+
   @doc "Transações que casam com a busca, na ordem recebida."
   def filter(%__MODULE__{ast: nil}, transactions, _recurring), do: transactions
 
   def filter(%__MODULE__{ast: ast}, transactions, recurring) do
-    Enum.filter(transactions, &eval(ast, document(&1, recurring)))
+    task =
+      Task.async(fn ->
+        Enum.filter(transactions, &eval(ast, document(&1, recurring)))
+      end)
+
+    case Task.yield(task, @filter_timeout_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      _ -> []
+    end
   end
 
   @doc "Se a busca usa `recurrence:` (que precisa da análise de fixas e variáveis)."
@@ -685,8 +695,21 @@ defmodule Grana.Banking.Search do
   defp text_match?({:pattern, regex}, {_raw, folded}), do: Regex.match?(regex, folded)
 
   defp text_match?({:regex, regex}, {raw, folded}) do
-    Regex.match?(regex, raw) or Regex.match?(regex, folded)
+    safe_match?(regex, raw) or safe_match?(regex, folded)
   end
+
+  defp safe_match?(regex, subject) when is_binary(subject) do
+    case :re.run(subject, regex.re_pattern, [
+           {:capture, :none},
+           {:match_limit, 50_000},
+           {:match_limit_recursion, 5_000}
+         ]) do
+      :match -> true
+      _ -> false
+    end
+  end
+
+  defp safe_match?(_regex, _subject), do: false
 
   defp allowed(:gt), do: [:gt]
   defp allowed(:ge), do: [:gt, :eq]

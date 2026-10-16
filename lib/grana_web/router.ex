@@ -89,8 +89,17 @@ defmodule GranaWeb.Router do
   scope "/admin" do
     pipe_through [:browser, :setup_complete, :require_authenticated_user]
 
-    error_tracker_dashboard("/errors")
-    oban_dashboard("/oban")
+    error_tracker_dashboard "/errors",
+      on_mount: [
+        {GranaWeb.SetupGate, :setup_complete},
+        {GranaWeb.UserAuth, :require_authenticated}
+      ]
+
+    oban_dashboard "/oban",
+      on_mount: [
+        {GranaWeb.SetupGate, :setup_complete},
+        {GranaWeb.UserAuth, :require_authenticated}
+      ]
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
