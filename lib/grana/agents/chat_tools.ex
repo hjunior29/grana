@@ -8,6 +8,7 @@ defmodule Grana.Agents.ChatTools do
   alias Grana.Banking
   alias Grana.Banking.Search
   alias Grana.Money
+  alias Grana.AI.PromptSanitizer
   alias LangChain.Function
 
   @search_limit 50
@@ -187,8 +188,8 @@ defmodule Grana.Agents.ChatTools do
           fixed_expenses:
             Enum.map(analysis.fixed, fn item ->
               %{
-                name: item.name,
-                category: category(item),
+                name: PromptSanitizer.sanitize_description(item.name),
+                category: PromptSanitizer.sanitize_description(category(item)),
                 average: brl(item.avg_amount),
                 last: brl(item.last_amount),
                 months_present: item.months_present,
@@ -273,9 +274,9 @@ defmodule Grana.Agents.ChatTools do
   defp transaction(txn) do
     %{
       date: txn.date,
-      description: txn.description,
+      description: PromptSanitizer.sanitize_description(txn.description),
       amount: brl(txn.amount),
-      category: category(txn),
+      category: PromptSanitizer.sanitize_description(category(txn)),
       bank: bank(txn)
     }
   end

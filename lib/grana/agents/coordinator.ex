@@ -93,7 +93,9 @@ defmodule Grana.Agents.Coordinator do
         "- #{call["name"]}(#{Jason.encode!(call["arguments"] || %{})}): #{call["result"]}"
       end)
 
-    Message.new_assistant!("#{content}\n\n[consulted data]\n#{data}")
+    Message.new_assistant!(
+      "#{content}\n\n[consulted data]\n<consulted_data>\n#{data}\n</consulted_data>"
+    )
   end
 
   defp tool_calls(messages) do
