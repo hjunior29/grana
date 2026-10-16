@@ -70,6 +70,9 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
                     nil
 
                   _ ->
+                    amount = Decimal.negate(val)
+                    type = if Decimal.compare(amount, 0) == :lt, do: "debit", else: "credit"
+
                     trimmed_desc = String.trim(description)
                     cleaned_desc = clean_description(trimmed_desc)
 
@@ -80,8 +83,8 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
 
                     %{
                       date: date,
-                      amount: Decimal.negate(val),
-                      type: "debit",
+                      amount: amount,
+                      type: type,
                       identifier: nil,
                       description: final_desc,
                       original_description: trimmed_desc,
