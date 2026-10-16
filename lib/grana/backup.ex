@@ -94,11 +94,19 @@ defmodule Grana.Backup do
   defp prepare_copy(work) do
     with_temp_repo(work, fn ->
       with :ok <- integrity_check(),
+           :ok <- check_triggers_and_views(),
            :ok <- check_migrations(),
            :ok <- migrate() do
         list_users()
       end
     end)
+  end
+
+  defp check_triggers_and_views do
+    case Repo.query!("SELECT count(*) FROM sqlite_master WHERE type IN ('view', 'trigger')") do
+      %{rows: [[0]]} -> :ok
+      _ -> {:error, :untrusted_objects}
+    end
   end
 
   defp integrity_check do
@@ -283,6 +291,7 @@ defmodule Grana.Backup do
         Repo.put_dynamic_repo(pid)
 
         try do
+          Repo.query!("PRAGMA trusted_schema = OFF")
           fun.()
         rescue
           e ->
@@ -300,6 +309,7 @@ defmodule Grana.Backup do
 
   defp apply_to_live(path) do
     replace_live_data(fn ->
+      Repo.query!("PRAGMA trusted_schema = OFF")
       Repo.query!("ATTACH DATABASE ? AS restore", [path])
 
       try do
