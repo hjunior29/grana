@@ -71,4 +71,25 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
     assert dez.date == ~D[2025-12-20]
     assert fev.date == ~D[2026-02-04]
   end
+
+  test "linhas negativas (pagamento de fatura e estornos) viram credit" do
+    csv = """
+    Data: 15/02/2026 11:00:04\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r10/02;PAGTO. POR DEB EM C/C;0,00;-1.500,00\r\r11/02;ESTORNO DE COMPRA;0,00;-89,90\r\r12/02;COMPRA NORMAL;0,00;50,00
+    """
+
+    result = BradescoFatura.parse(csv)
+    assert length(result) == 3
+
+    pagto = Enum.find(result, &(&1.description == "PAGTO. POR DEB EM C/C"))
+    assert pagto.type == "credit"
+    assert Decimal.compare(pagto.amount, Decimal.new("1500.00")) == :eq
+
+    estorno = Enum.find(result, &(&1.description == "ESTORNO DE COMPRA"))
+    assert estorno.type == "credit"
+    assert Decimal.compare(estorno.amount, Decimal.new("89.90")) == :eq
+
+    compra = Enum.find(result, &(&1.description == "COMPRA NORMAL"))
+    assert compra.type == "debit"
+    assert Decimal.compare(compra.amount, Decimal.new("-50.00")) == :eq
+  end
 end
