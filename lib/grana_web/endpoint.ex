@@ -9,6 +9,7 @@ defmodule GranaWeb.Endpoint do
     store: :cookie,
     key: "_grana_key",
     signing_salt: "sxKxVNPA",
+    encryption_salt: "grana_session_enc_salt",
     same_site: "Lax"
   ]
 

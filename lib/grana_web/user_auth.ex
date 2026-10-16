@@ -160,9 +160,11 @@ defmodule GranaWeb.UserAuth do
   defp maybe_write_remember_me_cookie(conn, _token, _params, _), do: conn
 
   defp write_remember_me_cookie(conn, token) do
+    opts = Keyword.put(@remember_me_options, :secure, conn.scheme == :https)
+
     conn
     |> put_session(:user_remember_me, true)
-    |> put_resp_cookie(@remember_me_cookie, token, @remember_me_options)
+    |> put_resp_cookie(@remember_me_cookie, token, opts)
   end
 
   defp put_token_in_session(conn, token) do
