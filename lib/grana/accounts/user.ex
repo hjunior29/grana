@@ -197,6 +197,17 @@ defmodule Grana.Accounts.User do
     false
   end
 
+  @doc """
+  Validates the current password.
+  """
+  def validate_current_password(changeset, password) do
+    if valid_password?(changeset.data, password) do
+      changeset
+    else
+      add_error(changeset, :current_password, "não confere com a senha atual")
+    end
+  end
+
   def ai_default_changeset(user, provider_ref, model) do
     change(user, ai_provider: provider_ref, ai_model: model)
   end
@@ -251,6 +262,18 @@ defmodule Grana.Accounts.User do
       message: "deve ser um email válido"
     )
     |> validate_length(:smtp_from_name, max: 80)
+    |> validate_host_password(user)
+  end
+
+  defp validate_host_password(changeset, user) do
+    new_host = get_change(changeset, :smtp_host)
+
+    if new_host && user.smtp_host && new_host != user.smtp_host &&
+         not is_nil(user.smtp_password) && get_change(changeset, :smtp_password) == nil do
+      add_error(changeset, :smtp_password, "deve ser informada ao alterar o servidor")
+    else
+      changeset
+    end
   end
 
   @doc """
