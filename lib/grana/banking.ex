@@ -846,7 +846,10 @@ defmodule Grana.Banking do
     Repo.transaction(fn ->
       # 1) Reset non-overridden
       Transaction
-      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true and is_nil(t.internal_override))
+      |> where(
+        [t],
+        t.user_id == ^user_id and t.is_internal_transfer == true and is_nil(t.internal_override)
+      )
       |> Repo.update_all(
         set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
       )
@@ -868,9 +871,7 @@ defmodule Grana.Banking do
       # 5) Reapply manual overrides: true forces internal, false forces external.
       Transaction
       |> where([t], t.user_id == ^user_id and t.internal_override == true)
-      |> Repo.update_all(
-        set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)]
-      )
+      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
 
       Transaction
       |> where([t], t.user_id == ^user_id and t.internal_override == false)
@@ -912,6 +913,7 @@ defmodule Grana.Banking do
             updated_at: DateTime.utc_now(:second)
           ]
         )
+
         Grana.Cache.invalidate_user(user_id)
         {:ok, :single}
 
@@ -939,32 +941,50 @@ defmodule Grana.Banking do
   end
 
   defp mark_cc_bill_payments(user_id) do
-    extrato_stmt_ids =
+    faturas =
       BankStatement
-      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "extrato")
-      |> select([bs], bs.id)
-
-    transactions =
-      Transaction
-      |> where([t], t.user_id == ^user_id and t.type == "debit")
-      |> where([t], t.bank_statement_id in subquery(extrato_stmt_ids))
+      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "fatura")
+      |> select([bs], {bs.period_start, bs.period_end})
       |> Repo.all()
 
-    cc_payment_ids =
-      transactions
-      |> Enum.filter(fn t ->
-        desc = String.downcase(t.description)
+    if faturas != [] do
+      extrato_stmt_ids =
+        BankStatement
+        |> where([bs], bs.user_id == ^user_id and bs.statement_type == "extrato")
+        |> select([bs], bs.id)
 
-        Enum.any?(@cc_payment_patterns, &String.contains?(desc, &1)) or
-          (String.contains?(desc, "pagto eletron") and
-             Enum.any?(@cc_issuers, &String.contains?(desc, &1)))
-      end)
-      |> Enum.map(& &1.id)
+      transactions =
+        Transaction
+        |> where([t], t.user_id == ^user_id and t.type == "debit")
+        |> where([t], t.bank_statement_id in subquery(extrato_stmt_ids))
+        |> Repo.all()
 
-    if cc_payment_ids != [] do
-      Transaction
-      |> where([t], t.id in ^cc_payment_ids)
-      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
+      cc_payment_ids =
+        transactions
+        |> Enum.filter(fn t ->
+          desc = String.downcase(t.description)
+
+          matches_pattern? =
+            Enum.any?(@cc_payment_patterns, &String.contains?(desc, &1)) or
+              (String.contains?(desc, "pagto eletron") and
+                 Enum.any?(@cc_issuers, &String.contains?(desc, &1)))
+
+          matches_pattern? and
+            Enum.any?(faturas, fn {p_start, p_end} ->
+              (p_end && abs(Date.diff(t.date, p_end)) <= 45) or
+                (p_start && abs(Date.diff(t.date, p_start)) <= 45) or
+                (is_nil(p_start) and is_nil(p_end))
+            end)
+        end)
+        |> Enum.map(& &1.id)
+
+      if cc_payment_ids != [] do
+        Transaction
+        |> where([t], t.id in ^cc_payment_ids)
+        |> Repo.update_all(
+          set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)]
+        )
+      end
     end
   end
 

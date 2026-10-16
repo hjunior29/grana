@@ -108,4 +108,26 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
     assert :ok = Banking.detect_internal_transfers(ctx.user.id)
     refute internal?(txn.id, ctx.user.id)
   end
+
+  test "pagamento de fatura só é marcado interno se o usuário tiver fatura importada", ctx do
+    # Apenas o extrato existe
+    cc_pay = insert_txn(ctx, "PAGAMENTO DE FATURA", "debit")
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    refute internal?(cc_pay.id, ctx.user.id)
+
+    # Cria uma fatura correspondente
+    {:ok, _fatura} =
+      Banking.create_statement(%{
+        bank: "nubank",
+        filename: "fatura.csv",
+        statement_type: "fatura",
+        period_start: ~D[2026-01-10],
+        period_end: ~D[2026-02-10],
+        user_id: ctx.user.id
+      })
+
+    # Agora a detecção marca como interna
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    assert internal?(cc_pay.id, ctx.user.id)
+  end
 end

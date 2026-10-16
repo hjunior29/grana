@@ -87,7 +87,7 @@ defmodule Grana.Banking.StatementProcessor do
             # transactions leave before deduplication, which compares with other uploads.
             OpenFinance.release_period(user_id, bank, statement_type, period_start, period_end)
 
-            entries = deduplicate(entries, user_id)
+            entries = deduplicate(entries, user_id, bank, statement_type)
 
             {count, _} = Banking.bulk_insert_transactions(entries)
 
@@ -281,13 +281,20 @@ defmodule Grana.Banking.StatementProcessor do
     end
   end
 
-  defp deduplicate(entries, user_id) do
+  defp deduplicate(entries, user_id, bank, statement_type) do
     dates = Enum.map(entries, & &1.date)
     date_from = Enum.min(dates, Date)
     date_to = Enum.max(dates, Date)
 
+    opts =
+      [date_from: date_from, date_to: date_to]
+      |> then(fn o -> if bank, do: Keyword.put(o, :bank, bank), else: o end)
+      |> then(fn o ->
+        if statement_type, do: Keyword.put(o, :statement_type, statement_type), else: o
+      end)
+
     existing =
-      Banking.list_transactions(user_id, date_from: date_from, date_to: date_to)
+      Banking.list_transactions(user_id, opts)
 
     existing_freq =
       existing

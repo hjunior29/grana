@@ -439,6 +439,16 @@ defmodule Grana.BankingTest do
           user_id: user.id
         })
 
+      {:ok, _fatura} =
+        Banking.create_statement(%{
+          bank: "nubank",
+          filename: "fatura.csv",
+          statement_type: "fatura",
+          period_start: ~D[2026-01-01],
+          period_end: ~D[2026-01-31],
+          user_id: user.id
+        })
+
       Banking.bulk_insert_transactions([
         %{
           date: ~D[2026-01-10],
@@ -484,6 +494,16 @@ defmodule Grana.BankingTest do
           bank: "bradesco",
           filename: "e.csv",
           statement_type: "extrato",
+          user_id: user.id
+        })
+
+      {:ok, _fatura} =
+        Banking.create_statement(%{
+          bank: "bradesco",
+          filename: "f.csv",
+          statement_type: "fatura",
+          period_start: ~D[2026-05-01],
+          period_end: ~D[2026-05-31],
           user_id: user.id
         })
 
