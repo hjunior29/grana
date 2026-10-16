@@ -538,6 +538,11 @@ defmodule Grana.BankingTest do
       assert Decimal.compare(summary.total_income, Decimal.new("5000.00")) == :eq
       assert Decimal.compare(summary.total_expenses, Decimal.new("200.00")) == :eq
       assert summary.transaction_count == 2
+
+      assert [%{category: %{name: "Alimentação"}, total: income, count: 1}] =
+               summary.income_by_category
+
+      assert Decimal.compare(income, Decimal.new("5000.00")) == :eq
     end
 
     test "subtracts refunds, separates investments, excludes internal transfers", %{user: user} do

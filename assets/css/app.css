@@ -2735,6 +2735,31 @@ html {
 .ui-tag-pendente { --ui-tone: var(--color-warning); }
 .ui-tag-erro { --ui-tone: var(--ui-despesa); }
 
+/* Fluxo de caixa (sankey) */
+.cf-chart { max-height: 36rem; }
+.cf-link {
+  opacity: 0.38;
+  transition: opacity 180ms ease-out;
+}
+.cf-chart:hover .cf-link { opacity: 0.22; }
+.cf-chart .cf-link:hover { opacity: 0.7; }
+.cf-node {
+  opacity: 0.92;
+  transition: opacity 180ms ease-out;
+}
+.cf-node:hover { opacity: 1; }
+.cf-label {
+  fill: var(--color-base-content);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cf-value {
+  fill: var(--color-base-content);
+  font-size: 11px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Nota da análise do período (0 a 10) */
 .ui-score {
   --ui-tone: var(--color-info);

@@ -596,6 +596,125 @@ const IncomeExpensesChart = {
   }
 }
 
+// Sankey do fluxo de caixa: fontes de receita à esquerda, o caixa do período no meio e,
+// à direita, as categorias de despesa, os investimentos e a sobra.
+const CashFlowChart = {
+  mounted() {
+    this.renderChart()
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-flow-name]")
+      if (!target) return hideTooltip(this.el)
+      const value = parseFloat(target.dataset.flowValue)
+      const total = parseFloat(target.dataset.flowTotal)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.flowName)}</strong><br>${privateBRL(value)} · ${pct(value, total)}%`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-flow-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.flowUrl})
+    })
+  },
+  updated() { this.renderChart() },
+  renderChart() {
+    const data = JSON.parse(this.el.dataset.flow || "{}")
+    const sources = data.sources || []
+    const targets = data.targets || []
+    const total = sources.reduce((sum, n) => sum + n.value, 0)
+    if (!total || !targets.length) return
+
+    const width = 1000
+    const rows = Math.max(sources.length, targets.length)
+    const height = Math.max(280, Math.min(560, rows * 44 + 40))
+    const pad = {top: 16, bottom: 16}
+    const nodeW = 12
+    const gap = 10
+    const leftX = 0
+    const centerX = width / 2 - nodeW / 2
+    const rightX = width - nodeW
+    const usable = height - pad.top - pad.bottom
+
+    const layout = (nodes) => {
+      const free = usable - gap * Math.max(0, nodes.length - 1)
+      let y = pad.top
+      return nodes.map((n) => {
+        const h = Math.max(2, (n.value / total) * free)
+        const node = {...n, y, h}
+        y += h + gap
+        return node
+      })
+    }
+    const left = layout(sources)
+    const right = layout(targets)
+    const center = {y: pad.top, h: usable}
+
+    const uid = `cf${Math.random().toString(36).slice(2, 8)}`
+    let defs = ""
+    let links = ""
+    let nodes = ""
+    let labels = ""
+    const ribbon = (x0, y0, h0, x1, y1, h1, id) => {
+      const mid = (x0 + x1) / 2
+      return `M ${x0} ${y0} C ${mid} ${y0}, ${mid} ${y1}, ${x1} ${y1} L ${x1} ${y1 + h1} C ${mid} ${y1 + h1}, ${mid} ${y0 + h0}, ${x0} ${y0 + h0} Z`
+    }
+    const attrs = (n) =>
+      `data-flow-name="${escapeHtml(n.name)}" data-flow-value="${n.value}" data-flow-total="${total}"` +
+      (n.url ? ` data-flow-url="${escapeHtml(n.url)}"` : "")
+
+    // Ribbons keep the order of the nodes on each side of the cash node.
+    let inY = center.y
+    left.forEach((n, i) => {
+      const h = (n.value / total) * center.h
+      const id = `${uid}-in-${i}`
+      defs += `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${escapeHtml(n.color)}"/><stop offset="1" stop-color="var(--color-primary)"/></linearGradient>`
+      links += `<path d="${ribbon(leftX + nodeW, n.y, n.h, centerX, inY, h, id)}" fill="url(#${id})" class="cf-link${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></path>`
+      inY += h
+    })
+    let outY = center.y
+    right.forEach((n, i) => {
+      const h = (n.value / total) * center.h
+      const id = `${uid}-out-${i}`
+      defs += `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="var(--color-primary)"/><stop offset="1" stop-color="${escapeHtml(n.color)}"/></linearGradient>`
+      links += `<path d="${ribbon(centerX + nodeW, outY, h, rightX, n.y, n.h, id)}" fill="url(#${id})" class="cf-link${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></path>`
+      outY += h
+    })
+
+    // Labels follow their node but never overlap the previous one.
+    let bottom = height
+    const place = (list, x, anchor) => {
+      let last = -Infinity
+      list.forEach((n) => {
+        const y = Math.max(n.y + n.h / 2, last + 30)
+        last = y
+        bottom = Math.max(bottom, y + 20)
+        labels += `<text x="${x}" y="${y - 2}" text-anchor="${anchor}" class="cf-label">${escapeHtml(n.name)}</text>`
+        labels += `<text x="${x}" y="${y + 12}" text-anchor="${anchor}" class="cf-value ui-private">${fmtBRL(n.value)}</text>`
+      })
+    }
+    left.forEach((n) => {
+      nodes += `<rect x="${leftX}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="3" fill="${escapeHtml(n.color)}" class="cf-node${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></rect>`
+    })
+    right.forEach((n) => {
+      nodes += `<rect x="${rightX}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="3" fill="${escapeHtml(n.color)}" class="cf-node${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></rect>`
+    })
+    nodes += `<rect x="${centerX}" y="${center.y}" width="${nodeW}" height="${center.h}" rx="3" fill="var(--color-primary)" class="cf-node" data-flow-name="Caixa do período" data-flow-value="${total}" data-flow-total="${total}"></rect>`
+    place(left, leftX + nodeW + 10, "start")
+    place(right, rightX - 10, "end")
+    labels += `<text x="${centerX + nodeW + 10}" y="${center.y + center.h / 2 - 2}" class="cf-label">Caixa do período</text>`
+    labels += `<text x="${centerX + nodeW + 10}" y="${center.y + center.h / 2 + 12}" class="cf-value ui-private">${fmtBRL(total)}</text>`
+
+    const svg = `<svg viewBox="0 0 ${width} ${bottom}" class="cf-chart w-full" preserveAspectRatio="xMidYMid meet"><defs>${defs}</defs>${links}${nodes}${labels}</svg>`
+    const existing = this.el.querySelector(".chart-svg")
+    if (existing) {
+      existing.innerHTML = svg
+    } else {
+      const div = document.createElement("div")
+      div.className = "chart-svg"
+      div.innerHTML = svg
+      this.el.insertBefore(div, this.el.firstChild)
+    }
+  }
+}
+
 const ProjectionChart = {
   mounted() {
     this.renderChart()
@@ -895,6 +1014,7 @@ const Hooks = {
   DailyChart,
   CalendarHeatmap,
   IncomeExpensesChart,
+  CashFlowChart,
   ProjectionChart,
   AutoDismiss,
   NotificationStack,
