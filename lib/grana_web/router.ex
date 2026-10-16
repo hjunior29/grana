@@ -11,11 +11,11 @@ defmodule GranaWeb.Router do
   @content_security_policy Enum.join(
                              [
                                "default-src 'self'",
-                               "script-src 'self'",
+                               "script-src 'self' https://connect.pluggy.ai",
                                "style-src 'self' 'unsafe-inline'",
                                "img-src 'self' data: https:",
                                "font-src 'self' data:",
-                               "connect-src 'self' ws: wss:",
+                               "connect-src 'self' ws: wss: https://connect.pluggy.ai https://api.pluggy.ai",
                                "frame-src https://connect.pluggy.ai",
                                "frame-ancestors 'none'",
                                "base-uri 'self'",
@@ -31,7 +31,11 @@ defmodule GranaWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {GranaWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    plug :put_secure_browser_headers, %{
+      "permissions-policy" => "camera=(), microphone=(), geolocation=(), payment=()"
+    }
+
     plug :fetch_current_scope_for_user
   end
 

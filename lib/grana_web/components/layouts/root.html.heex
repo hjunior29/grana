@@ -20,55 +20,6 @@
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
     {Application.get_env(:live_debugger, :live_debugger_tags)}
-    <script>
-      (() => {
-        const visualStyles = new Set(["default", "signal", "bossa", "papel", "caderneta", "planetario", "cyber"]);
-        const cyberStyleActive = () => document.documentElement.dataset.visualStyle === "cyber";
-        const lightThemeActive = () => document.documentElement.dataset.theme === "light";
-        const setTheme = (theme) => {
-          if (theme === "light" && cyberStyleActive()) {
-            theme = "dark";
-          }
-
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-          }
-        };
-        const setVisualStyle = (style) => {
-          const visualStyle = visualStyles.has(style) ? style : "default";
-          if (visualStyle === "default") {
-            localStorage.removeItem("phx:visual-style");
-            document.documentElement.removeAttribute("data-visual-style");
-          } else {
-            localStorage.setItem("phx:visual-style", visualStyle);
-            document.documentElement.setAttribute("data-visual-style", visualStyle);
-          }
-
-          if (visualStyle === "cyber" && lightThemeActive()) {
-            setTheme("dark");
-          }
-        };
-        // Logado: a preferência salva no servidor vence o localStorage (que só serve
-        // para telas sem login e para evitar o flash).
-        const serverTheme = document.documentElement.dataset.serverTheme;
-        const serverStyle = document.documentElement.dataset.serverVisualStyle;
-        setVisualStyle(serverStyle || localStorage.getItem("phx:visual-style") || "default");
-        if (serverTheme) {
-          setTheme(serverTheme);
-        } else if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        window.addEventListener("storage", (e) => e.key === "phx:visual-style" && setVisualStyle(e.newValue || "default"));
-
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
-        window.addEventListener("phx:set-visual-style", (e) => setVisualStyle(e.target.dataset.phxVisualStyle));
-      })();
-    </script>
   </head>
   <body class="bg-base-100">
     {@inner_content}
