@@ -22,6 +22,9 @@ defmodule Grana.Application do
           {Registry, keys: :unique, name: Grana.Chat.ReplyRegistry},
           {Task.Supervisor, name: Grana.Chat.TaskSupervisor},
           {DynamicSupervisor, name: Grana.Chat.ReplySupervisor, strategy: :one_for_one},
+          {Registry, keys: :unique, name: Grana.Agents.SearchRegistry},
+          {Task.Supervisor, name: Grana.Agents.TaskSupervisor},
+          {DynamicSupervisor, name: Grana.Agents.SearchSupervisor, strategy: :one_for_one},
           Grana.Setup,
           GranaWeb.Endpoint
         ] ++ announce_setup()

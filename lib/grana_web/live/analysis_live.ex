@@ -359,7 +359,7 @@ defmodule GranaWeb.AnalysisLive do
       flash={@flash}
       current_scope={@current_scope}
       import_queue={@import_queue}
-      chat_notice={@chat_notice}
+      ai_notice={@ai_notice}
     >
       <div class="max-w-6xl mx-auto">
         <.page_header title="Análise" subtitle="Insights inteligentes sobre suas finanças" />

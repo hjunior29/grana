@@ -2834,6 +2834,11 @@ html {
   font-size: 0.875rem;
 }
 
+.ui-ai-search-input:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
 .ui-ai-search-input::placeholder {
   color: color-mix(in oklch, var(--color-base-content) 45%, transparent);
 }
@@ -3044,12 +3049,28 @@ html {
 .ui-chat-step {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.0625rem 0.5rem;
+  gap: 0.3rem;
+  padding: 0.125rem 0.5rem 0.125rem 0.4rem;
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
   border-radius: 9999px;
-  background-color: color-mix(in oklch, var(--color-base-content) 6%, transparent);
-  color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+  background-color: color-mix(in oklch, var(--color-base-content) 5%, transparent);
+  color: color-mix(in oklch, var(--color-base-content) 70%, transparent);
   font-size: 0.6875rem;
+}
+
+.ui-chat-step > .size-3 {
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+
+/* A specialist is another agent at work: it stands out from the data reads. */
+.ui-chat-step-agent {
+  border-color: color-mix(in oklch, var(--color-primary) 30%, transparent);
+  background-color: color-mix(in oklch, var(--color-primary) 10%, transparent);
+  color: color-mix(in oklch, var(--color-primary) 70%, var(--color-base-content));
+}
+
+.ui-chat-step-agent > .size-3 {
+  color: var(--color-primary);
 }
 
 .ui-chat-composer {

@@ -25,7 +25,7 @@ defmodule GranaWeb.UserLive.Settings do
       flash={@flash}
       current_scope={@current_scope}
       import_queue={@import_queue}
-      chat_notice={@chat_notice}
+      ai_notice={@ai_notice}
     >
       <div class="max-w-xl mx-auto">
         <.page_header

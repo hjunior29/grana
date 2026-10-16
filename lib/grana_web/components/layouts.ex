@@ -26,9 +26,10 @@ defmodule GranaWeb.Layouts do
     values: [:bottom, :top],
     doc: "onde ficam os avisos flutuantes (no alto em telas com campo fixo embaixo, como o chat)"
 
-  attr :chat_notice, :map,
+  attr :ai_notice, :map,
     default: nil,
-    doc: "resposta do chat concluída em outra tela (`@chat_notice`)"
+    doc:
+      "trabalho de IA concluído em outra tela (`@ai_notice`): resposta do chat ou busca montada"
 
   slot :inner_block, required: true
 
@@ -188,7 +189,7 @@ defmodule GranaWeb.Layouts do
         ]}
       >
         <GranaWeb.ImportComponents.import_toast queue={@import_queue} />
-        <GranaWeb.ChatComponents.reply_toast notice={@chat_notice} />
+        <GranaWeb.AiNoticeComponents.ai_toast notice={@ai_notice} />
       </div>
     </div>
     """
