@@ -11,7 +11,12 @@ defmodule Grana.AI.HTTP do
   @spec get(String.t(), list(), keyword()) :: result()
   def get(url, headers, params \\ []) do
     url
-    |> Req.get(headers: headers, params: params, receive_timeout: @receive_timeout)
+    |> Req.get(
+      headers: headers,
+      params: params,
+      receive_timeout: @receive_timeout,
+      redirect: false
+    )
     |> handle()
   end
 

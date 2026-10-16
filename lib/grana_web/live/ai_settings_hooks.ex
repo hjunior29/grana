@@ -131,44 +131,53 @@ defmodule GranaWeb.AiSettingsHooks do
   defp handle_event("ai_add_provider", %{"provider" => params}, socket) do
     user = socket.assigns.current_scope.user
 
-    case AI.add_provider(user, params) do
-      {:ok, provider, models, user} ->
-        ref = ProviderConfig.ref(provider)
+    if Accounts.sudo_mode?(user) do
+      case AI.add_provider(user, params) do
+        {:ok, provider, models, user} ->
+          ref = ProviderConfig.ref(provider)
 
-        {:halt,
-         socket
-         |> assign(:current_scope, Accounts.Scope.for_user(user))
-         |> update(:ai_models, &Map.put(&1, ref, {:ok, models}))
-         |> assign(:ai_form, provider_form(%{}))
-         |> assign(:ai_show_form, false)
-         |> assign_ai()
-         |> ModelChoicesHook.refresh()
-         |> put_flash(:info, "#{provider.name} cadastrado. Modelos carregados da API.")}
+          {:halt,
+           socket
+           |> assign(:current_scope, Accounts.Scope.for_user(user))
+           |> update(:ai_models, &Map.put(&1, ref, {:ok, models}))
+           |> assign(:ai_form, provider_form(%{}))
+           |> assign(:ai_show_form, false)
+           |> assign_ai()
+           |> ModelChoicesHook.refresh()
+           |> put_flash(:info, "#{provider.name} cadastrado. Modelos carregados da API.")}
 
-      {:error, changeset} ->
-        # A chave digitada não volta para a tela.
-        scrubbed = %{
-          changeset
-          | changes: Map.delete(changeset.changes, :api_key),
-            params: Map.put(changeset.params || %{}, "api_key", "")
-        }
+        {:error, changeset} ->
+          # A chave digitada não volta para a tela.
+          scrubbed = %{
+            changeset
+            | changes: Map.delete(changeset.changes, :api_key),
+              params: Map.put(changeset.params || %{}, "api_key", "")
+          }
 
-        {:halt,
-         assign(socket, :ai_form, to_form(duplicate_error(scrubbed, params), as: :provider))}
+          {:halt,
+           assign(socket, :ai_form, to_form(duplicate_error(scrubbed, params), as: :provider))}
+      end
+    else
+      {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
     end
   end
 
   defp handle_event("ai_remove_provider", %{"id" => id}, socket) do
     user = socket.assigns.current_scope.user
-    {:ok, user} = AI.remove_provider(user, String.to_integer(id))
 
-    {:halt,
-     socket
-     |> assign(:current_scope, Accounts.Scope.for_user(user))
-     |> assign_ai()
-     |> load_models()
-     |> ModelChoicesHook.refresh()
-     |> put_flash(:info, "Provedor removido.")}
+    if Accounts.sudo_mode?(user) do
+      {:ok, user} = AI.remove_provider(user, String.to_integer(id))
+
+      {:halt,
+       socket
+       |> assign(:current_scope, Accounts.Scope.for_user(user))
+       |> assign_ai()
+       |> load_models()
+       |> ModelChoicesHook.refresh()
+       |> put_flash(:info, "Provedor removido.")}
+    else
+      {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
+    end
   end
 
   defp handle_event("ai_default_change", %{"default" => params}, socket) do
@@ -192,39 +201,49 @@ defmodule GranaWeb.AiSettingsHooks do
        ) do
     user = socket.assigns.current_scope.user
 
-    if AI.get_provider(user, ref) && model not in [nil, ""] do
-      {:ok, user} = AI.set_default(user, ref, model)
+    if Accounts.sudo_mode?(user) do
+      if AI.get_provider(user, ref) && model not in [nil, ""] do
+        {:ok, user} = AI.set_default(user, ref, model)
+
+        {:halt,
+         socket
+         |> assign(:current_scope, Accounts.Scope.for_user(user))
+         |> assign_ai()
+         |> ModelChoicesHook.refresh()
+         |> put_flash(:info, "Padrão salvo: #{model}.")}
+      else
+        form =
+          to_form(%{"provider" => ref, "model" => model},
+            as: :default,
+            errors: [model: {"Escolha o provedor e o modelo.", []}]
+          )
+
+        {:halt, assign(socket, :ai_default_form, form)}
+      end
+    else
+      {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
+    end
+  end
+
+  defp handle_event("ai_save_specialists", %{"specialists" => params}, socket) do
+    user = socket.assigns.current_scope.user
+
+    if Accounts.sudo_mode?(user) do
+      user =
+        Enum.reduce(AI.specialists(), user, fn key, user ->
+          {:ok, user} = AI.set_specialist_default(user, key, params[key])
+          user
+        end)
 
       {:halt,
        socket
        |> assign(:current_scope, Accounts.Scope.for_user(user))
        |> assign_ai()
        |> ModelChoicesHook.refresh()
-       |> put_flash(:info, "Padrão salvo: #{model}.")}
+       |> put_flash(:info, "Modelos dos especialistas salvos.")}
     else
-      form =
-        to_form(%{"provider" => ref, "model" => model},
-          as: :default,
-          errors: [model: {"Escolha o provedor e o modelo.", []}]
-        )
-
-      {:halt, assign(socket, :ai_default_form, form)}
+      {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
     end
-  end
-
-  defp handle_event("ai_save_specialists", %{"specialists" => params}, socket) do
-    user =
-      Enum.reduce(AI.specialists(), socket.assigns.current_scope.user, fn key, user ->
-        {:ok, user} = AI.set_specialist_default(user, key, params[key])
-        user
-      end)
-
-    {:halt,
-     socket
-     |> assign(:current_scope, Accounts.Scope.for_user(user))
-     |> assign_ai()
-     |> ModelChoicesHook.refresh()
-     |> put_flash(:info, "Modelos dos especialistas salvos.")}
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
