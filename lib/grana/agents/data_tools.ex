@@ -9,6 +9,7 @@ defmodule Grana.Agents.DataTools do
   alias Grana.Banking.Merchants
   alias Grana.Banking.Search
   alias Grana.Money
+  alias Grana.AI.PromptSanitizer
   alias LangChain.Function
 
   @preview_limit 15
@@ -45,7 +46,12 @@ defmodule Grana.Agents.DataTools do
         {:ok,
          Jason.encode!(
            Enum.map(merchants, fn m ->
-             %{name: m.name, category: m.category, count: m.count, total: Money.format(m.total)}
+             %{
+               name: PromptSanitizer.sanitize_description(m.name),
+               category: PromptSanitizer.sanitize_description(m.category),
+               count: m.count,
+               total: Money.format(m.total)
+             }
            end)
          )}
       end
@@ -75,7 +81,7 @@ defmodule Grana.Agents.DataTools do
               |> Enum.sort_by(&elem(&1, 1), :desc)
               |> Enum.take(@preview_limit)
               |> Enum.map(fn {description, count} ->
-                %{description: description, count: count}
+                %{description: PromptSanitizer.sanitize_description(description), count: count}
               end)
 
             total =
