@@ -8,7 +8,6 @@ defmodule GranaWeb.AiModelsUiTest do
   import Grana.BankingFixtures
 
   alias Grana.AI
-  alias Grana.Banking
   alias Grana.LLMStub
   alias Grana.Workers.StatementUploadWorker
 
