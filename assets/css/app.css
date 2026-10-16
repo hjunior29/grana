@@ -2735,6 +2735,29 @@ html {
 .ui-tag-pendente { --ui-tone: var(--color-warning); }
 .ui-tag-erro { --ui-tone: var(--ui-despesa); }
 
+/* Nota da análise do período (0 a 10) */
+.ui-score {
+  --ui-tone: var(--color-info);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding-inline: 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--ui-tone) 35%, transparent);
+  border-radius: var(--radius-box);
+  background-color: color-mix(in oklch, var(--ui-tone) 14%, transparent);
+  color: color-mix(in oklch, var(--ui-tone) 60%, var(--color-base-content));
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-score-good { --ui-tone: var(--ui-receita); }
+.ui-score-ok { --ui-tone: var(--color-info); }
+.ui-score-warn { --ui-tone: var(--color-warning); }
+.ui-score-bad { --ui-tone: var(--ui-despesa); }
+
 /* Avisos em caixa */
 .ui-notice {
   --ui-tone: var(--color-info);

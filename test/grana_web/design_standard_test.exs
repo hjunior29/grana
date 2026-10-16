@@ -22,7 +22,7 @@ defmodule GranaWeb.DesignStandardTest do
     "lib/grana_web/components/open_finance_components.ex",
     "lib/grana_web/components/filter_components.ex",
     "lib/grana_web/live/dashboard_live.ex",
-    "lib/grana_web/live/analysis_live.ex",
+    "lib/grana_web/components/analysis_components.ex",
     "lib/grana_web/components/layouts.ex",
     "lib/grana_web/components/core_components.ex"
   ]

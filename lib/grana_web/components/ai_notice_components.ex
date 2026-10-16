@@ -38,15 +38,22 @@ defmodule GranaWeb.AiNoticeComponents do
 
   defp toast_icon(%{kind: :chat}), do: "hero-chat-bubble-left-right"
   defp toast_icon(%{kind: :search}), do: "hero-sparkles"
+  defp toast_icon(%{kind: :analysis}), do: "hero-sparkles"
 
   defp title(%{kind: :chat, status: :done}), do: "Resposta pronta"
   defp title(%{kind: :chat}), do: "O chat não conseguiu responder"
   defp title(%{kind: :search, status: :done}), do: "Busca pronta"
   defp title(%{kind: :search}), do: "A IA não conseguiu montar a busca"
+  defp title(%{kind: :analysis, status: :done}), do: "Análise pronta"
+  defp title(%{kind: :analysis}), do: "A IA não conseguiu analisar o período"
 
   defp path(%{kind: :chat, conversation_id: id}), do: ~p"/chat/#{id}"
   defp path(%{kind: :search}), do: ~p"/transactions?mode=advanced"
 
+  defp path(%{kind: :analysis, year: year, month: month}),
+    do: ~p"/dashboard?#{[year: year, month: if(month == 0, do: "all", else: month)]}"
+
   defp action(%{kind: :chat}), do: "Ver conversa"
   defp action(%{kind: :search}), do: "Ver busca"
+  defp action(%{kind: :analysis}), do: "Ver análise"
 end

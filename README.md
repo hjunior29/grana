@@ -119,8 +119,9 @@ A IA entra em quatro lugares, cada um um **especialista** com o seu próprio mod
 
 - **Pesquisa avançada**: descreva a busca em português e a IA monta a string da pesquisa,
   validada pelo próprio Grana antes de chegar a você.
-- **Análise**: nota, resumo, pontos e dicas de um mês ou de um ano. Cada análise guarda o
-  modelo que a gerou.
+- **Análise**: no Painel, logo abaixo dos filtros, a nota, o resumo, os pontos e as dicas do
+  mês ou do ano selecionado. Roda em segundo plano (pode sair da tela), guarda o modelo que a
+  gerou e só é refeita quando os dados do período mudam.
 - **Processamento**: leitura de PDFs que os parsers não entendem e categorização do que as
   regras não pegaram. O histórico mostra o modelo usado em cada extrato.
 - **Chat**: conversa com os seus dados por mês, ano, banco, conta ou categoria. Todo número

@@ -115,11 +115,11 @@ defmodule Grana.Accounts do
 
   def change_owner(attrs \\ %{}, opts \\ []), do: User.owner_changeset(%User{}, attrs, opts)
 
-  @preference_fields [:theme, :visual_style, :hide_values, :hide_names]
+  @preference_fields [:theme, :visual_style, :hide_values, :hide_names, :analysis_open]
 
   @doc """
-  Grava tema, estilo visual e privacidade (ocultar valores e nomes) e avisa as telas do
-  usuário abertas (outras abas e aparelhos), que aplicam as preferências sem recarregar.
+  Grava tema, estilo visual, privacidade (ocultar valores e nomes) e se a análise do
+  painel fica aberta, e avisa as telas do usuário abertas (outras abas e aparelhos), que aplicam as preferências sem recarregar.
   """
   def update_user_preferences(%User{} = user, attrs) do
     with {:ok, user} <- user |> User.preferences_changeset(attrs) |> Repo.update() do

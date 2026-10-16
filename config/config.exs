@@ -91,7 +91,7 @@ config :grana, Oban,
   repo: Grana.Repo,
   # uploads: um arquivo por vez. A deduplicação compara cada arquivo com o que já foi
   # importado, então extratos com períodos sobrepostos precisam entrar um depois do outro.
-  queues: [uploads: 1, ai_analysis: 1, notifications: 1, open_finance: 1],
+  queues: [uploads: 1, notifications: 1, open_finance: 1],
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     Oban.Plugins.Lifeline,

@@ -10,7 +10,6 @@ defmodule GranaWeb.AiModelsUiTest do
   alias Grana.AI
   alias Grana.Banking
   alias Grana.LLMStub
-  alias Grana.Workers.AIAnalysisWorker
   alias Grana.Workers.StatementUploadWorker
 
   setup :register_and_log_in_user
@@ -26,66 +25,30 @@ defmodule GranaWeb.AiModelsUiTest do
   describe "analysis" do
     setup %{user: user} do
       transaction_fixture(user, %{description: "MERCADO", amount: "-80.00", date: ~D[2026-03-10]})
+      Grana.Analyses.subscribe(user.id)
+      on_exit(fn -> Grana.Analyses.clear(user.id, 2026, 3) end)
       :ok
     end
 
-    test "the picked model goes with the job and the analysis shows who made it", %{
+    test "the picked model goes with the run and the analysis shows who made it", %{
       conn: conn,
       user: user,
       pro: pro
     } do
-      {:ok, view, _html} = live(conn, ~p"/analysis")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
       render_async(view)
 
       assert has_element?(view, "#analysis-model option", "Padrão · gemini-test-model")
-
-      view
-      |> form("form[phx-submit=analyze]", %{"prompt" => "", "model" => pro})
-      |> render_change()
-
-      view
-      |> form("form[phx-submit=analyze]", %{"prompt" => "", "model" => pro})
-      |> render_submit()
-
-      assert_enqueued(worker: AIAnalysisWorker, args: %{"model" => pro})
-      assert has_element?(view, "#analysis-model option[selected][value='#{pro}']")
 
       LLMStub.script([
         Jason.encode!(%{"nota" => 8, "titulo" => "Bom mês", "resumo" => "Ok.", "pontos" => []})
       ])
 
-      assert %{success: 1} = Oban.drain_queue(queue: :ai_analysis)
+      view |> form("#analysis-form", %{"model" => pro}) |> render_submit()
+      assert_receive {:agent_run, {:analysis, 2026, 3}, {:done, _}}, 5_000
 
-      [analysis] = Banking.list_ai_analyses(user.id)
-      assert analysis.ai_model == "gemini-pro"
-
-      {:ok, view, _html} = live(conn, ~p"/analysis")
-      assert has_element?(view, "#analysis-model-#{analysis.id}", "gemini-pro")
-    end
-
-    test "a recent analysis with the same filters but another model is allowed", %{
-      conn: conn,
-      user: user,
-      pro: pro
-    } do
-      {:ok, _} =
-        Banking.create_ai_analysis(%{
-          user_id: user.id,
-          filters_json: %{context: "banking", year: 2026, month: 3},
-          result_json: %{"nota" => 7, "titulo" => "x", "resumo" => "y", "pontos" => []},
-          ai_model: "gemini-test-model"
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/analysis")
-
-      view |> form("form[phx-submit=analyze]", %{"prompt" => ""}) |> render_submit()
-      assert render(view) =~ "Já existe uma análise recente"
-
-      view
-      |> form("form[phx-submit=analyze]", %{"prompt" => "", "model" => pro})
-      |> render_submit()
-
-      assert_enqueued(worker: AIAnalysisWorker, args: %{"model" => pro})
+      assert %{ai_model: "gemini-pro"} = Grana.Analyses.latest(user.id, 2026, 3)
+      assert has_element?(view, "#analysis-toggle", "gemini-pro")
     end
   end
 

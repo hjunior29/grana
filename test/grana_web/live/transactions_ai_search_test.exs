@@ -5,7 +5,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
 
-  alias Grana.Agents.SearchRun
+  alias Grana.Agents.Run
   alias Grana.LLMStub
 
   setup :register_and_log_in_user
@@ -16,8 +16,8 @@ defmodule GranaWeb.TransactionsAiSearchTest do
       {:ok, [%{id: "gemini-pro", name: "Gemini Pro"}]}
     end)
 
-    on_exit(fn -> SearchRun.clear(user.id) end)
-    SearchRun.subscribe(user.id)
+    on_exit(fn -> Run.clear(user.id, :search) end)
+    Run.subscribe(user.id)
     %{user: ai_fixture(user)}
   end
 
@@ -33,7 +33,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
   end
 
   defp await_build(view) do
-    assert_receive {:search_build, _event}, 5_000
+    assert_receive {:agent_run, :search, _event}, 5_000
     render(view)
   end
 
@@ -83,7 +83,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
     view |> element("#ai-search-text button") |> render_click()
     refute has_element?(view, "#ai-search-text")
-    assert SearchRun.current(user.id) == nil
+    assert Run.current(user.id, :search) == nil
   end
 
   test "the model picked for the request is used", %{conn: conn, user: user} do
@@ -171,15 +171,19 @@ defmodule GranaWeb.TransactionsAiSearchTest do
     # The result waits for the user to come back to the screen.
     again = advanced(conn)
     assert has_element?(again, "#ai-search-result code", "unimed")
-    assert %{request: "gastos com saúde"} = SearchRun.current(user.id)
+    assert %{input: "gastos com saúde"} = Run.current(user.id, :search)
   end
 
   test "a failed build also notifies the other screens", %{conn: conn, user: user} do
     LLMStub.script([{:error, "boom"}])
     {:ok, other, _html} = live(conn, ~p"/dashboard")
 
-    {:ok, _pid} = SearchRun.start(user.id, "uber", nil)
-    assert_receive {:search_build, {:error, _}}, 5_000
+    {:ok, _pid} =
+      Run.start(user.id, :search, "uber", fn ->
+        Grana.Agents.SearchBuilder.run(user.id, "uber")
+      end)
+
+    assert_receive {:agent_run, :search, {:error, _}}, 5_000
 
     assert has_element?(other, "#ai-toast", "A IA não conseguiu montar a busca")
     assert has_element?(other, "#ai-toast-open", "Ver busca")

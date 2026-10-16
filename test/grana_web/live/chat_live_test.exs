@@ -31,10 +31,10 @@ defmodule GranaWeb.ChatLiveTest do
   # The answer stays in the animated draft until the browser reports the animation is done.
   defp reveal(view), do: render_hook(view, "answer_revealed", %{})
 
-  test "the chat link sits after Análise in the menu", %{conn: conn} do
+  test "the chat link sits after Painel in the menu", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/chat")
 
-    assert html =~ ~r/Análise<\/a>\s*<\/li>\s*<li>\s*<a[^>]*href="\/chat"/
+    assert html =~ ~r/Painel<\/a>\s*<\/li>\s*<li>\s*<a[^>]*href="\/chat"/
   end
 
   test "starts with suggestions and the model picker", %{conn: conn} do
