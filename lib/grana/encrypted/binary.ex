@@ -57,11 +57,27 @@ defmodule Grana.Encrypted.Binary do
 
   def equal?(a, b), do: a == b
 
+  @dev_key "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU="
+
   @doc """
-  Verdadeiro quando a chave vem de `CLOAK_KEY`. Sem ela, dev/test usam a chave
-  fixa de `config/*.exs` — pública no repositório, então não protege nada.
+  Verdadeiro quando a chave vem de `CLOAK_KEY` ou do arquivo de segredos gerado no boot
+  e não é a chave padrão pública de desenvolvimento (`@dev_key`).
   """
-  def private_key?, do: System.get_env("CLOAK_KEY") not in [nil, ""]
+  def private_key? do
+    key =
+      case System.get_env("CLOAK_KEY") do
+        nil -> Application.get_env(:grana, :cloak_key)
+        "" -> Application.get_env(:grana, :cloak_key)
+        val -> val
+      end
+
+    case key do
+      nil -> false
+      "" -> false
+      @dev_key -> false
+      _custom_key -> true
+    end
+  end
 
   @doc """
   Decifra um valor guardado (base64) com a chave `old_key_b64` e o cifra de novo
