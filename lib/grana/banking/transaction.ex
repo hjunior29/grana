@@ -24,7 +24,10 @@ defmodule Grana.Banking.Transaction do
   end
 
   def changeset(transaction, attrs) do
+    user_id = transaction.user_id || attrs[:user_id] || attrs["user_id"]
+
     transaction
+    |> Map.put(:user_id, user_id)
     |> cast(attrs, [
       :date,
       :description,
@@ -37,7 +40,6 @@ defmodule Grana.Banking.Transaction do
       :installment_group_id,
       :is_internal_transfer,
       :bank_statement_id,
-      :user_id,
       :category_id
     ])
     |> validate_required([:date, :description, :amount, :type, :bank_statement_id, :user_id])

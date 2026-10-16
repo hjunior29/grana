@@ -12,8 +12,11 @@ defmodule Grana.Banking.CategoryRule do
   end
 
   def changeset(rule, attrs) do
+    user_id = rule.user_id || attrs[:user_id] || attrs["user_id"]
+
     rule
-    |> cast(attrs, [:pattern, :user_id, :category_id])
+    |> Map.put(:user_id, user_id)
+    |> cast(attrs, [:pattern, :category_id])
     |> validate_required([:pattern, :user_id, :category_id])
     |> unique_constraint([:pattern, :user_id])
     |> update_change(:pattern, &String.downcase/1)

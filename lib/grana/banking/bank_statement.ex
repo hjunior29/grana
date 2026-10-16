@@ -26,7 +26,10 @@ defmodule Grana.Banking.BankStatement do
   end
 
   def changeset(statement, attrs) do
+    user_id = statement.user_id || attrs[:user_id] || attrs["user_id"]
+
     statement
+    |> Map.put(:user_id, user_id)
     |> cast(attrs, [
       :bank,
       :filename,
@@ -36,8 +39,7 @@ defmodule Grana.Banking.BankStatement do
       :period_end,
       :total_transactions,
       :ai_provider,
-      :ai_model,
-      :user_id
+      :ai_model
     ])
     |> validate_required([:bank, :filename, :user_id])
     |> validate_inclusion(:status, ["processing", "completed", "error"])

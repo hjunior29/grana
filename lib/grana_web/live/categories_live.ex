@@ -183,6 +183,7 @@ defmodule GranaWeb.CategoriesLive do
             placeholder="Nome da categoria"
             autofocus
             phx-debounce="100"
+            readonly={match?({:edit, %{is_system: true}}, @form_mode)}
           />
 
           <input type="hidden" name="category[icon]" value={@form_icon} />
