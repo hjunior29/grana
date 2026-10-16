@@ -5,6 +5,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
 
+  alias Grana.Agents.SearchRun
   alias Grana.LLMStub
 
   setup :register_and_log_in_user
@@ -15,6 +16,8 @@ defmodule GranaWeb.TransactionsAiSearchTest do
       {:ok, [%{id: "gemini-pro", name: "Gemini Pro"}]}
     end)
 
+    on_exit(fn -> SearchRun.clear(user.id) end)
+    SearchRun.subscribe(user.id)
     %{user: ai_fixture(user)}
   end
 
@@ -26,7 +29,12 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
   defp ask(view, request, model \\ "") do
     view |> form("#ai-search-form", %{"request" => request, "model" => model}) |> render_submit()
-    render_async(view)
+    render(view)
+  end
+
+  defp await_build(view) do
+    assert_receive {:search_build, _event}, 5_000
+    render(view)
   end
 
   test "the box sits in the advanced search with the search specialist default", %{conn: conn} do
@@ -44,6 +52,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
     view = advanced(conn)
     ask(view, "gastos com uber")
+    await_build(view)
 
     assert has_element?(view, "#ai-search-result code", "uber AND type:expense")
     assert has_element?(view, "#ai-search-result", "Gastos com Uber.")
@@ -63,16 +72,18 @@ defmodule GranaWeb.TransactionsAiSearchTest do
     assert has_element?(view, "#ai-search-request[value='gastos com uber']")
   end
 
-  test "a request that is not a search gets a short text", %{conn: conn} do
+  test "a request that is not a search gets a short text", %{conn: conn, user: user} do
     LLMStub.script(["Eu monto buscas de transações; descreva o que procura."])
 
     view = advanced(conn)
     ask(view, "oi")
+    await_build(view)
 
     assert has_element?(view, "#ai-search-text", "Eu monto buscas")
 
     view |> element("#ai-search-text button") |> render_click()
     refute has_element?(view, "#ai-search-text")
+    assert SearchRun.current(user.id) == nil
   end
 
   test "the model picked for the request is used", %{conn: conn, user: user} do
@@ -81,6 +92,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
     view = advanced(conn)
     ask(view, "x", Grana.AI.choice(ref, "gemini-pro"))
+    await_build(view)
 
     assert [{%{model: "gemini-pro"}, _messages}] = LLMStub.calls(agent)
   end
@@ -90,6 +102,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
     view = advanced(conn)
     ask(view, "uber")
+    await_build(view)
 
     assert has_element?(view, "#ai-search-error", "A IA respondeu com erro: boom")
   end
@@ -99,6 +112,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
     view = advanced(conn)
     ask(view, "uber")
+    await_build(view)
 
     assert has_element?(view, "#ai-search-error", "Cadastre um provedor de IA")
   end
@@ -109,5 +123,65 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
     refute has_element?(view, "#ai-search-loading")
     refute has_element?(view, "#ai-search-error")
+  end
+
+  test "while building, the box is locked and survives leaving the screen", %{
+    conn: conn,
+    user: user
+  } do
+    test_pid = self()
+
+    LLMStub.script([
+      fn _messages ->
+        send(test_pid, {:waiting, self()})
+
+        receive do
+          :go -> {:tool, "submit_query", %{"query" => "unimed", "explanation" => "Saúde."}}
+        end
+      end
+    ])
+
+    view = advanced(conn)
+    ask(view, "gastos com saúde")
+    assert_receive {:waiting, task}, 5_000
+
+    assert has_element?(view, "#ai-search-loading")
+    assert has_element?(view, "#ai-search-request[disabled]")
+    assert has_element?(view, "#ai-search-model[disabled]")
+    assert has_element?(view, "#ai-search-submit[disabled]")
+
+    # Away and back: still building, with the same request on the field.
+    {:ok, other, _html} = live(conn, ~p"/dashboard")
+    back = advanced(conn)
+    assert has_element?(back, "#ai-search-loading")
+    assert has_element?(back, "#ai-search-request[disabled][value='gastos com saúde']")
+
+    send(task, :go)
+    await_build(back)
+    assert has_element?(back, "#ai-search-result code", "unimed")
+    refute has_element?(back, "#ai-search-request[disabled]")
+    refute has_element?(back, "#ai-toast")
+
+    # The screen that was not looking got the notice, with a link to the search.
+    assert has_element?(other, "#ai-toast", "Busca pronta")
+    assert has_element?(other, ~s|#ai-toast-open[href="/transactions?mode=advanced"]|)
+    other |> element("#ai-toast-close") |> render_click()
+    refute has_element?(other, "#ai-toast")
+
+    # The result waits for the user to come back to the screen.
+    again = advanced(conn)
+    assert has_element?(again, "#ai-search-result code", "unimed")
+    assert %{request: "gastos com saúde"} = SearchRun.current(user.id)
+  end
+
+  test "a failed build also notifies the other screens", %{conn: conn, user: user} do
+    LLMStub.script([{:error, "boom"}])
+    {:ok, other, _html} = live(conn, ~p"/dashboard")
+
+    {:ok, _pid} = SearchRun.start(user.id, "uber", nil)
+    assert_receive {:search_build, {:error, _}}, 5_000
+
+    assert has_element?(other, "#ai-toast", "A IA não conseguiu montar a busca")
+    assert has_element?(other, "#ai-toast-open", "Ver busca")
   end
 end

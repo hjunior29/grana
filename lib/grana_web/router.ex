@@ -112,7 +112,7 @@ defmodule GranaWeb.Router do
         {GranaWeb.UserAuth, :require_authenticated},
         GranaWeb.PreferencesHook,
         GranaWeb.ImportsHook,
-        GranaWeb.ChatRepliesHook
+        GranaWeb.AiNoticesHook
       ] do
       live "/onboarding", OnboardingLive, :index
       live "/dashboard", DashboardLive, :index

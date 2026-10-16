@@ -20,16 +20,19 @@ defmodule GranaWeb.ChatLive do
   # browser does not report that the animation finished (e.g. a tab in the background).
   @flush_after 6_000
 
-  @tool_labels %{
-    "get_data_overview" => "Visão geral dos dados",
-    "get_period_summary" => "Resumo do período",
-    "get_monthly_totals" => "Totais por mês",
-    "search_transactions" => "Busca de transações",
-    "get_fixed_expenses" => "Despesas fixas",
-    "get_installments" => "Parcelas",
-    "get_goals" => "Metas",
-    "analyze_period" => "Especialista de análise",
-    "build_search" => "Especialista de pesquisa"
+  # Each step the coordinator took: what it reads (data), who it delegated to (agent)
+  # or a plain tool, each with its own icon.
+  @tools %{
+    "get_data_overview" => {"Visão geral dos dados", :data},
+    "get_period_summary" => {"Resumo do período", :data},
+    "get_monthly_totals" => {"Totais por mês", :data},
+    "search_transactions" => {"Busca de transações", :data},
+    "get_fixed_expenses" => {"Despesas fixas", :data},
+    "get_installments" => {"Parcelas", :data},
+    "get_goals" => {"Metas", :data},
+    "list_merchants" => {"Estabelecimentos", :data},
+    "analyze_period" => {"Especialista de análise", :agent},
+    "build_search" => {"Especialista de pesquisa", :agent}
   }
 
   @impl true
@@ -243,10 +246,10 @@ defmodule GranaWeb.ChatLive do
   end
 
   # Another conversation: the list order changes and the floating notice shows up.
-  def handle_info({:chat_reply, id, {kind, _}}, socket) when kind in [:done, :error] do
+  def handle_info({:chat_reply, id, {status, _}}, socket) when status in [:done, :error] do
     {:noreply,
      socket
-     |> assign(:chat_notice, %{conversation_id: id, kind: kind})
+     |> assign(:ai_notice, %{kind: :chat, status: status, conversation_id: id})
      |> load_conversations()}
   end
 
@@ -305,7 +308,7 @@ defmodule GranaWeb.ChatLive do
       flash={@flash}
       current_scope={@current_scope}
       import_queue={@import_queue}
-      chat_notice={@chat_notice}
+      ai_notice={@ai_notice}
       import_toast={:top}
     >
       <div class="max-w-6xl mx-auto">
@@ -412,9 +415,7 @@ defmodule GranaWeb.ChatLive do
                     ><span class="ui-chat-caret"></span></div>
                   </div>
                   <div :if={@pending != []} class="mt-2 flex flex-wrap gap-1.5">
-                    <span :for={name <- @pending} class="ui-chat-step">
-                      <.icon name="hero-check" class="size-3" /> {tool_label(name)}
-                    </span>
+                    <.step :for={name <- Enum.uniq(@pending)} name={name} />
                   </div>
                 </div>
               </div>
@@ -660,13 +661,7 @@ defmodule GranaWeb.ChatLive do
           </.link>
         </div>
         <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          <span
-            :for={name <- @tools |> Enum.map(& &1["name"]) |> Enum.uniq()}
-            class="ui-chat-step"
-            title="Consultado para esta resposta"
-          >
-            <.icon name="hero-circle-stack" class="size-3" /> {tool_label(name)}
-          </span>
+          <.step :for={name <- @tools |> Enum.map(& &1["name"]) |> Enum.uniq()} name={name} />
           <span
             :if={@message.ai_model}
             class="ui-caption inline-flex items-center gap-1"
@@ -680,7 +675,26 @@ defmodule GranaWeb.ChatLive do
     """
   end
 
-  defp tool_label(name), do: Map.get(@tool_labels, name, name)
+  attr :name, :string, required: true
+
+  defp step(assigns) do
+    {label, kind} = Map.get(@tools, assigns.name, {assigns.name, :tool})
+    assigns = assign(assigns, label: label, kind: kind)
+
+    ~H"""
+    <span class={["ui-chat-step", "ui-chat-step-#{@kind}"]} title={step_title(@kind)}>
+      <.icon name={step_icon(@kind)} class="size-3" /> {@label}
+    </span>
+    """
+  end
+
+  defp step_icon(:data), do: "hero-circle-stack"
+  defp step_icon(:agent), do: "hero-sparkles"
+  defp step_icon(:tool), do: "hero-wrench-screwdriver"
+
+  defp step_title(:data), do: "Dados consultados no banco"
+  defp step_title(:agent), do: "Especialista acionado"
+  defp step_title(:tool), do: "Ferramenta usada"
 
   defp format_date(datetime) do
     datetime |> DateTime.add(-3, :hour) |> Calendar.strftime("%d/%m %H:%M")

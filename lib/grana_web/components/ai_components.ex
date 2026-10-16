@@ -271,7 +271,7 @@ defmodule GranaWeb.AiComponents do
   attr :default, :any, default: nil
   attr :value, :string, default: ""
   attr :pdf, :boolean, default: false, doc: "only models that read PDF files (processing)"
-  attr :rest, :global
+  attr :rest, :global, include: ~w(disabled)
 
   def model_picker(assigns) do
     ~H"""

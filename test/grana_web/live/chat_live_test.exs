@@ -81,7 +81,7 @@ defmodule GranaWeb.ChatLiveTest do
 
     refute has_element?(view, "#chat-messages script")
     refute has_element?(view, "#chat-messages [onclick]")
-    assert has_element?(view, "#chat-messages .ui-chat-step", "Resumo do período")
+    assert has_element?(view, "#chat-messages .ui-chat-step-data", "Resumo do período")
     assert has_element?(view, "#chat-messages", "gemini-test-model")
     assert has_element?(view, "#conversations-#{conversation.id}", "quanto gastei em março?")
     refute has_element?(view, "#chat-pending")
@@ -124,7 +124,7 @@ defmodule GranaWeb.ChatLiveTest do
              "uber AND type:expense"
            )
 
-    assert has_element?(view, "#chat-messages .ui-chat-step", "Especialista de pesquisa")
+    assert has_element?(view, "#chat-messages .ui-chat-step-agent", "Especialista de pesquisa")
   end
 
   test "the answer shows up while it is written", %{conn: conn, user: user} do
@@ -329,13 +329,13 @@ defmodule GranaWeb.ChatLiveTest do
 
     # The screen that was not looking got the notice, with a link to the conversation
     # and nothing of its content; the chat screen did not.
-    assert has_element?(other, "#chat-reply-toast", "Resposta pronta")
-    assert has_element?(other, ~s|#chat-reply-toast-open[href="/chat/#{id}"]|)
-    refute has_element?(other, "#chat-reply-toast", "oi")
-    refute has_element?(back, "#chat-reply-toast")
+    assert has_element?(other, "#ai-toast", "Resposta pronta")
+    assert has_element?(other, ~s|#ai-toast-open[href="/chat/#{id}"]|)
+    refute has_element?(other, "#ai-toast", "oi")
+    refute has_element?(back, "#ai-toast")
 
-    other |> element("#chat-reply-toast-close") |> render_click()
-    refute has_element?(other, "#chat-reply-toast")
+    other |> element("#ai-toast-close") |> render_click()
+    refute has_element?(other, "#ai-toast")
   end
 
   test "a question left without an answer can be asked again", %{conn: conn, user: user} do
@@ -363,7 +363,7 @@ defmodule GranaWeb.ChatLiveTest do
     {:ok, _pid} = Chat.ask(conversation)
     assert_receive {:chat_reply, _id, {:error, _}}, 5_000
 
-    assert has_element?(other, "#chat-reply-toast", "O chat não conseguiu responder")
+    assert has_element?(other, "#ai-toast", "O chat não conseguiu responder")
   end
 
   test "blank messages are ignored", %{conn: conn, user: user} do
