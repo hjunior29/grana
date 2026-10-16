@@ -118,7 +118,6 @@ defmodule GranaWeb.Router do
       live "/dashboard", DashboardLive, :index
       live "/upload", UploadLive, :index
       live "/transactions", TransactionsLive, :index
-      live "/analysis", AnalysisLive, :index
       live "/chat", ChatLive, :index
       live "/chat/new", ChatLive, :new
       live "/chat/:id", ChatLive, :show

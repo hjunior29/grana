@@ -1,7 +1,8 @@
 defmodule GranaWeb.TransactionsLive do
   use GranaWeb, :live_view
 
-  alias Grana.Agents.SearchRun
+  alias Grana.Agents.Run
+  alias Grana.Agents.SearchBuilder
   alias Grana.Banking
   alias Grana.Banking.Search
   alias Grana.OpenFinance
@@ -27,7 +28,7 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:saved_searches, Banking.list_saved_searches(user_id))
       |> assign(:save_form, nil)
       |> assign(:delete_saved, nil)
-      |> assign_ai_search(SearchRun.current(user_id))
+      |> assign_ai_search(Run.current(user_id, :search))
 
     # Meses sem upload vêm do Open Finance; relê se a última leitura passou de 1h.
     if connected?(socket) do
@@ -38,11 +39,11 @@ defmodule GranaWeb.TransactionsLive do
     {:ok, socket}
   end
 
-  # The search build runs in the background (`Grana.Agents.SearchRun`), so the box comes
-  # back as it was when the user left, loading or with its result.
+  # The search build runs in the background (`Grana.Agents.Run`), so the box comes back
+  # as it was when the user left, loading or with its result.
   defp assign_ai_search(socket, nil), do: assign(socket, ai_request: "", ai_search: nil)
 
-  defp assign_ai_search(socket, %{request: request, outcome: outcome}) do
+  defp assign_ai_search(socket, %{input: request, outcome: outcome}) do
     assign(socket, ai_request: request, ai_search: ai_outcome(outcome))
   end
 
@@ -57,10 +58,10 @@ defmodule GranaWeb.TransactionsLive do
   defp ai_error(_reason), do: "Não foi possível montar a busca. Tente de novo."
 
   @impl true
-  def handle_info({:search_build, {:done, result}}, socket),
+  def handle_info({:agent_run, :search, {:done, result}}, socket),
     do: {:noreply, assign(socket, :ai_search, result)}
 
-  def handle_info({:search_build, {:error, reason}}, socket),
+  def handle_info({:agent_run, :search, {:error, reason}}, socket),
     do: {:noreply, assign(socket, :ai_search, {:error, ai_error(reason)})}
 
   def handle_info({:open_finance_synced, _connection_id}, socket) do
@@ -134,7 +135,16 @@ defmodule GranaWeb.TransactionsLive do
     user_id = socket.assigns.current_scope.user.id
     choice = if params["model"] in [nil, ""], do: nil, else: params["model"]
 
-    if request != "" and match?({:ok, _}, SearchRun.start(user_id, request, choice)) do
+    started =
+      request != "" and
+        match?(
+          {:ok, _},
+          Run.start(user_id, :search, request, fn ->
+            SearchBuilder.run(user_id, request, choice)
+          end)
+        )
+
+    if started do
       {:noreply, assign(socket, ai_request: request, ai_search: :loading)}
     else
       {:noreply, socket}
@@ -142,7 +152,7 @@ defmodule GranaWeb.TransactionsLive do
   end
 
   def handle_event("dismiss_ai_search", _params, socket) do
-    SearchRun.clear(socket.assigns.current_scope.user.id)
+    Run.clear(socket.assigns.current_scope.user.id, :search)
     {:noreply, assign(socket, :ai_search, nil)}
   end
 

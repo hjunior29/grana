@@ -78,9 +78,6 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/dashboard"} class="text-sm">Painel</.link>
             </li>
             <li>
-              <.link navigate={~p"/analysis"} class="text-sm">Análise</.link>
-            </li>
-            <li>
               <.link navigate={~p"/chat"} class="text-sm">Chat</.link>
             </li>
             <li>
@@ -127,11 +124,6 @@ defmodule GranaWeb.Layouts do
               <li>
                 <.link navigate={~p"/dashboard"}>
                   <.icon name="hero-chart-bar" class="size-4" /> Painel
-                </.link>
-              </li>
-              <li>
-                <.link navigate={~p"/analysis"}>
-                  <.icon name="hero-sparkles" class="size-4" /> Análise
                 </.link>
               </li>
               <li>

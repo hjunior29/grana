@@ -44,6 +44,7 @@ defmodule Grana.Accounts.User do
     field :visual_style, :string, default: "default"
     field :hide_values, :boolean, default: false
     field :hide_names, :boolean, default: false
+    field :analysis_open, :boolean, default: false
 
     field :onboarded_at, :utc_datetime
     field :base_url, :string
@@ -71,7 +72,7 @@ defmodule Grana.Accounts.User do
 
   def preferences_changeset(user, attrs) do
     user
-    |> cast(attrs, [:theme, :visual_style, :hide_values, :hide_names])
+    |> cast(attrs, [:theme, :visual_style, :hide_values, :hide_names, :analysis_open])
     |> validate_inclusion(:theme, @themes)
     |> validate_inclusion(:visual_style, @visual_styles)
   end

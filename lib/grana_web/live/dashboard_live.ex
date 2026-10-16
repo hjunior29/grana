@@ -1,10 +1,15 @@
 defmodule GranaWeb.DashboardLive do
   use GranaWeb, :live_view
 
+  alias Grana.Analyses
   alias Grana.Banking
   alias Grana.Banking.FinancialGoal
+  alias Grana.Banking.PrivateNames
   alias Grana.OpenFinance
+  alias GranaWeb.AnalysisComponents
   alias GranaWeb.OpenFinanceComponents
+
+  on_mount GranaWeb.ModelChoicesHook
 
   # ── Mount ──
 
@@ -32,6 +37,7 @@ defmodule GranaWeb.DashboardLive do
       socket
       |> assign(:page_title, "Dashboard")
       |> assign(:tab, "banking")
+      |> assign(:private_names, PrivateNames.pattern(user_id))
       # Banking state
       |> assign(:available_years, available_years)
       |> assign(:available_months, months)
@@ -73,11 +79,30 @@ defmodule GranaWeb.DashboardLive do
           |> assign(:tab, "recurring")
 
         _ ->
-          assign(socket, :tab, "banking")
+          socket |> assign(:tab, "banking") |> select_period(params)
       end
 
     {:noreply, socket}
   end
+
+  # `?year=2026&month=3` (or `month=all`) opens a period, as the analysis notice links do.
+  defp select_period(socket, %{"year" => year} = params) do
+    year = GranaWeb.Params.to_int(year, socket.assigns.selected_year)
+
+    case params["month"] do
+      "all" ->
+        socket |> assign(selected_year: year, view_mode: "year") |> load_banking_data()
+
+      month ->
+        month = GranaWeb.Params.to_int(month, socket.assigns.selected_month)
+
+        socket
+        |> assign(selected_year: year, selected_month: month, view_mode: "month")
+        |> load_banking_data()
+    end
+  end
+
+  defp select_period(socket, _params), do: socket
 
   # ── Events: Tab Switch ──
 
@@ -188,6 +213,19 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, socket}
   end
 
+  # ── Events: Period analysis ──
+
+  def handle_event("analyze", params, socket) do
+    {year, month} = analysis_period(socket.assigns)
+    choice = if params["model"] in [nil, ""], do: nil, else: params["model"]
+
+    case Analyses.request(socket.assigns.current_scope.user.id, year, month, choice) do
+      {:ok, :current} -> {:noreply, assign(socket, :analysis_status, :current)}
+      {:ok, :started} -> {:noreply, assign(socket, :analysis_status, :loading)}
+      {:error, :busy} -> {:noreply, socket}
+    end
+  end
+
   def handle_event("toggle-category", %{"id" => "nil"}, socket) do
     excluded = toggle_set(socket.assigns.excluded_categories, nil)
     {:noreply, assign(socket, :excluded_categories, excluded)}
@@ -202,11 +240,22 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, assign(socket, :excluded_categories, MapSet.new())}
   end
 
+  # ── PubSub: Period analysis ──
+
+  @impl true
+  def handle_info({:agent_run, {:analysis, year, month}, {status, _}}, socket) do
+    if {year, month} == analysis_period(socket.assigns) do
+      {:noreply, load_analysis(socket)}
+    else
+      notice = %{kind: :analysis, status: status, year: year, month: month}
+      {:noreply, assign(socket, :ai_notice, notice)}
+    end
+  end
+
   # ── PubSub: Open Finance ──
 
   # Uma releitura do Open Finance pode trazer o retrato novo e transações dos
   # períodos sem upload (inclusive um mês novo nos seletores).
-  @impl true
   def handle_info({:open_finance_synced, _connection_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
 
@@ -384,7 +433,38 @@ defmodule GranaWeb.DashboardLive do
         _ -> []
       end
     )
+    |> load_analysis()
   end
+
+  # The analysis of the selected month or year (`Grana.Analyses`): the saved one and the
+  # state of a run in progress, so the panel comes back as it was when the user left.
+  defp load_analysis(%{assigns: %{view_mode: "total"}} = socket),
+    do: assign(socket, analysis: nil, analysis_status: nil)
+
+  defp load_analysis(socket) do
+    user_id = socket.assigns.current_scope.user.id
+    {year, month} = analysis_period(socket.assigns)
+
+    status =
+      case Analyses.in_progress(user_id, year, month) do
+        %{outcome: nil} -> :loading
+        %{outcome: {:error, reason}} -> {:error, analysis_error(reason)}
+        _done_or_none -> nil
+      end
+
+    assign(socket, analysis: Analyses.latest(user_id, year, month), analysis_status: status)
+  end
+
+  defp analysis_period(%{view_mode: "month", selected_year: year, selected_month: month}),
+    do: {year, month}
+
+  defp analysis_period(%{selected_year: year}), do: {year, 0}
+
+  defp analysis_error(:no_api_key),
+    do: "Cadastre um provedor de IA nas Configurações para analisar o período."
+
+  defp analysis_error(reason) when is_binary(reason), do: reason
+  defp analysis_error(_reason), do: "Não foi possível analisar o período. Tente de novo."
 
   defp bank_opts("all"), do: []
   defp bank_opts(bank), do: [bank: bank]
@@ -752,6 +832,19 @@ defmodule GranaWeb.DashboardLive do
     </.empty_state>
 
     <div :if={@summary.transaction_count > 0}>
+      <AnalysisComponents.analysis_panel
+        :if={@view_mode != "total"}
+        analysis={@analysis}
+        status={@analysis_status}
+        open={@current_scope.user.analysis_open}
+        year={@selected_year}
+        month={if @view_mode == "month", do: @selected_month, else: 0}
+        filtered={banking_filtered?(assigns)}
+        model_choices={@model_choices}
+        model_default={@model_defaults["analysis"]}
+        private_names={@private_names}
+      />
+
       <%!-- Stat Cards --%>
       <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
         <.stat_tile

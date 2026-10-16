@@ -3,6 +3,9 @@ defmodule Grana.Banking.AIAnalysis do
   import Ecto.Changeset
 
   schema "ai_analyses" do
+    # Period on the dashboard: month 1..12, or 0 for the whole year.
+    field :year, :integer
+    field :month, :integer
     field :prompt, :string
     field :filters_json, :map
     field :result_json, :map
@@ -16,7 +19,16 @@ defmodule Grana.Banking.AIAnalysis do
 
   def changeset(analysis, attrs) do
     analysis
-    |> cast(attrs, [:prompt, :filters_json, :result_json, :ai_provider, :ai_model, :user_id])
+    |> cast(attrs, [
+      :year,
+      :month,
+      :prompt,
+      :filters_json,
+      :result_json,
+      :ai_provider,
+      :ai_model,
+      :user_id
+    ])
     |> validate_required([:result_json, :user_id])
   end
 end
