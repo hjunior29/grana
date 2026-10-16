@@ -844,9 +844,9 @@ defmodule Grana.Banking do
 
   def detect_internal_transfers(user_id) do
     Repo.transaction(fn ->
-      # 1) Reset all
+      # 1) Reset non-overridden
       Transaction
-      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
+      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true and is_nil(t.internal_override))
       |> Repo.update_all(
         set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
       )
@@ -864,6 +864,19 @@ defmodule Grana.Banking do
       # 4) Apply learned per-counterparty rules LAST: "internal" força interna e
       #    "external" sobrepõe a heurística (correção manual do usuário vence).
       apply_internal_transfer_rules(user_id)
+
+      # 5) Reapply manual overrides: true forces internal, false forces external.
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.internal_override == true)
+      |> Repo.update_all(
+        set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)]
+      )
+
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.internal_override == false)
+      |> Repo.update_all(
+        set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
+      )
     end)
     |> case do
       {:ok, _} ->
@@ -891,7 +904,14 @@ defmodule Grana.Banking do
 
     case TransferIdentity.rule_key(transaction.description) do
       nil ->
-        mark_ids([transaction.id], internal?)
+        from(t in Transaction, where: t.id == ^transaction.id)
+        |> Repo.update_all(
+          set: [
+            is_internal_transfer: internal?,
+            internal_override: internal?,
+            updated_at: DateTime.utc_now(:second)
+          ]
+        )
         Grana.Cache.invalidate_user(user_id)
         {:ok, :single}
 
