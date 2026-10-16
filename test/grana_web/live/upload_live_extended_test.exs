@@ -151,62 +151,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
     end
   end
 
-  describe "upload_complete with 4-tuple warnings" do
-    test "upload_complete with 4-tuple success and warnings shows warning flash", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(
-        view.pid,
-        {:upload_complete, [{:ok, "extrato.csv", 5, ["Linha 3 ignorada", "Linha 7 ignorada"]}]}
-      )
-
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "upload_complete all errors shows error flash", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(
-        view.pid,
-        {:upload_complete,
-         [
-           {:error, "bad1.csv", "Erro 1"},
-           {:error, "bad2.csv", "Erro 2"},
-           {:error, "bad3.csv", "Erro 3"},
-           {:error, "bad4.csv", "Erro 4"},
-           {:error, "bad5.csv", "Erro 5"},
-           {:error, "bad6.csv", "Erro 6"}
-         ]}
-      )
-
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "upload_complete partial success shows both info and error", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(
-        view.pid,
-        {:upload_complete,
-         [
-           {:ok, "good.csv", 3, []},
-           {:error, "bad.csv", "Erro ao processar"}
-         ]}
-      )
-
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-  end
-
   describe "outro bank upload triggers api key alert" do
     test "upload with outro bank and no api key shows api key alert", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/upload")
@@ -217,33 +161,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
 
       html = render_click(view, "upload", %{})
 
-      assert html =~ "Importar"
-    end
-  end
-
-  describe "processing state render" do
-    test "upload with nubank extrato triggers processing state", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "banking"})
-      render_click(view, "select-bank", %{"bank" => "nubank"})
-      render_click(view, "select-type", %{"type" => "extrato"})
-
-      html = render_click(view, "upload", %{})
-      assert html =~ "Importar"
-
-      send(view.pid, {:upload_complete, []})
-      Process.sleep(100)
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "platform upload triggers processing state", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "platform"})
-
-      html = render_click(view, "upload", %{})
       assert html =~ "Importar"
     end
   end
@@ -296,72 +213,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
     end
   end
 
-  describe "handle_info callbacks" do
-    test "processing_file updates progress filename", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:processing_file, 1, 3, "extrato.csv"})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "processing_file with PDF sets AI flag", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:processing_file, 1, 1, "fatura.pdf"})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "file_done updates progress counter", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:file_done, 1, 3})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "upload_complete with success results updates state", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:upload_complete, [{:ok, "extrato.csv", 5}]})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "upload_complete with error results shows errors", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:upload_complete, [{:error, "bad.csv", "Arquivo inválido"}]})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "upload_complete with mixed results", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {
-        :upload_complete,
-        [{:ok, "ok.csv", 10}, {:error, "bad.csv", "Erro"}]
-      })
-
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-  end
-
   describe "historico tab" do
     test "switch_tab to historico shows statement history", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/upload")
@@ -409,92 +260,6 @@ defmodule GranaWeb.UploadLiveExtendedTest do
       render_click(view, "select-bank", %{"bank" => "nubank"})
       html = render_click(view, "upload", %{})
 
-      assert html =~ "Importar"
-    end
-
-    test "upload when processing is blocked - switch_tab no-op", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:processing_file, 1, 3, "test.csv"})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-  end
-
-  describe "handle_info process_uploads" do
-    test "process_uploads with no files starts worker", %{conn: conn, user: user} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:process_uploads, "nubank", "extrato", user.id})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-
-    test "process_platform_uploads with no files starts worker", %{conn: conn, user: user} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      send(view.pid, {:process_platform_uploads, user.id})
-      Process.sleep(50)
-
-      html = render(view)
-      assert html =~ "Importar"
-    end
-  end
-
-  describe "processing state guards" do
-    setup do
-      :ok
-    end
-
-    test "switch_tab while processing is no-op", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "banking"})
-      render_click(view, "select-bank", %{"bank" => "nubank"})
-      render_click(view, "select-type", %{"type" => "extrato"})
-      render_click(view, "upload", %{})
-
-      html = render_click(view, "switch_tab", %{"tab" => "historico"})
-      assert html =~ "Importar"
-    end
-
-    test "select-bank while processing is no-op", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "banking"})
-      render_click(view, "select-bank", %{"bank" => "nubank"})
-      render_click(view, "select-type", %{"type" => "extrato"})
-      render_click(view, "upload", %{})
-
-      html = render_click(view, "select-bank", %{"bank" => "bradesco"})
-      assert html =~ "Importar"
-    end
-
-    test "select-type while processing is no-op", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "banking"})
-      render_click(view, "select-bank", %{"bank" => "nubank"})
-      render_click(view, "select-type", %{"type" => "extrato"})
-      render_click(view, "upload", %{})
-
-      html = render_click(view, "select-type", %{"type" => "fatura"})
-      assert html =~ "Importar"
-    end
-
-    test "select_upload_category while processing is no-op", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/upload")
-
-      render_click(view, "select_upload_category", %{"category" => "banking"})
-      render_click(view, "select-bank", %{"bank" => "nubank"})
-      render_click(view, "select-type", %{"type" => "extrato"})
-      render_click(view, "upload", %{})
-
-      html = render_click(view, "select_upload_category", %{"category" => "platform"})
       assert html =~ "Importar"
     end
   end

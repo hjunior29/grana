@@ -9,4 +9,11 @@ defmodule Grana.DataDir do
     File.mkdir_p!(dir)
     dir
   end
+
+  @doc "Arquivos enviados para importação, guardados até o job de cada um rodar. Criado sob demanda."
+  def imports_dir do
+    dir = Path.join(tmp_dir(), "imports")
+    File.mkdir_p!(dir)
+    dir
+  end
 end
