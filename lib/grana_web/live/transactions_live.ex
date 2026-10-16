@@ -1344,10 +1344,7 @@ defmodule GranaWeb.TransactionsLive do
     ~H"""
     <div class="flex items-center gap-2">
       <span
-        class={[
-          "cursor-pointer hover:text-primary",
-          !MapSet.member?(@expanded_ids, @row.raw_id) && "truncate"
-        ]}
+        class="min-w-0 cursor-pointer hover:text-primary"
         phx-click={
           JS.push("toggle-description", value: %{id: to_string(@row.raw_id)})
           |> JS.toggle_class("ui-row-open", to: "#transaction-#{@row.id}")
@@ -1357,7 +1354,12 @@ defmodule GranaWeb.TransactionsLive do
             do: @row.raw.original_description || @row.raw.description
         }
       >
-        <span class="ui-private-name">{@row.raw.description}</span>
+        <span class={[
+          "ui-private-name",
+          !MapSet.member?(@expanded_ids, @row.raw_id) && "block truncate"
+        ]}>
+          {@row.raw.description}
+        </span>
       </span>
       <button
         :if={@row.raw.is_internal_transfer}

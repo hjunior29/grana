@@ -53,6 +53,9 @@ defmodule GranaWeb.ChatLive do
   end
 
   @impl true
+  def handle_params(_params, _uri, %{assigns: %{live_action: :new}} = socket),
+    do: {:noreply, open(socket, nil)}
+
   def handle_params(%{"id" => id}, _uri, socket) do
     user_id = socket.assigns.current_scope.user.id
 
@@ -75,7 +78,13 @@ defmodule GranaWeb.ChatLive do
     end
   end
 
-  def handle_params(_params, _uri, socket), do: {:noreply, open(socket, nil)}
+  # /chat lands on the latest conversation, so a visit does not start a new one each time.
+  def handle_params(_params, _uri, socket) do
+    case Chat.list_conversations(socket.assigns.current_scope.user.id) do
+      [latest | _] -> {:noreply, push_patch(socket, to: ~p"/chat/#{latest.id}")}
+      [] -> {:noreply, open(socket, nil)}
+    end
+  end
 
   defp open(socket, conversation) do
     socket
@@ -93,7 +102,11 @@ defmodule GranaWeb.ChatLive do
   defp resume_answer(%{assigns: %{conversation: conversation}} = socket) do
     case Chat.answer_in_progress(conversation.id) do
       nil ->
-        assign_idle(socket)
+        # A question left without an answer (the server restarted mid-answer, for
+        # instance) gets the retry button.
+        socket
+        |> assign_idle()
+        |> assign(:error, if(unanswered?(conversation), do: "A pergunta ficou sem resposta."))
 
       %{tools: tools, draft: draft} ->
         assign(socket,
@@ -107,6 +120,8 @@ defmodule GranaWeb.ChatLive do
 
   defp assign_idle(socket),
     do: assign(socket, pending: nil, pending_conversation_id: nil, draft: "", finished: nil)
+
+  defp unanswered?(%{messages: messages}), do: match?(%{role: "user"}, List.last(messages))
 
   defp load_conversations(socket) do
     conversations = Chat.list_conversations(socket.assigns.current_scope.user.id)
@@ -229,13 +244,10 @@ defmodule GranaWeb.ChatLive do
 
   # Another conversation: the list order changes and the floating notice shows up.
   def handle_info({:chat_reply, id, {kind, _}}, socket) when kind in [:done, :error] do
-    notice =
-      case Chat.get_conversation(socket.assigns.current_scope.user.id, id) do
-        nil -> nil
-        conversation -> %{conversation_id: id, title: conversation.title, kind: kind}
-      end
-
-    {:noreply, socket |> assign(:chat_notice, notice) |> load_conversations()}
+    {:noreply,
+     socket
+     |> assign(:chat_notice, %{conversation_id: id, kind: kind})
+     |> load_conversations()}
   end
 
   def handle_info({:chat_reply, _id, _event}, socket), do: {:noreply, socket}
@@ -293,8 +305,8 @@ defmodule GranaWeb.ChatLive do
       flash={@flash}
       current_scope={@current_scope}
       import_queue={@import_queue}
-      import_toast={:top}
       chat_notice={@chat_notice}
+      import_toast={:top}
     >
       <div class="max-w-6xl mx-auto">
         <.page_header
@@ -304,7 +316,7 @@ defmodule GranaWeb.ChatLive do
           <:actions>
             <.button
               id="new-conversation"
-              patch={~p"/chat"}
+              patch={~p"/chat/new"}
               variant="secondary"
               size="sm"
               icon="hero-plus"

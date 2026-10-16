@@ -120,6 +120,7 @@ defmodule GranaWeb.Router do
       live "/transactions", TransactionsLive, :index
       live "/analysis", AnalysisLive, :index
       live "/chat", ChatLive, :index
+      live "/chat/new", ChatLive, :new
       live "/chat/:id", ChatLive, :show
       live "/categories", CategoriesLive, :index
       live "/goals", GoalsLive, :index

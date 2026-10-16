@@ -222,13 +222,33 @@ defmodule GranaWeb.ChatLiveTest do
 
     view |> element("#conversations-#{second.id} button") |> render_click()
     view |> element("#delete-conversation-modal button", "Apagar") |> render_click()
-    assert_patch(view, ~p"/chat")
+    # Without a conversation to show, /chat lands on the latest one left.
+    assert_patch(view, ~p"/chat/#{first.id}")
     refute has_element?(view, "#conversations-#{second.id}")
 
     view |> element("#conversations-#{first.id} button") |> render_click()
     view |> element("#delete-conversation-modal button", "Apagar") |> render_click()
     refute has_element?(view, "#conversations-#{first.id}")
     assert Chat.list_conversations(user.id) == []
+  end
+
+  test "/chat opens the latest conversation; Nova conversa starts a blank one", %{
+    conn: conn,
+    user: user
+  } do
+    {:ok, _older} = Chat.start_conversation(user.id, "antiga")
+    {:ok, latest} = Chat.start_conversation(user.id, "recente")
+
+    # On the first load the patch becomes a redirect to the latest conversation.
+    assert {:error, {:live_redirect, %{to: to}}} = live(conn, ~p"/chat")
+    assert to == "/chat/#{latest.id}"
+    {:ok, view, _html} = live(conn, to)
+    assert has_element?(view, "#conversations-#{latest.id}.ui-chat-conversation-active")
+
+    view |> element("#new-conversation") |> render_click()
+    assert_patch(view, ~p"/chat/new")
+    assert has_element?(view, "#chat-welcome")
+    refute has_element?(view, ".ui-chat-conversation-active")
   end
 
   test "a conversation of someone else or unknown sends back to a new one", %{conn: conn} do
@@ -307,13 +327,31 @@ defmodule GranaWeb.ChatLiveTest do
     assert has_element?(back, "#chat-messages .ui-chat-answer", "Pronto.")
     assert Chat.answer_in_progress(id) == nil
 
-    # The screen that was not looking got the notice, with a link to the conversation.
+    # The screen that was not looking got the notice, with a link to the conversation
+    # and nothing of its content; the chat screen did not.
     assert has_element?(other, "#chat-reply-toast", "Resposta pronta")
     assert has_element?(other, ~s|#chat-reply-toast-open[href="/chat/#{id}"]|)
+    refute has_element?(other, "#chat-reply-toast", "oi")
     refute has_element?(back, "#chat-reply-toast")
 
     other |> element("#chat-reply-toast-close") |> render_click()
     refute has_element?(other, "#chat-reply-toast")
+  end
+
+  test "a question left without an answer can be asked again", %{conn: conn, user: user} do
+    {:ok, conversation} = Chat.start_conversation(user.id, "oi")
+    {:ok, _} = Chat.add_user_message(conversation, "oi")
+    LLMStub.script(["Agora sim."])
+
+    {:ok, view, _html} = live(conn, ~p"/chat/#{conversation.id}")
+    assert has_element?(view, "#chat-error", "A pergunta ficou sem resposta.")
+
+    view |> element("#chat-retry") |> render_click()
+    await_reply(view)
+    reveal(view)
+
+    refute has_element?(view, "#chat-error")
+    assert has_element?(view, "#chat-messages .ui-chat-answer", "Agora sim.")
   end
 
   test "a failed answer also notifies the other screens", %{conn: conn, user: user} do
