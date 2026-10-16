@@ -17,6 +17,19 @@ defmodule GranaWeb.Layouts do
     default: false,
     doc: "mostra tema e estilo visual no header (telas sem login, como o setup)"
 
+  attr :import_queue, :map,
+    default: nil,
+    doc: "andamento da importação (`@import_queue`), mostrado como aviso flutuante"
+
+  attr :import_toast, :atom,
+    default: :bottom,
+    values: [:bottom, :top],
+    doc: "onde ficam os avisos flutuantes (no alto em telas com campo fixo embaixo, como o chat)"
+
+  attr :chat_notice, :map,
+    default: nil,
+    doc: "resposta do chat concluída em outra tela (`@chat_notice`)"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -65,6 +78,9 @@ defmodule GranaWeb.Layouts do
             </li>
             <li>
               <.link navigate={~p"/analysis"} class="text-sm">Análise</.link>
+            </li>
+            <li>
+              <.link navigate={~p"/chat"} class="text-sm">Chat</.link>
             </li>
             <li>
               <.link navigate={~p"/transactions"} class="text-sm">Transações</.link>
@@ -118,6 +134,11 @@ defmodule GranaWeb.Layouts do
                 </.link>
               </li>
               <li>
+                <.link navigate={~p"/chat"}>
+                  <.icon name="hero-chat-bubble-left-right" class="size-4" /> Chat
+                </.link>
+              </li>
+              <li>
                 <.link navigate={~p"/transactions"}>
                   <.icon name="hero-list-bullet" class="size-4" /> Transações
                 </.link>
@@ -159,6 +180,16 @@ defmodule GranaWeb.Layouts do
       </main>
 
       <.flash_group flash={@flash} />
+      <div
+        id="floating-notices"
+        class={[
+          "fixed right-4 left-4 z-40 flex flex-col gap-3 sm:left-auto sm:w-96",
+          if(@import_toast == :top, do: "top-20", else: "bottom-4")
+        ]}
+      >
+        <GranaWeb.ImportComponents.import_toast queue={@import_queue} />
+        <GranaWeb.ChatComponents.reply_toast notice={@chat_notice} />
+      </div>
     </div>
     """
   end

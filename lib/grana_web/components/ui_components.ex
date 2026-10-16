@@ -150,6 +150,7 @@ defmodule GranaWeb.UiComponents do
   @doc "Linha de uma lista (`<ul>`): provedores, conexões, integrações."
   attr :id, :string, default: nil
   attr :title, :string, required: true
+  attr :title_class, :any, default: nil, doc: "ex.: `ui-private-name` para nomes de arquivo"
   attr :subtitle, :string, default: nil
   attr :rest, :global
 
@@ -164,7 +165,7 @@ defmodule GranaWeb.UiComponents do
       {render_slot(@leading)}
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span class="ui-body truncate font-medium">{@title}</span>
+          <span class={["ui-body truncate font-medium", @title_class]}>{@title}</span>
           {render_slot(@tags)}
         </div>
         <p :if={@subtitle} class="ui-help truncate">{@subtitle}</p>
@@ -641,25 +642,41 @@ defmodule GranaWeb.UiComponents do
   """
   attr :text, :any, required: true
 
+  attr :names, :any,
+    default: nil,
+    doc:
+      "`Grana.Banking.PrivateNames.pattern/1`: nomes conhecidos ficam num trecho `ui-private-name`"
+
   def private_text(assigns) do
-    assigns = assign(assigns, :parts, money_parts(assigns.text))
+    assigns = assign(assigns, :parts, private_parts(assigns.text, assigns.names))
 
     ~H"""
-    <span
-      :for={{part, money?} <- @parts}
-      class={money? && "ui-private whitespace-nowrap"}
-      phx-no-format
-    >{part}</span>
+    <span :for={{part, kind} <- @parts} class={private_class(kind)} phx-no-format>{part}</span>
     """
   end
 
-  # Com `include_captures`, o split alterna texto e valor: os ímpares são os valores.
+  defp private_class(:money), do: "ui-private whitespace-nowrap"
+  defp private_class(:name), do: "ui-private-name"
+  defp private_class(nil), do: nil
+
+  # Nomes conhecidos primeiro; no que sobra, os valores. Com `include_captures`, o split
+  # alterna texto e valor: os ímpares são os valores.
+  defp private_parts(text, names) do
+    text
+    |> to_string()
+    |> Grana.Banking.PrivateNames.split(names)
+    |> Enum.flat_map(fn
+      {name, true} -> [{name, :name}]
+      {part, false} -> money_parts(part)
+    end)
+  end
+
   defp money_parts(text) do
     @money_pattern
-    |> Regex.split(to_string(text), include_captures: true)
+    |> Regex.split(text, include_captures: true)
     |> Enum.with_index()
     |> Enum.reject(fn {part, _index} -> part == "" end)
-    |> Enum.map(fn {part, index} -> {part, rem(index, 2) == 1} end)
+    |> Enum.map(fn {part, index} -> {part, if(rem(index, 2) == 1, do: :money)} end)
   end
 
   @doc """

@@ -24,6 +24,8 @@ defmodule Grana.AI do
 
   @env_kinds ~w(gemini openai anthropic)
 
+  @specialists ~w(search analysis processing chat)
+
   @doc "Tipos disponíveis para cadastro: `[{kind, rótulo}]`."
   def kinds, do: Enum.map(ProviderConfig.kinds(), &{&1, @labels[&1]})
 
@@ -113,9 +115,15 @@ defmodule Grana.AI do
   @doc "Remove o provedor; se era o padrão, o padrão é limpo (o próximo uso escolhe outro)."
   def remove_provider(%User{} = user, id) do
     provider = Repo.get_by!(ProviderConfig, id: id, user_id: user.id)
+    ref = ProviderConfig.ref(provider)
     {:ok, _} = Repo.delete(provider)
 
-    if user.ai_provider == ProviderConfig.ref(provider) do
+    specialists =
+      Map.reject(user.ai_specialists, fn {_key, choice} -> choice_ref(choice) == ref end)
+
+    {:ok, user} = user |> User.ai_specialists_changeset(specialists) |> Repo.update()
+
+    if user.ai_provider == ref do
       set_default(user, nil, nil)
     else
       {:ok, user}
@@ -134,15 +142,7 @@ defmodule Grana.AI do
     user |> User.ai_default_changeset(ref, model) |> Repo.update()
   end
 
-  @doc """
-  Configuração pronta para `Grana.AI.Provider` (`{:ok, config}`) com o provedor e o
-  modelo padrão, ou `{:error, :no_api_key}` se não há provedor utilizável. Sem padrão
-  salvo, usa o primeiro provedor e o modelo sugerido pela API, e já grava a escolha.
-  """
-  def resolve_config(user_id) do
-    user = Repo.get!(User, user_id)
-    providers = list_providers(user)
-
+  defp general_config(user, providers) do
     case Enum.find(providers, &(ProviderConfig.ref(&1) == user.ai_provider)) do
       %ProviderConfig{} = provider when is_binary(user.ai_model) ->
         {:ok, Map.put(config_for(provider), :model, user.ai_model)}
@@ -170,7 +170,94 @@ defmodule Grana.AI do
       provider: provider.kind,
       name: provider.name,
       api_key: provider.api_key,
-      base_url: provider.base_url
+      base_url: provider.base_url,
+      ref: ProviderConfig.ref(provider)
     }
+  end
+
+  ## Specialists
+
+  @doc "Keys of the AI specialists, each with its own default model."
+  def specialists, do: @specialists
+
+  @doc "Encodes a provider + model pair as used by model pickers and stored defaults."
+  def choice(ref, model), do: "#{ref}|#{model}"
+
+  @doc "Choice of the general default, or nil when none is saved."
+  def general_choice(%User{ai_provider: ref, ai_model: model})
+      when is_binary(ref) and is_binary(model),
+      do: choice(ref, model)
+
+  def general_choice(_user), do: nil
+
+  @doc "The specialist's own default choice, or nil when it follows the general default."
+  def specialist_choice(%User{ai_specialists: specialists}, specialist),
+    do: Map.get(specialists || %{}, specialist)
+
+  @doc "Saves the specialist default; a blank choice makes it follow the general default again."
+  def set_specialist_default(%User{} = user, specialist, choice)
+      when specialist in @specialists do
+    specialists =
+      if choice in [nil, ""],
+        do: Map.delete(user.ai_specialists, specialist),
+        else: Map.put(user.ai_specialists, specialist, choice)
+
+    user |> User.ai_specialists_changeset(specialists) |> Repo.update()
+  end
+
+  @doc """
+  Config for a call made by `specialist`. Precedence: the `choice` picked for this call,
+  then the specialist default, then the general default. Choices pointing to a provider
+  that no longer exists are skipped.
+  """
+  def resolve(user, specialist, choice \\ nil)
+
+  def resolve(user_id, specialist, choice) when is_integer(user_id),
+    do: resolve(Repo.get!(User, user_id), specialist, choice)
+
+  def resolve(%User{} = user, specialist, choice) do
+    providers = list_providers(user)
+
+    with :error <- from_choice(providers, choice),
+         :error <- from_choice(providers, specialist && specialist_choice(user, specialist)) do
+      general_config(user, providers)
+    end
+  end
+
+  @doc "Provider and model the call would use, without touching the network: `{name, model}` or nil."
+  def describe(%User{} = user, specialist) do
+    providers = list_providers(user)
+
+    Enum.find_value(
+      [specialist_choice(user, specialist), general_choice(user)],
+      fn choice ->
+        case from_choice(providers, choice) do
+          {:ok, config} -> {config.name, config.model}
+          :error -> nil
+        end
+      end
+    )
+  end
+
+  @doc "Every provider with its models, for the model pickers."
+  def model_choices(%User{} = user) do
+    for provider <- list_providers(user) do
+      %{ref: ProviderConfig.ref(provider), name: provider.name, models: list_models(provider)}
+    end
+  end
+
+  defp from_choice(providers, choice) when is_binary(choice) do
+    with [ref, model] when model != "" <- String.split(choice, "|", parts: 2),
+         %ProviderConfig{} = provider <- Enum.find(providers, &(ProviderConfig.ref(&1) == ref)) do
+      {:ok, Map.put(config_for(provider), :model, model)}
+    else
+      _ -> :error
+    end
+  end
+
+  defp from_choice(_providers, _choice), do: :error
+
+  defp choice_ref(choice) do
+    choice |> String.split("|", parts: 2) |> hd()
   end
 end

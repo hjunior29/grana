@@ -14,13 +14,19 @@ defmodule GranaWeb.UserLive.Settings do
 
   on_mount {GranaWeb.BackupHooks, :settings}
   on_mount GranaWeb.AiSettingsHooks
+  on_mount GranaWeb.ModelChoicesHook
   on_mount GranaWeb.SmtpHooks
   on_mount GranaWeb.OpenFinanceHooks
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      chat_notice={@chat_notice}
+    >
       <div class="max-w-xl mx-auto">
         <.page_header
           title="Configurações"
@@ -111,7 +117,7 @@ defmodule GranaWeb.UserLive.Settings do
           id="ai-settings"
           icon="hero-cpu-chip"
           title="Inteligência artificial"
-          description="Provedores de IA para análises, categorização e leitura de PDFs. Os modelos vêm direto da API de cada provedor."
+          description="Provedores de IA e o modelo de cada especialista: pesquisa avançada, análise, processamento e chat. Os modelos vêm direto da API de cada provedor."
         >
           <AiComponents.providers_panel
             providers={@ai_providers}
@@ -121,6 +127,12 @@ defmodule GranaWeb.UserLive.Settings do
             models={@ai_models}
             form={@ai_form}
             show_form={@ai_show_form}
+          />
+          <AiComponents.specialists_panel
+            :if={@ai_providers != []}
+            choices={@model_choices}
+            general={@ai_general}
+            values={@ai_specialists}
           />
         </.card>
 

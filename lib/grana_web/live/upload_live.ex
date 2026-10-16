@@ -1,9 +1,19 @@
 defmodule GranaWeb.UploadLive do
   use GranaWeb, :live_view
 
+  alias Grana.AI
   alias Grana.Banking
+  alias Grana.Imports
+  alias Grana.Workers.PlatformImportWorker
+  alias Grana.Workers.StatementUploadWorker
+  alias GranaWeb.AiComponents
 
   @per_page 20
+  # Sem limite prático de arquivos: cada um vira um job do Oban e a fila cuida do resto.
+  @max_files 1_000
+  @max_file_size 5_000_000
+
+  on_mount GranaWeb.ModelChoicesHook
 
   @impl true
   def mount(_params, _session, socket) do
@@ -14,50 +24,45 @@ defmodule GranaWeb.UploadLive do
       |> assign(:upload_category, nil)
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
-      |> assign(:processing, false)
-      |> assign(:results, [])
-      |> assign(:progress_current, 0)
-      |> assign(:progress_total, 0)
-      |> assign(:progress_filename, "")
-      |> assign(:progress_ai, false)
       |> assign(:delete_target, nil)
       |> assign(:selected_ids, MapSet.new())
       |> assign(:cal_rows, [])
       |> assign(:cal_has_data, false)
       |> assign(:cal_score, nil)
       |> assign(:show_api_key_alert, false)
-      |> allow_upload(:statements,
-        accept: ~w(.csv .pdf),
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> assign(:model_choice, "")
+      |> allow_statements(~w(.csv .pdf))
+      # Esta tela mostra a fila inteira e trata `:imports_changed` por conta própria,
+      # para também atualizar o histórico e o calendário a cada arquivo processado.
+      |> detach_hook(:imports, :handle_info)
 
     {:ok, socket}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
-    tab = params["tab"] || socket.assigns.tab
-    page = parse_int(params["page"], 1)
+    socket =
+      socket
+      |> assign(:tab, params["tab"] || socket.assigns.tab)
+      |> assign(:page, parse_int(params["page"], 1))
+      |> assign(:selected_ids, MapSet.new())
+      |> load_statements()
+
+    {:noreply, socket}
+  end
+
+  defp load_statements(socket) do
+    %{tab: tab, page: page} = socket.assigns
     user_id = socket.assigns.current_scope.user.id
 
     {statements, total} =
       Banking.list_statements_paginated(user_id, page: page, per_page: @per_page)
 
-    page_stmts = Enum.map(statements, &normalize_banking_stmt/1)
-    total_pages = max(1, ceil(total / @per_page))
-
-    socket =
-      socket
-      |> assign(:tab, tab)
-      |> assign(:page, page)
-      |> assign(:total_pages, total_pages)
-      |> assign(:total, total)
-      |> assign(:stmt_list, page_stmts)
-      |> assign(:selected_ids, MapSet.new())
-      |> maybe_load_calendar(tab, user_id)
-
-    {:noreply, socket}
+    socket
+    |> assign(:total_pages, max(1, ceil(total / @per_page)))
+    |> assign(:total, total)
+    |> assign(:stmt_list, Enum.map(statements, &normalize_banking_stmt/1))
+    |> maybe_load_calendar(tab, user_id)
   end
 
   # Calendário de importações: só carrega os dados quando a sub-aba está ativa.
@@ -84,25 +89,19 @@ defmodule GranaWeb.UploadLive do
       total_transactions: stmt.total_transactions,
       inserted_at: stmt.inserted_at,
       status: stmt.status,
+      ai_provider: stmt.ai_provider,
+      ai_model: stmt.ai_model,
       link: ~p"/transactions?statement_id=#{stmt.id}"
     }
   end
 
   @impl true
-  def handle_event("validate", _params, socket) do
-    {:noreply, socket}
-  end
-
-  def handle_event("switch_tab", _params, %{assigns: %{processing: true}} = socket) do
-    {:noreply, socket}
+  def handle_event("validate", params, socket) do
+    {:noreply, assign(socket, :model_choice, params["model"] || socket.assigns.model_choice)}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, push_patch(socket, to: ~p"/upload?tab=#{tab}")}
-  end
-
-  def handle_event("select-bank", _params, %{assigns: %{processing: true}} = socket) do
-    {:noreply, socket}
   end
 
   def handle_event("select-bank", %{"bank" => bank}, socket) do
@@ -117,16 +116,8 @@ defmodule GranaWeb.UploadLive do
     socket =
       socket
       |> assign(bank: bank, statement_type: nil)
-      |> allow_upload(:statements,
-        accept: accept,
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> allow_statements(accept)
 
-    {:noreply, socket}
-  end
-
-  def handle_event("select-type", _params, %{assigns: %{processing: true}} = socket) do
     {:noreply, socket}
   end
 
@@ -136,10 +127,6 @@ defmodule GranaWeb.UploadLive do
 
   # Upload category selection (banking vs platform)
 
-  def handle_event("select_upload_category", _params, %{assigns: %{processing: true}} = socket) do
-    {:noreply, socket}
-  end
-
   def handle_event("select_upload_category", %{"category" => "banking"}, socket) do
     socket =
       socket
@@ -147,11 +134,7 @@ defmodule GranaWeb.UploadLive do
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> cancel_all_uploads()
-      |> allow_upload(:statements,
-        accept: ~w(.csv .pdf),
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> allow_statements(~w(.csv .pdf))
 
     {:noreply, socket}
   end
@@ -163,19 +146,21 @@ defmodule GranaWeb.UploadLive do
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> cancel_all_uploads()
-      |> allow_upload(:statements,
-        accept: ~w(.csv),
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> allow_statements(~w(.csv))
 
     {:noreply, socket}
   end
 
-  def handle_event("upload", _params, socket) do
+  def handle_event("upload", params, socket) do
     case socket.assigns.upload_category do
-      "platform" -> handle_platform_upload(socket)
-      _ -> handle_banking_upload(socket)
+      "platform" ->
+        handle_platform_upload(socket)
+
+      _ ->
+        handle_banking_upload(
+          socket,
+          if(params["model"] in [nil, ""], do: nil, else: params["model"])
+        )
     end
   end
 
@@ -278,7 +263,7 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
-  defp handle_banking_upload(socket) do
+  defp handle_banking_upload(socket, choice) do
     %{current_scope: scope} = socket.assigns
     bank = socket.assigns.bank
     statement_type = socket.assigns.statement_type
@@ -298,21 +283,39 @@ defmodule GranaWeb.UploadLive do
         {:noreply, put_flash(socket, :error, "Selecione o tipo (extrato ou fatura)")}
 
       needs_api_key ->
-        case Grana.Accounts.get_user_ai_config(scope.user.id) do
+        case AI.resolve(scope.user, "processing", choice) do
           {:error, :no_api_key} ->
             {:noreply, assign(socket, :show_api_key_alert, true)}
 
           {:ok, _config} ->
-            socket = assign(socket, :processing, true)
-            send(self(), {:process_uploads, bank, statement_type, scope.user.id})
-            {:noreply, socket}
+            {:noreply, enqueue_statements(socket, bank, statement_type, choice)}
         end
 
       true ->
-        socket = assign(socket, :processing, true)
-        send(self(), {:process_uploads, bank, statement_type, scope.user.id})
-        {:noreply, socket}
+        {:noreply, enqueue_statements(socket, bank, statement_type, choice)}
     end
+  end
+
+  defp enqueue_statements(socket, bank, statement_type, choice) do
+    enqueue(socket, StatementUploadWorker, %{
+      "bank" => bank,
+      "statement_type" => statement_type,
+      "model" => choice
+    })
+  end
+
+  # Os arquivos saem do upload para o diretório de importações e cada um vira um job;
+  # o processamento segue em segundo plano, mesmo fora desta tela.
+  defp enqueue(socket, worker, args) do
+    user_id = socket.assigns.current_scope.user.id
+
+    files =
+      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
+        {:ok, %{filename: entry.client_name, path: Imports.store!(path)}}
+      end)
+
+    Imports.enqueue(user_id, worker, args, files)
+    assign(socket, :import_queue, Imports.queue(user_id))
   end
 
   # PDFs que conseguimos extrair de forma determinística (pdftotext) não exigem
@@ -320,184 +323,23 @@ defmodule GranaWeb.UploadLive do
   defp deterministic_pdf?("bradesco", "extrato"), do: true
   defp deterministic_pdf?(_bank, _statement_type), do: false
 
-  defp handle_platform_upload(socket) do
-    scope = socket.assigns.current_scope
-    socket = assign(socket, :processing, true)
-    send(self(), {:process_platform_uploads, scope.user.id})
-    {:noreply, socket}
-  end
+  defp handle_platform_upload(socket),
+    do: {:noreply, enqueue(socket, PlatformImportWorker, %{})}
 
   defp reload_statements(socket) do
     {:noreply, push_patch(socket, to: ~p"/upload?tab=historico&page=#{socket.assigns.page}")}
   end
 
   @impl true
-  def handle_info({:process_uploads, bank, statement_type, user_id}, socket) do
-    file_data =
-      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
-        {:ok, {entry.client_name, File.read!(path)}}
-      end)
+  def handle_info(:imports_changed, socket) do
+    finished = socket.assigns.import_queue.finished
+    queue = Imports.queue(socket.assigns.current_scope.user.id)
+    socket = assign(socket, :import_queue, queue)
 
-    total = length(file_data)
-    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
-    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
-
-    files =
-      Enum.map(file_data, fn {filename, content} ->
-        %{"filename" => filename, "content_b64" => Base.encode64(content)}
-      end)
-
-    %{
-      files: files,
-      bank: bank,
-      statement_type: statement_type,
-      user_id: user_id,
-      topic: topic
-    }
-    |> Grana.Workers.StatementUploadWorker.new()
-    |> Oban.insert()
-
-    {:noreply,
-     assign(socket,
-       upload_bank: bank,
-       progress_current: 0,
-       progress_total: total,
-       progress_filename: ""
-     )}
+    # Cada arquivo que termina pode criar um extrato: histórico e calendário acompanham.
+    socket = if queue.finished != finished, do: load_statements(socket), else: socket
+    {:noreply, socket}
   end
-
-  def handle_info({:process_platform_uploads, user_id}, socket) do
-    file_data =
-      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
-        {:ok, {entry.client_name, File.read!(path)}}
-      end)
-
-    total = length(file_data)
-    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
-    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
-
-    files =
-      Enum.map(file_data, fn {filename, content} ->
-        %{"filename" => filename, "content_b64" => Base.encode64(content)}
-      end)
-
-    %{files: files, user_id: user_id, topic: topic}
-    |> Grana.Workers.PlatformImportWorker.new()
-    |> Oban.insert()
-
-    {:noreply,
-     assign(socket,
-       upload_bank: "grana",
-       progress_current: 0,
-       progress_total: total,
-       progress_filename: ""
-     )}
-  end
-
-  def handle_info({:processing_file, _index, total, filename}, socket) do
-    is_ai = String.ends_with?(String.downcase(filename), ".pdf")
-
-    {:noreply,
-     assign(socket, progress_total: total, progress_filename: filename, progress_ai: is_ai)}
-  end
-
-  def handle_info({:file_done, index, total}, socket) do
-    {:noreply, assign(socket, progress_current: index, progress_total: total)}
-  end
-
-  def handle_info({:upload_complete, results}, socket) do
-    bank = socket.assigns[:upload_bank] || ""
-
-    {successes, errors} =
-      Enum.split_with(results, fn
-        {:ok, _, _, _} -> true
-        {:ok, _, _} -> true
-        _ -> false
-      end)
-
-    socket =
-      socket
-      |> assign(:processing, false)
-      |> assign(:results, successes)
-      |> assign(:progress_current, 0)
-      |> assign(:progress_total, 0)
-      |> assign(:progress_filename, "")
-      |> assign(:progress_ai, false)
-
-    # Collect parser warnings from successful results
-    all_warnings =
-      successes
-      |> Enum.flat_map(fn
-        {:ok, filename, _count, warnings} when warnings != [] ->
-          Enum.map(warnings, &"#{filename}: #{&1}")
-
-        _ ->
-          []
-      end)
-
-    socket =
-      case {successes, errors} do
-        {[], errors} ->
-          put_flash(socket, :error, build_error_message(errors, bank))
-
-        {_, []} ->
-          put_flash(socket, :info, "#{length(successes)} arquivo(s) processado(s) com sucesso!")
-
-        {_, errors} ->
-          socket
-          |> put_flash(:info, "#{length(successes)} processado(s) com sucesso")
-          |> put_flash(:error, build_error_message(errors, bank))
-      end
-
-    socket =
-      if all_warnings != [] do
-        warning_count = length(all_warnings)
-        summary = Enum.take(all_warnings, 5) |> Enum.join(" | ")
-        extra = if warning_count > 5, do: " (+#{warning_count - 5} mais)", else: ""
-        put_flash(socket, :warning, "#{warning_count} linha(s) ignorada(s): #{summary}#{extra}")
-      else
-        socket
-      end
-
-    {:noreply, push_patch(socket, to: ~p"/upload?tab=#{socket.assigns.tab}&page=1")}
-  end
-
-  # Limita a 5 erros exibidos (+N mais) para a flash não crescer sem limite.
-  defp build_error_message(errors, bank) do
-    shown = Enum.take(errors, 5)
-
-    msgs =
-      Enum.map(shown, fn {:error, name, reason} -> "#{name}: #{format_error(reason, bank)}" end)
-
-    extra = length(errors) - length(shown)
-    base = Enum.join(msgs, " | ")
-    if extra > 0, do: base <> " (+#{extra} mais)", else: base
-  end
-
-  defp format_error("No transactions found in file", "outro") do
-    "Nenhuma transação encontrada no arquivo."
-  end
-
-  defp format_error("No transactions found in file", bank) do
-    "Nenhuma transação encontrada. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
-  end
-
-  defp format_error("No transactions found in PDF", "outro") do
-    "Nenhuma transação encontrada no PDF."
-  end
-
-  defp format_error("No transactions found in PDF", bank) do
-    "Nenhuma transação encontrada no PDF. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
-  end
-
-  defp format_error(:no_api_key, _bank) do
-    "Não foi possível extrair o PDF automaticamente (pode ser digitalizado). " <>
-      "Cadastre um provedor de IA nas Configurações para processá-lo."
-  end
-
-  defp format_error(reason, _bank) when is_binary(reason), do: reason
-  # Nunca expõe termos internos crus (tuplas/atoms) ao usuário.
-  defp format_error(_reason, _bank), do: "Não foi possível processar o arquivo."
 
   @impl true
   def render(assigns) do
@@ -511,7 +353,6 @@ defmodule GranaWeb.UploadLive do
             label="Importar"
             icon="hero-cloud-arrow-up"
             active={@tab == "upload"}
-            disabled={@processing}
             event="switch_tab"
             value="upload"
           />
@@ -520,7 +361,6 @@ defmodule GranaWeb.UploadLive do
             icon="hero-document-text"
             count={if @total > 0, do: @total}
             active={@tab == "historico"}
-            disabled={@processing}
             event="switch_tab"
             value="historico"
           />
@@ -528,23 +368,23 @@ defmodule GranaWeb.UploadLive do
             label="Calendário"
             icon="hero-calendar-days"
             active={@tab == "calendario"}
-            disabled={@processing}
             event="switch_tab"
             value="calendario"
           />
         </.tabs>
 
         <div :if={@tab == "upload"}>
+          <GranaWeb.ImportComponents.import_panel
+            :if={@import_queue.total > 0}
+            queue={@import_queue}
+          />
+
           <%!-- Upload Category Selection --%>
-          <div class={[
-            "mb-8 grid grid-cols-1 gap-4 md:grid-cols-2",
-            @processing && "pointer-events-none"
-          ]}>
+          <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
             <.option_card
               title="Fatura / Extrato"
               description="Conta corrente e cartão de crédito"
               selected={@upload_category == "banking"}
-              disabled={@processing}
               phx-click="select_upload_category"
               phx-value-category="banking"
             >
@@ -559,7 +399,6 @@ defmodule GranaWeb.UploadLive do
               title="Grana (exportação)"
               description="Reimporte um CSV exportado da plataforma"
               selected={@upload_category == "platform"}
-              disabled={@processing}
               phx-click="select_upload_category"
               phx-value-category="platform"
             >
@@ -572,15 +411,11 @@ defmodule GranaWeb.UploadLive do
           </div>
 
           <div :if={@upload_category == "banking"}>
-            <div class={[
-              "mb-8 grid grid-cols-1 gap-4 md:grid-cols-3",
-              @processing && "pointer-events-none"
-            ]}>
+            <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
               <.option_card
                 title="Nubank"
                 description="Extrato ou fatura CSV/PDF"
                 selected={@bank == "nubank"}
-                disabled={@processing}
                 phx-click="select-bank"
                 phx-value-bank="nubank"
               >
@@ -597,7 +432,6 @@ defmodule GranaWeb.UploadLive do
                 title="Bradesco"
                 description="Extrato ou fatura CSV/PDF"
                 selected={@bank == "bradesco"}
-                disabled={@processing}
                 phx-click="select-bank"
                 phx-value-bank="bradesco"
               >
@@ -614,7 +448,6 @@ defmodule GranaWeb.UploadLive do
                 title="Outro banco"
                 description="Qualquer banco via PDF + IA"
                 selected={@bank == "outro"}
-                disabled={@processing}
                 phx-click="select-bank"
                 phx-value-bank="outro"
               >
@@ -626,19 +459,12 @@ defmodule GranaWeb.UploadLive do
               </.option_card>
             </div>
 
-            <div
-              :if={@bank}
-              class={[
-                "mb-8 grid grid-cols-1 gap-4 md:grid-cols-2",
-                @processing && "pointer-events-none"
-              ]}
-            >
+            <div :if={@bank} class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
               <.option_card
                 title="Extrato"
                 description="Conta corrente: entradas e saídas"
                 hint={extrato_tip(@bank)}
                 selected={@statement_type == "extrato"}
-                disabled={@processing}
                 phx-click="select-type"
                 phx-value-type="extrato"
               >
@@ -650,7 +476,6 @@ defmodule GranaWeb.UploadLive do
                 description="Cartão de crédito: gastos e parcelas"
                 hint={fatura_tip(@bank)}
                 selected={@statement_type == "fatura"}
-                disabled={@processing}
                 phx-click="select-type"
                 phx-value-type="fatura"
               >
@@ -664,7 +489,6 @@ defmodule GranaWeb.UploadLive do
               <.statements_form
                 form_id="upload-form"
                 drop_id="drop-zone"
-                progress_id="upload-progress"
                 prompt={
                   if @bank == "outro",
                     do: "Arraste arquivos PDF, ou clique para selecionar",
@@ -672,12 +496,17 @@ defmodule GranaWeb.UploadLive do
                 }
                 submit="Processar"
                 uploads={@uploads}
-                processing={@processing}
-                progress_current={@progress_current}
-                progress_total={@progress_total}
-                progress_filename={@progress_filename}
-                progress_ai={@progress_ai}
-              />
+              >
+                <:extra>
+                  <AiComponents.model_picker
+                    id="upload-model"
+                    choices={@model_choices}
+                    default={@model_defaults["processing"]}
+                    value={@model_choice}
+                    pdf
+                  />
+                </:extra>
+              </.statements_form>
             </div>
           </div>
 
@@ -691,15 +520,9 @@ defmodule GranaWeb.UploadLive do
               <.statements_form
                 form_id="upload-form-platform"
                 drop_id="drop-zone-platform"
-                progress_id="upload-progress-platform"
                 prompt="Arraste CSVs exportados do Grana, ou clique para selecionar"
                 submit="Importar"
                 uploads={@uploads}
-                processing={@processing}
-                progress_current={@progress_current}
-                progress_total={@progress_total}
-                progress_filename={@progress_filename}
-                progress_ai={@progress_ai}
               />
             </div>
           </div>
@@ -822,6 +645,14 @@ defmodule GranaWeb.UploadLive do
                       <.link navigate={stmt.link} class="ui-private-name ui-body hover:underline">
                         {stmt.filename}
                       </.link>
+                      <span
+                        :if={stmt.ai_model}
+                        id={"statement-model-#{stmt.raw_id}"}
+                        class="ui-caption mt-0.5 flex items-center gap-1"
+                        title={"Processado por IA: #{stmt.ai_provider} · #{stmt.ai_model}"}
+                      >
+                        <.icon name="hero-cpu-chip" class="size-3.5 shrink-0" /> {stmt.ai_model}
+                      </span>
                     </td>
                     <td class="ui-st-detail ui-body ui-text-secondary">
                       {if stmt.period_start,
@@ -1068,15 +899,10 @@ defmodule GranaWeb.UploadLive do
 
   attr :form_id, :string, required: true
   attr :drop_id, :string, required: true
-  attr :progress_id, :string, required: true
   attr :prompt, :string, required: true
   attr :submit, :string, required: true
   attr :uploads, :any, required: true
-  attr :processing, :boolean, required: true
-  attr :progress_current, :integer, required: true
-  attr :progress_total, :integer, required: true
-  attr :progress_filename, :string, required: true
-  attr :progress_ai, :boolean, required: true
+  slot :extra, doc: "next to the submit button (e.g. the AI model picker)"
 
   defp statements_form(assigns) do
     ~H"""
@@ -1084,32 +910,29 @@ defmodule GranaWeb.UploadLive do
       <div class="flex flex-col items-center gap-4">
         <div
           id={@drop_id}
-          class={["ui-dropzone w-full", @processing && "pointer-events-none"]}
-          phx-drop-target={!@processing && @uploads.statements.ref}
+          class="ui-dropzone w-full"
+          phx-drop-target={@uploads.statements.ref}
           phx-hook="DropZone"
         >
-          <.live_file_input upload={@uploads.statements} class="hidden" disabled={@processing} />
-          <label
-            for={!@processing && @uploads.statements.ref}
-            class={[
-              "block p-8 text-center",
-              (!@processing && "cursor-pointer") || "cursor-not-allowed"
-            ]}
-          >
+          <.live_file_input upload={@uploads.statements} class="hidden" />
+          <label for={@uploads.statements.ref} class="block cursor-pointer p-8 text-center">
             <.icon name="hero-cloud-arrow-up" class="ui-text-tertiary mx-auto mb-4 size-12" />
             <p class="ui-body font-medium">{@prompt}</p>
-            <p class="ui-help mt-1">Até 12 arquivos, máximo 5MB cada</p>
+            <p class="ui-help mt-1">Quantos arquivos quiser, até 5MB cada</p>
           </label>
         </div>
 
         <ul
           :if={@uploads.statements.entries != []}
+          id={"#{@form_id}-entries"}
           class="w-full divide-y divide-base-content/10"
         >
           <.item_row
             :for={entry <- @uploads.statements.entries}
+            :key={entry.ref}
             title={entry.client_name}
-            subtitle={format_bytes(entry.client_size)}
+            title_class="ui-private-name"
+            subtitle={entry_subtitle(entry)}
           >
             <p
               :for={err <- upload_errors(@uploads.statements, entry)}
@@ -1139,49 +962,36 @@ defmodule GranaWeb.UploadLive do
           {upload_error_to_string(err)}
         </p>
 
-        <.button
-          :if={!@processing}
-          variant="primary"
-          class="w-full sm:w-auto"
-          disabled={
-            @uploads.statements.entries == [] or Enum.any?(@uploads.statements.entries, &(!&1.valid?))
-          }
-        >
-          {@submit}
-        </.button>
-        <p :if={!@processing and @uploads.statements.entries == []} class="ui-help">
+        <div class="flex w-full flex-col items-center gap-2 sm:w-auto sm:flex-row">
+          <.button
+            variant="primary"
+            class="w-full sm:w-auto"
+            phx-disable-with="Enviando…"
+            disabled={
+              @uploads.statements.entries == [] or
+                Enum.any?(@uploads.statements.entries, &(!&1.valid?))
+            }
+          >
+            {submit_label(@submit, length(@uploads.statements.entries))}
+          </.button>
+          {render_slot(@extra)}
+        </div>
+        <p :if={@uploads.statements.entries == []} class="ui-help">
           Escolha um arquivo para continuar.
         </p>
-
-        <div
-          :if={@processing}
-          id={@progress_id}
-          phx-hook="ProgressBar"
-          data-progress={progress_percent(@progress_current, @progress_total)}
-          data-total={@progress_total}
-          data-ai={to_string(@progress_ai)}
-          class="w-full"
-        >
-          <div class="mb-2 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <.tag kind="pendente">Processando…</.tag>
-              <span class="ui-body">
-                <span :if={@progress_filename != ""} class="ui-private-name font-medium">
-                  {@progress_filename}
-                </span>
-                <span :if={@progress_total > 1} class="ui-text-secondary">
-                  ({@progress_current}/{@progress_total})
-                </span>
-              </span>
-            </div>
-            <span data-pct class="ui-help font-mono">0%</span>
-          </div>
-          <progress class="progress progress-primary w-full" value="0" max="100"></progress>
-        </div>
       </div>
     </form>
     """
   end
+
+  defp submit_label(label, count) when count > 1, do: "#{label} #{count} arquivos"
+  defp submit_label(label, _count), do: label
+
+  # Enquanto o navegador envia (depois de clicar em Processar), mostra quanto já subiu.
+  defp entry_subtitle(%{progress: progress} = entry) when progress in 1..99,
+    do: "#{format_bytes(entry.client_size)} · enviando #{progress}%"
+
+  defp entry_subtitle(entry), do: format_bytes(entry.client_size)
 
   # ── Calendário de importações (heatmap ano × mês) ──
 
@@ -1299,21 +1109,29 @@ defmodule GranaWeb.UploadLive do
   @month_abbr {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"}
   defp month_label(month), do: elem(@month_abbr, month - 1)
 
+  defp allow_statements(socket, accept) do
+    allow_upload(socket, :statements,
+      accept: accept,
+      max_entries: @max_files,
+      max_file_size: @max_file_size
+    )
+  end
+
   defp cancel_all_uploads(socket) do
     Enum.reduce(socket.assigns.uploads.statements.entries, socket, fn entry, acc ->
       cancel_upload(acc, :statements, entry.ref)
     end)
   end
 
-  defp progress_percent(_current, 0), do: 0
-  defp progress_percent(current, total), do: round(current / total * 100)
-
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_bytes(bytes), do: "#{Float.round(bytes / 1024, 1)} KB"
 
   defp upload_error_to_string(:too_large), do: "Arquivo muito grande (máximo 5MB)"
   defp upload_error_to_string(:not_accepted), do: "Tipo de arquivo não aceito (use CSV ou PDF)"
-  defp upload_error_to_string(:too_many_files), do: "Muitos arquivos (máximo 12)"
+
+  defp upload_error_to_string(:too_many_files),
+    do: "Muitos arquivos de uma vez (máximo #{@max_files})"
+
   defp upload_error_to_string(err), do: "Erro: #{inspect(err)}"
 
   defp format_datetime_br(dt) do

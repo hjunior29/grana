@@ -19,6 +19,9 @@ defmodule Grana.Application do
         [
           {Phoenix.PubSub, name: Grana.PubSub},
           {Oban, Application.fetch_env!(:grana, Oban)},
+          {Registry, keys: :unique, name: Grana.Chat.ReplyRegistry},
+          {Task.Supervisor, name: Grana.Chat.TaskSupervisor},
+          {DynamicSupervisor, name: Grana.Chat.ReplySupervisor, strategy: :one_for_one},
           Grana.Setup,
           GranaWeb.Endpoint
         ] ++ announce_setup()

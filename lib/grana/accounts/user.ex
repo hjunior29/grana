@@ -13,6 +13,7 @@ defmodule Grana.Accounts.User do
     # ("env:gemini" ou "db:<id>", ver Grana.AI) e `ai_model` o id do modelo.
     field :ai_provider, :string
     field :ai_model, :string
+    field :ai_specialists, :map, default: %{}
     has_many :ai_providers, Grana.AI.ProviderConfig
 
     # Identidade do titular, para reconhecer transferências entre contas próprias.
@@ -197,6 +198,10 @@ defmodule Grana.Accounts.User do
 
   def ai_default_changeset(user, provider_ref, model) do
     change(user, ai_provider: provider_ref, ai_model: model)
+  end
+
+  def ai_specialists_changeset(user, specialists) do
+    change(user, ai_specialists: specialists)
   end
 
   # Campos de segredo são só de escrita: a tela nunca recebe o valor salvo, então

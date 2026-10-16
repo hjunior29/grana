@@ -8,7 +8,8 @@
 # Grana
 
 Finanças pessoais **self-hosted**, para uma pessoa só. Importe extratos e faturas
-(CSV/PDF), categorize com IA (Gemini, OpenAI, Claude ou qualquer serviço compatível, com a sua chave), acompanhe o dia a dia pelo
+(CSV/PDF), categorize e analise com IA, converse com os seus dados num chat (Gemini, OpenAI,
+Claude ou qualquer serviço compatível, com a sua chave), acompanhe o dia a dia pelo
 Open Finance (opcional) e veja tudo num painel. Seus dados ficam num único arquivo SQLite,
 no seu servidor.
 
@@ -104,20 +105,36 @@ quando não há nada no ambiente).
 > decifra as credenciais salvas (chaves de IA, Pluggy, SMTP, CPF); sem ela, ao restaurar em outra
 > instância você precisa cadastrá-las de novo.
 
-## Provedores de IA
+## Inteligência artificial
 
-Em **Configurações → LLM** você cadastra quantos provedores quiser: **Google Gemini**,
-**OpenAI**, **Anthropic (Claude)** ou qualquer serviço compatível com a API de chat da OpenAI
-(OpenRouter, Groq, Together, Ollama, LM Studio... informe o endereço, ex.:
-`http://localhost:11434/v1`). A chave é conferida na hora e guardada cifrada.
+Em **Configurações → Inteligência artificial** você cadastra quantos provedores quiser:
+**Google Gemini**, **OpenAI**, **Anthropic (Claude)** ou qualquer serviço compatível com a API
+de chat da OpenAI (OpenRouter, Groq, Together, Ollama, LM Studio... informe o endereço, ex.:
+`http://localhost:11434/v1`). A chave é conferida na hora e guardada cifrada. Provedores
+definidos por variável de ambiente aparecem na lista com a tag `.env` e não são editáveis
+pela tela.
 
-Os **modelos não ficam no código**: a lista vem da própria API de cada provedor, então um
-modelo novo aparece sozinho, sem atualizar o Grana. Você escolhe o provedor + modelo padrão
-(usado na categorização, nas análises e na leitura de PDFs). Se um modelo recusar algum
-parâmetro (ex.: `temperature` em modelos de raciocínio), o Grana ajusta e tenta de novo.
+A IA entra em quatro lugares, cada um um **especialista** com o seu próprio modelo padrão
+(e um seletor na tela para trocar só naquela vez):
 
-Provedores definidos por variável de ambiente aparecem na lista com a tag `.env` e não são
-editáveis pela tela.
+- **Pesquisa avançada**: descreva a busca em português e a IA monta a string da pesquisa,
+  validada pelo próprio Grana antes de chegar a você.
+- **Análise**: nota, resumo, pontos e dicas de um mês ou de um ano. Cada análise guarda o
+  modelo que a gerou.
+- **Processamento**: leitura de PDFs que os parsers não entendem e categorização do que as
+  regras não pegaram. O histórico mostra o modelo usado em cada extrato.
+- **Chat**: conversa com os seus dados por mês, ano, banco, conta ou categoria. Todo número
+  vem de consultas ao banco; a IA só redige a resposta (em HTML, no estilo da tela) e pode
+  acionar os outros especialistas.
+
+Os **modelos não ficam no código**: a lista vem da API de cada provedor, então um modelo novo
+aparece sozinho. Para a lista não encher de modelos de imagem, áudio e gerações antigas, o
+Grana a cruza uma vez por dia com o catálogo aberto [models.dev](https://models.dev): ficam
+só os modelos de texto com suporte a ferramentas, o mais novo de cada família e nada com mais
+de um ano em relação ao modelo mais novo do provedor. Essa é a única chamada de rede fora dos
+seus provedores; se o catálogo estiver fora do ar, vale uma filtragem por palavra. Se um modelo
+recusar algum parâmetro (ex.: `temperature` em modelos de raciocínio), o Grana ajusta e tenta
+de novo.
 
 ## HTTPS e rede local
 

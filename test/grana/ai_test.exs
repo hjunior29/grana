@@ -143,16 +143,16 @@ defmodule Grana.AITest do
     end
   end
 
-  describe "resolve_config/1" do
+  describe "resolve/3 with the general default" do
     test "sem provedor nenhum" do
       user = user_fixture()
-      assert AI.resolve_config(user.id) == {:error, :no_api_key}
+      assert AI.resolve(user.id, nil) == {:error, :no_api_key}
     end
 
     test "usa o provedor e o modelo padrão", %{user: user} do
       ai_fixture(user, %{kind: "anthropic", name: "Claude", api_key: "ant", model: "claude-x"})
 
-      assert {:ok, config} = AI.resolve_config(user.id)
+      assert {:ok, config} = AI.resolve(user.id, nil)
 
       assert %{
                provider: "anthropic",
@@ -164,11 +164,6 @@ defmodule Grana.AITest do
                config
     end
 
-    test "Accounts.get_user_ai_config delega", %{user: user} do
-      ai_fixture(user)
-      assert {:ok, %{provider: "gemini"}} = Accounts.get_user_ai_config(user.id)
-    end
-
     test "sem padrão salvo, escolhe o primeiro provedor com o modelo sugerido e grava", %{
       user: user
     } do
@@ -176,20 +171,20 @@ defmodule Grana.AITest do
       expect(AI.Models, :list, fn %{api_key: "sk-env"} -> {:ok, @models} end)
 
       assert {:ok, %{provider: "openai", model: "gpt-5-mini", api_key: "sk-env"}} =
-               AI.resolve_config(user.id)
+               AI.resolve(user.id, nil)
 
       saved = Accounts.get_user!(user.id)
       assert saved.ai_provider == "env:openai"
       assert saved.ai_model == "gpt-5-mini"
 
       reject(&AI.Models.list/1)
-      assert {:ok, %{model: "gpt-5-mini"}} = AI.resolve_config(user.id)
+      assert {:ok, %{model: "gpt-5-mini"}} = AI.resolve(user.id, nil)
     end
 
     test "se não dá para listar os modelos, não há configuração", %{user: user} do
       put_env_keys(%{"gemini" => "k"})
       stub(AI.Models, :list, fn _ -> {:error, "fora do ar"} end)
-      assert AI.resolve_config(user.id) == {:error, :no_api_key}
+      assert AI.resolve(user.id, nil) == {:error, :no_api_key}
     end
 
     test "o padrão apontando para um provedor removido cai no primeiro disponível", %{user: user} do
@@ -197,12 +192,12 @@ defmodule Grana.AITest do
       {:ok, _} = AI.set_default(user, "db:999", "algum-modelo")
       stub(AI.Models, :list, fn _ -> {:ok, [%{id: "gemini-x", name: "x"}]} end)
 
-      assert {:ok, %{provider: "gemini", model: "gemini-x"}} = AI.resolve_config(user.id)
+      assert {:ok, %{provider: "gemini", model: "gemini-x"}} = AI.resolve(user.id, nil)
     end
 
     test "o valor antigo 'gemini' da coluna conta como sem padrão", %{user: user} do
       {:ok, _} = AI.set_default(user, "gemini", "gemini-2.0-flash")
-      assert AI.resolve_config(user.id) == {:error, :no_api_key}
+      assert AI.resolve(user.id, nil) == {:error, :no_api_key}
     end
   end
 
