@@ -12,7 +12,11 @@ services:
     container_name: grana
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "${BIND_IP:-127.0.0.1}:${PORT:-4000}:4000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - grana-data:/data
     env_file:

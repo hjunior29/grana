@@ -35,7 +35,6 @@ RUN mix local.hex --force \
 # set build ENV
 ENV MIX_ENV="prod"
 ENV DATA_DIR=/data
-VOLUME /data
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
