@@ -79,6 +79,20 @@ defmodule GranaWeb.CategoriesLive do
   end
 
   @impl true
+  def handle_params(%{"action" => "new"}, _uri, socket) do
+    socket = new_category_form(socket)
+
+    socket =
+      if connected?(socket),
+        do: push_patch(socket, to: ~p"/categories", replace: true),
+        else: socket
+
+    {:noreply, socket}
+  end
+
+  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -304,16 +318,7 @@ defmodule GranaWeb.CategoriesLive do
 
   @impl true
   def handle_event("new_category", _params, socket) do
-    changeset = Category.changeset(%Category{}, %{})
-
-    {:noreply,
-     assign(socket,
-       form_mode: :new,
-       form: to_form(changeset, as: "category"),
-       form_icon: "hero-tag",
-       form_color: "#6366F1",
-       form_kind: "expense"
-     )}
+    {:noreply, new_category_form(socket)}
   end
 
   def handle_event("edit_category", %{"id" => id}, socket) do
@@ -426,5 +431,17 @@ defmodule GranaWeb.CategoriesLive do
       nil -> 0
       s -> Map.get(s, key, 0)
     end
+  end
+
+  defp new_category_form(socket) do
+    changeset = Category.changeset(%Category{}, %{})
+
+    assign(socket,
+      form_mode: :new,
+      form: to_form(changeset, as: "category"),
+      form_icon: "hero-tag",
+      form_color: "#6366F1",
+      form_kind: "expense"
+    )
   end
 end

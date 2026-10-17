@@ -43,19 +43,23 @@ defmodule GranaWeb.GoalsLive do
     |> assign(:month, month)
   end
 
+  @impl true
+  def handle_params(%{"action" => "new"}, _uri, socket) do
+    socket = new_goal_form(socket)
+
+    socket =
+      if connected?(socket), do: push_patch(socket, to: ~p"/goals", replace: true), else: socket
+
+    {:noreply, socket}
+  end
+
+  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+
   # ── Events ──
 
   @impl true
   def handle_event("show_form", _params, socket) do
-    changeset = FinancialGoal.changeset(%FinancialGoal{}, %{})
-
-    {:noreply,
-     assign(socket,
-       show_form: true,
-       editing_goal: nil,
-       form_type: "expense_limit",
-       form: to_form(changeset, as: "goal")
-     )}
+    {:noreply, new_goal_form(socket)}
   end
 
   def handle_event("hide_form", _params, socket) do
@@ -505,4 +509,15 @@ defmodule GranaWeb.GoalsLive do
   defp status_label(:exceeded), do: "Limite ultrapassado"
   defp status_label(:behind), do: "Abaixo da meta"
   defp status_label(_), do: ""
+
+  defp new_goal_form(socket) do
+    changeset = FinancialGoal.changeset(%FinancialGoal{}, %{})
+
+    assign(socket,
+      show_form: true,
+      editing_goal: nil,
+      form_type: "expense_limit",
+      form: to_form(changeset, as: "goal")
+    )
+  end
 end

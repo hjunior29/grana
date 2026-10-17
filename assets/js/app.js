@@ -4,6 +4,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 import {PluggyConnect} from "../vendor/pluggy-connect"
+import QuickActions from "./quick_actions"
 
 // --- Theme ---
 const visualStyles = new Set(["default", "signal", "bossa", "papel", "caderneta", "planetario", "cyber"])
@@ -921,6 +922,7 @@ const PluggyConnectWidget = {
 
 const Hooks = {
   ...colocatedHooks,
+  QuickActions,
   CategoryChart,
   DailyChart,
   CalendarHeatmap,

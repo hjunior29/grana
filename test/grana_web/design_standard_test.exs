@@ -4,6 +4,7 @@ defmodule GranaWeb.DesignStandardTest do
   # Telas já migradas ao padrão de `doc/DESIGN.md`. Ao migrar uma tela, acrescente o
   # arquivo aqui.
   @migrated [
+    "lib/grana_web/components/quick_action_components.ex",
     "lib/grana_web/live/user_live/settings.ex",
     "lib/grana_web/components/account_components.ex",
     "lib/grana_web/components/ai_components.ex",

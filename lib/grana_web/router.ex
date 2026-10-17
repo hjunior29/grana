@@ -126,6 +126,7 @@ defmodule GranaWeb.Router do
         {GranaWeb.SetupGate, :setup_complete},
         {GranaWeb.UserAuth, :require_authenticated},
         GranaWeb.PreferencesHook,
+        GranaWeb.QuickActionsHook,
         GranaWeb.DataHook,
         GranaWeb.ImportsHook,
         GranaWeb.AiNoticesHook

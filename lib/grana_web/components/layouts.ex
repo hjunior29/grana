@@ -71,6 +71,7 @@ defmodule GranaWeb.Layouts do
             </div>
           </details>
         </div>
+        <GranaWeb.QuickActionComponents.palette :if={@current_scope && !@hide_nav} />
         <%!-- Desktop nav --%>
         <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">
           <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
