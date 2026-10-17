@@ -30,8 +30,15 @@ defmodule GranaWeb.BackupHooks do
 
   defp restore_form(params), do: to_form(params, as: :restore)
 
-  defp handle_event("restore_validate_upload", _params, socket),
-    do: {:halt, assign(socket, :restore_upload_error, nil)}
+  defp handle_event("restore_validate_upload", _params, socket) do
+    if authorized?(socket) do
+      {:halt, assign(socket, :restore_upload_error, nil)}
+    else
+      entries = socket.assigns.uploads.backup.entries
+      socket = Enum.reduce(entries, socket, &cancel_upload(&2, :backup, &1.ref))
+      {:halt, unauthorized(socket)}
+    end
+  end
 
   defp handle_event("restore_analyze", _params, socket) do
     if authorized?(socket) do
@@ -173,4 +180,13 @@ defmodule GranaWeb.BackupHooks do
 
   defp error_message(:password_invalid), do: "A nova senha deve ter entre 12 e 72 caracteres."
   defp error_message(_), do: "Não foi possível restaurar o backup."
+
+  @doc "Descarta análise de restauração pendente, apagando arquivo temporário restore-*.db"
+  def cleanup(socket) do
+    if analysis = socket.assigns[:restore_analysis] do
+      discard(analysis)
+    end
+
+    :ok
+  end
 end

@@ -26,10 +26,7 @@ defmodule Grana.Banking.BankStatement do
   end
 
   def changeset(statement, attrs) do
-    user_id = statement.user_id || attrs[:user_id] || attrs["user_id"]
-
     statement
-    |> Map.put(:user_id, user_id)
     |> cast(attrs, [
       :bank,
       :filename,

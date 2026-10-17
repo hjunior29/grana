@@ -983,7 +983,7 @@ defmodule GranaWeb.LandingLive do
             <p class="lp-kicker lp-rise">Segurança</p>
             <h2 class="lp-h2 lp-rise" style="--d: 0.05">Seus dados, no seu servidor</h2>
             <p class="lp-lead mx-auto max-w-xl lp-rise" style="--d: 0.1">
-              Nada de nuvem de terceiros: o Grana roda na sua máquina, com a sua chave de IA.
+              O Grana roda no seu servidor, sem intermediários. Suas chaves de IA falam diretamente com os provedores configurados.
             </p>
           </div>
           <div class="lp-dash-grid">

@@ -26,8 +26,7 @@ defmodule Grana.Banking.AIAnalysis do
       :filters_json,
       :result_json,
       :ai_provider,
-      :ai_model,
-      :user_id
+      :ai_model
     ])
     |> validate_required([:result_json, :user_id])
   end

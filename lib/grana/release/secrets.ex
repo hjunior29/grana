@@ -20,8 +20,9 @@ defmodule Grana.Release.Secrets do
         File.mkdir_p!(dir)
         File.chmod!(dir, 0o700)
         secret = @sizes[name] |> :crypto.strong_rand_bytes() |> Base.encode64()
-        File.write!(path, secret)
+        File.touch!(path)
         File.chmod!(path, 0o600)
+        File.write!(path, secret)
         Logger.info("Segredo #{name} gerado e salvo em #{path}")
         secret
     end

@@ -58,6 +58,8 @@ defmodule GranaWeb.UserLive.ForgotPassword do
      |> assign(:client_ip, GranaWeb.RateLimit.get_ip(socket))}
   end
 
+  @async_delivery Application.compile_env(:grana, :async_password_reset, true)
+
   @impl true
   def handle_event("send", %{"user" => %{"email" => email}}, socket) do
     case GranaWeb.RateLimit.check(:password_reset, socket.assigns.client_ip) do
@@ -72,10 +74,15 @@ defmodule GranaWeb.UserLive.ForgotPassword do
       :allow ->
         with true <- socket.assigns.smtp?,
              %{} = user <- Accounts.get_user_by_email(email) do
-          Accounts.deliver_reset_password_instructions(
-            user,
-            &(Accounts.public_base_url(user) <> ~p"/users/reset-password/#{&1}")
-          )
+          url_fun = &(Accounts.public_base_url(user) <> ~p"/users/reset-password/#{&1}")
+
+          if @async_delivery do
+            Task.Supervisor.start_child(Grana.TaskSupervisor, fn ->
+              Accounts.deliver_reset_password_instructions(user, url_fun)
+            end)
+          else
+            Accounts.deliver_reset_password_instructions(user, url_fun)
+          end
         end
 
         {:noreply,

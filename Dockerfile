@@ -87,7 +87,8 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 WORKDIR "/app"
-RUN chown nobody /app && mkdir /data && chown nobody /data
+RUN useradd -u 10001 -r -s /bin/false -d /app grana \
+  && install -d -m 700 -o grana /data
 
 # set runner ENV
 ENV MIX_ENV="prod"
@@ -96,9 +97,9 @@ ENV LISTEN_IP=0.0.0.0
 VOLUME /data
 
 # Only copy the final release from the build stage
-COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/grana ./
+COPY --from=builder --chown=root:root /app/_build/${MIX_ENV}/rel/grana ./
 
-USER nobody
+USER grana
 
 # If using an environment that doesn't automatically reap zombie processes, it is
 # advised to add an init process such as tini via `apt-get install`

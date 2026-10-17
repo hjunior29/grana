@@ -8,7 +8,6 @@ defmodule Grana.AnalysesTest do
   import Grana.BankingFixtures
 
   alias Grana.Analyses
-  alias Grana.Banking
   alias Grana.LLMStub
 
   setup do
@@ -84,7 +83,11 @@ defmodule Grana.AnalysesTest do
     assert {:ok, :started} = Analyses.request(user.id, 2026, 3)
     assert_receive {:agent_run, {:analysis, 2026, 3}, {:done, _}}, 5_000
     assert Analyses.latest(user.id, 2026, 3).result_json["titulo"] == "Mês revisto"
-    assert length(Banking.list_ai_analyses(user.id)) == 2
+
+    assert Repo.aggregate(
+             from(a in Grana.Banking.AIAnalysis, where: a.user_id == ^user.id),
+             :count
+           ) == 2
   end
 
   test "another model makes the analysis again", %{user: user} do

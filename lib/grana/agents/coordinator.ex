@@ -163,7 +163,7 @@ defmodule Grana.Agents.Coordinator do
     - Earlier answers may end with a "[consulted data]" note listing the tool results
       they used. You can rely on it, but never write such a note yourself.
 
-    Today is #{Date.utc_today()}.
+    Today is #{Grana.LocalTime.today()}.
     """
   end
 end

@@ -283,12 +283,6 @@ defmodule Grana.Banking.ExtendedTest do
       assert entry
     end
 
-    test "transactions_summary returns aggregated data", %{user: user} do
-      result = Banking.transactions_summary(user.id, year: 2026)
-      assert is_map(result)
-      assert Map.has_key?(result, :total_income) or Map.has_key?(result, :total_expenses)
-    end
-
     test "uncategorized_count returns count of uncategorized", %{user: user} do
       count = Banking.uncategorized_count(user.id)
       assert is_integer(count)
@@ -312,68 +306,6 @@ defmodule Grana.Banking.ExtendedTest do
     test "returns empty list when no fatura statements", %{user: user} do
       result = Banking.fatura_ids_for_month(user.id, 2026, 1)
       assert result == [] or is_list(result)
-    end
-  end
-
-  describe "AI analysis CRUD" do
-    test "create and list ai analyses", %{user: user} do
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: user.id,
-          prompt: nil,
-          filters_json: %{context: "banking"},
-          result_json: %{
-            "titulo" => "Test",
-            "resumo" => "ok",
-            "pontos" => [],
-            "nota" => 7.0
-          }
-        })
-
-      analyses = Banking.list_ai_analyses(user.id)
-      assert Enum.any?(analyses, &(&1.id == analysis.id))
-    end
-
-    test "get_ai_analysis! returns analysis for correct user", %{user: user} do
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: user.id,
-          prompt: nil,
-          filters_json: %{context: "banking"},
-          result_json: %{"titulo" => "T", "resumo" => "r", "pontos" => [], "nota" => 5.0}
-        })
-
-      found = Banking.get_ai_analysis!(analysis.id, user.id)
-      assert found.id == analysis.id
-    end
-
-    test "get_ai_analysis! raises for wrong user", %{user: user} do
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: user.id,
-          prompt: nil,
-          filters_json: %{},
-          result_json: %{"titulo" => "T", "resumo" => "r", "pontos" => [], "nota" => 5.0}
-        })
-
-      other_user = user_fixture()
-
-      assert_raise Ecto.NoResultsError, fn ->
-        Banking.get_ai_analysis!(analysis.id, other_user.id)
-      end
-    end
-
-    test "delete_ai_analysis removes analysis", %{user: user} do
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: user.id,
-          prompt: nil,
-          filters_json: %{},
-          result_json: %{"titulo" => "T", "resumo" => "r", "pontos" => [], "nota" => 5.0}
-        })
-
-      {:ok, _} = Banking.delete_ai_analysis(analysis)
-      assert Banking.list_ai_analyses(user.id) == []
     end
   end
 

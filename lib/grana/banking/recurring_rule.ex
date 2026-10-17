@@ -22,7 +22,7 @@ defmodule Grana.Banking.RecurringRule do
 
   def changeset(rule, attrs) do
     rule
-    |> cast(attrs, [:pattern, :mode, :user_id])
+    |> cast(attrs, [:pattern, :mode])
     |> validate_required([:pattern, :mode, :user_id])
     |> validate_inclusion(:mode, @modes)
     |> unique_constraint([:user_id, :pattern])

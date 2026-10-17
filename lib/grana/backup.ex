@@ -364,8 +364,25 @@ defmodule Grana.Backup do
         end)
       end)
 
+    File.rm_rf(DataDir.tmp_dir())
+    File.mkdir_p!(DataDir.tmp_dir())
+    File.chmod!(DataDir.tmp_dir(), 0o700)
+
+    stop_dynamic_supervisors()
+    Grana.OpenFinance.Pluggy.clear_cache()
+
     Setup.generate_code()
     result
+  end
+
+  defp stop_dynamic_supervisors do
+    for sup <- [Grana.Chat.ReplySupervisor, Grana.Agents.RunSupervisor] do
+      if Process.whereis(sup) do
+        for {_, pid, _, _} <- DynamicSupervisor.which_children(sup) do
+          DynamicSupervisor.terminate_child(sup, pid)
+        end
+      end
+    end
   end
 
   # Pausa o Oban, troca os dados e depois derruba sessões e caches. Os tokens de
@@ -405,7 +422,21 @@ defmodule Grana.Backup do
       String.starts_with?(name, ["sqlite_", "oban_", "error_tracker_"])
   end
 
-  defp extra_tables, do: ["oban_jobs", "error_tracker_occurrences", "error_tracker_errors"]
+  defp extra_tables do
+    candidates = [
+      "oban_jobs",
+      "oban_peers",
+      "error_tracker_occurrences",
+      "error_tracker_errors",
+      "error_tracker_meta"
+    ]
+
+    %{rows: rows} =
+      Repo.query!("SELECT name FROM main.sqlite_master WHERE type = 'table'")
+
+    existing = Enum.map(rows, &hd/1)
+    Enum.filter(candidates, &(&1 in existing))
+  end
 
   defp copy_table(table) do
     columns = shared_columns(table)

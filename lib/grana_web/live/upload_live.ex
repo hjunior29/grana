@@ -221,6 +221,7 @@ defmodule GranaWeb.UploadLive do
       {:single, stmt} ->
         bank_stmt = Banking.get_statement!(stmt.raw_id, user_id)
         Banking.delete_statement(bank_stmt)
+        Banking.detect_internal_transfers(user_id)
         # Sem esse upload, o Open Finance volta a cobrir o período.
         Grana.OpenFinance.uploads_changed(user_id)
 
@@ -246,6 +247,7 @@ defmodule GranaWeb.UploadLive do
 
         if ids != [] do
           Banking.delete_statements(ids, user_id)
+          Banking.detect_internal_transfers(user_id)
           Grana.OpenFinance.uploads_changed(user_id)
         end
 

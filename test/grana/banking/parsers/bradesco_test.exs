@@ -13,20 +13,34 @@ defmodule Grana.Banking.Parsers.BradescoTest do
   Filtro de resultados;;;;;
   """
 
-  test "parses valid CSV content" do
+  test "parses valid CSV content and ignores zero-value lines" do
     result = Bradesco.parse(@sample_csv)
-    assert length(result) == 3
+    assert length(result) == 2
   end
 
   test "parses date correctly" do
-    [_, second | _] = Bradesco.parse(@sample_csv)
-    assert second.date == ~D[2026-02-06]
+    [first | _] = Bradesco.parse(@sample_csv)
+    assert first.date == ~D[2026-02-06]
   end
 
   test "parses credit amount" do
-    [_, credit | _] = Bradesco.parse(@sample_csv)
+    [credit | _] = Bradesco.parse(@sample_csv)
     assert credit.type == "credit"
     assert Decimal.compare(credit.amount, Decimal.new("19.00")) == :eq
+  end
+
+  test "parses row with both credit and debit into two transactions" do
+    csv = """
+    Header;;;;;
+    Data;Histórico;Docto.;Crédito (R$);Débito (R$);Saldo (R$)
+    09/02/2026;TRANSFERENCIA MISTA;101;100,00;50,00;10.000,00
+    """
+
+    [credit, debit] = Bradesco.parse(csv)
+    assert credit.type == "credit"
+    assert Decimal.compare(credit.amount, Decimal.new("100.00")) == :eq
+    assert debit.type == "debit"
+    assert Decimal.compare(debit.amount, Decimal.new("-50.00")) == :eq
   end
 
   test "filters metadata lines" do

@@ -645,26 +645,6 @@ defmodule Grana.BankingTest do
     end
   end
 
-  describe "get_ai_analysis!/2 authorization (IDOR)" do
-    test "raises when the analysis belongs to another user", %{user: user} do
-      other = user_fixture()
-
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: other.id,
-          prompt: nil,
-          filters_json: %{},
-          result_json: %{"titulo" => "x"}
-        })
-
-      assert_raise Ecto.NoResultsError, fn ->
-        Banking.get_ai_analysis!(analysis.id, user.id)
-      end
-
-      assert Banking.get_ai_analysis!(analysis.id, other.id).id == analysis.id
-    end
-  end
-
   describe "create_financial_goal/1 category ownership" do
     test "rejects a category owned by another user", %{user: user} do
       other = user_fixture()

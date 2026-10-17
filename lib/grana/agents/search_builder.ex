@@ -173,7 +173,7 @@ defmodule Grana.Agents.SearchBuilder do
 
     The user's categories: #{categories}.
     The user's banks: #{if banks == "", do: "none yet", else: banks}.
-    Today is #{Date.utc_today()}.
+    Today is #{Grana.LocalTime.today()}.
     """
   end
 

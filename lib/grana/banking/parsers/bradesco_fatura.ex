@@ -22,7 +22,7 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
         {String.to_integer(year), String.to_integer(month)}
 
       _ ->
-        today = Date.utc_today()
+        today = Grana.LocalTime.today()
         {today.year, today.month}
     end
   end

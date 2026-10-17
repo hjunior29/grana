@@ -7,8 +7,10 @@ defmodule Grana.AI.PromptSanitizer do
   @max_description_length 200
   @max_prompt_length 1000
 
+  @xml_tags ~r{</?\s*(user_transactions|user_prompt|consulted_data)\s*>}i
+
   @doc """
-  Sanitizes a transaction description: strips control characters and newlines,
+  Sanitizes a transaction description: strips control characters, XML delimiters, and newlines,
   truncates to a safe length.
   """
   def sanitize_description(nil), do: ""
@@ -16,6 +18,7 @@ defmodule Grana.AI.PromptSanitizer do
   def sanitize_description(desc) when is_binary(desc) do
     desc
     |> strip_control_characters()
+    |> neutralize_xml_delimiters()
     |> String.replace(~r/[\r\n]+/, " ")
     |> String.trim()
     |> String.slice(0, @max_description_length)
@@ -32,6 +35,7 @@ defmodule Grana.AI.PromptSanitizer do
     sanitized =
       prompt
       |> strip_control_characters()
+      |> neutralize_xml_delimiters()
       |> String.trim()
       |> String.slice(0, @max_prompt_length)
 
@@ -41,6 +45,16 @@ defmodule Grana.AI.PromptSanitizer do
     #{sanitized}
     </user_prompt>
     """
+  end
+
+  @doc """
+  Neutralizes XML delimiters by replacing reserved tag names and converting `<>` to angle quotes.
+  """
+  def neutralize_xml_delimiters(text) when is_binary(text) do
+    text
+    |> String.replace(@xml_tags, " ")
+    |> String.replace("<", "‹")
+    |> String.replace(">", "›")
   end
 
   @doc """

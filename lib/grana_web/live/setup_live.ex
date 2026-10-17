@@ -321,4 +321,7 @@ defmodule GranaWeb.SetupLive do
       _ -> nil
     end
   end
+
+  @impl true
+  def terminate(_reason, socket), do: GranaWeb.BackupHooks.cleanup(socket)
 end

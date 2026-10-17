@@ -17,6 +17,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    init: true
+    pids_limit: 512
     volumes:
       - grana-data:/data
     env_file:

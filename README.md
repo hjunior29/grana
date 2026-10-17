@@ -137,6 +137,8 @@ seus provedores; se o catálogo estiver fora do ar, vale uma filtragem por palav
 recusar algum parâmetro (ex.: `temperature` em modelos de raciocínio), o Grana ajusta e tenta
 de novo.
 
+> **Privacidade:** ao configurar provedores em nuvem (Gemini, OpenAI, Claude), dados das requisições (como descrições de transações e perguntas de chat) são transmitidos diretamente à API do provedor. Para manter 100% dos dados na sua máquina/rede local, utilize provedores locais como Ollama ou LM Studio via conector OpenAI-compatível.
+
 ## HTTPS e rede local
 
 O app **não força HTTPS**: ele responde por HTTP na rede local (`http://192.168.x.x:4000`,
@@ -157,6 +159,8 @@ grana.seudominio.com {
 server {
     server_name grana.seudominio.com;
     # listen 443 ssl; ssl_certificate ...; ssl_certificate_key ...;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     location / {
         proxy_pass http://127.0.0.1:4000;

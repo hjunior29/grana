@@ -17,6 +17,10 @@ defmodule Grana.Banking.Parsers.PdfText do
 
   require Logger
 
+  alias Grana.DataDir
+
+  @timeout_ms 60_000
+
   @doc """
   Recebe os bytes brutos do PDF e devolve `{:ok, texto}` ou `{:error, motivo}`.
   """
@@ -28,7 +32,19 @@ defmodule Grana.Banking.Parsers.PdfText do
       exe ->
         with {:ok, path} <- write_temp(pdf_bytes) do
           try do
-            run(exe, path)
+            task =
+              Task.Supervisor.async_nolink(Grana.TaskSupervisor, fn ->
+                run(exe, path)
+              end)
+
+            case Task.yield(task, @timeout_ms) || Task.shutdown(task, :brutal_kill) do
+              {:ok, result} ->
+                result
+
+              nil ->
+                Logger.warning("pdftotext excedeu o tempo limite de #{@timeout_ms}ms")
+                {:error, :pdftotext_failed}
+            end
           after
             File.rm(path)
           end
@@ -37,21 +53,21 @@ defmodule Grana.Banking.Parsers.PdfText do
   end
 
   defp write_temp(bytes) do
-    path =
-      Path.join(
-        System.tmp_dir!(),
-        "grana_pdf_#{:erlang.unique_integer([:positive, :monotonic])}.pdf"
-      )
+    path = Path.join(DataDir.tmp_dir(), "grana_pdf_#{Ecto.UUID.generate()}.pdf")
 
     case File.write(path, bytes) do
-      :ok -> {:ok, path}
-      {:error, reason} -> {:error, {:tmp_write_failed, reason}}
+      :ok ->
+        File.chmod(path, 0o600)
+        {:ok, path}
+
+      {:error, reason} ->
+        {:error, {:tmp_write_failed, reason}}
     end
   end
 
   defp run(exe, path) do
     case System.cmd(exe, ["-layout", "-enc", "UTF-8", "-nopgbrk", path, "-"],
-           stderr_to_stdout: true
+           stderr_to_stdout: false
          ) do
       {output, 0} ->
         if String.trim(output) == "" do
@@ -60,8 +76,8 @@ defmodule Grana.Banking.Parsers.PdfText do
           {:ok, output}
         end
 
-      {output, code} ->
-        Logger.warning("pdftotext falhou (status #{code}): #{String.slice(output, 0, 200)}")
+      {_output, code} ->
+        Logger.warning("pdftotext falhou (status #{code})")
         {:error, :pdftotext_failed}
     end
   end
