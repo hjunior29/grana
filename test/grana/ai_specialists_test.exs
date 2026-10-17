@@ -199,6 +199,56 @@ defmodule Grana.AISpecialistsTest do
       assert {:error, "Limite de requisições" <> _} = LLM.run(chain(0.5))
     end
 
+    test "transport and connection errors provide clear feedback" do
+      stub(ChatOpenAI, :call, fn _model, _messages, _tools ->
+        {:error,
+         LangChain.LangChainError.exception(
+           type: "unexpected_response",
+           message: "Unexpected response",
+           original: {:error, %Req.TransportError{reason: :econnrefused}}
+         )}
+      end)
+
+      assert {:error, "Não foi possível conectar ao servidor de IA (conexão recusada)." <> _} =
+               LLM.run(chain(0.5))
+
+      stub(ChatOpenAI, :call, fn _model, _messages, _tools ->
+        {:error,
+         LangChain.LangChainError.exception(
+           type: "unexpected_response",
+           message: "Unexpected response",
+           original: {:error, %Req.TransportError{reason: :nxdomain}}
+         )}
+      end)
+
+      assert {:error, "Endereço do servidor de IA não encontrado" <> _} = LLM.run(chain(0.5))
+    end
+
+    test "http status errors from the provider are mapped" do
+      stub(ChatOpenAI, :call, fn _model, _messages, _tools ->
+        {:error,
+         LangChain.LangChainError.exception(
+           message: "Unauthorized",
+           type: "unexpected_response",
+           original: %Req.Response{status: 401}
+         )}
+      end)
+
+      assert {:error, "Chave de API inválida" <> _} = LLM.run(chain(0.5))
+
+      stub(ChatOpenAI, :call, fn _model, _messages, _tools ->
+        {:error,
+         LangChain.LangChainError.exception(
+           message: "Service Unavailable",
+           type: "unexpected_response",
+           original: %Req.Response{status: 503}
+         )}
+      end)
+
+      assert {:error, "O servidor de IA retornou instabilidade temporária (HTTP 503)." <> _} =
+               LLM.run(chain(0.5))
+    end
+
     test "last_text/1 is empty without messages" do
       assert LLM.last_text(%LLMChain{}) == ""
     end
