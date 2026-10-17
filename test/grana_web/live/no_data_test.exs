@@ -22,7 +22,7 @@ defmodule GranaWeb.NoDataTest do
 
     assert has_element?(
              view,
-             "##{id} a[href='/users/settings#open-finance-settings']",
+             "##{id} a[href='/users/settings?section=integrations']",
              "Conectar o Open Finance"
            )
   end

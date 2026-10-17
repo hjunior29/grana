@@ -3265,6 +3265,96 @@ html {
   field-sizing: content;
 }
 
+/* Settings: groups side by side on wide screens, a scrollable strip on narrow ones */
+.ui-settings-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent, #000 1rem, #000 calc(100% - 1.5rem), transparent);
+}
+
+.ui-settings-nav-item {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-field);
+  color: color-mix(in oklch, var(--color-base-content) 70%, transparent);
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.ui-settings-nav-item:hover {
+  background-color: color-mix(in oklch, var(--color-base-content) 5%, transparent);
+  color: var(--color-base-content);
+}
+
+.ui-settings-nav-item-active,
+.ui-settings-nav-item-active:hover {
+  background-color: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+/* the destructive group sits apart, in red */
+.ui-settings-nav-item-danger {
+  position: relative;
+  margin-left: 0.75rem;
+  color: color-mix(in oklch, var(--color-error) 85%, transparent);
+}
+
+.ui-settings-nav-item-danger::before {
+  content: "";
+  position: absolute;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  left: -0.5rem;
+  border-left: 1px solid color-mix(in oklch, var(--color-base-content) 12%, transparent);
+}
+
+.ui-settings-nav-item-danger:hover {
+  background-color: color-mix(in oklch, var(--color-error) 8%, transparent);
+  color: var(--color-error);
+}
+
+.ui-settings-nav-item-danger.ui-settings-nav-item-active,
+.ui-settings-nav-item-danger.ui-settings-nav-item-active:hover {
+  background-color: color-mix(in oklch, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+}
+
+@media (min-width: 1024px) {
+  .ui-settings-nav-item-danger {
+    margin-top: 1rem;
+    margin-left: 0;
+  }
+
+  .ui-settings-nav-item-danger::before {
+    top: -0.5rem;
+    bottom: auto;
+    left: 0.75rem;
+    right: 0.75rem;
+    border-left: 0;
+    border-top: 1px solid color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  }
+
+  .ui-settings-nav {
+    position: sticky;
+    top: 5rem;
+    align-self: start;
+    flex-direction: column;
+    margin-inline: 0;
+    padding-inline: 0;
+    overflow: visible;
+    mask-image: none;
+  }
+}
+
 .ui-chat-conversations {
   display: flex;
   flex-direction: column;
@@ -3340,6 +3430,12 @@ html {
 
 [data-theme="dark"] .btn.btn-error.btn-soft:not(:hover):not(:active) {
   color: color-mix(in oklch, var(--color-error) 55%, white);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .btn.btn-error.btn-soft:not(:hover):not(:active) {
+    color: color-mix(in oklch, var(--color-error) 55%, white);
+  }
 }
 
 .btn.btn-error.btn-soft:hover,
