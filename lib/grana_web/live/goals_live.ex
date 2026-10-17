@@ -4,6 +4,8 @@ defmodule GranaWeb.GoalsLive do
   alias Grana.Banking
   alias Grana.Banking.FinancialGoal
 
+  on_mount {GranaWeb.DataHook, :reload_on_data}
+
   @impl true
   def mount(_params, _session, socket) do
     user_id = socket.assigns.current_scope.user.id
@@ -176,6 +178,7 @@ defmodule GranaWeb.GoalsLive do
         <.page_header title="Metas" subtitle="Acompanhe seus objetivos financeiros">
           <:actions>
             <.button
+              :if={@has_data}
               id="new-goal"
               type="button"
               variant="primary"
@@ -188,160 +191,169 @@ defmodule GranaWeb.GoalsLive do
           </:actions>
         </.page_header>
 
-        <div :if={@goals_progress != []} class="flex items-center justify-center mb-6">
-          <.tag kind="neutro">Referência: {month_name(@month)} {@year}</.tag>
-        </div>
+        <.no_data
+          :if={!@has_data}
+          id="goals-no-data"
+          icon="hero-flag"
+          text="As metas acompanham os seus gastos mês a mês, com sugestões tiradas do seu histórico."
+        />
 
-        <%!-- Suggestions --%>
-        <% suggestions =
-          Enum.reject(
-            @suggestions,
-            &(&1.type in Enum.map(@goals_progress, fn gp -> gp.goal.type end))
-          ) %>
-        <div :if={suggestions != []} class="mb-6 space-y-3">
-          <h2 class="ui-section-title">Sugestões baseadas no seu histórico</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div :for={s <- suggestions} class="card bg-base-200 p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <.icon name={FinancialGoal.type_icon(s.type)} class="size-5 text-primary" />
-                <span class="ui-body font-medium">{FinancialGoal.type_label(s.type)}</span>
-              </div>
-              <p class="ui-help mb-3">
-                Média dos últimos 3 meses: <span class="ui-private">{format_currency(s.avg)}</span>
-              </p>
-              <% v90 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.9)), 0) %>
-              <% v80 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.8)), 0) %>
-              <div class="flex flex-wrap gap-2">
-                <.button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  phx-click="accept_suggestion"
-                  phx-value-type={s.type}
-                  phx-value-amount={Decimal.to_string(s.avg, :normal)}
-                >
-                  <span class="ui-private">{format_currency(s.avg)}</span>
-                </.button>
-                <.button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  phx-click="accept_suggestion"
-                  phx-value-type={s.type}
-                  phx-value-amount={Decimal.to_string(v90, :normal)}
-                >
-                  <span class="ui-private">{format_currency(v90)}</span>
-                </.button>
-                <.button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  phx-click="accept_suggestion"
-                  phx-value-type={s.type}
-                  phx-value-amount={Decimal.to_string(v80, :normal)}
-                >
-                  <span class="ui-private">{format_currency(v80)}</span>
-                </.button>
-              </div>
-            </div>
+        <div :if={@has_data}>
+          <div :if={@goals_progress != []} class="flex items-center justify-center mb-6">
+            <.tag kind="neutro">Referência: {month_name(@month)} {@year}</.tag>
           </div>
-        </div>
 
-        <%!-- Active Goals --%>
-        <div :if={@goals_progress != []} class="space-y-4">
-          <div
-            :for={gp <- @goals_progress}
-            id={"goal-#{gp.goal.id}"}
-            class="card bg-base-200 p-4 sm:p-6"
-          >
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                <.icon
-                  name={FinancialGoal.type_icon(gp.goal.type)}
-                  class={"size-5 #{status_color(gp.status)}"}
-                />
-                <div>
-                  <span class="ui-body font-semibold">
-                    {FinancialGoal.type_label(gp.goal.type)}
-                  </span>
-                  <.category_icon
-                    :if={gp.goal.category}
-                    category={gp.goal.category}
-                    class="size-5 ml-2"
-                  />
+          <%!-- Suggestions --%>
+          <% suggestions =
+            Enum.reject(
+              @suggestions,
+              &(&1.type in Enum.map(@goals_progress, fn gp -> gp.goal.type end))
+            ) %>
+          <div :if={suggestions != []} class="mb-6 space-y-3">
+            <h2 class="ui-section-title">Sugestões baseadas no seu histórico</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div :for={s <- suggestions} class="card bg-base-200 p-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <.icon name={FinancialGoal.type_icon(s.type)} class="size-5 text-primary" />
+                  <span class="ui-body font-medium">{FinancialGoal.type_label(s.type)}</span>
+                </div>
+                <p class="ui-help mb-3">
+                  Média dos últimos 3 meses: <span class="ui-private">{format_currency(s.avg)}</span>
+                </p>
+                <% v90 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.9)), 0) %>
+                <% v80 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.8)), 0) %>
+                <div class="flex flex-wrap gap-2">
+                  <.button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    phx-click="accept_suggestion"
+                    phx-value-type={s.type}
+                    phx-value-amount={Decimal.to_string(s.avg, :normal)}
+                  >
+                    <span class="ui-private">{format_currency(s.avg)}</span>
+                  </.button>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="accept_suggestion"
+                    phx-value-type={s.type}
+                    phx-value-amount={Decimal.to_string(v90, :normal)}
+                  >
+                    <span class="ui-private">{format_currency(v90)}</span>
+                  </.button>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="accept_suggestion"
+                    phx-value-type={s.type}
+                    phx-value-amount={Decimal.to_string(v80, :normal)}
+                  >
+                    <span class="ui-private">{format_currency(v80)}</span>
+                  </.button>
                 </div>
               </div>
-              <div class="flex items-center gap-1">
-                <.button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  icon="hero-pencil"
-                  class="btn-square"
-                  aria-label="Editar meta"
-                  phx-click="edit_goal"
-                  phx-value-id={gp.goal.id}
-                >
-                  <span class="sr-only">Editar meta</span>
-                </.button>
-                <.button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  icon="hero-trash"
-                  class="btn-square text-error"
-                  aria-label="Remover meta"
-                  phx-click="confirm_delete"
-                  phx-value-id={gp.goal.id}
-                >
-                  <span class="sr-only">Remover meta</span>
-                </.button>
-              </div>
-            </div>
-
-            <div class="flex items-end justify-between mb-2">
-              <span class={"ui-private text-lg sm:text-xl font-bold #{status_color(gp.status)}"}>
-                {format_currency(gp.current)}
-              </span>
-              <span class="ui-body ui-text-secondary">
-                / <span class="ui-private">{format_currency(gp.target)}</span>
-              </span>
-            </div>
-
-            <div class="w-full bg-base-300 rounded-full h-3 mb-1">
-              <div
-                class={"h-3 rounded-full transition-all #{status_bg(gp.status)}"}
-                style={"width: #{min(gp.pct, 100)}%"}
-              />
-            </div>
-
-            <div class="ui-help flex justify-between">
-              <span>{status_label(gp.status)}</span>
-              <span class={"font-medium #{status_color(gp.status)}"}>{format_pct(gp.pct)}</span>
             </div>
           </div>
-        </div>
 
-        <%!-- Empty State --%>
-        <.empty_state
-          :if={@goals_progress == [] and @suggestions == []}
-          id="goals-empty"
-          icon="hero-flag"
-          title="Nenhuma meta definida"
-          text="Importe pelo menos 2 meses de extratos para receber sugestões automáticas."
-        >
-          <:action>
-            <.button
-              type="button"
-              variant="primary"
-              size="sm"
-              icon="hero-plus"
-              phx-click="show_form"
+          <%!-- Active Goals --%>
+          <div :if={@goals_progress != []} class="space-y-4">
+            <div
+              :for={gp <- @goals_progress}
+              id={"goal-#{gp.goal.id}"}
+              class="card bg-base-200 p-4 sm:p-6"
             >
-              Criar meta
-            </.button>
-          </:action>
-        </.empty_state>
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <.icon
+                    name={FinancialGoal.type_icon(gp.goal.type)}
+                    class={"size-5 #{status_color(gp.status)}"}
+                  />
+                  <div>
+                    <span class="ui-body font-semibold">
+                      {FinancialGoal.type_label(gp.goal.type)}
+                    </span>
+                    <.category_icon
+                      :if={gp.goal.category}
+                      category={gp.goal.category}
+                      class="size-5 ml-2"
+                    />
+                  </div>
+                </div>
+                <div class="flex items-center gap-1">
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon="hero-pencil"
+                    class="btn-square"
+                    aria-label="Editar meta"
+                    phx-click="edit_goal"
+                    phx-value-id={gp.goal.id}
+                  >
+                    <span class="sr-only">Editar meta</span>
+                  </.button>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon="hero-trash"
+                    class="btn-square text-error"
+                    aria-label="Remover meta"
+                    phx-click="confirm_delete"
+                    phx-value-id={gp.goal.id}
+                  >
+                    <span class="sr-only">Remover meta</span>
+                  </.button>
+                </div>
+              </div>
+
+              <div class="flex items-end justify-between mb-2">
+                <span class={"ui-private text-lg sm:text-xl font-bold #{status_color(gp.status)}"}>
+                  {format_currency(gp.current)}
+                </span>
+                <span class="ui-body ui-text-secondary">
+                  / <span class="ui-private">{format_currency(gp.target)}</span>
+                </span>
+              </div>
+
+              <div class="w-full bg-base-300 rounded-full h-3 mb-1">
+                <div
+                  class={"h-3 rounded-full transition-all #{status_bg(gp.status)}"}
+                  style={"width: #{min(gp.pct, 100)}%"}
+                />
+              </div>
+
+              <div class="ui-help flex justify-between">
+                <span>{status_label(gp.status)}</span>
+                <span class={"font-medium #{status_color(gp.status)}"}>{format_pct(gp.pct)}</span>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Empty State --%>
+          <.empty_state
+            :if={@goals_progress == [] and @suggestions == []}
+            id="goals-empty"
+            icon="hero-flag"
+            title="Nenhuma meta definida"
+            text="Importe pelo menos 2 meses de extratos para receber sugestões automáticas."
+          >
+            <:action>
+              <.button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon="hero-plus"
+                phx-click="show_form"
+              >
+                Criar meta
+              </.button>
+            </:action>
+          </.empty_state>
+        </div>
 
         <.form_modal
           :if={@show_form}

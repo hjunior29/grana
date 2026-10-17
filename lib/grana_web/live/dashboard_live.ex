@@ -11,6 +11,7 @@ defmodule GranaWeb.DashboardLive do
   alias GranaWeb.SpendingCalendar
 
   on_mount GranaWeb.ModelChoicesHook
+  on_mount {GranaWeb.DataHook, :reload_on_data}
 
   # ── Mount ──
 
@@ -624,7 +625,7 @@ defmodule GranaWeb.DashboardLive do
       <div class="max-w-6xl mx-auto">
         <.page_header title="Painel" subtitle="Visão geral das suas finanças" />
 
-        <.tabs>
+        <.tabs :if={@has_data}>
           <:tab
             label="Resumo"
             icon="hero-banknotes"
@@ -641,17 +642,24 @@ defmodule GranaWeb.DashboardLive do
           />
         </.tabs>
 
+        <OpenFinanceComponents.today
+          :if={(!@has_data or @tab != "recurring") and @today.accounts != []}
+          accounts={@today.accounts}
+          totals={@today.totals}
+          calendar={@today.calendar}
+          collected_at={@today.collected_at}
+        />
+
         <%= cond do %>
+          <% !@has_data -> %>
+            <.no_data
+              id="dashboard-no-data"
+              icon="hero-chart-bar"
+              text="O painel mostra para onde vai o seu dinheiro: receitas e despesas, categorias, fluxo de caixa e despesas fixas."
+            />
           <% @tab == "recurring" -> %>
             {render_recurring_tab(assigns)}
           <% true -> %>
-            <OpenFinanceComponents.today
-              :if={@today.accounts != []}
-              accounts={@today.accounts}
-              totals={@today.totals}
-              calendar={@today.calendar}
-              collected_at={@today.collected_at}
-            />
             {render_banking_tab(assigns)}
         <% end %>
       </div>
@@ -663,7 +671,7 @@ defmodule GranaWeb.DashboardLive do
 
   defp render_recurring_tab(assigns) do
     ~H"""
-    <.filter_bar :if={@available_years != []} id="recurring-filters">
+    <.filter_bar id="recurring-filters">
       <.chip_group label="Janela">
         <.chip
           :for={{label, value} <- [{"6 meses", "6"}, {"12 meses", "12"}]}
@@ -679,21 +687,7 @@ defmodule GranaWeb.DashboardLive do
     </.filter_bar>
 
     <.empty_state
-      :if={@available_years == []}
-      id="recurring-empty"
-      icon="hero-arrow-path"
-      title="Nenhuma transação encontrada"
-      text="Importe um extrato bancário para começar."
-    >
-      <:action>
-        <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
-          Importar extratos
-        </.button>
-      </:action>
-    </.empty_state>
-
-    <.empty_state
-      :if={@available_years != [] && @rec_analysis.total_months == 0}
+      :if={@rec_analysis.total_months == 0}
       id="recurring-empty"
       icon="hero-arrow-path"
       title="Nenhuma despesa encontrada nesse período"
@@ -805,7 +799,7 @@ defmodule GranaWeb.DashboardLive do
 
   defp render_banking_tab(assigns) do
     ~H"""
-    <.filter_bar :if={@available_years != []} id="banking-filters">
+    <.filter_bar id="banking-filters">
       <.period_filter
         years={@available_years}
         selected_year={if @view_mode == "total", do: nil, else: @selected_year}
@@ -838,15 +832,9 @@ defmodule GranaWeb.DashboardLive do
       :if={@summary.transaction_count == 0 && !banking_filtered?(assigns)}
       id="dashboard-empty"
       icon="hero-chart-bar"
-      title="Nenhuma transação encontrada"
-      text="Importe um extrato bancário para começar."
-    >
-      <:action>
-        <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
-          Importar extratos
-        </.button>
-      </:action>
-    </.empty_state>
+      title="Nada nesse período"
+      text="Escolha outro mês ou ano nos filtros acima."
+    />
 
     <div :if={@summary.transaction_count > 0}>
       <AnalysisComponents.analysis_panel

@@ -8,7 +8,7 @@ defmodule GranaWeb.DashboardLiveTest do
   test "renders dashboard page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/dashboard")
     assert html =~ "Painel"
-    assert html =~ "Nenhuma transação encontrada"
+    assert html =~ "Nenhuma transação ainda"
   end
 
   test "shows upload button when no transactions", %{conn: conn} do
@@ -33,11 +33,9 @@ defmodule GranaWeb.DashboardLiveTest do
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/dashboard?tab=recurring")
 
-      assert has_element?(view, "#recurring-empty", "Nenhuma transação encontrada")
-
       assert has_element?(
                view,
-               ~s|#recurring-empty a.btn-primary[href="/upload"]|,
+               ~s|#dashboard-no-data a.btn-primary[href="/upload"]|,
                "Importar extratos"
              )
 

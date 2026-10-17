@@ -4,6 +4,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
 
   import Phoenix.LiveViewTest
   import Grana.AccountsFixtures
+  import Grana.BankingFixtures
 
   alias Grana.Agents.Run
   alias Grana.LLMStub
@@ -16,6 +17,7 @@ defmodule GranaWeb.TransactionsAiSearchTest do
       {:ok, [%{id: "gemini-pro", name: "Gemini Pro"}]}
     end)
 
+    transaction_fixture(user, %{description: "UBER TRIP", amount: "-30.00"})
     on_exit(fn -> Run.clear(user.id, :search) end)
     Run.subscribe(user.id)
     %{user: ai_fixture(user)}

@@ -83,6 +83,7 @@ defmodule GranaWeb.AiModelsUiTest do
         })
 
       by_rules = statement_fixture(user, %{filename: "regras.csv"})
+      transaction_fixture(user, %{bank_statement_id: by_rules.id})
 
       {:ok, view, _html} = live(conn, ~p"/upload?tab=historico")
 

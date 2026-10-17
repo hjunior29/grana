@@ -2955,6 +2955,15 @@ html {
   cursor: pointer;
 }
 
+.ui-model-picker:has(select:disabled) {
+  opacity: 0.55;
+  border-color: color-mix(in oklch, var(--color-base-content) 14%, transparent);
+}
+
+.ui-model-picker select:disabled {
+  cursor: not-allowed;
+}
+
 .ui-model-picker option,
 .ui-model-picker optgroup {
   background-color: var(--color-base-100);
