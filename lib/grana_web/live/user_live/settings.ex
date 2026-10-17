@@ -132,6 +132,7 @@ defmodule GranaWeb.UserLive.Settings do
           <AiComponents.providers_panel
             providers={@ai_providers}
             selected_ref={@ai_selected_ref}
+            saved_ref={@ai_saved_ref}
             default_form={@ai_default_form}
             default_model={@ai_default_model}
             models={@ai_models}

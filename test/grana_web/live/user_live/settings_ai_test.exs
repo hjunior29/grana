@@ -245,6 +245,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
 
     render_async(lv)
     assert has_element?(lv, "#ai-default-model option", "Claude Sonnet X")
+    refute has_element?(lv, "#ai-default-model option", "gemini-test-model")
   end
 
   defp anthropic_id, do: Grana.Repo.get_by!(ProviderConfig, kind: "anthropic").id

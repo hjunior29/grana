@@ -473,6 +473,13 @@ const CalendarHeatmap = {
 
 const AutoDismiss = {
   mounted() {
+    this.el.style.opacity = "0"
+    this.el.style.transform = "translateX(100%)"
+    requestAnimationFrame(() => {
+      this.el.style.opacity = "1"
+      this.el.style.transform = "translateX(0)"
+    })
+
     this.timer = setTimeout(() => {
       const kind = this.el.id.replace("flash-", "")
       this.pushEvent("lv:clear-flash", { key: kind })
