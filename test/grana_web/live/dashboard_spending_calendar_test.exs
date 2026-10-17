@@ -66,7 +66,7 @@ defmodule GranaWeb.DashboardSpendingCalendarTest do
   end
 
   test "days and months still to come stay dim", %{conn: conn, user: user} do
-    today = Date.utc_today()
+    today = Grana.LocalTime.today()
     transactions_fixture(user, [%{date: today, description: "HOJE", amount: "-10.00"}])
 
     {:ok, view, _html} = live(conn, ~p"/dashboard")

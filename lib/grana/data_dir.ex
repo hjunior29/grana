@@ -7,6 +7,7 @@ defmodule Grana.DataDir do
   def tmp_dir do
     dir = Path.join(path(), "tmp")
     File.mkdir_p!(dir)
+    File.chmod!(dir, 0o700)
     dir
   end
 
@@ -14,6 +15,7 @@ defmodule Grana.DataDir do
   def imports_dir do
     dir = Path.join(tmp_dir(), "imports")
     File.mkdir_p!(dir)
+    File.chmod!(dir, 0o700)
     dir
   end
 end

@@ -743,4 +743,7 @@ defmodule GranaWeb.UserLive.Settings do
       _ -> iso
     end
   end
+
+  @impl true
+  def terminate(_reason, socket), do: GranaWeb.BackupHooks.cleanup(socket)
 end

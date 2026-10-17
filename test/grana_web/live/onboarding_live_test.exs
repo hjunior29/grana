@@ -123,7 +123,7 @@ defmodule GranaWeb.OnboardingLiveTest do
   end
 
   test "login de quem não concluiu o onboarding leva a /onboarding", %{user: user} do
-    {:ok, _} = Accounts.update_user_password(user, %{password: valid_user_password()})
+    {:ok, _} = Accounts.reset_user_password(user, %{password: valid_user_password()})
 
     conn =
       post(build_conn(), ~p"/users/log-in", %{

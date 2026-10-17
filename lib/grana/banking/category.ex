@@ -23,7 +23,7 @@ defmodule Grana.Banking.Category do
     category
     |> Map.put(:user_id, user_id)
     |> cast(attrs, allowed)
-    |> validate_required([:name])
+    |> validate_required([:name, :user_id])
     |> validate_inclusion(:kind, @kinds)
     |> validate_format(:color, ~r/^#[0-9A-Fa-f]{3,8}$/, message: "cor inválida")
     |> validate_format(:icon, ~r/^hero-[a-z0-9-]+$/, message: "ícone inválido")

@@ -189,7 +189,9 @@ defmodule GranaWeb.AiComponents do
               Cancelar
             </.button>
           </div>
-          <p class="ui-help">A chave é conferida listando os modelos e guardada criptografada.</p>
+          <p class="ui-help">
+            A chave é guardada criptografada. Provedores em nuvem recebem os dados de extratos diretamente na API configurada; use provedores locais (Ollama, LM Studio) para manter 100% dos dados na sua máquina.
+          </p>
         </div>
       </.form>
     </div>

@@ -140,7 +140,11 @@ defmodule Grana.PlatformImport do
           identifier: r.identifier,
           installment_current: r.installment_current,
           installment_total: r.installment_total,
-          installment_group_id: nil,
+          installment_group_id:
+            Grana.Banking.Parsers.InstallmentParser.generate_group_id(
+              r.description,
+              r.installment_total
+            ),
           is_internal_transfer: r.is_internal_transfer,
           internal_override:
             if(is_boolean(r.is_internal_transfer), do: r.is_internal_transfer, else: nil),
@@ -336,12 +340,16 @@ defmodule Grana.PlatformImport do
   defp parse_decimal(""), do: nil
 
   defp parse_decimal(str) do
+    trimmed = str |> to_string() |> String.trim()
+
     cleaned =
-      str
-      |> to_string()
-      |> String.trim()
-      |> String.replace(".", "")
-      |> String.replace(",", ".")
+      if String.contains?(trimmed, ",") do
+        trimmed
+        |> String.replace(".", "")
+        |> String.replace(",", ".")
+      else
+        trimmed
+      end
 
     case Decimal.parse(cleaned) do
       {dec, _} -> dec

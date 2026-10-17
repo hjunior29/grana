@@ -124,6 +124,10 @@ defmodule GranaWeb.UserAuth do
   # Do not renew session if the user is already logged in
   # to prevent CSRF errors or data being lost in tabs that are still open
   defp renew_session(conn, user) when conn.assigns.current_scope.user.id == user.id do
+    if prev_token = get_session(conn, :user_token) do
+      Accounts.delete_user_session_token(prev_token)
+    end
+
     conn
   end
 
@@ -224,21 +228,6 @@ defmodule GranaWeb.UserAuth do
     socket = mount_current_scope(socket, session)
 
     if socket.assigns.current_scope && socket.assigns.current_scope.user do
-      {:cont, socket}
-    else
-      socket =
-        socket
-        |> Phoenix.LiveView.put_flash(:error, "Você deve fazer login para acessar esta página.")
-        |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
-
-      {:halt, socket}
-    end
-  end
-
-  def on_mount(:require_sudo_mode, _params, session, socket) do
-    socket = mount_current_scope(socket, session)
-
-    if Accounts.sudo_mode?(socket.assigns.current_scope.user, -10) do
       {:cont, socket}
     else
       socket =

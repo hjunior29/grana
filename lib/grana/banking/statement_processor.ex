@@ -196,10 +196,7 @@ defmodule Grana.Banking.StatementProcessor do
         :ok
 
       {:error, issues} ->
-        Logger.warning(
-          "BradescoPdf: #{length(issues)} balance reconciliation mismatch(es): " <>
-            inspect(Enum.take(issues, 5))
-        )
+        Logger.warning("BradescoPdf: #{length(issues)} balance reconciliation mismatch(es)")
     end
   end
 

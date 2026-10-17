@@ -29,15 +29,31 @@ defmodule GranaWeb.RateLimit do
   def call(conn, opts) do
     action = Keyword.fetch!(opts, :action)
 
-    case check(action, client_ip(conn)) do
-      :allow ->
-        conn
+    email =
+      case conn.params do
+        %{"user" => %{"email" => e}} when is_binary(e) ->
+          e |> String.trim() |> String.downcase()
 
-      :deny ->
-        conn
-        |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
-        |> redirect(to: redirect_path(action))
-        |> halt()
+        _ ->
+          nil
+      end
+
+    ip_allowed? = check(action, client_ip(conn)) == :allow
+
+    email_allowed? =
+      if action == :login and email not in [nil, ""] do
+        check_rate("login:email:#{email}", 15 * 60_000, 30) == :allow
+      else
+        true
+      end
+
+    if ip_allowed? and email_allowed? do
+      conn
+    else
+      conn
+      |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
+      |> redirect(to: redirect_path(action))
+      |> halt()
     end
   end
 
@@ -71,7 +87,7 @@ defmodule GranaWeb.RateLimit do
       case Hammer.check_rate(bucket_key, window_ms, limit) do
         {:allow, _count} -> :allow
         {:deny, _limit} -> :deny
-        {:error, _reason} -> :allow
+        {:error, _reason} -> :deny
       end
     end
   end
@@ -87,7 +103,7 @@ defmodule GranaWeb.RateLimit do
       case Hammer.check_rate(bucket_key, window_ms, limit) do
         {:allow, _count} -> :allow
         {:deny, _limit} -> :deny
-        {:error, _reason} -> :allow
+        {:error, _reason} -> :deny
       end
     end
   end

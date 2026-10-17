@@ -49,7 +49,7 @@ defmodule Grana.Agents.ChatTools do
           |> Map.new(fn {year, months} -> {year, Enum.sort(months)} end)
 
         %{
-          today: Date.utc_today(),
+          today: Grana.LocalTime.today(),
           years: Banking.available_years(user_id),
           months_with_data: months,
           banks: Banking.available_banks(user_id),
@@ -232,7 +232,7 @@ defmodule Grana.Agents.ChatTools do
       %{year: %{type: "integer"}, month: %{type: "integer"}},
       [],
       fn args ->
-        today = Date.utc_today()
+        today = Grana.LocalTime.today()
 
         user_id
         |> Banking.goals_progress(args["year"] || today.year, args["month"] || today.month)

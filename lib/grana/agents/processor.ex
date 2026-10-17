@@ -19,22 +19,41 @@ defmodule Grana.Agents.Processor do
   @impl true
   def key, do: "processing"
 
+  alias Grana.Banking.Parsers.PdfText
+
   @doc """
   Transactions in the PDF. For `"outro"` (unknown bank) it also returns the detected bank
   and document type: `{:ok, transactions, %{detected_bank:, detected_type:}}`.
   """
   def extract_pdf(pdf_bytes, bank, config) do
     message =
-      Message.new_user!([
-        ContentPart.file!(Base.encode64(pdf_bytes), media: :pdf, filename: "statement.pdf"),
-        ContentPart.text!(pdf_prompt(bank))
-      ])
+      case PdfText.extract(pdf_bytes) do
+        {:ok, text} ->
+          sanitized_text = redact_sensitive_info(text)
+
+          prompt =
+            "#{pdf_prompt(bank)}\n\nDocument text:\n#{PromptSanitizer.wrap_transactions(sanitized_text)}"
+
+          Message.new_user!(prompt)
+
+        _ ->
+          Message.new_user!([
+            ContentPart.file!(Base.encode64(pdf_bytes), media: :pdf, filename: "statement.pdf"),
+            ContentPart.text!(pdf_prompt(bank))
+          ])
+      end
 
     case call(message, config, max_tokens: 16_384, receive_timeout: 180_000) do
       {:ok, text} when bank == "outro" -> parse_document(text)
       {:ok, text} -> parse_transactions(text)
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  defp redact_sensitive_info(text) do
+    text
+    |> String.replace(~r/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/, "[CPF]")
+    |> String.replace(~r/\b(ag[eê]ncia|ag\.?|conta|c\/c)\s*[:.]?\s*[\d\-]+/i, "[CONTA]")
   end
 
   @doc "Category id for each description, in order (uncategorized when unsure)."

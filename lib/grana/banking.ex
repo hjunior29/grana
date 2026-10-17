@@ -21,14 +21,14 @@ defmodule Grana.Banking do
 
   def list_categories(user_id) do
     Category
-    |> where([c], is_nil(c.user_id) or c.user_id == ^user_id)
+    |> where([c], c.user_id == ^user_id)
     |> order_by([c], asc: c.name)
     |> Repo.all()
   end
 
   def get_category!(id, user_id) do
     Category
-    |> where([c], c.id == ^id and (is_nil(c.user_id) or c.user_id == ^user_id))
+    |> where([c], c.id == ^id and c.user_id == ^user_id)
     |> Repo.one!()
   end
 
@@ -56,7 +56,7 @@ defmodule Grana.Banking do
 
   def category_stats(user_id) do
     Category
-    |> where([c], is_nil(c.user_id) or c.user_id == ^user_id)
+    |> where([c], c.user_id == ^user_id)
     |> join(:left, [c], t in Transaction, on: t.category_id == c.id and t.user_id == ^user_id)
     |> join(:left, [c, _t], r in CategoryRule,
       on: r.category_id == c.id and r.user_id == ^user_id
@@ -210,7 +210,9 @@ defmodule Grana.Banking do
   end
 
   def create_statement(attrs) do
-    %BankStatement{}
+    user_id = attrs[:user_id] || attrs["user_id"]
+
+    %BankStatement{user_id: user_id}
     |> BankStatement.changeset(attrs)
     |> Repo.insert()
     |> invalidate_cache()
@@ -443,8 +445,8 @@ defmodule Grana.Banking do
   def upsert_recurring_rule(user_id, pattern, mode) do
     pattern = Grana.Banking.RecurringExpenses.normalize(pattern)
 
-    %RecurringRule{}
-    |> RecurringRule.changeset(%{user_id: user_id, pattern: pattern, mode: mode})
+    %RecurringRule{user_id: user_id}
+    |> RecurringRule.changeset(%{pattern: pattern, mode: mode})
     |> Repo.insert(
       on_conflict: [set: [mode: mode, updated_at: DateTime.utc_now(:second)]],
       conflict_target: [:user_id, :pattern]
@@ -660,14 +662,16 @@ defmodule Grana.Banking do
   defp filter_by_search(query, ""), do: query
 
   defp filter_by_search(query, term) do
+    escaped = escape_like(term)
+
     patterns =
-      [term, String.upcase(term), String.downcase(term)]
+      [escaped, String.upcase(escaped), String.downcase(escaped)]
       |> Enum.uniq()
       |> Enum.map(&"%#{&1}%")
 
     cat_filter =
       Enum.reduce(patterns, dynamic(false), fn p, acc ->
-        dynamic([c], ^acc or like(c.name, ^p))
+        dynamic([c], ^acc or fragment("? LIKE ? ESCAPE '\\'", c.name, ^p))
       end)
 
     cat_ids =
@@ -677,13 +681,20 @@ defmodule Grana.Banking do
 
     txn_filter =
       Enum.reduce(patterns, dynamic(false), fn p, acc ->
-        dynamic([t], ^acc or like(t.description, ^p))
+        dynamic([t], ^acc or fragment("? LIKE ? ESCAPE '\\'", t.description, ^p))
       end)
 
     where_filter =
       dynamic([t], ^txn_filter or t.category_id in subquery(cat_ids))
 
     where(query, ^where_filter)
+  end
+
+  defp escape_like(term) do
+    term
+    |> String.replace("\\", "\\\\")
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
   end
 
   defp filter_by_bank(query, nil, _user_id), do: query
@@ -758,14 +769,18 @@ defmodule Grana.Banking do
   end
 
   def bulk_update_categories(transaction_ids, category_id, user_id) do
-    result =
-      from(t in Transaction,
-        where: t.id in ^transaction_ids and t.user_id == ^user_id
-      )
-      |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
+    if category_id && !category_belongs_to_user?(category_id, user_id) do
+      {:error, :unauthorized}
+    else
+      result =
+        from(t in Transaction,
+          where: t.id in ^transaction_ids and t.user_id == ^user_id
+        )
+        |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
 
-    Grana.Cache.invalidate_user(user_id)
-    result
+      Grana.Cache.invalidate_user(user_id)
+      result
+    end
   end
 
   @transaction_defaults %{
@@ -932,8 +947,8 @@ defmodule Grana.Banking do
   end
 
   defp upsert_internal_transfer_rule(user_id, pattern, kind) do
-    %InternalTransferRule{}
-    |> InternalTransferRule.changeset(%{user_id: user_id, pattern: pattern, kind: kind})
+    %InternalTransferRule{user_id: user_id}
+    |> InternalTransferRule.changeset(%{pattern: pattern, kind: kind})
     |> Repo.insert(
       on_conflict: [set: [kind: kind, updated_at: DateTime.utc_now(:second)]],
       conflict_target: [:user_id, :pattern]
@@ -1128,13 +1143,20 @@ defmodule Grana.Banking do
   end
 
   def create_category_rule(attrs) do
-    %CategoryRule{}
-    |> CategoryRule.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: {:replace, [:category_id, :updated_at]},
-      conflict_target: [:pattern, :user_id]
-    )
-    |> invalidate_cache()
+    user_id = attrs[:user_id] || attrs["user_id"]
+    category_id = attrs[:category_id] || attrs["category_id"]
+
+    if category_id && user_id && !category_belongs_to_user?(category_id, user_id) do
+      {:error, :unauthorized}
+    else
+      %CategoryRule{}
+      |> CategoryRule.changeset(attrs)
+      |> Repo.insert(
+        on_conflict: {:replace, [:category_id, :updated_at]},
+        conflict_target: [:pattern, :user_id]
+      )
+      |> invalidate_cache()
+    end
   end
 
   def categorize_transaction(description, user_id) do
@@ -1698,62 +1720,6 @@ defmodule Grana.Banking do
     |> Enum.sort_by(& &1.month)
   end
 
-  def transactions_summary(user_id, opts) do
-    Grana.Cache.get_or_store("banking:transactions_summary", user_id, Enum.sort(opts), fn ->
-      do_transactions_summary(user_id, opts)
-    end)
-  end
-
-  defp do_transactions_summary(user_id, opts) do
-    build_transactions_query(user_id, opts)
-    |> exclude(:preload)
-    |> exclude(:order_by)
-    |> where([t], t.is_internal_transfer == false)
-    |> join(:left, [t], c in Category, on: t.category_id == c.id)
-    |> select([t, c], %{
-      total_income:
-        type(
-          coalesce(
-            sum(fragment("CASE WHEN ? = 'credit' THEN ABS(?) ELSE 0 END", t.type, t.amount)),
-            0
-          ),
-          :decimal
-        ),
-      total_expenses:
-        type(
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'debit' AND (? IS NULL OR ? != 'investment') THEN ABS(?) ELSE 0 END",
-                t.type,
-                c.kind,
-                c.kind,
-                t.amount
-              )
-            ),
-            0
-          ),
-          :decimal
-        ),
-      total_investments:
-        type(
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'debit' AND ? = 'investment' THEN ABS(?) ELSE 0 END",
-                t.type,
-                c.kind,
-                t.amount
-              )
-            ),
-            0
-          ),
-          :decimal
-        )
-    })
-    |> Repo.one()
-  end
-
   def uncategorized_count(user_id) do
     uncat_ids =
       Category
@@ -1881,26 +1847,11 @@ defmodule Grana.Banking do
   # AI Analyses
 
   def create_ai_analysis(attrs) do
-    %AIAnalysis{}
+    user_id = attrs[:user_id] || attrs["user_id"]
+
+    %AIAnalysis{user_id: user_id}
     |> AIAnalysis.changeset(attrs)
     |> Repo.insert()
-  end
-
-  def list_ai_analyses(user_id) do
-    AIAnalysis
-    |> where([a], a.user_id == ^user_id)
-    |> order_by([a], desc: a.inserted_at)
-    |> Repo.all()
-  end
-
-  def get_ai_analysis!(id, user_id) do
-    AIAnalysis
-    |> where([a], a.id == ^id and a.user_id == ^user_id)
-    |> Repo.one!()
-  end
-
-  def delete_ai_analysis(%AIAnalysis{} = analysis) do
-    Repo.delete(analysis)
   end
 
   # Shared helpers

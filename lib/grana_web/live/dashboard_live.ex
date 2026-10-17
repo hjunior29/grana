@@ -30,8 +30,12 @@ defmodule GranaWeb.DashboardLive do
 
     {year, month, view_mode} =
       case months do
-        [{y, m} | _] -> {y, m, "month"}
-        [] -> {Date.utc_today().year, Date.utc_today().month, "month"}
+        [{y, m} | _] ->
+          {y, m, "month"}
+
+        [] ->
+          today = Grana.LocalTime.today()
+          {today.year, today.month, "month"}
       end
 
     socket =
@@ -139,7 +143,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("select_year", %{"year" => year_str}, socket) do
-    year = GranaWeb.Params.to_int(year_str, Date.utc_today().year)
+    year = GranaWeb.Params.to_int(year_str, Grana.LocalTime.today().year)
 
     socket =
       socket
@@ -1627,7 +1631,7 @@ defmodule GranaWeb.DashboardLive do
   # month's biggest day. Days still to come stay dim.
   defp month_heat_rows(%{selected_year: year, selected_month: month} = assigns) do
     first = Date.new!(year, month, 1)
-    today = Date.utc_today()
+    today = Grana.LocalTime.today()
     totals = Map.new(assigns.daily_spending, &{&1.date, to_float(&1.total)})
     max = totals |> Map.values() |> Enum.max(fn -> 0.0 end)
 
@@ -1663,7 +1667,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   defp month_cells(assigns, year, totals, max) do
-    today = Date.utc_today()
+    today = Grana.LocalTime.today()
 
     Enum.map(1..12, fn month ->
       from = Date.new!(year, month, 1)

@@ -18,7 +18,9 @@ defmodule GranaWeb.TransactionsExportController do
         send_csv(conn, Banking.search_transactions(user_id, search, opts))
 
       {:error, message} ->
-        send_resp(conn, 400, message)
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(400, message)
     end
   end
 
@@ -81,8 +83,11 @@ defmodule GranaWeb.TransactionsExportController do
 
   defp parse_decimal(str) do
     case Decimal.parse(str) do
-      {d, _} -> d
-      :error -> nil
+      {d, _} ->
+        if Decimal.nan?(d) or Decimal.inf?(d), do: nil, else: d
+
+      :error ->
+        nil
     end
   end
 

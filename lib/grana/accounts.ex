@@ -4,6 +4,7 @@ defmodule Grana.Accounts do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias Grana.Repo
 
   alias Grana.Accounts.{User, UserNotifier, UserToken}
@@ -283,17 +284,17 @@ defmodule Grana.Accounts do
         error
 
       {:error, reason} ->
+        Logger.warning("SMTP test failure: #{inspect(reason)}")
+
         {:error,
          changeset
          |> Ecto.Changeset.add_error(
            :smtp_host,
-           "não foi possível enviar o email de teste (#{smtp_error(reason)}); nada foi salvo"
+           "não foi possível enviar o email de teste; verifique as configurações informadas; nada foi salvo"
          )
          |> Map.put(:action, :update)}
     end
   end
-
-  defp smtp_error(reason), do: reason |> inspect() |> String.slice(0, 160)
 
   def remove_smtp_settings(%User{} = user) do
     user
@@ -526,12 +527,6 @@ defmodule Grana.Accounts do
     user
     |> User.password_changeset(attrs)
     |> User.validate_current_password(current_password)
-    |> update_user_and_delete_all_tokens()
-  end
-
-  def update_user_password(user, attrs) do
-    user
-    |> User.password_changeset(attrs)
     |> update_user_and_delete_all_tokens()
   end
 

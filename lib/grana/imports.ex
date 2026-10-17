@@ -102,7 +102,7 @@ defmodule Grana.Imports do
       rescue
         e ->
           Logger.error(
-            "Falha ao importar #{job.args["filename"]}: #{Exception.message(e)}\n" <>
+            "Falha ao importar #{job.args["filename"]}: #{inspect(e.__struct__)}\n" <>
               Exception.format_stacktrace(__STACKTRACE__)
           )
 

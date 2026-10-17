@@ -158,7 +158,10 @@ defmodule Grana.Accounts.UserToken do
     }
   end
 
-  def hash_two_factor_code(code), do: :crypto.hash(@hash_algorithm, code)
+  def hash_two_factor_code(code) do
+    secret = Application.get_env(:grana, GranaWeb.Endpoint)[:secret_key_base] || "grana_2fa_salt"
+    :crypto.mac(:hmac, @hash_algorithm, secret, code)
+  end
 
   def two_factor_validity_in_minutes, do: @two_factor_validity_in_minutes
 

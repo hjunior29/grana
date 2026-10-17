@@ -1905,8 +1905,11 @@ defmodule GranaWeb.TransactionsLive do
 
   defp parse_decimal(str) do
     case Decimal.parse(str) do
-      {d, _} -> d
-      :error -> nil
+      {d, _} ->
+        if Decimal.nan?(d) or Decimal.inf?(d), do: nil, else: d
+
+      :error ->
+        nil
     end
   end
 

@@ -26,7 +26,7 @@ defmodule Grana.Banking.InternalTransferRule do
 
   def changeset(rule, attrs) do
     rule
-    |> cast(attrs, [:pattern, :kind, :user_id])
+    |> cast(attrs, [:pattern, :kind])
     |> validate_required([:pattern, :kind, :user_id])
     |> validate_inclusion(:kind, @kinds)
     |> unique_constraint([:user_id, :pattern])

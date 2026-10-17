@@ -42,7 +42,7 @@ defmodule Grana.Agents.ChatToolsTest do
     assert overview["months_with_data"] == %{"2026" => [2, 3]}
     assert overview["banks"] == ["nubank"]
     assert Enum.any?(overview["categories"], &(&1["name"] == "Alimentação"))
-    assert overview["today"] == Date.to_iso8601(Date.utc_today())
+    assert overview["today"] == Date.to_iso8601(Grana.LocalTime.today())
   end
 
   test "get_period_summary for a month, a year and all time", %{tools: tools} do

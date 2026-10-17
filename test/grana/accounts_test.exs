@@ -163,14 +163,14 @@ defmodule Grana.AccountsTest do
     end
   end
 
-  describe "update_user_password/2" do
+  describe "reset_user_password/2" do
     setup do
       %{user: user_fixture()}
     end
 
     test "validates password", %{user: user} do
       {:error, changeset} =
-        Accounts.update_user_password(user, %{
+        Accounts.reset_user_password(user, %{
           password: "not valid",
           password_confirmation: "another"
         })
@@ -185,14 +185,14 @@ defmodule Grana.AccountsTest do
       too_long = String.duplicate("db", 100)
 
       {:error, changeset} =
-        Accounts.update_user_password(user, %{password: too_long})
+        Accounts.reset_user_password(user, %{password: too_long})
 
       assert "should be at most 72 character(s)" in errors_on(changeset).password
     end
 
     test "updates the password", %{user: user} do
       {:ok, {user, expired_tokens}} =
-        Accounts.update_user_password(user, %{
+        Accounts.reset_user_password(user, %{
           password: "new valid password"
         })
 
@@ -205,7 +205,7 @@ defmodule Grana.AccountsTest do
       _ = Accounts.generate_user_session_token(user)
 
       {:ok, {_, _}} =
-        Accounts.update_user_password(user, %{
+        Accounts.reset_user_password(user, %{
           password: "new valid password"
         })
 

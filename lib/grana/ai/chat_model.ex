@@ -38,6 +38,7 @@ defmodule Grana.AI.ChatModel do
 
     attrs
     |> Map.put(:endpoint, endpoint)
+    |> Map.put(:req_config, %{redirect: false})
     |> put(:max_tokens, max_tokens)
     |> ChatOpenAICompatible.new!()
   end

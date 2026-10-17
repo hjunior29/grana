@@ -73,6 +73,8 @@ defmodule Grana.AI.ProviderConfig do
     end)
   end
 
+  import Bitwise
+
   defp blocked_host?(host) do
     down = String.downcase(host)
 
@@ -80,16 +82,58 @@ defmodule Grana.AI.ProviderConfig do
       down in ["metadata.google.internal", "metadata", "instance-data"] ->
         true
 
-      match?({:ok, {169, 254, _, _}}, :inet.parse_address(String.to_charlist(host))) ->
-        true
-
-      match?({:ok, {0, _, _, _}}, :inet.parse_address(String.to_charlist(host))) ->
+      ip_blocked?(down) ->
         true
 
       true ->
-        false
+        resolve_and_check(down)
     end
   end
+
+  defp ip_blocked?(host) do
+    clean = host |> String.trim_leading("[") |> String.trim_trailing("]")
+
+    case :inet.parse_address(String.to_charlist(clean)) do
+      {:ok, ip} -> blocked_ip?(ip)
+      _ -> false
+    end
+  end
+
+  defp resolve_and_check(host) do
+    charlist = String.to_charlist(host)
+
+    ipv4s =
+      case :inet.getaddrs(charlist, :inet) do
+        {:ok, addrs} -> addrs
+        _ -> []
+      end
+
+    ipv6s =
+      case :inet.getaddrs(charlist, :inet6) do
+        {:ok, addrs} -> addrs
+        _ -> []
+      end
+
+    Enum.any?(ipv4s ++ ipv6s, &blocked_ip?/1)
+  end
+
+  # IPv4 tuples: {a, b, c, d}
+  defp blocked_ip?({0, _, _, _}), do: true
+  defp blocked_ip?({169, 254, _, _}), do: true
+  defp blocked_ip?({100, b, _, _}) when b >= 64 and b <= 127, do: true
+
+  # IPv6 tuples: {w1, w2, w3, w4, w5, w6, w7, w8}
+  defp blocked_ip?({0, 0, 0, 0, 0, 0, 0, 0}), do: true
+  defp blocked_ip?({0xFD00, 0x0EC2, _, _, _, _, _, _}), do: true
+
+  # IPv4-mapped IPv6: ::ffff:a.b.c.d
+  defp blocked_ip?({0, 0, 0, 0, 0, 0xFFFF, w7, w8}) do
+    blocked_ip?({w7 >>> 8, band(w7, 0xFF), w8 >>> 8, band(w8, 0xFF)})
+  end
+
+  # fe80::/10 (IPv6 link-local)
+  defp blocked_ip?({w1, _, _, _, _, _, _, _}) when band(w1, 0xFFC0) == 0xFE80, do: true
+  defp blocked_ip?(_), do: false
 
   # Serviços locais (Ollama, LM Studio) não pedem chave.
   defp validate_api_key(changeset) do

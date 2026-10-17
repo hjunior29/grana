@@ -25,10 +25,7 @@ defmodule Grana.Banking.Transaction do
   end
 
   def changeset(transaction, attrs) do
-    user_id = transaction.user_id || attrs[:user_id] || attrs["user_id"]
-
     transaction
-    |> Map.put(:user_id, user_id)
     |> cast(attrs, [
       :date,
       :description,

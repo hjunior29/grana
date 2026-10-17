@@ -64,8 +64,10 @@ defmodule Grana.AI.LLM do
   defp message(%LangChainError{type: type}) when type in ["rate_limited", "too_many_requests"],
     do: "Limite de requisições do provedor atingido. Aguarde alguns minutos e tente novamente."
 
-  defp message(%LangChainError{message: message}) when is_binary(message),
-    do: "A IA respondeu com erro: #{message}"
+  defp message(%LangChainError{message: message}) when is_binary(message) do
+    redacted = Regex.replace(~r/([?&]key=)[^&\s]+/, message, "\\1[redigido]")
+    "A IA respondeu com erro: #{redacted}"
+  end
 
   defp message(_error), do: "Não foi possível falar com a IA. Tente novamente."
 end
