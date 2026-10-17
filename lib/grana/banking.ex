@@ -1551,6 +1551,16 @@ defmodule Grana.Banking do
          String.contains?(desc, "chargeback"))
   end
 
+  @doc """
+  Whether the user has any transaction at all, imported or from Open Finance. Until
+  then the screens that read the data show only how to bring it in (`GranaWeb.DataHook`).
+  """
+  def has_transactions?(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id)
+    |> Repo.exists?()
+  end
+
   def available_months(user_id) do
     Transaction
     |> where([t], t.user_id == ^user_id)

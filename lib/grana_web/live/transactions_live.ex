@@ -13,6 +13,7 @@ defmodule GranaWeb.TransactionsLive do
   @sort_dirs ~w(asc desc)
 
   on_mount GranaWeb.ModelChoicesHook
+  on_mount {GranaWeb.DataHook, :reload_on_data}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -479,7 +480,7 @@ defmodule GranaWeb.TransactionsLive do
         >
           <:actions>
             <.button
-              :if={!advanced?(@filters)}
+              :if={@has_data && !advanced?(@filters)}
               id="advanced-search-open"
               type="button"
               variant="secondary"
@@ -490,7 +491,7 @@ defmodule GranaWeb.TransactionsLive do
               Pesquisa avançada
             </.button>
             <.button
-              :if={advanced?(@filters)}
+              :if={@has_data && advanced?(@filters)}
               id="advanced-search-close"
               patch={~p"/transactions"}
               variant="secondary"
@@ -502,456 +503,460 @@ defmodule GranaWeb.TransactionsLive do
           </:actions>
         </.page_header>
 
-        <.advanced_search
-          :if={advanced?(@filters)}
-          filters={@filters}
-          search={@search}
-          search_error={@search_error}
-          saved_searches={@saved_searches}
-          current_saved={@current_saved}
-          ai_request={@ai_request}
-          ai_search={@ai_search}
-          model_choices={@model_choices}
-          model_default={@model_defaults["search"]}
+        <.no_data
+          :if={!@has_data}
+          id="transactions-no-data"
+          icon="hero-document-magnifying-glass"
+          text="Aqui ficam todas as suas transações num lugar só, com filtros, pesquisa avançada e buscas montadas pela IA."
         />
 
-        <div :if={@statement_info && !advanced?(@filters)} class="mb-4">
-          <.tag kind="neutro" class="gap-2 py-1">
-            <img
-              :if={@statement_info.logo}
-              src={@statement_info.logo}
-              alt=""
-              class="w-4 h-4 rounded-full"
-            />
-            <.icon :if={!@statement_info.logo} name={@statement_info.icon} class="size-4" />
-            {@statement_info.label}: {@statement_info.filename}
-            <button
-              type="button"
-              phx-click="clear_statement"
-              class="ui-chip -mr-1 h-5 px-1"
-              aria-label="Remover filtro de extrato"
-            >
-              <.icon name="hero-x-mark" class="size-3" />
-            </button>
-          </.tag>
-        </div>
+        <div :if={@has_data}>
+          <.advanced_search
+            :if={advanced?(@filters)}
+            filters={@filters}
+            search={@search}
+            search_error={@search_error}
+            saved_searches={@saved_searches}
+            current_saved={@current_saved}
+            ai_request={@ai_request}
+            ai_search={@ai_search}
+            model_choices={@model_choices}
+            model_default={@model_defaults["search"]}
+          />
 
-        <div :if={!advanced?(@filters)} class="mb-3 sm:hidden">
-          <.button
-            id="transactions-filters-toggle"
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon="hero-funnel"
-            phx-click={JS.toggle_class("hidden", to: "#transactions-filters-card")}
-          >
-            Filtros
-          </.button>
-        </div>
+          <div :if={@statement_info && !advanced?(@filters)} class="mb-4">
+            <.tag kind="neutro" class="gap-2 py-1">
+              <img
+                :if={@statement_info.logo}
+                src={@statement_info.logo}
+                alt=""
+                class="w-4 h-4 rounded-full"
+              />
+              <.icon :if={!@statement_info.logo} name={@statement_info.icon} class="size-4" />
+              {@statement_info.label}: {@statement_info.filename}
+              <button
+                type="button"
+                phx-click="clear_statement"
+                class="ui-chip -mr-1 h-5 px-1"
+                aria-label="Remover filtro de extrato"
+              >
+                <.icon name="hero-x-mark" class="size-3" />
+              </button>
+            </.tag>
+          </div>
 
-        <div
-          :if={!advanced?(@filters)}
-          id="transactions-filters-card"
-          class={["card bg-base-200 p-4 mb-6", !filtered?(@filters) && "hidden sm:block"]}
-        >
-          <form id="transactions-filters" phx-change="apply_filters" phx-submit="apply_filters">
-            <input
-              :if={@filters.statement_id}
-              type="hidden"
-              name="statement_id"
-              value={@filters.statement_id}
-            />
-            <input
-              :if={@filters.statement_source}
-              type="hidden"
-              name="statement_source"
-              value={@filters.statement_source}
-            />
-
-            <div class="transactions-filter-grid">
-              <div class="transactions-filter-search ui-private-name-field">
-                <.input
-                  type="search"
-                  name="search"
-                  label="Buscar"
-                  size="sm"
-                  value={@filters.search}
-                  placeholder="Transação ou categoria"
-                  phx-debounce="300"
-                />
-              </div>
-
-              <div class="transactions-filter-movement">
-                <.input
-                  type="select"
-                  name="movement"
-                  label="Movimento"
-                  size="sm"
-                  value={@filters.movement}
-                  options={[
-                    {"Todos movimentos", "all"},
-                    {"Despesas", "expense"},
-                    {"Receitas", "income"},
-                    {"Investimentos", "bank_investment"}
-                  ]}
-                />
-              </div>
-
-              <div class="transactions-filter-origin">
-                <.input
-                  type="select"
-                  name="origin"
-                  label="Origem"
-                  size="sm"
-                  value={@filters.origin}
-                  options={[
-                    {"Todas origens", "all"}
-                    | for(b <- @banks, do: {String.capitalize(b), "bank:#{b}"})
-                  ]}
-                />
-              </div>
-
-              <div class="transactions-filter-kind">
-                <.input
-                  type="select"
-                  name="kind"
-                  label="Tipo ou categoria"
-                  size="sm"
-                  value={@filters.kind}
-                  options={
-                    [
-                      {"Todos os tipos", "all"},
-                      {"Extrato", "statement:extrato"},
-                      {"Fatura", "statement:fatura"}
-                    ] ++ for(cat <- @categories, do: {cat.name, "category:#{cat.id}"})
-                  }
-                />
-              </div>
-
-              <div class="transactions-filter-date-from">
-                <.input
-                  type="date"
-                  name="date_from"
-                  label="Data início"
-                  size="sm"
-                  value={@filters.date_from}
-                />
-              </div>
-
-              <div class="transactions-filter-date-to">
-                <.input
-                  type="date"
-                  name="date_to"
-                  label="Data fim"
-                  size="sm"
-                  value={@filters.date_to}
-                />
-              </div>
-
-              <div class="transactions-filter-min">
-                <.input
-                  type="number"
-                  name="amount_min"
-                  label="Valor mínimo"
-                  size="sm"
-                  value={@filters.amount_min}
-                  step="0.01"
-                  placeholder="0,00"
-                />
-              </div>
-
-              <div class="transactions-filter-max">
-                <.input
-                  type="number"
-                  name="amount_max"
-                  label="Valor máximo"
-                  size="sm"
-                  value={@filters.amount_max}
-                  step="0.01"
-                  placeholder="0,00"
-                />
-              </div>
-
-              <div class="transactions-filter-internal">
-                <.input
-                  type="select"
-                  name="internal"
-                  label="Transferências internas"
-                  size="sm"
-                  value={@filters.internal}
-                  options={[
-                    {"Todas", "all"},
-                    {"Ocultar internas", "hide"},
-                    {"Apenas internas", "only"}
-                  ]}
-                />
-              </div>
-
-              <div class="transactions-filter-clear flex items-end justify-end">
-                <.button
-                  id="clear-filters"
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="mb-2"
-                  phx-click="clear_filters"
-                >
-                  Limpar filtros
-                </.button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <div :if={!@search_error} class="ui-body mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span :if={@total == 0} class="ui-text-secondary">Nenhuma transação</span>
-          <span :if={@total > 1} class="ui-text-secondary">{@total} transações</span>
-          <span :if={@total == 1} class="ui-text-secondary">{@total} transação</span>
-          <span :if={Decimal.compare(@summary.bank_expenses, 0) == :gt} class="font-medium">
-            Despesas <.money value={@summary.bank_expenses} tone={:despesa} />
-          </span>
-          <span :if={Decimal.compare(@summary.bank_income, 0) == :gt} class="font-medium">
-            Receitas <.money value={@summary.bank_income} tone={:receita} />
-          </span>
-          <span :if={Decimal.compare(@summary.bank_investments, 0) == :gt} class="font-medium">
-            Investimentos <.money value={@summary.bank_investments} tone={:investimento} />
-          </span>
-
-          <div :if={@total > 0} class="ml-auto flex gap-2">
+          <div :if={!advanced?(@filters)} class="mb-3 sm:hidden">
             <.button
-              id="export-csv"
-              href={export_href(@filters)}
+              id="transactions-filters-toggle"
+              type="button"
               variant="secondary"
               size="sm"
-              icon="hero-arrow-down-tray"
+              icon="hero-funnel"
+              phx-click={JS.toggle_class("hidden", to: "#transactions-filters-card")}
             >
-              Exportar CSV
+              Filtros
             </.button>
           </div>
-        </div>
 
-        <div
-          :if={MapSet.size(@selected_ids) > 0}
-          id="bulk-bar"
-          class="ui-rounded-box mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 border border-primary/20 bg-primary/10 px-4 py-3"
-        >
-          <span class="ui-body mb-2 whitespace-nowrap font-medium">
-            {MapSet.size(@selected_ids)} {if MapSet.size(@selected_ids) == 1,
-              do: "selecionada",
-              else: "selecionadas"}
-          </span>
-          <form phx-submit="bulk-apply" class="flex flex-wrap items-end gap-x-3 gap-y-2">
-            <.input
-              type="select"
-              name="category_id"
-              label="Categoria"
-              size="sm"
-              value={nil}
-              prompt="Manter"
-              options={for cat <- @categories, do: {cat.name, cat.id}}
-            />
-            <.input
-              type="select"
-              name="mode"
-              label="Recorrência"
-              size="sm"
-              value={nil}
-              prompt="Manter"
-              options={[{"Fixa", "fixed"}, {"Variável", "variable"}]}
-            />
-            <div class="mb-2">
-              <.button variant="primary" size="sm" loading="Aplicando…">Aplicar</.button>
-            </div>
-          </form>
-          <div class="mb-2 ml-auto">
-            <.button type="button" variant="ghost" size="sm" phx-click="clear-selection">
-              Limpar seleção
-            </.button>
-          </div>
-        </div>
-
-        <.empty_state
-          :if={@transactions == [] && filtered?(@filters) && !advanced?(@filters)}
-          id="transactions-empty"
-          icon="hero-document-magnifying-glass"
-          title="Nada com esses filtros"
-          text="Tente outros termos ou limpe os filtros."
-        >
-          <:action>
-            <.button type="button" variant="secondary" size="sm" phx-click="clear_filters">
-              Limpar filtros
-            </.button>
-          </:action>
-        </.empty_state>
-
-        <.empty_state
-          :if={@transactions == [] && advanced?(@filters) && @filters.q != "" && !@search_error}
-          id="transactions-empty"
-          icon="hero-document-magnifying-glass"
-          title="Nada com essa busca"
-          text="Revise os termos ou confira a sintaxe acima."
-        />
-
-        <.empty_state
-          :if={@transactions == [] && !filtered?(@filters)}
-          id="transactions-empty"
-          icon="hero-document-magnifying-glass"
-          title="Nenhuma transação ainda"
-          text="Importe dados bancários ou de investimento para começar."
-        >
-          <:action>
-            <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
-              Importar extratos
-            </.button>
-          </:action>
-        </.empty_state>
-
-        <div :if={@transactions != []} class="mb-3 flex flex-wrap items-center gap-1 sm:hidden">
-          <span class="ui-caption mr-1">Ordenar</span>
-          <.link
-            :for={
-              {field, label} <- [{"date", "Data"}, {"description", "Transação"}, {"amount", "Valor"}]
-            }
-            patch={sort_url(@filters, field)}
-            class={["ui-chip", @filters.sort_by == field && "ui-chip-active"]}
+          <div
+            :if={!advanced?(@filters)}
+            id="transactions-filters-card"
+            class={["card bg-base-200 p-4 mb-6", !filtered?(@filters) && "hidden sm:block"]}
           >
-            {label}
-            <.icon
-              :if={@filters.sort_by == field}
-              name={sort_icon(@filters.sort_dir)}
-              class="size-3"
-            />
-          </.link>
-        </div>
+            <form id="transactions-filters" phx-change="apply_filters" phx-submit="apply_filters">
+              <input
+                :if={@filters.statement_id}
+                type="hidden"
+                name="statement_id"
+                value={@filters.statement_id}
+              />
+              <input
+                :if={@filters.statement_source}
+                type="hidden"
+                name="statement_source"
+                value={@filters.statement_source}
+              />
 
-        <div
-          :if={@transactions != []}
-          class="transactions-table-shell card bg-base-200 overflow-x-auto"
-        >
-          <table id="transactions-table" class="table">
-            <thead class="hidden sm:table-header-group">
-              <tr>
-                <th class="w-8">
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-xs"
-                    aria-label="Selecionar todas"
-                    checked={all_selected?(@transactions, @selected_ids)}
-                    phx-click="toggle-select-all"
+              <div class="transactions-filter-grid">
+                <div class="transactions-filter-search ui-private-name-field">
+                  <.input
+                    type="search"
+                    name="search"
+                    label="Buscar"
+                    size="sm"
+                    value={@filters.search}
+                    placeholder="Transação ou categoria"
+                    phx-debounce="300"
                   />
-                </th>
-                <.sortable_header filters={@filters} field="date" label="Data" />
-                <.sortable_header filters={@filters} field="description" label="Transação" />
-                <.sortable_header filters={@filters} field="source" label="Origem" />
-                <.sortable_header
-                  filters={@filters}
-                  field="kind"
-                  label="Classificação"
-                  class="text-center"
-                />
-                <th class="text-center">Recorrência</th>
-                <.sortable_header filters={@filters} field="amount" label="Valor" class="text-right" />
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                :for={row <- @transactions}
-                id={"transaction-#{row.id}"}
-                class={[
-                  "hover",
-                  row.source == :banking && row.raw.is_internal_transfer && "ui-text-tertiary"
-                ]}
-              >
-                <td class="ui-txn-select">
-                  <input
-                    :if={row.selectable?}
-                    type="checkbox"
-                    class="checkbox checkbox-xs"
-                    aria-label="Selecionar transação"
-                    checked={MapSet.member?(@selected_ids, row.raw_id)}
-                    phx-click="toggle-select"
-                    phx-value-id={row.raw_id}
+                </div>
+
+                <div class="transactions-filter-movement">
+                  <.input
+                    type="select"
+                    name="movement"
+                    label="Movimento"
+                    size="sm"
+                    value={@filters.movement}
+                    options={[
+                      {"Todos movimentos", "all"},
+                      {"Despesas", "expense"},
+                      {"Receitas", "income"},
+                      {"Investimentos", "bank_investment"}
+                    ]}
                   />
-                  <span :if={row.selectable?} class="ui-caption sm:hidden">
-                    Selecionar para ação em lote
-                  </span>
-                  <span :if={!row.selectable?} class="ui-text-tertiary hidden sm:inline">—</span>
-                </td>
-                <td
-                  class="ui-txn-date ui-body whitespace-nowrap"
-                  phx-click={toggle_row(row)}
-                >
-                  <span class="sm:hidden">{Calendar.strftime(row.date, "%d/%m")}</span>
-                  <span class="hidden sm:inline">{Calendar.strftime(row.date, "%d/%m/%Y")}</span>
-                </td>
-                <td class="ui-txn-title ui-body max-w-xs">{render_title_cell(assigns, row)}</td>
-                <td class="ui-txn-detail">
-                  <span class="ui-caption sm:hidden">Origem</span>
-                  {render_origin_cell(row)}
-                  <button
-                    :if={
-                      row.source == :banking and not row.raw.is_internal_transfer and
-                        transfer_like?(row.raw.description)
+                </div>
+
+                <div class="transactions-filter-origin">
+                  <.input
+                    type="select"
+                    name="origin"
+                    label="Origem"
+                    size="sm"
+                    value={@filters.origin}
+                    options={[
+                      {"Todas origens", "all"}
+                      | for(b <- @banks, do: {String.capitalize(b), "bank:#{b}"})
+                    ]}
+                  />
+                </div>
+
+                <div class="transactions-filter-kind">
+                  <.input
+                    type="select"
+                    name="kind"
+                    label="Tipo ou categoria"
+                    size="sm"
+                    value={@filters.kind}
+                    options={
+                      [
+                        {"Todos os tipos", "all"},
+                        {"Extrato", "statement:extrato"},
+                        {"Fatura", "statement:fatura"}
+                      ] ++ for(cat <- @categories, do: {cat.name, "category:#{cat.id}"})
                     }
-                    type="button"
-                    phx-click="toggle-internal"
-                    phx-value-id={row.raw_id}
-                    phx-value-internal="true"
-                    class="ui-tag ui-tag-neutro mt-2 cursor-pointer sm:hidden"
-                  >
-                    Marcar como interna
-                  </button>
-                </td>
-                <td class="ui-txn-detail text-center">
-                  <span class="ui-caption sm:hidden">Classificação</span>
-                  {render_kind_cell(assigns, row)}
-                </td>
-                <td class="ui-txn-detail text-center">
-                  <span class="ui-caption sm:hidden">Recorrência</span>
-                  {render_recurring_column(assigns, row)}
-                </td>
-                <td class="ui-txn-amount text-right" phx-click={toggle_row(row)}>
-                  <.money
-                    value={signed_amount(row)}
-                    tone={:auto}
-                    sign
-                    class="ui-body font-medium"
                   />
-                  <.icon
-                    name="hero-chevron-down"
-                    class="ui-txn-chevron ui-text-tertiary ml-1 size-3 sm:hidden"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                </div>
 
-        <div :if={@total_pages > 1} class="flex justify-center gap-2 mt-6">
-          <.link
-            :if={@page > 1}
-            patch={transactions_url(@filters, @page - 1)}
-            class="btn btn-sm btn-ghost"
+                <div class="transactions-filter-date-from">
+                  <.input
+                    type="date"
+                    name="date_from"
+                    label="Data início"
+                    size="sm"
+                    value={@filters.date_from}
+                  />
+                </div>
+
+                <div class="transactions-filter-date-to">
+                  <.input
+                    type="date"
+                    name="date_to"
+                    label="Data fim"
+                    size="sm"
+                    value={@filters.date_to}
+                  />
+                </div>
+
+                <div class="transactions-filter-min">
+                  <.input
+                    type="number"
+                    name="amount_min"
+                    label="Valor mínimo"
+                    size="sm"
+                    value={@filters.amount_min}
+                    step="0.01"
+                    placeholder="0,00"
+                  />
+                </div>
+
+                <div class="transactions-filter-max">
+                  <.input
+                    type="number"
+                    name="amount_max"
+                    label="Valor máximo"
+                    size="sm"
+                    value={@filters.amount_max}
+                    step="0.01"
+                    placeholder="0,00"
+                  />
+                </div>
+
+                <div class="transactions-filter-internal">
+                  <.input
+                    type="select"
+                    name="internal"
+                    label="Transferências internas"
+                    size="sm"
+                    value={@filters.internal}
+                    options={[
+                      {"Todas", "all"},
+                      {"Ocultar internas", "hide"},
+                      {"Apenas internas", "only"}
+                    ]}
+                  />
+                </div>
+
+                <div class="transactions-filter-clear flex items-end justify-end">
+                  <.button
+                    id="clear-filters"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="mb-2"
+                    phx-click="clear_filters"
+                  >
+                    Limpar filtros
+                  </.button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div :if={!@search_error} class="ui-body mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span :if={@total == 0} class="ui-text-secondary">Nenhuma transação</span>
+            <span :if={@total > 1} class="ui-text-secondary">{@total} transações</span>
+            <span :if={@total == 1} class="ui-text-secondary">{@total} transação</span>
+            <span :if={Decimal.compare(@summary.bank_expenses, 0) == :gt} class="font-medium">
+              Despesas <.money value={@summary.bank_expenses} tone={:despesa} />
+            </span>
+            <span :if={Decimal.compare(@summary.bank_income, 0) == :gt} class="font-medium">
+              Receitas <.money value={@summary.bank_income} tone={:receita} />
+            </span>
+            <span :if={Decimal.compare(@summary.bank_investments, 0) == :gt} class="font-medium">
+              Investimentos <.money value={@summary.bank_investments} tone={:investimento} />
+            </span>
+
+            <div :if={@total > 0} class="ml-auto flex gap-2">
+              <.button
+                id="export-csv"
+                href={export_href(@filters)}
+                variant="secondary"
+                size="sm"
+                icon="hero-arrow-down-tray"
+              >
+                Exportar CSV
+              </.button>
+            </div>
+          </div>
+
+          <div
+            :if={MapSet.size(@selected_ids) > 0}
+            id="bulk-bar"
+            class="ui-rounded-box mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 border border-primary/20 bg-primary/10 px-4 py-3"
           >
-            <.icon name="hero-chevron-left" class="size-4" />
-          </.link>
-          <span :for={p <- page_range(@page, @total_pages)}>
+            <span class="ui-body mb-2 whitespace-nowrap font-medium">
+              {MapSet.size(@selected_ids)} {if MapSet.size(@selected_ids) == 1,
+                do: "selecionada",
+                else: "selecionadas"}
+            </span>
+            <form phx-submit="bulk-apply" class="flex flex-wrap items-end gap-x-3 gap-y-2">
+              <.input
+                type="select"
+                name="category_id"
+                label="Categoria"
+                size="sm"
+                value={nil}
+                prompt="Manter"
+                options={for cat <- @categories, do: {cat.name, cat.id}}
+              />
+              <.input
+                type="select"
+                name="mode"
+                label="Recorrência"
+                size="sm"
+                value={nil}
+                prompt="Manter"
+                options={[{"Fixa", "fixed"}, {"Variável", "variable"}]}
+              />
+              <div class="mb-2">
+                <.button variant="primary" size="sm" loading="Aplicando…">Aplicar</.button>
+              </div>
+            </form>
+            <div class="mb-2 ml-auto">
+              <.button type="button" variant="ghost" size="sm" phx-click="clear-selection">
+                Limpar seleção
+              </.button>
+            </div>
+          </div>
+
+          <.empty_state
+            :if={@transactions == [] && filtered?(@filters) && !advanced?(@filters)}
+            id="transactions-empty"
+            icon="hero-document-magnifying-glass"
+            title="Nada com esses filtros"
+            text="Tente outros termos ou limpe os filtros."
+          >
+            <:action>
+              <.button type="button" variant="secondary" size="sm" phx-click="clear_filters">
+                Limpar filtros
+              </.button>
+            </:action>
+          </.empty_state>
+
+          <.empty_state
+            :if={@transactions == [] && advanced?(@filters) && @filters.q != "" && !@search_error}
+            id="transactions-empty"
+            icon="hero-document-magnifying-glass"
+            title="Nada com essa busca"
+            text="Revise os termos ou confira a sintaxe acima."
+          />
+
+          <div :if={@transactions != []} class="mb-3 flex flex-wrap items-center gap-1 sm:hidden">
+            <span class="ui-caption mr-1">Ordenar</span>
             <.link
-              :if={is_integer(p)}
-              patch={transactions_url(@filters, p)}
-              class={["btn btn-sm", (p == @page && "btn-primary") || "btn-ghost"]}
+              :for={
+                {field, label} <- [
+                  {"date", "Data"},
+                  {"description", "Transação"},
+                  {"amount", "Valor"}
+                ]
+              }
+              patch={sort_url(@filters, field)}
+              class={["ui-chip", @filters.sort_by == field && "ui-chip-active"]}
             >
-              {p}
+              {label}
+              <.icon
+                :if={@filters.sort_by == field}
+                name={sort_icon(@filters.sort_dir)}
+                class="size-3"
+              />
             </.link>
-            <span :if={p == :dots} class="ui-text-tertiary px-2">…</span>
-          </span>
-          <.link
-            :if={@page < @total_pages}
-            patch={transactions_url(@filters, @page + 1)}
-            class="btn btn-sm btn-ghost"
+          </div>
+
+          <div
+            :if={@transactions != []}
+            class="transactions-table-shell card bg-base-200 overflow-x-auto"
           >
-            <.icon name="hero-chevron-right" class="size-4" />
-          </.link>
+            <table id="transactions-table" class="table">
+              <thead class="hidden sm:table-header-group">
+                <tr>
+                  <th class="w-8">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-xs"
+                      aria-label="Selecionar todas"
+                      checked={all_selected?(@transactions, @selected_ids)}
+                      phx-click="toggle-select-all"
+                    />
+                  </th>
+                  <.sortable_header filters={@filters} field="date" label="Data" />
+                  <.sortable_header filters={@filters} field="description" label="Transação" />
+                  <.sortable_header filters={@filters} field="source" label="Origem" />
+                  <.sortable_header
+                    filters={@filters}
+                    field="kind"
+                    label="Classificação"
+                    class="text-center"
+                  />
+                  <th class="text-center">Recorrência</th>
+                  <.sortable_header
+                    filters={@filters}
+                    field="amount"
+                    label="Valor"
+                    class="text-right"
+                  />
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={row <- @transactions}
+                  id={"transaction-#{row.id}"}
+                  class={[
+                    "hover",
+                    row.source == :banking && row.raw.is_internal_transfer && "ui-text-tertiary"
+                  ]}
+                >
+                  <td class="ui-txn-select">
+                    <input
+                      :if={row.selectable?}
+                      type="checkbox"
+                      class="checkbox checkbox-xs"
+                      aria-label="Selecionar transação"
+                      checked={MapSet.member?(@selected_ids, row.raw_id)}
+                      phx-click="toggle-select"
+                      phx-value-id={row.raw_id}
+                    />
+                    <span :if={row.selectable?} class="ui-caption sm:hidden">
+                      Selecionar para ação em lote
+                    </span>
+                    <span :if={!row.selectable?} class="ui-text-tertiary hidden sm:inline">—</span>
+                  </td>
+                  <td
+                    class="ui-txn-date ui-body whitespace-nowrap"
+                    phx-click={toggle_row(row)}
+                  >
+                    <span class="sm:hidden">{Calendar.strftime(row.date, "%d/%m")}</span>
+                    <span class="hidden sm:inline">{Calendar.strftime(row.date, "%d/%m/%Y")}</span>
+                  </td>
+                  <td class="ui-txn-title ui-body max-w-xs">{render_title_cell(assigns, row)}</td>
+                  <td class="ui-txn-detail">
+                    <span class="ui-caption sm:hidden">Origem</span>
+                    {render_origin_cell(row)}
+                    <button
+                      :if={
+                        row.source == :banking and not row.raw.is_internal_transfer and
+                          transfer_like?(row.raw.description)
+                      }
+                      type="button"
+                      phx-click="toggle-internal"
+                      phx-value-id={row.raw_id}
+                      phx-value-internal="true"
+                      class="ui-tag ui-tag-neutro mt-2 cursor-pointer sm:hidden"
+                    >
+                      Marcar como interna
+                    </button>
+                  </td>
+                  <td class="ui-txn-detail text-center">
+                    <span class="ui-caption sm:hidden">Classificação</span>
+                    {render_kind_cell(assigns, row)}
+                  </td>
+                  <td class="ui-txn-detail text-center">
+                    <span class="ui-caption sm:hidden">Recorrência</span>
+                    {render_recurring_column(assigns, row)}
+                  </td>
+                  <td class="ui-txn-amount text-right" phx-click={toggle_row(row)}>
+                    <.money
+                      value={signed_amount(row)}
+                      tone={:auto}
+                      sign
+                      class="ui-body font-medium"
+                    />
+                    <.icon
+                      name="hero-chevron-down"
+                      class="ui-txn-chevron ui-text-tertiary ml-1 size-3 sm:hidden"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div :if={@total_pages > 1} class="flex justify-center gap-2 mt-6">
+            <.link
+              :if={@page > 1}
+              patch={transactions_url(@filters, @page - 1)}
+              class="btn btn-sm btn-ghost"
+            >
+              <.icon name="hero-chevron-left" class="size-4" />
+            </.link>
+            <span :for={p <- page_range(@page, @total_pages)}>
+              <.link
+                :if={is_integer(p)}
+                patch={transactions_url(@filters, p)}
+                class={["btn btn-sm", (p == @page && "btn-primary") || "btn-ghost"]}
+              >
+                {p}
+              </.link>
+              <span :if={p == :dots} class="ui-text-tertiary px-2">…</span>
+            </span>
+            <.link
+              :if={@page < @total_pages}
+              patch={transactions_url(@filters, @page + 1)}
+              class="btn btn-sm btn-ghost"
+            >
+              <.icon name="hero-chevron-right" class="size-4" />
+            </.link>
+          </div>
         </div>
       </div>
 

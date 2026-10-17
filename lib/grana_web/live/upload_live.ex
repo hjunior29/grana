@@ -58,7 +58,10 @@ defmodule GranaWeb.UploadLive do
     {statements, total} =
       Banking.list_statements_paginated(user_id, page: page, per_page: @per_page)
 
+    # The import screen never reloads (an upload may be on its way): history and calendar
+    # appear here as soon as the first file brings transactions.
     socket
+    |> assign(:has_data, Banking.has_transactions?(user_id))
     |> assign(:total_pages, max(1, ceil(total / @per_page)))
     |> assign(:total, total)
     |> assign(:stmt_list, Enum.map(statements, &normalize_banking_stmt/1))
@@ -350,7 +353,7 @@ defmodule GranaWeb.UploadLive do
       <div class="max-w-6xl mx-auto scrollbar-gutter">
         <.page_header title="Importar" subtitle="Importe e gerencie seus extratos e faturas" />
 
-        <.tabs>
+        <.tabs :if={@has_data}>
           <:tab
             label="Importar"
             icon="hero-cloud-arrow-up"
@@ -375,7 +378,7 @@ defmodule GranaWeb.UploadLive do
           />
         </.tabs>
 
-        <div :if={@tab == "upload"}>
+        <div :if={@tab == "upload" or !@has_data}>
           <GranaWeb.ImportComponents.import_panel
             :if={@import_queue.total > 0}
             queue={@import_queue}
@@ -530,7 +533,7 @@ defmodule GranaWeb.UploadLive do
           </div>
         </div>
 
-        <div :if={@tab == "historico"}>
+        <div :if={@has_data and @tab == "historico"}>
           <div class="mb-4 flex items-center justify-between">
             <span class="ui-body ui-text-secondary">
               {count_label(@total, "extrato", "extratos")}
@@ -742,7 +745,7 @@ defmodule GranaWeb.UploadLive do
           </.confirm_modal>
         </div>
 
-        <div :if={@tab == "calendario"}>
+        <div :if={@has_data and @tab == "calendario"}>
           <div class="mb-6">
             <h2 class="ui-card-title">Calendário de importações</h2>
             <p class="ui-help mt-1 sm:text-sm">

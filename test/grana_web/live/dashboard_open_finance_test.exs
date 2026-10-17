@@ -11,7 +11,8 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
 
   setup :register_and_log_in_user
 
-  test "the main tab is called Resumo and there is no Open Finance tab", %{conn: conn} do
+  test "the main tab is called Resumo and there is no Open Finance tab", %{conn: conn, user: user} do
+    transaction_fixture(user, %{})
     {:ok, _lv, html} = live(conn, ~p"/dashboard")
 
     assert html =~ "Resumo"
@@ -139,7 +140,8 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
       assert has_element?(lv, "#open-finance-today-collected-at[title*='#{expected_title}']")
     end
 
-    test "is only shown on the Resumo tab", %{conn: conn} do
+    test "is only shown on the Resumo tab", %{conn: conn, user: user} do
+      transaction_fixture(user, %{})
       {:ok, lv, _html} = live(conn, ~p"/dashboard?tab=recurring")
 
       refute has_element?(lv, "#open-finance-today")
@@ -178,6 +180,7 @@ defmodule GranaWeb.DashboardOpenFinanceTest do
       connection: connection,
       checking: checking
     } do
+      transaction_fixture(user, %{description: "JA ESTAVA AQUI", date: Date.utc_today()})
       {:ok, lv, _html} = live(conn, ~p"/dashboard")
 
       Grana.Repo.update!(Ecto.Changeset.change(checking, balance: Decimal.new("99.00")))

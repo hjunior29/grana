@@ -84,10 +84,12 @@ defmodule GranaWeb.UploadQueueTest do
     assert has_element?(view, "#import-queue-files .ui-private-name", "extrato-jan.csv")
     assert has_element?(view, "#import-queue-files", "Na fila")
     refute has_element?(view, "#import-toast")
+    refute has_element?(view, "button[phx-value-tab=historico]")
 
     drain()
 
     assert has_element?(view, "#import-queue h2", "Importação concluída")
+    assert has_element?(view, "button[phx-value-tab=calendario]")
     assert has_element?(view, "#import-queue-files .ui-tag-ativo", "transações")
     assert [%{status: :ok}] = Imports.queue(user.id).files
 

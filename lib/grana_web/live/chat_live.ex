@@ -8,6 +8,7 @@ defmodule GranaWeb.ChatLive do
   alias GranaWeb.ChatHTML
 
   on_mount GranaWeb.ModelChoicesHook
+  on_mount {GranaWeb.DataHook, :reload_on_data}
 
   @suggestions [
     "Quanto gastei este mês?",
@@ -318,6 +319,7 @@ defmodule GranaWeb.ChatLive do
         >
           <:actions>
             <.button
+              :if={@has_data}
               id="new-conversation"
               patch={~p"/chat/new"}
               variant="secondary"
@@ -329,7 +331,14 @@ defmodule GranaWeb.ChatLive do
           </:actions>
         </.page_header>
 
-        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
+        <.no_data
+          :if={!@has_data}
+          id="chat-no-data"
+          icon="hero-chat-bubble-left-right"
+          text="O chat responde com os seus números: quanto gastou, onde, em que mês. Ele precisa de transações para conversar."
+        />
+
+        <div :if={@has_data} class="grid grid-cols-1 gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
           <aside class="min-w-0">
             <button
               type="button"

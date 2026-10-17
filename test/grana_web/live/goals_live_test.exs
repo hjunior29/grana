@@ -8,13 +8,15 @@ defmodule GranaWeb.GoalsLiveTest do
 
   setup :register_and_log_in_user
 
-  test "renders goals page", %{conn: conn} do
+  test "renders goals page", %{conn: conn, user: user} do
+    transaction_fixture(user)
     {:ok, _view, html} = live(conn, ~p"/goals")
     assert html =~ "Metas"
     assert html =~ "Nenhuma meta definida" or html =~ "Sugestões"
   end
 
-  test "shows Nova Meta button", %{conn: conn} do
+  test "shows Nova Meta button", %{conn: conn, user: user} do
+    transaction_fixture(user)
     {:ok, _view, html} = live(conn, ~p"/goals")
     assert html =~ "Nova meta"
   end

@@ -408,6 +408,38 @@ defmodule GranaWeb.UiComponents do
     """
   end
 
+  @doc """
+  What a screen that reads the data shows before the first transaction
+  (`@has_data` from `GranaWeb.DataHook`): in place of the filters and the content,
+  the way to bring the data in.
+  """
+  attr :id, :string, required: true
+  attr :icon, :string, required: true
+  attr :text, :string, required: true, doc: "what the screen will show once there is data"
+
+  def no_data(assigns) do
+    ~H"""
+    <div class="py-8">
+      <.empty_state id={@id} icon={@icon} title="Nenhuma transação ainda" text={@text}>
+        <:action>
+          <div class="flex flex-wrap justify-center gap-2">
+            <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
+              Importar extratos
+            </.button>
+            <.button
+              navigate={~p"/users/settings#open-finance-settings"}
+              variant="secondary"
+              icon="hero-building-library"
+            >
+              Conectar o Open Finance
+            </.button>
+          </div>
+        </:action>
+      </.empty_state>
+    </div>
+    """
+  end
+
   @doc "Cabeçalho de página: título, subtítulo e ações à direita."
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil

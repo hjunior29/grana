@@ -13,7 +13,8 @@ defmodule GranaWeb.TransactionsLiveTest do
     assert html =~ "Nenhuma transação ainda"
   end
 
-  test "busca sem resultado oferece limpar filtros em vez de importar", %{conn: conn} do
+  test "busca sem resultado oferece limpar filtros em vez de importar", %{conn: conn, user: user} do
+    banking_transaction_fixture(user, description: "PADARIA", amount: "-12.00")
     {:ok, view, _html} = live(conn, ~p"/transactions?search=zzzzqqq")
 
     assert has_element?(view, "#transactions-empty", "Nada com esses filtros")
@@ -26,7 +27,8 @@ defmodule GranaWeb.TransactionsLiveTest do
     assert html =~ "Visualize e gerencie todas as suas transações"
   end
 
-  test "shows filter panel", %{conn: conn} do
+  test "shows filter panel", %{conn: conn, user: user} do
+    banking_transaction_fixture(user, description: "PADARIA", amount: "-12.00")
     {:ok, _view, html} = live(conn, ~p"/transactions")
     assert html =~ "Todas"
     assert html =~ "Sem Categoria"
