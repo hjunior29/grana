@@ -354,7 +354,7 @@ defmodule GranaWeb.UiComponentsTest do
     doc = html(~H|<.ai_required_modal reason="Ler PDFs usa IA." />|)
 
     assert doc |> LazyHTML.text() =~ "Ler PDFs usa IA."
-    assert count(doc, "a[href='/users/settings']") == 1
+    assert count(doc, "a[href='/users/settings?section=ai']") == 1
   end
 
   test "format_pct usa vírgula e limita acima de 999%" do

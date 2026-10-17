@@ -27,426 +27,479 @@ defmodule GranaWeb.UserLive.Settings do
       import_queue={@import_queue}
       ai_notice={@ai_notice}
     >
-      <div class="max-w-xl mx-auto">
+      <div class="max-w-5xl mx-auto">
         <.page_header
           title="Configurações"
           subtitle="Gerencie sua conta, preferências e integrações"
         />
 
-        <.card
-          id="account-settings"
-          icon="hero-user-circle"
-          title="Conta"
-          description="Email e senha de acesso ao Grana."
-        >
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <.section title="Email de acesso">
-              <.form
-                for={@email_form}
-                id="email_form"
-                phx-submit="update_email"
-                phx-change="validate_email"
-                novalidate
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+          <nav
+            id="settings-nav"
+            class="ui-settings-nav"
+            aria-label="Grupos de configurações"
+            phx-hook=".SettingsNav"
+          >
+            <.link
+              :for={{key, label, icon} <- sections()}
+              id={"settings-nav-#{key}"}
+              patch={~p"/users/settings?#{[section: key]}"}
+              class={[
+                "ui-settings-nav-item",
+                key == "danger" && "ui-settings-nav-item-danger",
+                @section == key && "ui-settings-nav-item-active"
+              ]}
+              aria-current={@section == key && "page"}
+            >
+              <.icon name={icon} class="size-4 shrink-0" /> {label}
+            </.link>
+          </nav>
+
+          <%!-- Every group stays rendered: switching keeps what was typed and the hooks alive. --%>
+          <div class="min-w-0 max-w-2xl">
+            <div id="settings-account" class={[@section != "account" && "hidden"]}>
+              <.card
+                id="account-settings"
+                icon="hero-user-circle"
+                title="Acesso"
+                description="Email e senha para entrar no Grana."
               >
-                <.input
-                  field={@email_form[:email]}
-                  type="email"
-                  label="Novo email"
-                  autocomplete="username"
-                  required
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <.section title="Email de acesso">
+                    <.form
+                      for={@email_form}
+                      id="email_form"
+                      phx-submit="update_email"
+                      phx-change="validate_email"
+                      novalidate
+                    >
+                      <.input
+                        field={@email_form[:email]}
+                        type="email"
+                        label="Novo email"
+                        autocomplete="username"
+                        required
+                      />
+                      <div class="mt-2">
+                        <.button
+                          variant="primary"
+                          size="sm"
+                          class="w-full sm:w-auto"
+                          loading="Alterando…"
+                        >
+                          Alterar email
+                        </.button>
+                      </div>
+                    </.form>
+                  </.section>
+                  <.section title="Senha de acesso">
+                    <.form
+                      for={@password_form}
+                      id="password_form"
+                      action={~p"/users/update-password"}
+                      method="post"
+                      phx-change="validate_password"
+                      phx-submit="update_password"
+                      phx-trigger-action={@trigger_submit}
+                      novalidate
+                    >
+                      <input
+                        name={@password_form[:email].name}
+                        type="hidden"
+                        id="hidden_user_email"
+                        autocomplete="username"
+                        value={@current_email}
+                      />
+                      <.input
+                        field={@password_form[:current_password]}
+                        name="current_password"
+                        type="password"
+                        label="Senha atual"
+                        id="current_password_for_password"
+                        autocomplete="current-password"
+                        value={@current_password}
+                        required
+                      />
+                      <.input
+                        field={@password_form[:password]}
+                        type="password"
+                        label="Nova senha"
+                        autocomplete="new-password"
+                        required
+                      />
+                      <.input
+                        field={@password_form[:password_confirmation]}
+                        type="password"
+                        label="Confirmar nova senha"
+                        autocomplete="new-password"
+                      />
+                      <div class="mt-2">
+                        <.button
+                          variant="primary"
+                          size="sm"
+                          class="w-full sm:w-auto"
+                          loading="Salvando…"
+                        >
+                          Salvar senha
+                        </.button>
+                      </div>
+                    </.form>
+                  </.section>
+                </div>
+              </.card>
+
+              <.card
+                id="identity-settings"
+                icon="hero-identification"
+                title="Identidade"
+                description="Usados para reconhecer transferências entre suas próprias contas (quando a contraparte é você). O CPF é guardado criptografado."
+              >
+                <.form for={@identity_form} id="identity_form" phx-submit="update_identity">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                    <.input
+                      field={@identity_form[:name]}
+                      type="text"
+                      label="Nome completo"
+                      placeholder="Como aparece nas suas transferências"
+                    />
+                    <.input
+                      field={@identity_form[:cpf]}
+                      type="text"
+                      label="CPF"
+                      placeholder="000.000.000-00"
+                      inputmode="numeric"
+                      maxlength="14"
+                      phx-hook=".CpfMask"
+                    />
+                  </div>
+                  <div class="mt-2">
+                    <.button
+                      variant="primary"
+                      size="sm"
+                      class="w-full sm:w-auto"
+                      loading="Salvando…"
+                    >
+                      Salvar identidade
+                    </.button>
+                  </div>
+                </.form>
+              </.card>
+            </div>
+
+            <div id="settings-preferences" class={[@section != "preferences" && "hidden"]}>
+              <.card
+                id="preferences-settings"
+                icon="hero-paint-brush"
+                title="Aparência"
+                description="Tema e estilo visual do app."
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="ui-body">Tema</p>
+                    <p class="ui-help">Escolha entre claro, escuro ou sistema</p>
+                  </div>
+                  <Layouts.theme_toggle persist />
+                </div>
+                <div class="flex flex-col gap-3">
+                  <div>
+                    <p class="ui-body">Estilo visual</p>
+                    <p class="ui-help">Escolha a linguagem visual do app interno</p>
+                  </div>
+                  <Layouts.visual_style_toggle persist grid />
+                </div>
+              </.card>
+
+              <.card
+                id="privacy-settings"
+                icon="hero-eye-slash"
+                title="Privacidade na tela"
+                description="Para gravar ou compartilhar a tela: o que estiver oculto vira uma camada fosca em todas as páginas, na hora."
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="ui-body">Ocultar valores</p>
+                    <p class="ui-help">
+                      Valores em reais. Dá para ver se é receita ou despesa pela cor, mas não o número.
+                    </p>
+                  </div>
+                  <.switch
+                    id="hide-values-toggle"
+                    label="Ocultar valores"
+                    checked={@current_scope.user.hide_values}
+                    phx-click="set_preference"
+                    phx-value-hide_values={to_string(!@current_scope.user.hide_values)}
+                  />
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="ui-body">Ocultar nomes</p>
+                    <p class="ui-help">
+                      Descrições das transações (nomes de pessoas e lojas) e nomes dos arquivos de
+                      extrato.
+                    </p>
+                  </div>
+                  <.switch
+                    id="hide-names-toggle"
+                    label="Ocultar nomes"
+                    checked={@current_scope.user.hide_names}
+                    phx-click="set_preference"
+                    phx-value-hide_names={to_string(!@current_scope.user.hide_names)}
+                  />
+                </div>
+              </.card>
+            </div>
+
+            <div id="settings-ai" class={[@section != "ai" && "hidden"]}>
+              <.card
+                id="ai-settings"
+                icon="hero-cpu-chip"
+                title="Inteligência artificial"
+                description="Provedores de IA e o modelo de cada especialista: pesquisa avançada, análise, processamento e chat. Os modelos vêm direto da API de cada provedor."
+              >
+                <AiComponents.providers_panel
+                  providers={@ai_providers}
+                  selected_ref={@ai_selected_ref}
+                  saved_ref={@ai_saved_ref}
+                  default_form={@ai_default_form}
+                  default_model={@ai_default_model}
+                  models={@ai_models}
+                  form={@ai_form}
+                  show_form={@ai_show_form}
                 />
-                <div class="mt-2">
+                <AiComponents.specialists_panel
+                  :if={@ai_providers != []}
+                  choices={@model_choices}
+                  general={@ai_general}
+                  values={@ai_specialists}
+                />
+              </.card>
+            </div>
+
+            <div id="settings-integrations" class={[@section != "integrations" && "hidden"]}>
+              <OpenFinanceComponents.settings_card
+                configured={@open_finance_configured}
+                credentials_source={@open_finance_credentials_source}
+                client_id={@open_finance_client_id}
+                credentials_form={@open_finance_credentials_form}
+                show_credentials_form={@open_finance_show_credentials_form}
+                private_key={@open_finance_private_key}
+                connections={@open_finance_connections}
+                connecting={@open_finance_connecting}
+                syncing={@open_finance_syncing}
+                show_item_form={@open_finance_show_item_form}
+                item_form={@open_finance_item_form}
+              />
+
+              <AccountComponents.smtp_card
+                source={@smtp_source}
+                env_fields={@smtp_env_fields}
+                config={@smtp_config}
+                form={@smtp_form}
+                show_form={@smtp_show_form}
+                private_key={@smtp_private_key}
+              />
+            </div>
+
+            <div id="settings-backup" class={[@section != "backup" && "hidden"]}>
+              <.card
+                id="backup"
+                icon="hero-archive-box"
+                title="Backup"
+                description="Todos os seus dados ficam em um único arquivo."
+              >
+                <div>
                   <.button
-                    variant="primary"
+                    id="download-backup"
+                    href={~p"/users/settings/backup"}
+                    variant="secondary"
                     size="sm"
-                    class="w-full sm:w-auto"
-                    loading="Alterando…"
+                    icon="hero-arrow-down-tray"
                   >
-                    Alterar email
+                    Baixar backup
                   </.button>
                 </div>
-              </.form>
-            </.section>
-            <.section title="Senha de acesso">
-              <.form
-                for={@password_form}
-                id="password_form"
-                action={~p"/users/update-password"}
-                method="post"
-                phx-change="validate_password"
-                phx-submit="update_password"
-                phx-trigger-action={@trigger_submit}
-                novalidate
+
+                <.section id="backup-restore" title="Restaurar um backup" divider>
+                  <BackupComponents.restore_panel
+                    stage={@restore_stage}
+                    uploads={@uploads}
+                    analysis={@restore_analysis}
+                    form={@restore_form}
+                    upload_error={@restore_upload_error}
+                  />
+                </.section>
+
+                <p class="ui-help">
+                  Guarde também a <code>CLOAK_KEY</code>
+                  (ou a pasta <code>secrets/</code>) para levar as credenciais criptografadas.
+                </p>
+              </.card>
+            </div>
+
+            <div id="settings-system" class={[@section != "system" && "hidden"]}>
+              <.card
+                id="diagnostics"
+                icon="hero-server-stack"
+                title="Sistema"
+                description="O estado da sua instância: dados, integrações, filas e erros."
               >
-                <input
-                  name={@password_form[:email].name}
-                  type="hidden"
-                  id="hidden_user_email"
-                  autocomplete="username"
-                  value={@current_email}
-                />
-                <.input
-                  field={@password_form[:current_password]}
-                  name="current_password"
-                  type="password"
-                  label="Senha atual"
-                  id="current_password_for_password"
-                  autocomplete="current-password"
-                  value={@current_password}
-                  required
-                />
-                <.input
-                  field={@password_form[:password]}
-                  type="password"
-                  label="Nova senha"
-                  autocomplete="new-password"
-                  required
-                />
-                <.input
-                  field={@password_form[:password_confirmation]}
-                  type="password"
-                  label="Confirmar nova senha"
-                  autocomplete="new-password"
-                />
-                <div class="mt-2">
-                  <.button
-                    variant="primary"
-                    size="sm"
-                    class="w-full sm:w-auto"
-                    loading="Salvando…"
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <.stat_tile
+                    id="diagnostics-db-size"
+                    label="Banco"
+                    value={Diagnostics.format_bytes(@diagnostics.database_size)}
+                  />
+                  <.stat_tile
+                    id="diagnostics-uptime"
+                    label="No ar há"
+                    value={Diagnostics.format_uptime(@diagnostics.uptime_seconds)}
+                  />
+                  <.stat_tile
+                    id="diagnostics-last-upload"
+                    label="Último upload"
+                    value={format_last_upload(@diagnostics.data.last_upload)}
+                  />
+                </div>
+
+                <.section title="Seus dados">
+                  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <.stat_tile
+                      id="diagnostics-transactions"
+                      label="Transações"
+                      value={@diagnostics.data.transactions}
+                    />
+                    <.stat_tile
+                      id="diagnostics-statements"
+                      label="Extratos e faturas"
+                      value={@diagnostics.data.statements}
+                    />
+                    <.stat_tile
+                      id="diagnostics-categories"
+                      label="Categorias"
+                      value={@diagnostics.data.categories}
+                    />
+                  </div>
+                </.section>
+
+                <.section title="Integrações">
+                  <ul id="diagnostics-integrations" class="divide-y divide-base-content/10">
+                    <.item_row
+                      :for={{label, source} <- @diagnostics.credentials}
+                      title={label}
+                      subtitle={integration_detail(label, @diagnostics)}
+                    >
+                      <:tags>
+                        <%= if source == :mixed do %>
+                          <.tag kind="env" />
+                          <.tag kind="salvo" />
+                        <% else %>
+                          <.tag kind={source_kind(source)}>{source_label(source)}</.tag>
+                        <% end %>
+                      </:tags>
+                    </.item_row>
+                  </ul>
+                  <dl
+                    id="integration-sources-legend"
+                    class="mt-4 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-2"
                   >
-                    Salvar senha
+                    <dt><.tag kind="env" /></dt>
+                    <dd class="ui-help">
+                      Vem do arquivo <code>.env</code>
+                      do servidor. Tem prioridade sobre o que é salvo aqui e só muda editando o arquivo.
+                    </dd>
+                    <dt><.tag kind="salvo" /></dt>
+                    <dd class="ui-help">
+                      Configurado nesta tela e guardado no banco do Grana, com senhas e chaves
+                      criptografadas.
+                    </dd>
+                  </dl>
+                </.section>
+
+                <.section title="Ambiente">
+                  <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 ui-body">
+                    <dt class="ui-text-secondary">Endereço</dt>
+                    <dd class="min-w-0">
+                      <code id="diagnostics-public-url" class="break-all">
+                        {@diagnostics.public_url}
+                      </code>
+                    </dd>
+                    <dt class="ui-text-secondary">Pasta de dados</dt>
+                    <dd class="min-w-0">
+                      <code id="diagnostics-data-dir" class="break-all">{@diagnostics.data_dir}</code>
+                    </dd>
+                    <dt class="ui-text-secondary">Runtime</dt>
+                    <dd id="diagnostics-runtime" class="min-w-0">
+                      Elixir {@diagnostics.runtime.elixir} · OTP {@diagnostics.runtime.otp} · SQLite {@diagnostics.runtime.sqlite}
+                    </dd>
+                  </dl>
+                </.section>
+
+                <div class="flex flex-wrap gap-2">
+                  <.button
+                    id="diagnostics-oban"
+                    href="/admin/oban"
+                    target="_blank"
+                    variant="secondary"
+                    size="sm"
+                    icon="hero-queue-list"
+                  >
+                    Fila de jobs
+                    <.tag
+                      :if={@diagnostics.jobs.pending > 0}
+                      id="diagnostics-jobs-pending"
+                      kind="pendente"
+                    >
+                      {@diagnostics.jobs.pending}
+                    </.tag>
+                    <.tag :if={@diagnostics.jobs.failed > 0} id="diagnostics-jobs-failed" kind="erro">
+                      {@diagnostics.jobs.failed} com falha
+                    </.tag>
+                  </.button>
+                  <.button
+                    id="diagnostics-errors"
+                    href="/admin/errors"
+                    target="_blank"
+                    variant="secondary"
+                    size="sm"
+                    icon="hero-bug-ant"
+                  >
+                    Erros registrados
+                    <.tag
+                      :if={@diagnostics.unresolved_errors > 0}
+                      id="diagnostics-errors-count"
+                      kind="erro"
+                    >
+                      {@diagnostics.unresolved_errors}
+                    </.tag>
                   </.button>
                 </div>
-              </.form>
-            </.section>
-          </div>
-        </.card>
-
-        <.card
-          id="ai-settings"
-          icon="hero-cpu-chip"
-          title="Inteligência artificial"
-          description="Provedores de IA e o modelo de cada especialista: pesquisa avançada, análise, processamento e chat. Os modelos vêm direto da API de cada provedor."
-        >
-          <AiComponents.providers_panel
-            providers={@ai_providers}
-            selected_ref={@ai_selected_ref}
-            saved_ref={@ai_saved_ref}
-            default_form={@ai_default_form}
-            default_model={@ai_default_model}
-            models={@ai_models}
-            form={@ai_form}
-            show_form={@ai_show_form}
-          />
-          <AiComponents.specialists_panel
-            :if={@ai_providers != []}
-            choices={@model_choices}
-            general={@ai_general}
-            values={@ai_specialists}
-          />
-        </.card>
-
-        <AccountComponents.smtp_card
-          source={@smtp_source}
-          env_fields={@smtp_env_fields}
-          config={@smtp_config}
-          form={@smtp_form}
-          show_form={@smtp_show_form}
-          private_key={@smtp_private_key}
-        />
-
-        <OpenFinanceComponents.settings_card
-          configured={@open_finance_configured}
-          credentials_source={@open_finance_credentials_source}
-          client_id={@open_finance_client_id}
-          credentials_form={@open_finance_credentials_form}
-          show_credentials_form={@open_finance_show_credentials_form}
-          private_key={@open_finance_private_key}
-          connections={@open_finance_connections}
-          connecting={@open_finance_connecting}
-          syncing={@open_finance_syncing}
-          show_item_form={@open_finance_show_item_form}
-          item_form={@open_finance_item_form}
-        />
-
-        <.card
-          id="identity-settings"
-          icon="hero-identification"
-          title="Identidade"
-          description="Usados para reconhecer transferências entre suas próprias contas (quando a contraparte é você). O CPF é guardado criptografado."
-        >
-          <.form for={@identity_form} id="identity_form" phx-submit="update_identity">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-              <.input
-                field={@identity_form[:name]}
-                type="text"
-                label="Nome completo"
-                placeholder="Como aparece nas suas transferências"
-              />
-              <.input
-                field={@identity_form[:cpf]}
-                type="text"
-                label="CPF"
-                placeholder="000.000.000-00"
-                inputmode="numeric"
-                maxlength="14"
-                phx-hook=".CpfMask"
-              />
+              </.card>
             </div>
-            <div class="mt-2">
-              <.button variant="primary" size="sm" class="w-full sm:w-auto" loading="Salvando…">
-                Salvar identidade
-              </.button>
-            </div>
-          </.form>
-        </.card>
 
-        <.card
-          id="preferences-settings"
-          icon="hero-paint-brush"
-          title="Preferências"
-          description="Tema, estilo visual e privacidade na tela."
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <p class="ui-body">Tema</p>
-              <p class="ui-help">Escolha entre claro, escuro ou sistema</p>
-            </div>
-            <Layouts.theme_toggle persist />
-          </div>
-          <div class="flex flex-col gap-3">
-            <div>
-              <p class="ui-body">Estilo visual</p>
-              <p class="ui-help">Escolha a linguagem visual do app interno</p>
-            </div>
-            <Layouts.visual_style_toggle persist grid />
-          </div>
-          <.section id="privacy-settings" title="Privacidade na tela" divider>
-            <p class="ui-help mb-4">
-              Para gravar ou compartilhar a tela: o que estiver oculto vira uma camada fosca em
-              todas as páginas, na hora.
-            </p>
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <p class="ui-body">Ocultar valores</p>
-                <p class="ui-help">
-                  Valores em reais. Dá para ver se é receita ou despesa pela cor, mas não o número.
-                </p>
-              </div>
-              <.switch
-                id="hide-values-toggle"
-                label="Ocultar valores"
-                checked={@current_scope.user.hide_values}
-                phx-click="set_preference"
-                phx-value-hide_values={to_string(!@current_scope.user.hide_values)}
-              />
-            </div>
-            <div class="mt-4 flex items-center justify-between gap-4">
-              <div>
-                <p class="ui-body">Ocultar nomes</p>
-                <p class="ui-help">
-                  Descrições das transações (nomes de pessoas e lojas) e nomes dos arquivos de
-                  extrato.
-                </p>
-              </div>
-              <.switch
-                id="hide-names-toggle"
-                label="Ocultar nomes"
-                checked={@current_scope.user.hide_names}
-                phx-click="set_preference"
-                phx-value-hide_names={to_string(!@current_scope.user.hide_names)}
-              />
-            </div>
-          </.section>
-        </.card>
-
-        <.card
-          id="backup"
-          icon="hero-archive-box"
-          title="Backup"
-          description="Todos os seus dados ficam em um único arquivo."
-        >
-          <div>
-            <.button
-              id="download-backup"
-              href={~p"/users/settings/backup"}
-              variant="secondary"
-              size="sm"
-              icon="hero-arrow-down-tray"
-            >
-              Baixar backup
-            </.button>
-          </div>
-
-          <.section id="backup-restore" title="Restaurar um backup" divider>
-            <BackupComponents.restore_panel
-              stage={@restore_stage}
-              uploads={@uploads}
-              analysis={@restore_analysis}
-              form={@restore_form}
-              upload_error={@restore_upload_error}
-            />
-          </.section>
-
-          <p class="ui-help">
-            Guarde também a <code>CLOAK_KEY</code>
-            (ou a pasta <code>secrets/</code>) para levar as credenciais criptografadas.
-          </p>
-        </.card>
-
-        <.card
-          id="diagnostics"
-          icon="hero-server-stack"
-          title="Sistema"
-          description="O estado da sua instância: dados, integrações, filas e erros."
-        >
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <.stat_tile
-              id="diagnostics-db-size"
-              label="Banco"
-              value={Diagnostics.format_bytes(@diagnostics.database_size)}
-            />
-            <.stat_tile
-              id="diagnostics-uptime"
-              label="No ar há"
-              value={Diagnostics.format_uptime(@diagnostics.uptime_seconds)}
-            />
-            <.stat_tile
-              id="diagnostics-last-upload"
-              label="Último upload"
-              value={format_last_upload(@diagnostics.data.last_upload)}
-            />
-          </div>
-
-          <.section title="Seus dados">
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <.stat_tile
-                id="diagnostics-transactions"
-                label="Transações"
-                value={@diagnostics.data.transactions}
-              />
-              <.stat_tile
-                id="diagnostics-statements"
-                label="Extratos e faturas"
-                value={@diagnostics.data.statements}
-              />
-              <.stat_tile
-                id="diagnostics-categories"
-                label="Categorias"
-                value={@diagnostics.data.categories}
-              />
-            </div>
-          </.section>
-
-          <.section title="Integrações">
-            <ul id="diagnostics-integrations" class="divide-y divide-base-content/10">
-              <.item_row
-                :for={{label, source} <- @diagnostics.credentials}
-                title={label}
-                subtitle={integration_detail(label, @diagnostics)}
+            <div id="settings-danger" class={[@section != "danger" && "hidden"]}>
+              <.card
+                id="danger-zone"
+                tone={:danger}
+                icon="hero-exclamation-triangle"
+                title="Zona de perigo"
+                description="Apagar todos os dados remove sua conta, extratos, transações, categorias, análises e conexões, e volta a instância ao assistente de configuração. Faça um backup antes: esta ação não pode ser desfeita."
               >
-                <:tags>
-                  <%= if source == :mixed do %>
-                    <.tag kind="env" />
-                    <.tag kind="salvo" />
-                  <% else %>
-                    <.tag kind={source_kind(source)}>{source_label(source)}</.tag>
-                  <% end %>
-                </:tags>
-              </.item_row>
-            </ul>
-            <dl
-              id="integration-sources-legend"
-              class="mt-4 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-2"
-            >
-              <dt><.tag kind="env" /></dt>
-              <dd class="ui-help">
-                Vem do arquivo <code>.env</code>
-                do servidor. Tem prioridade sobre o que é salvo aqui e só muda editando o arquivo.
-              </dd>
-              <dt><.tag kind="salvo" /></dt>
-              <dd class="ui-help">
-                Configurado nesta tela e guardado no banco do Grana, com senhas e chaves
-                criptografadas.
-              </dd>
-            </dl>
-          </.section>
-
-          <.section title="Ambiente">
-            <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 ui-body">
-              <dt class="ui-text-secondary">Endereço</dt>
-              <dd class="min-w-0">
-                <code id="diagnostics-public-url" class="break-all">{@diagnostics.public_url}</code>
-              </dd>
-              <dt class="ui-text-secondary">Pasta de dados</dt>
-              <dd class="min-w-0">
-                <code id="diagnostics-data-dir" class="break-all">{@diagnostics.data_dir}</code>
-              </dd>
-              <dt class="ui-text-secondary">Runtime</dt>
-              <dd id="diagnostics-runtime" class="min-w-0">
-                Elixir {@diagnostics.runtime.elixir} · OTP {@diagnostics.runtime.otp} · SQLite {@diagnostics.runtime.sqlite}
-              </dd>
-            </dl>
-          </.section>
-
-          <div class="flex flex-wrap gap-2">
-            <.button
-              id="diagnostics-oban"
-              href="/admin/oban"
-              target="_blank"
-              variant="secondary"
-              size="sm"
-              icon="hero-queue-list"
-            >
-              Fila de jobs
-              <.tag :if={@diagnostics.jobs.pending > 0} id="diagnostics-jobs-pending" kind="pendente">
-                {@diagnostics.jobs.pending}
-              </.tag>
-              <.tag :if={@diagnostics.jobs.failed > 0} id="diagnostics-jobs-failed" kind="erro">
-                {@diagnostics.jobs.failed} com falha
-              </.tag>
-            </.button>
-            <.button
-              id="diagnostics-errors"
-              href="/admin/errors"
-              target="_blank"
-              variant="secondary"
-              size="sm"
-              icon="hero-bug-ant"
-            >
-              Erros registrados
-              <.tag
-                :if={@diagnostics.unresolved_errors > 0}
-                id="diagnostics-errors-count"
-                kind="erro"
-              >
-                {@diagnostics.unresolved_errors}
-              </.tag>
-            </.button>
+                <div>
+                  <.button
+                    id="show-reset-modal"
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    icon="hero-trash"
+                    phx-click="show_reset_modal"
+                  >
+                    Apagar todos os dados
+                  </.button>
+                </div>
+              </.card>
+            </div>
           </div>
-        </.card>
-
-        <.card
-          id="danger-zone"
-          tone={:danger}
-          icon="hero-exclamation-triangle"
-          title="Zona de perigo"
-          description="Apagar todos os dados remove sua conta, extratos, transações, categorias, análises e conexões, e volta a instância ao assistente de configuração. Faça um backup antes: esta ação não pode ser desfeita."
-        >
-          <div>
-            <.button
-              id="show-reset-modal"
-              type="button"
-              variant="danger"
-              size="sm"
-              icon="hero-trash"
-              phx-click="show_reset_modal"
-            >
-              Apagar todos os dados
-            </.button>
-          </div>
-        </.card>
+        </div>
 
         <.confirm_modal
           :if={@show_reset_modal}
@@ -479,6 +532,23 @@ defmodule GranaWeb.UserLive.Settings do
       </div>
     </Layouts.app>
 
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".SettingsNav">
+      // On narrow screens the groups are a strip that scrolls sideways: keep the active one in view.
+      export default {
+        mounted() { this.center() },
+        updated() { this.center() },
+        center() {
+          const active = this.el.querySelector("[aria-current=page]")
+          if (!active || this.el.scrollWidth <= this.el.clientWidth) return
+          this.el.scrollTo({
+            left: active.offsetLeft - (this.el.clientWidth - active.offsetWidth) / 2,
+            behavior: this.seen ? "smooth" : "instant"
+          })
+          this.seen = true
+        }
+      }
+    </script>
+
     <script :type={Phoenix.LiveView.ColocatedHook} name=".CpfMask">
       const format = (value) => {
         const d = value.replace(/\D/g, "").slice(0, 11)
@@ -501,6 +571,19 @@ defmodule GranaWeb.UserLive.Settings do
     </script>
     """
   end
+
+  @sections [
+    {"account", "Conta", "hero-user-circle"},
+    {"preferences", "Preferências", "hero-paint-brush"},
+    {"ai", "Inteligência artificial", "hero-cpu-chip"},
+    {"integrations", "Integrações", "hero-puzzle-piece"},
+    {"backup", "Backup", "hero-archive-box"},
+    {"system", "Sistema", "hero-server-stack"},
+    {"danger", "Zona de perigo", "hero-exclamation-triangle"}
+  ]
+  @section_keys Enum.map(@sections, &elem(&1, 0))
+
+  defp sections, do: @sections
 
   @impl true
   def mount(%{"token" => token}, _session, socket) do
@@ -535,6 +618,12 @@ defmodule GranaWeb.UserLive.Settings do
       |> assign(:diagnostics, Diagnostics.summary(user))
 
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    section = if params["section"] in @section_keys, do: params["section"], else: "account"
+    {:noreply, assign(socket, :section, section)}
   end
 
   @impl true

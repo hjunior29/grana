@@ -24,11 +24,11 @@ defmodule GranaWeb.BackupController do
 
           conn
           |> put_flash(:error, "Não foi possível gerar o backup.")
-          |> redirect(to: ~p"/users/settings")
+          |> redirect(to: ~p"/users/settings?section=backup")
       end
     else
       conn
-      |> put_session(:user_return_to, ~p"/users/settings")
+      |> put_session(:user_return_to, ~p"/users/settings?section=backup")
       |> put_flash(:error, "Por segurança, confirme seu login para baixar o backup.")
       |> redirect(to: ~p"/users/log-in")
     end

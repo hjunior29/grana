@@ -427,7 +427,7 @@ defmodule GranaWeb.UiComponents do
               Importar extratos
             </.button>
             <.button
-              navigate={~p"/users/settings#open-finance-settings"}
+              navigate={~p"/users/settings?section=integrations"}
               variant="secondary"
               icon="hero-building-library"
             >
@@ -855,7 +855,9 @@ defmodule GranaWeb.UiComponents do
         </div>
         <div class="modal-action">
           <.button type="button" variant="ghost" phx-click={@on_dismiss}>Fechar</.button>
-          <.button navigate={~p"/users/settings"} variant="primary">Ir para Configurações</.button>
+          <.button navigate={~p"/users/settings?section=ai"} variant="primary">
+            Ir para Configurações
+          </.button>
         </div>
       </div>
       <div class="modal-backdrop" phx-click={@on_dismiss}></div>
