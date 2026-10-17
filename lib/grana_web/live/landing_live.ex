@@ -1,6 +1,9 @@
 defmodule GranaWeb.LandingLive do
   use GranaWeb, :live_view
 
+  alias GranaWeb.OpenFinanceComponents
+  alias GranaWeb.SpendingCalendar
+
   @impl true
   def mount(_params, _session, %{assigns: %{current_scope: %{user: %{}}}} = socket) do
     {:ok, push_navigate(socket, to: ~p"/dashboard")}
@@ -8,14 +11,45 @@ defmodule GranaWeb.LandingLive do
 
   def mount(_params, _session, socket) do
     {:ok,
-     socket
-     |> assign(:page_title, "Controle suas finanças")}
+     assign(socket,
+       page_title: "Controle suas finanças",
+       spending_view: "calendar",
+       hide_values: false,
+       hide_names: false,
+       install_method: "script"
+     )}
+  end
+
+  @impl true
+  def handle_event("set_spending_view", %{"view" => view}, socket)
+      when view in ~w(bars calendar) do
+    {:noreply, assign(socket, :spending_view, view)}
+  end
+
+  def handle_event("toggle_privacy", %{"key" => "values"}, socket),
+    do: {:noreply, update(socket, :hide_values, &(!&1))}
+
+  def handle_event("toggle_privacy", %{"key" => "names"}, socket),
+    do: {:noreply, update(socket, :hide_names, &(!&1))}
+
+  def handle_event("set_install_method", %{"method" => method}, socket)
+      when method in ~w(script docker) do
+    {:noreply, assign(socket, :install_method, method)}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="lp" class="min-h-screen" phx-hook=".ScrollMotion">
+    <%!-- grana-app-shell: the visual styles chosen below restyle the whole page, as in the app --%>
+    <div
+      id="lp"
+      class={[
+        "grana-app-shell min-h-screen",
+        @hide_values && "ui-hide-values",
+        @hide_names && "ui-hide-names"
+      ]}
+      phx-hook=".ScrollMotion"
+    >
       <nav class="navbar bg-base-100/10 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-4 sm:px-6 lg:px-8">
         <div class="flex-1">
           <a id="landing-brand" href="/" class="flex items-center">
@@ -366,14 +400,16 @@ defmodule GranaWeb.LandingLive do
         </div>
       </section>
 
-      <%!-- Como funciona: a linha enche conforme a rolagem --%>
-      <section id="como-funciona" class="lp-section lp-alt" data-motion>
-        <div class="lp-wrap text-center">
-          <p class="lp-kicker lp-rise">Como funciona</p>
-          <h2 class="lp-h2 lp-rise" style="--d: 0.05">Três passos, no seu ritmo</h2>
-          <p class="lp-lead mx-auto max-w-xl lp-rise" style="--d: 0.1">
-            Os seus uploads são o histórico oficial. O resto complementa.
-          </p>
+      <%!-- Como funciona: o palco fica preso e a linha acende um passo de cada vez --%>
+      <section id="como-funciona" class="lp-scene lp-scene-short lp-alt" data-scene>
+        <div class="lp-stage lp-stage-single text-center">
+          <div data-motion>
+            <p class="lp-kicker lp-rise">Como funciona</p>
+            <h2 class="lp-h2 lp-rise" style="--d: 0.05">Três passos, no seu ritmo</h2>
+            <p class="lp-lead mx-auto max-w-xl lp-rise" style="--d: 0.1">
+              Os seus uploads são o histórico oficial. O resto complementa.
+            </p>
+          </div>
 
           <div class="lp-steps">
             <div class="lp-steps-line" aria-hidden="true">
@@ -383,7 +419,7 @@ defmodule GranaWeb.LandingLive do
             <div
               :for={{{icon, title, text}, n} <- Enum.with_index(steps(), 1)}
               class="lp-step"
-              style={"--a: #{0.15 + (n - 1) * 0.3}; --b: #{0.35 + (n - 1) * 0.3}"}
+              style={step_window(n)}
             >
               <div class="lp-step-circle">
                 <.icon name={icon} class="size-6" />
@@ -441,7 +477,8 @@ defmodule GranaWeb.LandingLive do
                     />
                   </span>
                   <span class="lp-file-name">
-                    {name} <small class="ui-caption">{bank}</small>
+                    <span class="ui-private-name truncate">{name}</span>
+                    <small class="ui-caption">{bank}</small>
                   </span>
                   <span
                     class="lp-file-bar lp-t"
@@ -503,7 +540,7 @@ defmodule GranaWeb.LandingLive do
                 class="lp-table-row"
               >
                 <span class="ui-caption">{date}</span>
-                <span class="truncate lp-table-desc">{desc}</span>
+                <span class="ui-private-name truncate lp-table-desc">{desc}</span>
                 <span class="lp-chip-slot">
                   <span
                     class="lp-chip-skeleton lp-t lp-t-fade"
@@ -522,7 +559,7 @@ defmodule GranaWeb.LandingLive do
                   </span>
                 </span>
                 <span class={[
-                  "text-right font-medium",
+                  "ui-private text-right font-medium",
                   if(String.starts_with?(value, "+"),
                     do: "ui-money-receita",
                     else: "ui-money-despesa"
@@ -561,13 +598,13 @@ defmodule GranaWeb.LandingLive do
                 style={"--d: #{0.15 + i * 0.06}"}
               >
                 <span class="ui-caption">{label}</span>
-                <strong class={tone}>{value}</strong>
-                <span class="ui-caption">{help}</span>
+                <strong class={tone}><.private_text text={value} /></strong>
+                <span class="ui-caption"><.private_text text={help} /></span>
               </div>
             </div>
 
-            <div class="lp-dash-grid">
-              <div class="lp-card lp-rise" style="--d: 0.3">
+            <div class="lp-dash-grid" data-motion>
+              <div class="lp-card lp-rise">
                 <h3 class="lp-card-title">Despesas por categoria</h3>
                 <div
                   id="landing-cat-hook"
@@ -578,56 +615,44 @@ defmodule GranaWeb.LandingLive do
                     <li :for={cat <- dash_categories()}>
                       <i style={"background-color: #{cat.color}"}></i>
                       <span class="flex-1 truncate">{cat.name}</span>
-                      <span class="font-medium">{brl_float(cat.value)}</span>
+                      <span class="ui-private font-medium">{brl_float(cat.value)}</span>
                     </li>
                   </ul>
                 </div>
               </div>
 
-              <div class="lp-card lp-rise" style="--d: 0.35">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="lp-card-title">Gastos diários</h3>
-                  <span class="ui-view-toggle" aria-hidden="true">
-                    <span class="ui-view-toggle-btn">
-                      <.icon name="hero-chart-bar" class="size-4" />
-                    </span>
-                    <span class="ui-view-toggle-btn is-active">
-                      <.icon name="hero-calendar-days" class="size-4" />
-                    </span>
-                  </span>
+              <%!-- The dashboard's own toggle and calendar, with March's data --%>
+              <div class="lp-card lp-rise" style="--d: 0.08">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="lp-card-title mb-0">Gastos diários</h3>
+                  <SpendingCalendar.view_toggle id="landing-daily-view" view={@spending_view} />
                 </div>
-                <div class="ui-heat lp-heat">
-                  <div class="ui-heat-row ui-heat-head">
-                    <div
-                      :for={day <- ~w(Dom Seg Ter Qua Qui Sex Sáb)}
-                      class="ui-heat-column ui-caption"
-                    >
-                      {day}
-                    </div>
-                  </div>
-                  <div :for={{row, r} <- Enum.with_index(dash_calendar())} class="ui-heat-row">
-                    <div
-                      :for={{heat, c} <- Enum.with_index(row)}
-                      class={[
-                        "ui-heat-cell",
-                        heat_kind(heat),
-                        is_float(heat) and heat >= 0.55 and "is-strong"
-                      ]}
-                      style={"--i: #{r * 7 + c}; --heat: #{if is_float(heat), do: heat, else: 0}"}
-                    >
-                      <span :if={heat != :blank} class="ui-heat-caption">{r * 7 + c - 1}</span>
-                    </div>
-                  </div>
+                <div :if={@spending_view == "calendar"} class="lp-cal">
+                  <SpendingCalendar.heat_grid
+                    id="landing-spending-calendar"
+                    columns={~w(Dom Seg Ter Qua Qui Sex Sáb)}
+                    rows={dash_calendar()}
+                  />
+                </div>
+                <div
+                  :if={@spending_view == "bars"}
+                  id="landing-daily-chart"
+                  phx-hook="DailyChart"
+                  phx-update="ignore"
+                  data-daily={Jason.encode!(dash_daily())}
+                >
                 </div>
                 <p class="ui-caption mt-3">
-                  Quanto mais vermelho, mais caro foi o dia. Fins de semana saltam aos olhos.
+                  {if @spending_view == "calendar",
+                    do: "Quanto mais vermelho, mais caro foi o dia.",
+                    else: "Cada barra é um dia de março."} Passe o mouse para ver o valor.
                 </p>
               </div>
             </div>
 
-            <div class="lp-card lp-rise" style="--d: 0.4">
+            <div class="lp-card lp-rise" data-motion>
               <h3 class="lp-card-title">Fluxo de caixa</h3>
-              <div class="lp-wipe" style="--d: 0.45">
+              <div class="lp-wipe" style="--d: 0.2">
                 <div
                   id="landing-flow-hook"
                   phx-hook="CashFlowChart"
@@ -637,8 +662,8 @@ defmodule GranaWeb.LandingLive do
               </div>
             </div>
 
-            <div class="lp-dash-grid lp-dash-grid-3">
-              <div class="lp-card lp-rise" style="--d: 0.5">
+            <div class="lp-dash-grid lp-dash-grid-3" data-motion>
+              <div class="lp-card lp-rise">
                 <h3 class="lp-card-title">Metas</h3>
                 <ul class="lp-goals">
                   <li :for={{{label, pct, tone}, i} <- Enum.with_index(dash_goals())}>
@@ -648,30 +673,30 @@ defmodule GranaWeb.LandingLive do
                     <div class="lp-goal-track">
                       <i
                         class={["lp-goal-fill", tone]}
-                        style={"--w: #{min(pct, 100)}%; --d: #{0.55 + i * 0.05}"}
+                        style={"--w: #{min(pct, 100)}%; --d: #{0.3 + i * 0.1}"}
                       >
                       </i>
                     </div>
                   </li>
                 </ul>
               </div>
-              <div class="lp-card lp-rise" style="--d: 0.55">
+              <div class="lp-card lp-rise" style="--d: 0.08">
                 <h3 class="lp-card-title">Despesas fixas</h3>
                 <ul class="lp-list">
                   <li :for={{name, value} <- dash_fixed()}>
-                    <span class="truncate">{name}</span><span class="ui-money-despesa font-medium">{value}</span>
+                    <span class="truncate">{name}</span><span class="ui-private ui-money-despesa font-medium">{value}</span>
                   </li>
                 </ul>
                 <p class="ui-caption mt-3">Detectadas sozinhas, mês após mês.</p>
               </div>
-              <div class="lp-card lp-rise" style="--d: 0.6">
+              <div class="lp-card lp-rise" style="--d: 0.16">
                 <h3 class="lp-card-title">Parcelas</h3>
                 <ul class="lp-list">
                   <li :for={{name, cur, total, value} <- dash_installments()}>
                     <span class="truncate">
                       {name} <small class="ui-caption">{cur}/{total}</small>
                     </span>
-                    <span class="font-medium">{value}</span>
+                    <span class="ui-private font-medium">{value}</span>
                   </li>
                 </ul>
                 <p class="ui-caption mt-3">Projeção dos próximos 12 meses no painel.</p>
@@ -693,53 +718,61 @@ defmodule GranaWeb.LandingLive do
             <div
               :for={{{kicker, title, text}, i} <- Enum.with_index(ai_panels())}
               class="lp-panel"
-              style={"--a: #{i * 0.25}; --b: #{if i == 3, do: 1.5, else: (i + 1) * 0.25}"}
+              style={panel_window(i, 4)}
             >
               <p class="lp-kicker">{kicker}</p>
               <h2 class="lp-h2">{title}</h2>
               <p class="lp-lead">{text}</p>
             </div>
             <ol class="lp-dots" aria-hidden="true">
-              <li
-                :for={i <- 0..3}
-                class="lp-dot"
-                style={"--a: #{i * 0.25}; --b: #{if i == 3, do: 1.5, else: (i + 1) * 0.25}"}
-              >
-              </li>
+              <li :for={i <- 0..3} class="lp-dot" style={panel_window(i, 4)}></li>
             </ol>
           </div>
 
           <div class="lp-stage-mock lp-panels">
-            <%!-- 1. Pesquisa avançada --%>
-            <div class="lp-panel" style="--a: 0; --b: 0.25">
-              <div class="lp-card">
-                <div class="lp-search">
+            <%!-- 1. Advanced search: types the whole request, then loads like the app --%>
+            <div class="lp-panel" style="--a: -0.04; --b: 0.25">
+              <div class="lp-card lp-ai-search" style="--ba: 0.088; --bb: 0.15">
+                <div class="ui-ai-search-bar">
                   <.icon name="hero-sparkles" class="size-4 shrink-0 text-primary" />
-                  <span class="lp-type lp-t" style="--a: 0.02; --b: 0.1">
-                    gastos com saúde nos últimos 3 meses
+                  <span class="lp-ai-input lp-t" style="--a: 0.012; --b: 0.075">
+                    <span class="lp-ai-placeholder" aria-hidden="true">
+                      Peça à IA: gastos com delivery nos últimos 3 meses
+                    </span>
+                    <span class="lp-typer">
+                      <span class="lp-typer-ghost" aria-hidden="true">{search_request()}</span>
+                      <span class="lp-typer-text">{search_request()}</span>
+                    </span>
                   </span>
-                  <span class="lp-search-model">
-                    <.icon name="hero-cpu-chip" class="size-3.5" /> gemini-flash
+                  <span class="ui-model-picker lp-ai-model">
+                    <.icon name="hero-cpu-chip" class="size-4 shrink-0" />
+                    <span class="truncate">gemini-2.5-flash</span>
+                  </span>
+                  <span class="btn btn-primary btn-sm btn-square lp-ai-send" aria-hidden="true">
+                    <.icon name="hero-arrow-up" class="size-4" />
                   </span>
                 </div>
-                <p
-                  class="ui-help mt-2 flex items-center gap-2 lp-t lp-t-fade"
-                  style="--a: 0.1; --b: 0.14; --reverse: 1"
-                >
-                  <span class="loading loading-spinner loading-xs"></span> Montando a busca…
-                </p>
-                <div class="lp-t lp-t-rise" style="--a: 0.13; --b: 0.18">
-                  <div class="ui-ai-query mt-3">
-                    <code class="ui-query-code">
-                      (unimed OR drogasil OR "plano de saúde") AND type:expense AND date>=today-3m
-                    </code>
-                    <span class="ui-ai-query-action">
-                      <.icon name="hero-arrow-down-left" class="size-3.5" /> Usar
+                <div class="lp-stack">
+                  <p class="ui-help mt-2 flex items-center gap-2 lp-ai-loading">
+                    <span class="loading loading-spinner loading-xs"></span> Montando a busca…
+                  </p>
+                  <div class="ui-ai-search-result lp-t lp-t-rise" style="--a: 0.15; --b: 0.19">
+                    <span class="ui-ai-query">
+                      <code class="ui-query-code">
+                        (unimed OR drogasil OR "plano de saúde") AND type:expense AND date>=today-3m
+                      </code>
+                      <span class="ui-ai-query-action">
+                        <.icon name="hero-arrow-down-left" class="size-3.5" /> Usar
+                      </span>
+                    </span>
+                    <p class="ui-help mt-1.5 flex flex-wrap items-center gap-x-2">
+                      <span>Inclui Unimed e Drogasil, que estavam fora da categoria Saúde.</span>
+                      <span class="ui-caption">gemini-2.5-flash</span>
+                    </p>
+                    <span class="ui-ai-search-close" aria-hidden="true">
+                      <.icon name="hero-x-mark" class="size-4" />
                     </span>
                   </div>
-                  <p class="ui-help mt-2">
-                    Inclui Unimed e Drogasil, que estavam fora da categoria Saúde.
-                  </p>
                 </div>
               </div>
             </div>
@@ -769,7 +802,7 @@ defmodule GranaWeb.LandingLive do
                     style={"--a: #{0.36 + i * 0.03}; --b: #{0.41 + i * 0.03}"}
                   >
                     <.icon name={icon} class={["size-4 shrink-0 mt-0.5", tone]} />
-                    <span class="ui-text-secondary">{text}</span>
+                    <span class="ui-text-secondary"><.private_text text={text} /></span>
                   </li>
                 </ul>
               </div>
@@ -797,8 +830,11 @@ defmodule GranaWeb.LandingLive do
                     class="lp-t lp-t-rise"
                     style={"--a: #{0.6 + i * 0.03}; --b: #{0.66 + i * 0.03}"}
                   >
-                    <span class="truncate">{desc} <small class="ui-caption">{cat}</small></span>
-                    <span class="ui-money-despesa font-medium">{value}</span>
+                    <span class="truncate">
+                      <span class="ui-private-name">{desc}</span>
+                      <small class="ui-caption">{cat}</small>
+                    </span>
+                    <span class="ui-private ui-money-despesa font-medium">{value}</span>
                   </li>
                 </ul>
               </div>
@@ -824,9 +860,9 @@ defmodule GranaWeb.LandingLive do
                 <div class="ui-chat-row lp-t lp-t-rise" style="--a: 0.85; --b: 0.9">
                   <div class="ui-chat-answer ui-chat-html">
                     <p>
-                      Saúde levou <strong class="ui-money-despesa">R$ 1.264,30</strong>
+                      Saúde levou <strong class="ui-private ui-money-despesa">R$ 1.264,30</strong>
                       nos últimos três meses,
-                      incluindo a Unimed, que estava em Pagamentos.
+                      incluindo a <span class="ui-private-name">Unimed</span>, que estava em Pagamentos.
                     </p>
                     <table class="lp-t lp-t-wipe" style="--a: 0.9; --b: 0.97">
                       <thead>
@@ -840,9 +876,11 @@ defmodule GranaWeb.LandingLive do
                       <tbody>
                         <tr :for={{m, a, b, t} <- chat_rows()}>
                           <td>{m}</td>
-                          <td>{a}</td>
-                          <td>{b}</td>
-                          <td class="text-right ui-money-despesa">{t}</td>
+                          <td><span class="ui-private">{a}</span></td>
+                          <td><span class="ui-private">{b}</span></td>
+                          <td class="text-right ui-money-despesa">
+                            <span class="ui-private">{t}</span>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -854,202 +892,548 @@ defmodule GranaWeb.LandingLive do
         </div>
       </section>
 
-      <%!-- Open Finance --%>
-      <section id="open-finance" class="lp-section" data-motion>
-        <div class="lp-wrap lp-two">
-          <div>
-            <p class="lp-kicker lp-rise">Opcional</p>
-            <h2 class="lp-h2 lp-rise" style="--d: 0.05">O retrato de hoje, pelo Open Finance</h2>
-            <p class="lp-lead lp-rise" style="--d: 0.1">
-              Conecte os seus bancos pelo Meu Pluggy (uso pessoal, gratuito) e veja saldos, faturas
-              abertas, limites e vencimentos sem esperar o extrato do mês.
-            </p>
-            <ul class="lp-bullets">
-              <li
-                :for={{{icon, text}, i} <- Enum.with_index(open_finance_bullets())}
-                class="lp-rise"
-                style={"--d: #{0.2 + i * 0.1}"}
-              >
-                <.icon name={icon} class="size-5 text-primary" /> <span>{text}</span>
-              </li>
-            </ul>
+      <%!-- Open Finance: connect through Meu Pluggy, the data flows, "Hoje" on the dashboard --%>
+      <section
+        id="open-finance"
+        class="lp-scene lp-scene-3"
+        data-scene
+        aria-label="Open Finance via Pluggy"
+      >
+        <div class="lp-stage">
+          <div class="lp-stage-text lp-panels">
+            <div
+              :for={{{kicker, title, text}, i} <- Enum.with_index(open_finance_panels())}
+              class="lp-panel"
+              style={panel_window(i, 3)}
+            >
+              <p class="lp-kicker">{kicker}</p>
+              <h2 class="lp-h2">{title}</h2>
+              <p class="lp-lead">{text}</p>
+            </div>
+            <ol class="lp-dots" aria-hidden="true">
+              <li :for={i <- 0..2} class="lp-dot" style={panel_window(i, 3)}></li>
+            </ol>
           </div>
 
-          <div id="open-finance-preview" class="lp-card lp-rise" style="--d: 0.25">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="lp-card-title mb-0">Hoje</h3>
-              <span class="ui-tag ui-tag-neutro">Open Finance</span>
+          <div class="lp-stage-mock lp-panels">
+            <%!-- 1. Connect: the Meu Pluggy widget, then the banks show up --%>
+            <div class="lp-panel lp-of-connect" style={panel_window(0, 3)}>
+              <div class="lp-card">
+                <div class="flex flex-wrap items-center gap-2">
+                  <OpenFinanceComponents.open_finance_logo class="size-5 shrink-0" />
+                  <h3 class="lp-card-title mb-0">Open Finance</h3>
+                  <span class="ui-tag ui-tag-neutro">
+                    via <img src={~p"/images/pluggy-logo.png"} alt="Pluggy" class="h-3 w-auto" />
+                  </span>
+                </div>
+                <p class="ui-help mt-2">
+                  Saldos, cartões e transações lidos direto dos seus bancos, com o consentimento do
+                  Open Finance Brasil.
+                </p>
+                <ul class="lp-of-conns">
+                  <li
+                    :for={{{bank, logo, detail}, i} <- Enum.with_index(of_connections())}
+                    class="lp-of-conn lp-t lp-t-rise"
+                    style={"--a: #{0.2 + i * 0.05}; --b: #{0.25 + i * 0.05}"}
+                  >
+                    <img src={logo} alt="" class="size-8 shrink-0 rounded-full" />
+                    <span class="min-w-0 flex-1">
+                      <span class="block font-medium">{bank}</span>
+                      <span class="ui-caption block truncate">{detail}</span>
+                    </span>
+                    <span class="ui-tag ui-tag-ativo">Atualizado</span>
+                  </li>
+                </ul>
+                <span class="btn btn-primary btn-sm mt-4" aria-hidden="true">
+                  <.icon name="hero-plus" class="size-4" /> Conectar via Meu Pluggy
+                </span>
+              </div>
+
+              <div class="lp-of-dim lp-win" style="--a: 0.03; --b: 0.2" aria-hidden="true"></div>
+              <div class="lp-card lp-of-widget lp-win" style="--a: 0.03; --b: 0.2">
+                <div class="flex items-center justify-between gap-2">
+                  <img src={~p"/images/pluggy-logo.png"} alt="Pluggy" class="h-4 w-auto" />
+                  <span class="ui-caption">Meu Pluggy</span>
+                </div>
+                <p class="mt-3 text-sm font-semibold">Escolha o banco</p>
+                <div class="lp-of-banks">
+                  <span class="lp-of-bank lp-t" style="--a: 0.07; --b: 0.09">
+                    <img src={~p"/images/nubank-logo.png"} alt="" class="size-5 rounded-full" />
+                    Nubank
+                  </span>
+                  <span class="lp-of-bank">
+                    <img src={~p"/images/bradesco-logo.png"} alt="" class="size-5 rounded-full" />
+                    Bradesco
+                  </span>
+                </div>
+                <p class="ui-caption mt-3 mb-1.5">O banco compartilha, só para leitura:</p>
+                <ul class="lp-of-perms">
+                  <li
+                    :for={{perm, i} <- Enum.with_index(of_permissions())}
+                    class="lp-t lp-t-pop"
+                    style={"--a: #{0.1 + i * 0.015}; --b: #{0.12 + i * 0.015}"}
+                  >
+                    <.icon name="hero-check-circle" class="size-4 text-success" /> {perm}
+                  </li>
+                </ul>
+              </div>
             </div>
-            <div class="grid grid-cols-2 gap-3 mb-4">
-              <div class="lp-stat">
-                <span class="ui-caption">Em conta</span>
-                <strong>R$ 4.250,00</strong>
-              </div>
-              <div class="lp-stat">
-                <span class="ui-caption">Faturas abertas</span>
-                <strong class="ui-money-despesa">R$ 1.180,40</strong>
+
+            <%!-- 2. The data path: bank → Open Finance Brasil → Pluggy → your Grana --%>
+            <div class="lp-panel" style={panel_window(1, 3)}>
+              <div class="lp-card lp-of-flow">
+                <div class="lp-of-track">
+                  <div class="lp-of-line lp-t" style="--a: 0.36; --b: 0.46" aria-hidden="true">
+                    <i></i>
+                  </div>
+                  <div class="lp-of-node">
+                    <span class="lp-of-icon lp-of-icon-banks">
+                      <img src={~p"/images/nubank-logo.png"} alt="" class="size-7 rounded-full" />
+                      <img src={~p"/images/bradesco-logo.png"} alt="" class="size-7 rounded-full" />
+                    </span>
+                    <span>Seus bancos<small>você autoriza</small></span>
+                  </div>
+                  <div class="lp-of-node">
+                    <span class="lp-of-icon">
+                      <OpenFinanceComponents.open_finance_logo class="size-7" />
+                    </span>
+                    <span>Open Finance Brasil<small>regulado pelo BC</small></span>
+                  </div>
+                  <div class="lp-of-node">
+                    <span class="lp-of-icon lp-of-icon-wide">
+                      <img src={~p"/images/pluggy-logo.png"} alt="Pluggy" class="h-3.5 w-auto" />
+                    </span>
+                    <span>Pluggy<small>reúne os dados</small></span>
+                  </div>
+                  <div class="lp-of-node">
+                    <span class="lp-of-icon lp-of-icon-grana">
+                      <GranaWeb.BrandComponents.logo class="size-8" />
+                    </span>
+                    <span>Seu Grana<small>guarda e organiza</small></span>
+                  </div>
+                  <span
+                    :for={{{icon, label}, i} <- Enum.with_index(of_packets())}
+                    class="lp-of-packet lp-t"
+                    style={"--a: #{0.38 + i * 0.06}; --b: #{0.54 + i * 0.06}"}
+                    aria-hidden="true"
+                  >
+                    <.icon name={icon} class="size-3.5" />
+                    <span class="lp-of-packet-label">{label}</span>
+                  </span>
+                </div>
+                <ul class="lp-of-facts">
+                  <li
+                    :for={{{icon, text}, i} <- Enum.with_index(open_finance_bullets())}
+                    class="lp-t lp-t-rise"
+                    style={"--a: #{0.42 + i * 0.05}; --b: #{0.48 + i * 0.05}"}
+                  >
+                    <.icon name={icon} class="size-5 shrink-0 text-primary" /> <span>{text}</span>
+                  </li>
+                </ul>
               </div>
             </div>
-            <div class="lp-stat">
-              <div class="flex items-center gap-2 mb-2">
-                <img src={~p"/images/nubank-logo.png"} alt="" class="size-6 rounded-full" />
-                <span class="font-medium ui-body">Nubank</span>
+
+            <%!-- 3. "Hoje": the block on top of the dashboard --%>
+            <div class="lp-panel" style={panel_window(2, 3)}>
+              <div id="open-finance-preview" class="lp-card lp-of-today">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <span class="flex items-center gap-2">
+                    <OpenFinanceComponents.open_finance_logo class="size-5 shrink-0" />
+                    <h3 class="lp-card-title mb-0">Hoje</h3>
+                  </span>
+                  <span class="ui-help">Open Finance · atualizado há 12 min</span>
+                </div>
+                <div class="lp-of-tiles">
+                  <div
+                    :for={{{id, label, value, tone, caption}, i} <- Enum.with_index(of_tiles())}
+                    class="lp-t lp-t-rise"
+                    style={"--a: #{0.69 + i * 0.03}; --b: #{0.74 + i * 0.03}"}
+                  >
+                    <.stat_tile id={id} label={label} value={value} tone={tone} caption={caption} />
+                  </div>
+                </div>
+                <div class="lp-of-bank-grid">
+                  <div
+                    :for={{bank, i} <- Enum.with_index(of_today_banks())}
+                    class="lp-of-bank-card lp-t lp-t-rise"
+                    style={"--a: #{0.76 + i * 0.04}; --b: #{0.81 + i * 0.04}"}
+                  >
+                    <div class="mb-2 flex items-center gap-2">
+                      <img src={bank.logo} alt="" class="size-6 shrink-0 rounded-full" />
+                      <span class="font-medium">{bank.name}</span>
+                    </div>
+                    <p class="ui-caption mb-1 font-semibold uppercase tracking-wide">Contas</p>
+                    <div class="flex items-baseline justify-between gap-2 py-0.5 text-sm">
+                      <span class="truncate">
+                        Conta corrente<span class="ui-text-tertiary"> ••{bank.account}</span>
+                      </span>
+                      <span class="ui-private font-medium tabular-nums whitespace-nowrap">
+                        {bank.balance}
+                      </span>
+                    </div>
+                    <p class="ui-caption mt-2 mb-1 font-semibold uppercase tracking-wide">
+                      Cartão de crédito
+                    </p>
+                    <div class="flex items-baseline justify-between gap-2 text-sm">
+                      <span class="truncate">
+                        {bank.card}<span class="ui-text-tertiary"> ••{bank.card_number}</span>
+                      </span>
+                      <span class="text-right whitespace-nowrap">
+                        <span class="ui-caption block leading-none">fatura atual</span>
+                        <span class="ui-private font-medium tabular-nums">{bank.invoice}</span>
+                      </span>
+                    </div>
+                    <div class="lp-goal-track">
+                      <i
+                        class="lp-goal-fill bg-warning"
+                        style={"--w: #{bank.usage}%; --d: #{0.8 + i * 0.04}"}
+                      >
+                      </i>
+                    </div>
+                    <p class="ui-caption mt-0.5">
+                      {bank.usage}% do limite usado · {bank.dates}
+                    </p>
+                  </div>
+                </div>
+                <div class="lp-of-months lp-t lp-t-rise" style="--a: 0.86; --b: 0.92">
+                  <p class="ui-help mb-2 flex items-center gap-1.5">
+                    <.icon name="hero-chevron-right" class="size-3.5" />
+                    Meses sem upload cobertos pelo Open Finance (2)
+                  </p>
+                  <div class="flex gap-1">
+                    <div :for={{initial, kind} <- of_months()} class="grid justify-items-center gap-1">
+                      <span class="ui-caption">{initial}</span>
+                      <span class={["grana-calendar-cell grid size-[18px] place-items-center", kind]}>
+                        <span
+                          :if={kind == "calendar-count-0"}
+                          class="grid size-3 place-items-center rounded-full bg-base-100 shadow-sm"
+                        >
+                          <OpenFinanceComponents.open_finance_logo class="size-2" />
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="flex justify-between ui-help mb-1">
-                <span>Conta corrente</span><span>R$ 4.250,00</span>
-              </div>
-              <div class="flex justify-between ui-help mb-2">
-                <span>Cartão Mastercard</span><span>R$ 1.180,40</span>
-              </div>
-              <div class="lp-goal-track">
-                <i class="lp-goal-fill bg-primary" style="--w: 42%; --d: 0.4"></i>
-              </div>
-              <p class="ui-caption mt-1">42% do limite usado · vence em 3 dias</p>
             </div>
           </div>
         </div>
       </section>
 
-      <%!-- Do seu jeito: privacidade, estilos, metas --%>
+      <%!-- Your way: privacy and the visual styles, live on this very page --%>
       <section id="privacidade" class="lp-section lp-alt" data-motion>
         <div class="lp-wrap">
           <div class="text-center mb-12">
             <p class="lp-kicker lp-rise">Do seu jeito</p>
             <h2 class="lp-h2 lp-rise" style="--d: 0.05">Mostre só o que quiser</h2>
-          </div>
-          <div class="lp-dash-grid lp-dash-grid-3">
-            <div class="lp-card lp-rise" style="--d: 0.15">
-              <h3 class="lp-card-title">Modo privacidade</h3>
-              <p class="ui-help mb-4">
-                Esconda valores e nomes com um clique, para gravar a tela ou mostrar o app sem expor nada.
-              </p>
-              <ul class="lp-list lp-blur" style="--d: 0.45">
-                <li>
-                  <span>Salário <i class="lp-private lp-private-name">Empresa Ltda</i></span><span class="ui-money-receita font-medium lp-private">R$ 8.450,00</span>
-                </li>
-                <li>
-                  <span>Aluguel</span><span class="ui-money-despesa font-medium lp-private">R$ 1.500,00</span>
-                </li>
-                <li>
-                  <span>Pix para <i class="lp-private lp-private-name">Ana</i></span><span class="ui-money-despesa font-medium lp-private">R$ 320,00</span>
-                </li>
-              </ul>
-            </div>
-            <div class="lp-card lp-rise" style="--d: 0.25">
-              <h3 class="lp-card-title">Sete estilos, claro e escuro</h3>
-              <p class="ui-help mb-4">
-                Do minimalista ao cyber, com tema claro, escuro ou o do sistema. A escolha acompanha você em todo aparelho.
-              </p>
-              <ul class="lp-swatches">
-                <li
-                  :for={{{name, colors}, i} <- Enum.with_index(visual_styles())}
-                  class="lp-rise"
-                  style={"--d: #{0.35 + i * 0.05}"}
-                >
-                  <span class="lp-swatch" style={"--c1: #{elem(colors, 0)}; --c2: #{elem(colors, 1)}"}>
-                  </span>
-                  <span class="ui-caption">{name}</span>
-                </li>
-              </ul>
-            </div>
-            <div class="lp-card lp-rise" style="--d: 0.35">
-              <h3 class="lp-card-title">Metas e alertas</h3>
-              <p class="ui-help mb-4">
-                Limite de gastos, meta de receita ou de investimento e limite por categoria, acompanhados mês a mês.
-              </p>
-              <ul class="lp-goals">
-                <li :for={{{label, pct, tone}, i} <- Enum.with_index(dash_goals())}>
-                  <div class="flex justify-between ui-help">
-                    <span>{label}</span><span>{pct}%</span>
-                  </div>
-                  <div class="lp-goal-track">
-                    <i
-                      class={["lp-goal-fill", tone]}
-                      style={"--w: #{min(pct, 100)}%; --d: #{0.45 + i * 0.05}"}
-                    >
-                    </i>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <%!-- Segurança --%>
-      <section id="seguranca" class="lp-section" data-motion>
-        <div class="lp-wrap">
-          <div class="text-center mb-12">
-            <p class="lp-kicker lp-rise">Segurança</p>
-            <h2 class="lp-h2 lp-rise" style="--d: 0.05">Seus dados, no seu servidor</h2>
             <p class="lp-lead mx-auto max-w-xl lp-rise" style="--d: 0.1">
-              O Grana roda no seu servidor, sem intermediários. Suas chaves de IA falam diretamente com os provedores configurados.
+              Experimente aqui: o que você mudar vale para a página inteira, como no app.
             </p>
           </div>
-          <div class="lp-dash-grid">
-            <div
-              :for={{{icon, title, text}, i} <- Enum.with_index(security_items())}
-              class="lp-card lp-feature lp-rise"
-              style={"--d: #{0.15 + i * 0.08}"}
-            >
-              <span class="lp-feature-icon"><.icon name={icon} class="size-5" /></span>
-              <div>
-                <p class="font-semibold mb-1">{title}</p>
-                <p class="ui-help">{text}</p>
+          <div class="lp-dash-grid lp-custom">
+            <div id="lp-privacy" class="lp-card lp-rise" style="--d: 0.15">
+              <h3 class="lp-card-title flex items-center gap-2">
+                <.icon name="hero-eye-slash" class="size-5 text-primary" /> Modo privacidade
+              </h3>
+              <p class="ui-help mb-4">
+                Para gravar ou mostrar a tela: o que estiver oculto vira uma camada fosca, na hora,
+                em todas as páginas.
+              </p>
+              <div class="lp-switch-row">
+                <div>
+                  <p class="ui-body">Ocultar valores</p>
+                  <p class="ui-help">Receita e despesa seguem nas cores; o número, não.</p>
+                </div>
+                <.switch
+                  id="lp-hide-values"
+                  label="Ocultar valores"
+                  checked={@hide_values}
+                  phx-click="toggle_privacy"
+                  phx-value-key="values"
+                />
               </div>
+              <div class="lp-switch-row">
+                <div>
+                  <p class="ui-body">Ocultar nomes</p>
+                  <p class="ui-help">Descrições, pessoas, lojas e nomes de arquivos.</p>
+                </div>
+                <.switch
+                  id="lp-hide-names"
+                  label="Ocultar nomes"
+                  checked={@hide_names}
+                  phx-click="toggle_privacy"
+                  phx-value-key="names"
+                />
+              </div>
+              <ul class="lp-privacy-rows">
+                <li :for={{desc, category, value, tone} <- privacy_rows()}>
+                  <span class="min-w-0">
+                    <span class="ui-private-name truncate block">{desc}</span>
+                    <span class="ui-caption">{category}</span>
+                  </span>
+                  <span class={["ui-private font-medium tabular-nums", tone]}>{value}</span>
+                </li>
+              </ul>
+              <p class="ui-caption mt-3 flex items-center gap-1.5">
+                <.icon name="hero-information-circle" class="size-4 shrink-0" />
+                Vale também para gráficos, dicas e respostas do chat.
+              </p>
+            </div>
+
+            <div id="lp-styles" class="lp-card lp-rise" style="--d: 0.25">
+              <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
+                <h3 class="lp-card-title mb-0 flex items-center gap-2">
+                  <.icon name="hero-paint-brush" class="size-5 text-primary" /> Estilo visual
+                </h3>
+                <Layouts.theme_toggle />
+              </div>
+              <p class="ui-help mb-4">
+                Sete estilos, cada um no claro e no escuro. Clique em um e a página inteira muda,
+                como no app.
+              </p>
+              <Layouts.visual_style_toggle grid />
             </div>
           </div>
         </div>
       </section>
 
-      <%!-- Instalação --%>
-      <section id="instalacao" class="lp-section lp-alt" data-motion>
-        <div class="lp-wrap lp-narrow">
-          <div class="text-center mb-12">
-            <p class="lp-kicker lp-rise">Em três passos</p>
+      <%!-- Self-hosted: where the data lives, told like the logo story --%>
+      <section
+        id="seguranca"
+        class="lp-scene lp-scene-3"
+        data-scene
+        aria-label="Self-hosted e segurança"
+      >
+        <div class="lp-stage">
+          <div class="lp-stage-text lp-panels">
+            <div class="lp-panel" style={panel_window(0, 3)}>
+              <p class="lp-kicker">Self-hosted</p>
+              <h2 class="lp-h2">Num app comum, seus dados moram com eles</h2>
+              <p class="lp-lead">
+                Extratos, saldos e o acesso ao seu banco vão para o servidor de uma empresa. Ela
+                guarda, cruza e decide o que fazer com tudo isso.
+              </p>
+            </div>
+            <div class="lp-panel" style={panel_window(1, 3)}>
+              <p class="lp-kicker">Self-hosted</p>
+              <h2 class="lp-h2">No Grana, eles moram com você</h2>
+              <p class="lp-lead">
+                O Grana roda num servidor seu: um computador em casa, uma VPS, um Raspberry Pi.
+                Tudo fica num único arquivo SQLite, e só sai de lá o que você configurar.
+              </p>
+            </div>
+            <div class="lp-panel" style={panel_window(2, 3)}>
+              <p class="lp-kicker">Segurança</p>
+              <h2 class="lp-h2">Seus dados, no seu servidor</h2>
+              <ul class="lp-sec-list">
+                <li :for={{icon, title, text} <- security_items()}>
+                  <span class="lp-feature-icon"><.icon name={icon} class="size-5" /></span>
+                  <span class="min-w-0">
+                    <span class="block font-semibold">{title}</span>
+                    <span class="ui-help block">{text}</span>
+                  </span>
+                </li>
+              </ul>
+            </div>
+            <ol class="lp-dots" aria-hidden="true">
+              <li :for={i <- 0..2} class="lp-dot" style={panel_window(i, 3)}></li>
+            </ol>
+          </div>
+
+          <div class="lp-stage-mock">
+            <div class="lp-card lp-sh" aria-hidden="true">
+              <svg class="lp-sh-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line class="lp-sh-link" x1="14" y1="50" x2="38" y2="50" />
+                <line
+                  :for={{_icon, _name, _note, y} <- self_hosted_links()}
+                  class="lp-sh-out"
+                  x1="75"
+                  y1="50"
+                  x2="86"
+                  y2={y}
+                />
+              </svg>
+
+              <div class="lp-sh-node lp-sh-you">
+                <span class="lp-sh-icon"><.icon name="hero-user" class="size-6" /></span>
+                <span class="lp-sh-label">Você</span>
+              </div>
+
+              <div class="lp-sh-target lp-sh-cloud">
+                <span class="lp-sh-box">
+                  <.icon name="hero-building-office-2" class="size-9" />
+                  <span class="lp-sh-label">Servidor de um app</span>
+                </span>
+                <i class="lp-sh-strike lp-t" style="--a: 0.24; --b: 0.3"></i>
+              </div>
+              <span
+                :for={{{icon, text, x, y}, i} <- Enum.with_index(cloud_tags())}
+                class="lp-sh-tag lp-t lp-t-pop"
+                style={"--a: #{0.12 + i * 0.03}; --b: #{0.16 + i * 0.03}; --x: #{x}; --y: #{y}"}
+              >
+                <.icon name={icon} class="size-3.5" /> {text}
+              </span>
+
+              <div class="lp-sh-target lp-sh-server">
+                <span class="lp-sh-box">
+                  <GranaWeb.BrandComponents.logo class="size-9" />
+                  <span class="lp-sh-file">
+                    <.icon name="hero-circle-stack" class="size-3.5" /> grana.db
+                  </span>
+                  <span class="lp-sh-label">Seu servidor</span>
+                </span>
+              </div>
+
+              <div
+                :for={{{icon, name, note, y}, i} <- Enum.with_index(self_hosted_links())}
+                class="lp-sh-node lp-sh-ext lp-t lp-t-pop"
+                style={"--a: #{0.52 + i * 0.03}; --b: #{0.57 + i * 0.03}; --y: #{y}"}
+              >
+                <span class="lp-sh-mini"><.icon name={icon} class="size-4" /></span>
+                <span class="lp-sh-label">{name}<small>{note}</small></span>
+              </div>
+              <p class="lp-sh-note lp-t lp-t-rise" style="--a: 0.58; --b: 0.63">
+                só sai o que você configurar
+              </p>
+
+              <span
+                :for={{{icon, text, x, y}, i} <- Enum.with_index(server_badges())}
+                class="lp-sh-tag lp-sh-badge lp-t lp-t-pop"
+                style={"--a: #{0.7 + i * 0.04}; --b: #{0.75 + i * 0.04}; --x: #{x}; --y: #{y}"}
+              >
+                <.icon name={icon} class="size-3.5" /> {text}
+              </span>
+
+              <span
+                :for={{icon, a} <- self_hosted_packets()}
+                class="lp-sh-packet lp-t"
+                style={"--a: #{a}; --b: #{a + 0.12}"}
+              >
+                <.icon name={icon} class="size-3.5" />
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Install: three steps, each with its terminal; commands copy with one click --%>
+      <section id="instalacao" class="lp-section lp-alt" data-motion phx-hook=".CopyCommands">
+        <div class="lp-wrap">
+          <div class="text-center mb-10">
+            <p class="lp-kicker lp-rise">Instalação</p>
             <h2 class="lp-h2 lp-rise" style="--d: 0.05">Instale no seu servidor</h2>
-            <p class="lp-lead lp-rise" style="--d: 0.1">
-              Release Elixir com systemd (recomendado), tarball ou Docker Compose.
+            <p class="lp-lead mx-auto max-w-2xl lp-rise" style="--d: 0.1">
+              Debian 12+ ou Ubuntu 22.04+, em x86_64 ou arm64. Nenhuma variável de ambiente é
+              obrigatória: o resto se configura pela tela.
             </p>
+            <div class="lp-seg lp-rise" style="--d: 0.15" role="group" aria-label="Forma de instalar">
+              <button
+                :for={{method, icon, label} <- install_methods()}
+                id={"install-method-#{method}"}
+                type="button"
+                class={["lp-seg-btn", @install_method == method && "is-active"]}
+                aria-pressed={to_string(@install_method == method)}
+                phx-click="set_install_method"
+                phx-value-method={method}
+              >
+                <.icon name={icon} class="size-4" /> {label}
+              </button>
+            </div>
           </div>
 
           <ol class="lp-install">
-            <li id="instalacao-passo-1" class="lp-rise" style="--d: 0.2">
-              <span class="lp-install-number">1</span>
-              <div class="min-w-0 flex-1">
-                <h3 class="font-semibold mb-2">Instale</h3>
-                <p class="ui-help mb-2">Em Debian 12+ ou Ubuntu 22.04+, com o script:</p>
-                <pre class="lp-pre" phx-no-curly-interpolation>curl -fsSL https://raw.githubusercontent.com/hjunior29/grana/main/deploy/install.sh -o install.sh
-    bash install.sh</pre>
-                <p class="ui-help mb-2">Ou com Docker Compose:</p>
-                <pre class="lp-pre" phx-no-curly-interpolation>curl -fsSLO https://raw.githubusercontent.com/hjunior29/grana/main/docker-compose.yml
-    docker compose up -d</pre>
+            <li id="instalacao-passo-1" class="lp-install-step" data-motion>
+              <div class="lp-install-rail" aria-hidden="true">
+                <span class="lp-install-number">1</span><i class="lp-install-line"></i>
               </div>
-            </li>
-            <li id="instalacao-passo-2" class="lp-rise" style="--d: 0.3">
-              <span class="lp-install-number">2</span>
-              <div class="min-w-0 flex-1">
-                <h3 class="font-semibold mb-2">Pegue o código do primeiro acesso</h3>
-                <p class="ui-help mb-2">
-                  Abra a URL do servidor (porta 4000). O código de uso único aparece no log:
+              <div class="lp-install-copy lp-rise">
+                <h3>Instale</h3>
+                <p :if={@install_method == "script"} class="ui-help">
+                  O script baixa a release da sua arquitetura, confere o sha256, cria o usuário
+                  <code>grana</code>
+                  e ativa o serviço no systemd. Dados em <code>/var/lib/grana</code>.
                 </p>
-                <pre class="lp-pre" phx-no-curly-interpolation>sudo journalctl -u grana | grep -A3 "configuração inicial"
-    docker compose logs grana</pre>
+                <p :if={@install_method == "docker"} class="ui-help">
+                  A imagem <code>ghcr.io/hjunior29/grana</code>
+                  (amd64 e arm64) guarda tudo no volume <code>grana-data</code>. Variáveis, se
+                  quiser, num <code>.env</code>
+                  ao lado do compose.
+                </p>
               </div>
+              <.terminal
+                id="instalacao-terminal-1"
+                title="seu-servidor — bash"
+                commands={install_commands(@install_method)}
+                output={install_output(@install_method)}
+              />
             </li>
-            <li id="instalacao-passo-3" class="lp-rise" style="--d: 0.4">
-              <span class="lp-install-number">3</span>
-              <div class="min-w-0 flex-1">
-                <h3 class="font-semibold mb-2">Configure a sua instância</h3>
+
+            <li id="instalacao-passo-2" class="lp-install-step" data-motion>
+              <div class="lp-install-rail" aria-hidden="true">
+                <span class="lp-install-number">2</span><i class="lp-install-line"></i>
+              </div>
+              <div class="lp-install-copy lp-rise">
+                <h3>Pegue o código do primeiro acesso</h3>
                 <p class="ui-help">
-                  O assistente cria a conta e, se quiser, configura email, IA e Open Finance, ou restaura
-                  um backup. HTTPS fica por conta do seu proxy reverso (Caddy, Nginx, Cloudflare Tunnel).
+                  Sem dono, a instância leva qualquer endereço ao setup, que pede um código de uso
+                  único impresso no log. Ele vale até a conta ser criada.
                 </p>
+              </div>
+              <.terminal
+                id="instalacao-terminal-2"
+                title="seu-servidor — bash"
+                commands={log_commands(@install_method)}
+                output={log_output()}
+              />
+            </li>
+
+            <li id="instalacao-passo-3" class="lp-install-step" data-motion>
+              <div class="lp-install-rail" aria-hidden="true">
+                <span class="lp-install-number">3</span>
+              </div>
+              <div class="lp-install-copy lp-rise">
+                <h3>Configure a sua instância</h3>
+                <p class="ui-help">
+                  Abra <code>http://seu-servidor:4000</code>, digite o código e crie a sua conta, ou
+                  restaure um backup. Um onboarding opcional configura o resto; cada etapa pode ser
+                  pulada e refeita em Configurações.
+                </p>
+                <p class="ui-help mt-2">
+                  HTTPS fica com o seu proxy reverso: Caddy, Nginx ou Cloudflare Tunnel.
+                </p>
+              </div>
+              <div class="lp-browser lp-rise" style="--d: 0.12" aria-hidden="true">
+                <div class="lp-term-bar">
+                  <span class="lp-term-dots"><i></i><i></i><i></i></span>
+                  <span class="lp-browser-url">
+                    <.icon name="hero-globe-alt" class="size-3.5" /> seu-servidor:4000/setup
+                  </span>
+                </div>
+                <div class="lp-browser-body">
+                  <ol class="lp-setup-dots">
+                    <li :for={n <- 1..4} class={n == 1 && "is-active"}>{n}</li>
+                  </ol>
+                  <p class="font-semibold">Configuração inicial</p>
+                  <span class="ui-label mt-3 block">Código do setup</span>
+                  <span class="lp-setup-input">
+                    <span class="lp-typer lp-t" style="--a: 0.3; --b: 0.55">
+                      <span class="lp-typer-ghost">{setup_code()}</span>
+                      <span class="lp-typer-text">{setup_code()}</span>
+                    </span>
+                  </span>
+                  <span class="btn btn-primary btn-sm mt-3 w-full">Continuar</span>
+                  <div class="lp-setup-next lp-t lp-t-rise" style="--a: 0.6; --b: 0.75">
+                    <span class="ui-caption">Depois, se quiser:</span>
+                    <span :for={{icon, label} <- onboarding_steps()} class="lp-setup-chip">
+                      <.icon name={icon} class="size-3.5" /> {label}
+                    </span>
+                  </div>
+                </div>
               </div>
             </li>
           </ol>
 
-          <p class="text-center mt-10 lp-rise" style="--d: 0.5">
+          <p class="text-center mt-12 lp-rise" style="--d: 0.5">
             <a
               id="instalacao-readme"
               href="https://github.com/hjunior29/grana#readme"
@@ -1062,6 +1446,42 @@ defmodule GranaWeb.LandingLive do
           </p>
         </div>
       </section>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyCommands">
+        // Copies the commands of a terminal. Plain HTTP on the LAN has no clipboard API,
+        // so it falls back to a hidden textarea.
+        export default {
+          mounted() {
+            this.el.addEventListener("click", e => {
+              const button = e.target.closest("[data-copy]")
+              if (!button) return
+              this.copy(button.dataset.copy).then(() => {
+                const label = button.querySelector("[data-copy-label]")
+                label.textContent = "Copiado"
+                button.classList.add("is-copied")
+                clearTimeout(button.copyTimer)
+                button.copyTimer = setTimeout(() => {
+                  label.textContent = "Copiar"
+                  button.classList.remove("is-copied")
+                }, 1600)
+              })
+            })
+          },
+          copy(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+              return navigator.clipboard.writeText(text)
+            }
+            const area = document.createElement("textarea")
+            area.value = text
+            area.setAttribute("readonly", "")
+            area.style.cssText = "position:fixed;top:0;opacity:0"
+            document.body.appendChild(area)
+            area.select()
+            document.execCommand("copy")
+            area.remove()
+            return Promise.resolve()
+          }
+        }
+      </script>
 
       <%!-- CTA --%>
       <section id="cta" class="lp-section" data-motion>
@@ -1088,17 +1508,24 @@ defmodule GranaWeb.LandingLive do
 
         export default {
           mounted() {
-            this.items = [...this.el.querySelectorAll("[data-motion], [data-scene]")].map(el => ({
-              el, scene: el.hasAttribute("data-scene"), last: null
-            }))
-            if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-              this.items.forEach(({el}) => el.style.setProperty("--p", "1"))
-              return
-            }
+            this.reduced = matchMedia("(prefers-reduced-motion: reduce)").matches
+            this.collect()
+            if (this.reduced) return
             this.onScroll = () => this.queue()
             addEventListener("scroll", this.onScroll, {passive: true})
             addEventListener("resize", this.onScroll)
             this.render()
+          },
+          // A server patch (the switches, the tabs) drops the inline --p: write it again.
+          updated() {
+            this.collect()
+            if (!this.reduced) this.render()
+          },
+          collect() {
+            this.items = [...this.el.querySelectorAll("[data-motion], [data-scene]")].map(el => ({
+              el, scene: el.hasAttribute("data-scene"), last: null
+            }))
+            if (this.reduced) this.items.forEach(({el}) => el.style.setProperty("--p", "1"))
           },
           destroyed() {
             removeEventListener("scroll", this.onScroll)
@@ -1235,49 +1662,39 @@ defmodule GranaWeb.LandingLive do
     ]
   end
 
-  # March 2026 starts on a Sunday: 31 days over five weeks. Weekends spend more.
-  defp dash_calendar do
-    heats = [
-      0.4,
-      0.15,
-      0.1,
-      1.0,
-      0.2,
-      0.12,
-      0.55,
-      0.6,
-      0.08,
-      0.14,
-      0.0,
-      0.18,
-      0.35,
-      0.7,
-      0.45,
-      0.1,
-      0.0,
-      0.22,
-      0.16,
-      0.3,
-      0.8,
-      0.5,
-      0.12,
-      0.09,
-      0.2,
-      0.0,
-      0.4,
-      0.65,
-      0.3,
-      0.1,
-      0.25
-    ]
+  # March 2026: starts on a Sunday, weekends spend more, and the days add up to the
+  # month's expenses on the stat cards.
+  @march_spending [245.6, 64.9, 41.2, 547.9, 88.3, 52.7, 344.0, 356.8, 35.8, 61.2, 0.0] ++
+                    [79.5, 158.0, 441.5, 262.9, 44.6, 0.0, 97.3, 70.1, 133.8, 498.6, 318.2] ++
+                    [52.4, 39.9, 88.0, 0.0, 181.6, 389.7, 135.2, 45.0, 112.3]
 
-    (heats ++ List.duplicate(:blank, 4))
-    |> Enum.chunk_every(7)
+  # Same cells as the dashboard's calendar (`GranaWeb.SpendingCalendar.heat_grid/1`).
+  defp dash_calendar do
+    max = Enum.max(@march_spending)
+    blank = %{kind: :blank, label: nil, caption: nil, value: nil, intensity: nil, url: nil}
+
+    @march_spending
+    |> Enum.with_index(1)
+    |> Enum.map(fn {value, day} ->
+      cell = %{label: march_date(day, "/2026"), caption: day, url: nil}
+
+      if value > 0,
+        do:
+          Map.merge(cell, %{kind: :spend, value: value, intensity: Float.round(value / max, 3)}),
+        else: Map.merge(cell, %{kind: :empty, value: nil, intensity: nil})
+    end)
+    |> Enum.chunk_every(7, 7, Stream.cycle([blank]))
+    |> Enum.map(&%{label: nil, cells: &1})
   end
 
-  defp heat_kind(:blank), do: "ui-heat-blank"
-  defp heat_kind(heat) when heat > 0, do: "ui-heat-spend"
-  defp heat_kind(_heat), do: "ui-heat-empty"
+  defp dash_daily do
+    for {value, day} <- Enum.with_index(@march_spending, 1),
+        value > 0,
+        do: %{date: march_date(day, ""), value: value}
+  end
+
+  defp march_date(day, year),
+    do: "#{day |> Integer.to_string() |> String.pad_leading(2, "0")}/03#{year}"
 
   defp dash_flow do
     targets =
@@ -1365,25 +1782,134 @@ defmodule GranaWeb.LandingLive do
     ]
   end
 
-  defp open_finance_bullets do
+  defp open_finance_panels do
     [
-      {"hero-banknotes",
-       "Hoje: saldos, faturas abertas, limites e vencimentos no topo do painel."},
-      {"hero-calendar-days", "Preenche os meses sem upload, marcados como Open Finance."},
-      {"hero-shield-check",
-       "O upload sempre vence: importou o arquivo do mês, ele passa a valer."}
+      {"Open Finance · conexão", "Seus bancos, conectados pelo Open Finance",
+       "O Grana usa o Open Finance Brasil, regulado pelo Banco Central, por meio da Pluggy. No Meu Pluggy, o caminho de uso pessoal: gratuito e com até 5 conexões."},
+      {"Open Finance · dados", "Do banco direto para o seu servidor",
+       "Você autoriza no app do próprio banco, só para leitura, e revoga quando quiser. A Pluggy entrega saldos, cartões e transações, e o Grana guarda tudo no seu banco local."},
+      {"Open Finance · hoje", "O retrato de hoje, sem esperar o extrato",
+       "Saldos, faturas abertas, limites e vencimentos no topo do painel. Os meses sem upload são preenchidos pelo Open Finance, e o upload sempre vence."}
     ]
   end
 
-  defp visual_styles do
+  defp of_connections do
     [
-      {"Padrão", {"#6366F1", "#1E293B"}},
-      {"Signal", {"#22C55E", "#0F172A"}},
-      {"Bossa", {"#F59E0B", "#FFF7ED"}},
-      {"Papel", {"#78716C", "#FAFAF9"}},
-      {"Caderneta", {"#2563EB", "#EFF6FF"}},
-      {"Planetário", {"#A855F7", "#0B1020"}},
-      {"Cyber", {"#06B6D4", "#111827"}}
+      {"Nubank", ~p"/images/nubank-logo.png", "Conta corrente · Mastercard · agora"},
+      {"Bradesco", ~p"/images/bradesco-logo.png", "Conta corrente · Visa · agora"}
+    ]
+  end
+
+  defp of_permissions, do: ["Contas e saldos", "Cartões e faturas", "Transações"]
+
+  defp of_packets do
+    [
+      {"hero-banknotes", "saldos"},
+      {"hero-credit-card", "faturas"},
+      {"hero-arrows-right-left", "transações"}
+    ]
+  end
+
+  defp open_finance_bullets do
+    [
+      {"hero-shield-check", "Consentimento seu, só de leitura, revogável no app do banco."},
+      {"hero-arrow-path", "Leitura no máximo a cada hora, ou na hora com o webhook."},
+      {"hero-calendar-days",
+       "Preenche os meses sem upload; importou o arquivo, ele passa a valer."}
+    ]
+  end
+
+  defp of_tiles do
+    [
+      {"lp-today-bank", "Em conta", "R$ 6.430,00", :neutro, "saldo somado de 2 conta(s)"},
+      {"lp-today-card-used", "Faturas abertas", "R$ 2.184,40", :despesa, "somando 2 cartão(ões)"},
+      {"lp-today-card-available", "Limite disponível", "R$ 9.815,60", :receita,
+       "de R$ 12.000,00 de limite total"}
+    ]
+  end
+
+  defp of_today_banks do
+    [
+      %{
+        name: "Nubank",
+        logo: ~p"/images/nubank-logo.png",
+        account: "4821",
+        balance: "R$ 4.250,00",
+        card: "Mastercard",
+        card_number: "7313",
+        invoice: "R$ 1.180,40",
+        usage: 42,
+        dates: "fecha 03/04 · vence 10/04"
+      },
+      %{
+        name: "Bradesco",
+        logo: ~p"/images/bradesco-logo.png",
+        account: "0937",
+        balance: "R$ 2.180,00",
+        card: "Visa",
+        card_number: "5520",
+        invoice: "R$ 1.004,00",
+        usage: 17,
+        dates: "fecha 20/03 · vence 28/03"
+      }
+    ]
+  end
+
+  # The year on the uploads calendar: Jul and Aug had no upload and came from Open Finance.
+  defp of_months do
+    kinds =
+      List.duplicate("calendar-count-3", 6) ++
+        List.duplicate("calendar-count-0", 2) ++
+        List.duplicate("calendar-count-3", 2) ++ List.duplicate("calendar-count-future", 2)
+
+    Enum.zip(~w(J F M A M J J A S O N D), kinds)
+  end
+
+  defp privacy_rows do
+    [
+      {"Salário Empresa Ltda", "Salário", "+R$ 8.450,00", "ui-money-receita"},
+      {"Pix Ana Souza", "Transferências", "-R$ 320,00", "ui-money-despesa"},
+      {"Mercado Pão de Açúcar", "Alimentação", "-R$ 486,20", "ui-money-despesa"},
+      {"Aluguel Imobiliária Lar", "Moradia", "-R$ 1.500,00", "ui-money-despesa"}
+    ]
+  end
+
+  # Self-hosted scene: tags around the company's server ({icon, text, x%, y%}), the links
+  # that leave your server ({icon, name, note, y%}), the badges of the last step and the
+  # data packets.
+  defp cloud_tags do
+    [
+      {"hero-user-circle", "perfil de consumo", 56, 13},
+      {"hero-share", "parceiros", 42, 87},
+      {"hero-exclamation-triangle", "vazamentos", 70, 87}
+    ]
+  end
+
+  defp self_hosted_links do
+    [
+      {"hero-sparkles", "Sua IA", "com a sua chave", 18},
+      {"hero-building-library", "Pluggy", "opcional", 50},
+      {"hero-envelope", "Seu email", "SMTP", 82}
+    ]
+  end
+
+  defp server_badges do
+    [
+      {"hero-lock-closed", "AES-256-GCM", 40, 16},
+      {"hero-envelope", "2FA por email", 70, 16},
+      {"hero-archive-box", "backup em 1 arquivo", 56, 86}
+    ]
+  end
+
+  # {icon, start}: the first three go to the company, the others come home.
+  defp self_hosted_packets do
+    [
+      {"hero-document-text", 0.02},
+      {"hero-banknotes", 0.07},
+      {"hero-key", 0.12},
+      {"hero-document-text", 0.42},
+      {"hero-chat-bubble-left-right", 0.47},
+      {"hero-tag", 0.52}
     ]
   end
 
@@ -1399,6 +1925,127 @@ defmodule GranaWeb.LandingLive do
        "Baixe o backup pela tela e restaure em qualquer instância. Quer recomeçar? Apague tudo e volte ao setup."}
     ]
   end
+
+  defp install_methods do
+    [
+      {"script", "hero-command-line", "Script + systemd"},
+      {"docker", "hero-cube", "Docker Compose"}
+    ]
+  end
+
+  @repo_raw "https://raw.githubusercontent.com/hjunior29/grana/main"
+
+  defp install_commands("script"),
+    do: ["curl -fsSL #{@repo_raw}/deploy/install.sh -o install.sh", "bash install.sh"]
+
+  defp install_commands("docker"),
+    do: ["curl -fsSLO #{@repo_raw}/docker-compose.yml", "docker compose up -d"]
+
+  # What deploy/install.sh and compose print along the way.
+  defp install_output("script") do
+    [
+      {:log, "Procurando a última versão"},
+      {:log, "Conferindo o sha256"},
+      {:log, "Instalando em /opt/grana"},
+      {:log, "Iniciando o serviço"},
+      {:text, "Grana instalado e rodando em http://localhost:4000"}
+    ]
+  end
+
+  defp install_output("docker") do
+    [
+      {:ok, "Volume grana-data    Created"},
+      {:ok, "Container grana      Started"}
+    ]
+  end
+
+  defp log_commands("script"),
+    do: [~s(sudo journalctl -u grana | grep -A3 "configuração inicial")]
+
+  defp log_commands("docker"), do: ["docker compose logs grana"]
+
+  # The banner `Grana.Setup` logs on a boot without an owner.
+  defp log_output do
+    [
+      {:text, "GRANA — configuração inicial"},
+      {:text, "Abra:   http://seu-servidor:4000/setup"},
+      {:code, "Código: ", setup_code()}
+    ]
+  end
+
+  defp setup_code, do: "K7QF-2M9X"
+
+  defp onboarding_steps do
+    [
+      {"hero-paint-brush", "Aparência"},
+      {"hero-envelope", "Email"},
+      {"hero-sparkles", "IA"},
+      {"hero-link", "Open Finance"}
+    ]
+  end
+
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :commands, :list, required: true
+  attr :output, :list, required: true
+
+  defp terminal(assigns) do
+    ~H"""
+    <div id={@id} class="lp-term lp-rise" style="--d: 0.12">
+      <div class="lp-term-bar">
+        <span class="lp-term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="lp-term-title">{@title}</span>
+        <button
+          type="button"
+          class="lp-copy"
+          data-copy={Enum.join(@commands, "\n")}
+          aria-label="Copiar os comandos"
+        >
+          <.icon name="hero-clipboard-document" class="size-4" />
+          <span data-copy-label>Copiar</span>
+        </button>
+      </div>
+      <div class="lp-term-body">
+        <p :for={command <- @commands} class="lp-term-cmd">
+          <span class="lp-term-prompt" aria-hidden="true">$</span>{command}
+        </p>
+        <p
+          :for={{line, i} <- Enum.with_index(@output)}
+          class="lp-term-out lp-t lp-t-rise"
+          style={"--a: #{0.35 + i * 0.08}; --b: #{0.42 + i * 0.08}"}
+        >
+          <%= case line do %>
+            <% {:log, text} -> %>
+              <b class="lp-term-ok">==&gt;</b> {text}
+            <% {:ok, text} -> %>
+              <b class="lp-term-ok">✔</b> <span class="whitespace-pre-wrap">{text}</span>
+            <% {:code, label, code} -> %>
+              <span class="whitespace-pre">{label}</span><mark class="lp-term-code">{code}</mark>
+            <% {:text, text} -> %>
+              <span class="whitespace-pre-wrap">{text}</span>
+          <% end %>
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  # The line (.lp-steps --f) reaches step n at p = 0.08 + 0.36 * (n - 1): the step lights up
+  # on the way there.
+  defp step_window(n) do
+    b = Float.round(0.08 + 0.36 * (n - 1), 2)
+    "--a: #{Float.round(b - 0.08, 2)}; --b: #{b}"
+  end
+
+  # Window of the i-th of n panels taking turns in a scene: the first is already on when
+  # the stage pins, the last stays until the scene ends.
+  defp panel_window(i, n) do
+    a = if i == 0, do: -0.04, else: Float.round(i / n, 3)
+    b = if i == n - 1, do: 1.5, else: Float.round((i + 1) / n, 3)
+    "--a: #{a}; --b: #{b}"
+  end
+
+  defp search_request, do: "gastos com saúde nos últimos 3 meses"
 
   defp brl_float(value), do: Grana.Money.format(Decimal.from_float(value))
 
