@@ -42,6 +42,7 @@ defmodule GranaWeb.AiSettingsHooks do
     |> assign(:ai_providers, Enum.map(providers, &%{&1 | api_key: nil}))
     |> assign(:ai_general, AI.describe(user, nil))
     |> assign(:ai_specialists, user.ai_specialists)
+    |> assign(:ai_saved_ref, user.ai_provider)
     |> assign(:ai_selected_ref, selected)
     |> assign(:ai_default_model, model)
     |> assign(:ai_default_form, default_form(selected, model))
@@ -103,7 +104,8 @@ defmodule GranaWeb.AiSettingsHooks do
     if is_nil(user.ai_model) or is_nil(AI.get_provider(user, user.ai_provider)) do
       case AI.get_provider(user, ref) do
         %ProviderConfig{kind: kind} ->
-          {:ok, user} = AI.set_default(user, ref, Grana.AI.Models.suggest(kind, models))
+          suggested = Grana.AI.Models.suggest(kind, models)
+          {:ok, user} = AI.set_default(user, ref, suggested)
 
           socket
           |> assign(:current_scope, Accounts.Scope.for_user(user))
@@ -114,7 +116,18 @@ defmodule GranaWeb.AiSettingsHooks do
           socket
       end
     else
-      socket
+      # Quando o usuário trocou para outro provedor no dropdown e os modelos acabaram de carregar
+      if socket.assigns.ai_selected_ref == ref and ref != user.ai_provider and
+           is_nil(socket.assigns.ai_default_form[:model].value) do
+        provider = AI.get_provider(user, ref)
+        suggested = provider && Grana.AI.Models.suggest(provider.kind, models)
+
+        socket
+        |> assign(:ai_default_model, suggested)
+        |> assign(:ai_default_form, default_form(ref, suggested))
+      else
+        socket
+      end
     end
   end
 
@@ -186,10 +199,29 @@ defmodule GranaWeb.AiSettingsHooks do
     if ref == socket.assigns.ai_selected_ref do
       {:halt, assign(socket, :ai_default_form, default_form(ref, params["model"]))}
     else
+      user = socket.assigns.current_scope.user
+      provider = AI.get_provider(user, ref)
+
+      model =
+        case socket.assigns.ai_models[ref] do
+          {:ok, models} when is_list(models) and models != [] ->
+            model_ids = Enum.map(models, & &1.id)
+
+            if ref == user.ai_provider and user.ai_model in model_ids do
+              user.ai_model
+            else
+              provider && Grana.AI.Models.suggest(provider.kind, models)
+            end
+
+          _ ->
+            if ref == user.ai_provider, do: user.ai_model, else: nil
+        end
+
       {:halt,
        socket
        |> assign(:ai_selected_ref, ref)
-       |> assign(:ai_default_form, default_form(ref, nil))
+       |> assign(:ai_default_model, model)
+       |> assign(:ai_default_form, default_form(ref, model))
        |> load_models()}
     end
   end

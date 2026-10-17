@@ -6,6 +6,7 @@ defmodule GranaWeb.AiComponents do
 
   attr :providers, :list, required: true
   attr :selected_ref, :string, default: nil
+  attr :saved_ref, :string, default: nil
   attr :default_form, :any, required: true
   attr :default_model, :string, default: nil
   attr :models, :map, required: true, doc: "ref => :loading | {:ok, lista} | {:error, msg}"
@@ -42,7 +43,14 @@ defmodule GranaWeb.AiComponents do
               type="select"
               label="Modelo"
               value={@default_form[:model].value || @default_model}
-              options={model_options(models, @default_model)}
+              options={
+                model_options(
+                  models,
+                  @default_form[:model].value || @default_model,
+                  @selected_ref,
+                  @saved_ref
+                )
+              }
             />
           <% {:error, message} -> %>
             <div>
@@ -305,13 +313,17 @@ defmodule GranaWeb.AiComponents do
     [AI.label(provider.kind), provider.base_url] |> Enum.reject(&is_nil/1) |> Enum.join(" · ")
   end
 
-  # Mantém o modelo salvo no select mesmo quando a API não o lista mais.
-  defp model_options(models, default_model) do
+  # Mantém o modelo salvo no select apenas quando o provedor selecionado for o do modelo salvo.
+  defp model_options(models, default_model, selected_ref, saved_ref) do
     listed = Enum.map(models, &{&1.name, &1.id})
+    ids = Enum.map(models, & &1.id)
 
-    if default_model in [nil | Enum.map(models, & &1.id)],
-      do: listed,
-      else: [{default_model, default_model} | listed]
+    if (is_nil(saved_ref) or selected_ref == saved_ref) and not is_nil(default_model) and
+         default_model not in ids do
+      [{default_model, default_model} | listed]
+    else
+      listed
+    end
   end
 
   defp ref(provider), do: AI.ProviderConfig.ref(provider)

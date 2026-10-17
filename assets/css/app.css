@@ -3325,12 +3325,30 @@ html {
 }
 
 /* Botão destrutivo com contraste nos dois temas */
-.btn.btn-error.btn-soft {
+.btn.btn-error.btn-soft:not(:hover):not(:active) {
   color: color-mix(in oklch, var(--color-error) 80%, black);
 }
 
-[data-theme="dark"] .btn.btn-error.btn-soft {
+[data-theme="dark"] .btn.btn-error.btn-soft:not(:hover):not(:active) {
   color: color-mix(in oklch, var(--color-error) 55%, white);
+}
+
+.btn.btn-error.btn-soft:hover,
+.btn.btn-error.btn-soft:active,
+.btn.btn-error:hover,
+.btn.btn-error:active,
+[data-theme="dark"] .btn.btn-error.btn-soft:hover,
+[data-theme="dark"] .btn.btn-error.btn-soft:active,
+[data-theme="dark"] .btn.btn-error:hover,
+[data-theme="dark"] .btn.btn-error:active {
+  background-color: var(--color-error);
+  color: #ffffff !important;
+}
+
+.btn.btn-ghost.text-error:hover,
+[data-theme="dark"] .btn.btn-ghost.text-error:hover {
+  background-color: color-mix(in oklch, var(--color-error) 15%, transparent);
+  color: color-mix(in oklch, var(--color-error) 90%, white);
 }
 
 /* Campos do .env: leitura, sem aparência de desabilitado */

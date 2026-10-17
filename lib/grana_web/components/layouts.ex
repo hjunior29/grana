@@ -177,7 +177,7 @@ defmodule GranaWeb.Layouts do
         id="floating-notices"
         class={[
           "fixed right-4 left-4 z-40 flex flex-col gap-3 sm:left-auto sm:w-96",
-          if(@import_toast == :top, do: "top-20", else: "bottom-4")
+          if(@import_toast == :top, do: "top-20", else: "bottom-20")
         ]}
       >
         <GranaWeb.ImportComponents.import_toast queue={@import_queue} />
@@ -196,7 +196,7 @@ defmodule GranaWeb.Layouts do
       id={@id}
       phx-hook="NotificationStack"
       aria-live="polite"
-      class="fixed right-4 top-20 z-50 flex flex-col gap-3 pointer-events-none"
+      class="fixed right-4 bottom-4 z-50 flex flex-col gap-3 pointer-events-none"
     >
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
