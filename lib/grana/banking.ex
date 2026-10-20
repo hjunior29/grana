@@ -1388,8 +1388,10 @@ defmodule Grana.Banking do
     # 2) Separate refunds (estornos) — these discount from expenses
     {refunds, rest} = Enum.split_with(relevant, &refund?/1)
 
-    # 3) Income = remaining credits (real income from extratos)
-    income_txns = Enum.filter(rest, &(&1.type == "credit"))
+    # 3) Income = remaining credits, but what comes back from an investment (a
+    #    redemption, a sale) is the user's own money: it nets the investments instead
+    {investment_credits, income_txns} =
+      rest |> Enum.filter(&(&1.type == "credit")) |> Enum.split_with(&investment_category?/1)
 
     total_income =
       Enum.reduce(income_txns, Decimal.new(0), fn t, acc ->
@@ -1405,10 +1407,7 @@ defmodule Grana.Banking do
         t.category && t.category.kind == "investment"
       end)
 
-    total_investments =
-      Enum.reduce(investment_debits, Decimal.new(0), fn t, acc ->
-        Decimal.add(acc, Decimal.abs(t.amount))
-      end)
+    total_investments = Decimal.sub(sum_abs(investment_debits), sum_abs(investment_credits))
 
     # 6) Gross expenses = debits in expense categories only
     gross_expenses =
@@ -1470,7 +1469,7 @@ defmodule Grana.Banking do
       transaction_count: length(relevant),
       income_count: length(income_txns),
       expense_count: length(expense_debits),
-      investment_count: length(investment_debits),
+      investment_count: length(investment_debits) + length(investment_credits),
       refund_count: length(refunds),
       internal_count: length(internal)
     }
@@ -1500,18 +1499,17 @@ defmodule Grana.Banking do
       not String.contains?(desc, "estorno")
   end
 
+  @refund_words ["estorno", "devoluc", "devolvid", "reembolso", "chargeback", "ajuste de compra"]
+
   # Any other credit on a card bill gives back a purchase (Bradesco lists a refund
   # under the merchant's name alone): it discounts the spending, it is not income.
+  # Banks write without accents too ("Devolucao Pix").
   defp refund?(t) do
-    desc = String.downcase(t.description)
+    desc = TransferIdentity.normalize(t.description)
 
     t.type == "credit" and
       (match?(%{bank_statement: %BankStatement{statement_type: "fatura"}}, t) or
-         String.contains?(desc, "estorno") or
-         String.contains?(desc, "devolução") or
-         String.contains?(desc, "devoluç") or
-         String.contains?(desc, "reembolso") or
-         String.contains?(desc, "chargeback"))
+         Enum.any?(@refund_words, &String.contains?(desc, &1)))
   end
 
   @doc """
@@ -1658,10 +1656,10 @@ defmodule Grana.Banking do
       relevant = Enum.reject(txns, &bill_payment?/1)
       {refunds, rest} = Enum.split_with(relevant, &refund?/1)
 
-      income =
-        rest
-        |> Enum.filter(&(&1.type == "credit"))
-        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
+      {investment_credits, income_credits} =
+        rest |> Enum.filter(&(&1.type == "credit")) |> Enum.split_with(&investment_category?/1)
+
+      income = sum_abs(income_credits)
 
       debits = Enum.filter(rest, &(&1.type == "debit"))
 
@@ -1673,10 +1671,7 @@ defmodule Grana.Banking do
           Decimal.add(acc, Decimal.abs(t.amount))
         end)
 
-      investments =
-        Enum.reduce(inv_debits, Decimal.new(0), fn t, acc ->
-          Decimal.add(acc, Decimal.abs(t.amount))
-        end)
+      investments = Decimal.sub(sum_abs(inv_debits), sum_abs(investment_credits))
 
       refund_total =
         Enum.reduce(refunds, Decimal.new(0), fn t, acc ->
