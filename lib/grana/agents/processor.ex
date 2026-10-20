@@ -264,7 +264,7 @@ defmodule Grana.Agents.Processor do
   For each transaction:
   - date: DD/MM/YYYY
   - description: the full description exactly as printed (do not translate)
-  - amount: absolute value as a decimal number with a dot (142.50, not 142,50)
+  - amount: absolute value as a decimal number with a dot (123.45, not 123,45)
   - type: "credit" for money coming in, "debit" for money going out
   """
 
@@ -300,16 +300,16 @@ defmodule Grana.Agents.Processor do
     - Purchases, fees, interest, insurance, annual fee and IOF are "debit".
     - The payment of the previous bill ("PAGTO. POR DEB EM C/C", "Pagamento recebido") and
       refunds (values printed negative) are "credit".
-    - Read every card section ("Cartão 4066 XXXX XXXX 5010" and the like): each holder or
+    - Read every card section ("Cartão 1234 XXXX XXXX 5678" and the like): each holder or
       card number lists its own transactions.
     - Use the amount in R$; the US$ column and the exchange rate are not amounts.
     - An installment keeps its "n/N" in the description even when glued to the name
-      ("MERCADOLIVRE*MERCADO01/02" is "MERCADOLIVRE*MERCADO 01/02"), with the date printed.
+      ("LOJA*EXEMPLO01/02" is "LOJA*EXEMPLO 01/02"), with the date printed.
     - Ignore "SALDO ANTERIOR", the bill summary ("Resumo da fatura", "Total da fatura"),
       payment options, minimum payment, installment offers and the rates table.
 
     Return ONLY a JSON array:
-    [{"date": "04/05/2026", "description": "PAGTO. POR DEB EM C/C", "amount": 4257.88, "type": "credit"}]
+    [{"date": "04/05/2026", "description": "PAGTO. POR DEB EM C/C", "amount": 1850.40, "type": "credit"}]
     """
   end
 
@@ -349,7 +349,7 @@ defmodule Grana.Agents.Processor do
       "Saldos Invest Fácil" table after it.
 
     Return ONLY a JSON array:
-    [{"date": "06/02/2026", "description": "Pix Qrcode Din - 99 Food", "amount": 17.18, "type": "debit"}]
+    [{"date": "06/02/2026", "description": "Pix Qrcode Din - Padaria Exemplo", "amount": 27.35, "type": "debit"}]
     """
   end
 
