@@ -147,8 +147,9 @@ if config_env() == :prod do
     System.get_env("SECRET_KEY_BASE") ||
       Grana.Release.Secrets.load_or_generate(secrets_dir, :secret_key_base)
 
-  # Chave de cifragem das credenciais (Grana.Encrypted.Binary). Guarde-a junto dos
-  # backups para poder levar as credenciais cifradas para outra instância.
+  # Chave de cifragem das credenciais (Grana.Encrypted.Binary). Guarde-a num lugar seguro,
+  # separada dos backups: com ela, um backup restaurado em outra instância leva as
+  # credenciais cifradas.
   cloak_key =
     System.get_env("CLOAK_KEY") ||
       Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
