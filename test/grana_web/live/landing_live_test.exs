@@ -249,6 +249,29 @@ defmodule GranaWeb.LandingLiveTest do
     refute has_element?(lv, "#instalacao-terminal-1", "bash install.sh")
   end
 
+  test "install on Fly.io: the fly commands, its tips and the app's own address", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/")
+
+    refute has_element?(lv, "#instalacao-fly")
+    lv |> element("#install-method-fly") |> render_click()
+
+    assert has_element?(lv, "#install-method-fly[aria-pressed=true]")
+    assert has_element?(lv, ~s|#instalacao-terminal-1 [data-copy*="deploy/fly.toml"]|)
+    assert has_element?(lv, "#instalacao-terminal-1", "fly volumes create grana_data")
+    assert has_element?(lv, "#instalacao-terminal-1", "fly deploy -a meu-grana --ha=false")
+    assert has_element?(lv, "#instalacao-fly .lp-install-tips", "Auto stop")
+    assert has_element?(lv, "#instalacao-terminal-2", "fly logs -a meu-grana --no-tail")
+    assert has_element?(lv, "#instalacao-terminal-2", "https://meu-grana.fly.dev/setup")
+    assert has_element?(lv, "#instalacao-passo-3", "https://meu-grana.fly.dev")
+  end
+
+  test "hosted elsewhere: PikaPods is offered as a request, not as ready", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/")
+
+    assert has_element?(lv, ~s|#instalacao-pikapods a[href="https://feedback.pikapods.com"]|)
+    assert has_element?(lv, "#instalacao-pikapods", "ainda não está lá")
+  end
+
   test "the Entrar CTA goes to login and nothing leads to sign-up or terms", %{conn: conn} do
     {:ok, lv, html} = live(conn, ~p"/")
 
