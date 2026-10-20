@@ -1,0 +1,87 @@
+                             Bradesco Internet Banking
+                             Data: 18/10/2026 - 10h42
+                             Nome: FULANO DE TAL SOUZA
+
+
+
+Extrato de: Ag: 1234 | Conta: 98765-4 | Entre 01/06/2026 e 30/06/2026
+
+
+
+ Data       Histórico                          Docto.                   Crédito (R$)   Débito (R$)    Saldo (R$)
+
+ 29/05/26 SALDO ANTERIOR                                                                                 8.512,40
+
+
+ 01/06/26 Rent.inv.facil                       1000001                          0,05                     8.512,45
+
+
+            Rent.inv.facil                     1000002                          0,31
+
+
+            Gasto c Credito                    1000003                                   - 3.921,15
+
+
+            Pix Enviado
+                                               1000004                                      - 60,00      4.531,61
+            Des: Maria Souza Pereira 01/06
+
+
+          Pix Recebido
+ 05/06/26 Rem: Fulano de Tal Souza             1000005                        190,00                     4.721,61
+          05/06
+
+
+            Pagto Cobranca
+                                               1000006                                     - 612,35
+            Escola Exemplo Ltda
+
+
+            Pix Enviado
+            Des: Beltrano Dias Camp Fe 05/06 1000007                                        - 18,40
+
+
+            Enc Lim Credito
+                                               1000008                                       - 0,52      4.090,34
+            Encargo - 06,15%
+
+
+            Pix Qrcode Din
+                                               1000009                                      - 50,00
+            Des: Padaria Central 05/06
+          Pix Enviado                        1000010           - 10,00     4.030,34
+          Des: Outra Pessoa Silva 05/06
+
+
+          Pix Qrcode Est
+
+
+ 08/06/26                                      1000011                                         - 45,00     3.985,34
+          Des: Cinema Centro 06/06
+
+
+            Pgto Rend - b3
+ 09/06/26                                      1000012                         17,90                     4.003,24
+            Fii Exemplo 
+
+
+           Total                                                           208,26      - 4.717,42     4.003,24
+
+
+Os dados acima têm como base 18/10/2026 às 10h42 e estão sujeitos a alterações.
+
+
+
+Saldos Invest Fácil
+
+ Data      Histórico                                                                                    Saldo (R$)
+
+ 01/06/26 Saldo Invest Fácil                                                                               3.410,18
+
+
+ 02/06/26 Saldo Invest Fácil                                                                               3.410,22
+
+
+    Fone Fácil Bradesco
+     SAC - Alô Bradesco        SAC - Deficiência Auditiva ou de Fala
+
