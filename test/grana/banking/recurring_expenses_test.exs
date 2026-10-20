@@ -27,7 +27,7 @@ defmodule Grana.Banking.RecurringExpensesTest do
     end
 
     test "remove sufixos de empresa e números soltos" do
-      assert RecurringExpenses.normalize("FLAMBRA LTDA") == "flambra"
+      assert RecurringExpenses.normalize("EMPRESA EXEMPLO LTDA") == "empresa exemplo"
       assert RecurringExpenses.normalize("NETFLIX.COM 12345") == "netflix com"
     end
   end
