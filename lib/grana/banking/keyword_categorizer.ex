@@ -1,9 +1,10 @@
 defmodule Grana.Banking.KeywordCategorizer do
   @moduledoc """
-  Classificador determinístico por palavra-chave, hoje focado em **Impostos e
-  Taxas**: reconhece IOF, DAS/DAS MEI (Simples Nacional), IRRF/IRPF, IPTU, IPVA,
-  INSS, FGTS, DARF, ISSQN/COFINS, além de multa, juros de mora, tarifa, anuidade,
-  imposto/tributo/encargo.
+  Classificador determinístico por palavra-chave: **Investimentos** (aplicação,
+  resgate, compra e venda de FII, ações e cripto, saldo da NuInvest, operação na B3,
+  capitalização) e **Impostos e Taxas** (IOF, DAS/DAS MEI (Simples Nacional),
+  IRRF/IRPF, IPTU, IPVA, INSS, FGTS, DARF, ISSQN/COFINS, além de multa, juros de mora,
+  tarifa, anuidade, imposto/tributo/encargo).
 
   Roda **antes da IA** na importação (preenchendo o que as regras do usuário não
   cobriram) e também alimenta o re-cálculo de dados já importados.
@@ -29,9 +30,37 @@ defmodule Grana.Banking.KeywordCategorizer do
   # a transação ainda está sem categoria.
   @tax_broad_contains @tax_strict_contains ++ ["taxa", "tarifa", "encargo"]
 
+  # Movements between the account and the user's own investments, by how the bank
+  # starts the description ("Resgate RDB", "Compra de FII - ABCD11", "Inv/ op na b3").
+  # Without a category they would count as spending or income.
+  @investment_prefixes [
+    "aplicacao",
+    "resgate",
+    "compra de fii",
+    "venda de fii",
+    "compra de acoes",
+    "venda de acoes",
+    "compra de criptomoedas",
+    "venda de criptomoedas",
+    "venda de nucoins",
+    "transferencia de saldo nuinvest",
+    "inv/ op na b3",
+    "capitalizacao"
+  ]
+
   @doc "Categoria determinística para a descrição, ou nil."
   def categorize(description) do
-    if tax?(description), do: "Impostos e Taxas", else: nil
+    cond do
+      investment?(description) -> "Investimentos"
+      tax?(description) -> "Impostos e Taxas"
+      true -> nil
+    end
+  end
+
+  @doc "Movimento entre a conta e os investimentos do próprio usuário."
+  def investment?(description) do
+    norm = normalize(description)
+    Enum.any?(@investment_prefixes, &String.starts_with?(norm, &1))
   end
 
   @doc "Reconhece imposto/taxa de forma ampla (inclui taxa/tarifa genéricas)."
