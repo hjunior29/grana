@@ -336,7 +336,7 @@ defmodule GranaWeb.CategoriesLive do
               <.input
                 field={@rule_form[:pattern]}
                 label="Novo termo"
-                placeholder="Ex: ifood"
+                placeholder="Ex: padaria"
                 autocomplete="off"
                 maxlength="120"
               />

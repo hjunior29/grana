@@ -759,14 +759,14 @@ defmodule GranaWeb.LandingLive do
                   <div class="ui-ai-search-result lp-t lp-t-rise" style="--a: 0.15; --b: 0.19">
                     <span class="ui-ai-query">
                       <code class="ui-query-code">
-                        (unimed OR drogasil OR "plano de saúde") AND type:expense AND date>=today-3m
+                        ("vida plena" OR farmacia OR "plano de saúde") AND type:expense AND date>=today-3m
                       </code>
                       <span class="ui-ai-query-action">
                         <.icon name="hero-arrow-down-left" class="size-3.5" /> Usar
                       </span>
                     </span>
                     <p class="ui-help mt-1.5 flex flex-wrap items-center gap-x-2">
-                      <span>Inclui Unimed e Drogasil, que estavam fora da categoria Saúde.</span>
+                      <span>Inclui Vida Plena e farmácias, que estavam fora de Saúde.</span>
                       <span class="ui-caption">gemini-2.5-flash</span>
                     </p>
                     <span class="ui-ai-search-close" aria-hidden="true">
@@ -862,13 +862,13 @@ defmodule GranaWeb.LandingLive do
                     <p>
                       Saúde levou <strong class="ui-private ui-money-despesa">R$ 1.264,30</strong>
                       nos últimos três meses,
-                      incluindo a <span class="ui-private-name">Unimed</span>, que estava em Pagamentos.
+                      incluindo a <span class="ui-private-name">Vida Plena</span>, que estava em Pagamentos.
                     </p>
                     <table class="lp-t lp-t-wipe" style="--a: 0.9; --b: 0.97">
                       <thead>
                         <tr>
                           <th>Mês</th>
-                          <th>Unimed</th>
+                          <th>Vida Plena</th>
                           <th>Farmácias</th>
                           <th class="text-right">Total</th>
                         </tr>
@@ -1625,7 +1625,7 @@ defmodule GranaWeb.LandingLive do
 
   defp category_bullets do
     [
-      {"hero-bolt", "Regras suas: \"ifood\" vai para Alimentação, sempre."},
+      {"hero-bolt", "Regras suas: \"delivery\" vai para Alimentação, sempre."},
       {"hero-sparkles", "A IA só categoriza o que nenhuma regra pegou, com o seu provedor."},
       {"hero-academic-cap", "Corrigiu uma categoria? Vira regra para as próximas."}
     ]
@@ -1633,12 +1633,12 @@ defmodule GranaWeb.LandingLive do
 
   defp category_rows do
     [
-      {"02/03", "iFood *Restaurante", "Alimentação", "#F59E0B", "- R$ 67,40", :rule},
-      {"03/03", "Uber *Trip", "Transporte", "#3B82F6", "- R$ 32,50", :rule},
+      {"02/03", "Delivery *Restaurante", "Alimentação", "#F59E0B", "- R$ 67,40", :rule},
+      {"03/03", "Corrida *App", "Transporte", "#3B82F6", "- R$ 32,50", :rule},
       {"05/03", "Transferência recebida", "Salário", "#22C55E", "+ R$ 5.500,00", :rule},
       {"07/03", "Aluguel março", "Moradia", "#8B5CF6", "- R$ 1.500,00", :rule},
-      {"08/03", "Sp Brilliant Labs", "Compras", "#F97316", "- R$ 89,70", :ai},
-      {"12/03", "Unimed Goiânia", "Saúde", "#EF4444", "- R$ 412,00", :ai}
+      {"08/03", "Sp Loja Aurora", "Compras", "#F97316", "- R$ 89,70", :ai},
+      {"12/03", "Vida Plena Saúde", "Saúde", "#EF4444", "- R$ 412,00", :ai}
     ]
   end
 
@@ -1768,9 +1768,9 @@ defmodule GranaWeb.LandingLive do
 
   defp processed_rows do
     [
-      {"Drogaria São Paulo", "Saúde", "R$ 86,40"},
+      {"Farmácia Bem-Estar", "Saúde", "R$ 86,40"},
       {"Posto Shell", "Transporte", "R$ 250,00"},
-      {"Amazon Prime", "Assinaturas", "R$ 19,90"}
+      {"Streaming Plus", "Assinaturas", "R$ 19,90"}
     ]
   end
 
