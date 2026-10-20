@@ -4,6 +4,7 @@ defmodule Grana.Banking.MovementRulesTest do
   import Grana.AccountsFixtures
 
   alias Grana.Banking
+  alias Grana.Banking.StatementProcessor
 
   setup do
     user = user_fixture()
@@ -101,5 +102,30 @@ defmodule Grana.Banking.MovementRulesTest do
            ]
 
     refute internal["Transferência enviada pelo Pix - Fulano"]
+  end
+
+  test "two Bradesco bills keep each installment of a purchase", ctx do
+    bill = fn exported, rows ->
+      "Data: #{exported} 11:20:18\r\rData;Histórico;Valor(US$);Valor(R$);\r\r" <>
+        Enum.join(rows, "\r\r")
+    end
+
+    for {name, csv} <- [
+          {"fatura-04.csv",
+           bill.("17/04/2026", ["05/02;LOJA EXEMPLO 2/3;0,00;132,00", "15/03;POSTO ;0,00;80,00"])},
+          {"fatura-05.csv",
+           bill.("17/05/2026", ["05/02;LOJA EXEMPLO 3/3;0,00;132,00", "15/04;POSTO ;0,00;80,00"])}
+        ] do
+      assert {:ok, _} = StatementProcessor.process(csv, "bradesco", "fatura", ctx.user.id, name)
+    end
+
+    installments =
+      ctx.user.id
+      |> Banking.list_transactions()
+      |> Enum.filter(&(&1.description == "LOJA EXEMPLO"))
+      |> Enum.map(&{&1.installment_current, &1.date})
+      |> Enum.sort()
+
+    assert installments == [{2, ~D[2026-03-05]}, {3, ~D[2026-04-05]}]
   end
 end

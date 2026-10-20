@@ -10,6 +10,31 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
     |> Enum.reject(&is_metadata_line?/1)
     |> Enum.map(&parse_line(&1, ref))
     |> Enum.reject(&is_nil/1)
+    |> charge_dates()
+  end
+
+  @doc """
+  Bradesco prints a purchase's installments with the purchase date ("18/02;LOJA 4/5"
+  on the July bill), unlike its own charges ("26/06;ANUIDADE DIFERENCIADA 5/12"). An
+  installment dated before the bill's cycle (over a month before its last movement) is
+  charged n - 1 months after that date: dated there, it falls in the month it is paid,
+  as Nubank prints it, and it does not pass for a duplicate of the other installments,
+  which share date, description and amount.
+  """
+  def charge_dates([]), do: []
+
+  def charge_dates(transactions) do
+    last = transactions |> Enum.map(& &1.date) |> Enum.max(Date)
+
+    Enum.map(transactions, fn
+      %{installment_current: n, date: date} = txn when is_integer(n) and n > 1 ->
+        if Date.diff(last, date) > 31,
+          do: %{txn | date: Date.shift(date, month: n - 1)},
+          else: txn
+
+      txn ->
+        txn
+    end)
   end
 
   # Data de referência da fatura (mês/ano do cabeçalho), usada para inferir o ano
