@@ -131,7 +131,7 @@ jobs:
   # Constrói a release de PRODUÇÃO e a sobe sem nenhuma variável de ambiente (só o
   # DATA_DIR, num diretório temporário): confirma que o boot gera os segredos, migra
   # o banco, responde em /health, imprime o código do setup no log e que a
-  # instância sem dono redireciona tudo para /setup.
+  # instância sem dono redireciona o app para /setup (a landing em / é pública).
   #
   # Só roda fora de PR para não consumir minutos desnecessariamente em branches.
   release-smoke:
@@ -184,10 +184,31 @@ jobs:
           test -s "$RUNNER_TEMP/grana-smoke/secrets/cloak_key"
           test -s "$RUNNER_TEMP/grana-smoke/grana.db"
 
-      - name: Sem dono, / redireciona para /setup
+      - name: Sem dono, o app redireciona para /setup
         run: |
-          curl -si --max-time 5 http://localhost:4002/ | tr -d '\r' | grep -iE '^location: .*/setup$'
+          curl -si --max-time 5 http://localhost:4002/dashboard | tr -d '\r' | grep -iE '^location: .*/setup$'
+
+      # Como atrás de um proxy HTTPS: com PUBLIC_URL em https a release sobe, e o socket do
+      # LiveView aceita a origem https (o esquema vem do X-Forwarded-Proto).
+      - name: Atrás de proxy HTTPS, sobe e o LiveView conecta
+        run: |
+          PID=$(DATA_DIR="$RUNNER_TEMP/grana-smoke" _build/prod/rel/grana/bin/grana pid)
+          DATA_DIR="$RUNNER_TEMP/grana-smoke" _build/prod/rel/grana/bin/grana stop
+          for i in $(seq 1 30); do
+            kill -0 "$PID" 2> /dev/null || break
+            sleep 1
+          done
+          DATA_DIR="$RUNNER_TEMP/grana-smoke" PHX_SERVER=true TRUST_PROXY_HEADERS=true \
+            PUBLIC_URL=https://grana.example.com \
+            _build/prod/rel/grana/bin/grana start > "$RUNNER_TEMP/grana-https.log" 2>&1 &
+          for i in $(seq 1 20); do
+            curl -sf --max-time 3 http://localhost:4002/health > /dev/null && break
+            sleep 2
+          done
+          curl -s --max-time 5 -H "Host: grana.example.com" -H "X-Forwarded-Proto: https" \
+            -H "Origin: https://grana.example.com" "http://localhost:4002/live/longpoll?vsn=2.0.0" \
+            | grep -q '"status":410' || { cat "$RUNNER_TEMP/grana-https.log"; exit 1; }
 
       - name: Parar app
         if: always()
-        run: _build/prod/rel/grana/bin/grana stop || true
+        run: DATA_DIR="$RUNNER_TEMP/grana-smoke" _build/prod/rel/grana/bin/grana stop || true
