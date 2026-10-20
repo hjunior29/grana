@@ -64,14 +64,17 @@ defmodule Grana.Banking.PrivateNames do
 
   # Halves the names until each part compiles, instead of guessing the size limit:
   # it depends on the characters (accents take more room in a case-insensitive regex).
-  defp compile([_name] = names), do: [Regex.compile!(source(names), "iu")]
-
+  # A single name that still does not fit is no name (a whole file glued into one
+  # description) and is left out.
   defp compile(names) do
-    case Regex.compile(source(names), "iu") do
-      {:ok, regex} ->
+    case {Regex.compile(source(names), "iu"), names} do
+      {{:ok, regex}, _names} ->
         [regex]
 
-      {:error, _too_large} ->
+      {{:error, _too_large}, [_name]} ->
+        []
+
+      {{:error, _too_large}, names} ->
         {longer, shorter} = Enum.split(names, div(length(names), 2))
         compile(longer) ++ compile(shorter)
     end

@@ -105,4 +105,21 @@ defmodule Grana.Banking.MerchantsTest do
              {", não CLIENTE NUMERO 20000 DA SILVA PEREIRA.", false}
            ]
   end
+
+  test "PrivateNames.pattern/1 leaves out a name too long for any regex" do
+    user = user_fixture()
+
+    transactions_fixture(user, [
+      %{description: "PIX - " <> String.duplicate("a", 40_000)},
+      %{description: "PIX - CLIENTE EXEMPLO"}
+    ])
+
+    pattern = PrivateNames.pattern(user.id)
+
+    assert PrivateNames.split("Pix para CLIENTE EXEMPLO.", pattern) == [
+             {"Pix para ", false},
+             {"CLIENTE EXEMPLO", true},
+             {".", false}
+           ]
+  end
 end
