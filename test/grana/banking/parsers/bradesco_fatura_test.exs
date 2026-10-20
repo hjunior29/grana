@@ -104,4 +104,17 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
     assert Decimal.equal?(payment.amount, Decimal.new("2875.60"))
     assert purchase.type == "debit"
   end
+
+  test "dates a purchase's later installment in the month it is charged, not its own charges" do
+    csv = """
+    Data: 18/10/2026 11:20:18\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r26/06;ANUIDADE DIFERENCIADA 5/12;0,00;98,00\r\r20/06;Clinica Exemplo 1/4;0,00;150,00\r\r18/02;LOJA EXEMPLO CENTRO 4/5;0,00;412,30\r\r27/06;ZP*BAR EXEMPLO ;0,00;47,00
+    """
+
+    assert csv |> BradescoFatura.parse() |> Map.new(&{&1.description, &1.date}) == %{
+             "ANUIDADE DIFERENCIADA" => ~D[2026-06-26],
+             "Clinica Exemplo" => ~D[2026-06-20],
+             "LOJA EXEMPLO CENTRO" => ~D[2026-05-18],
+             "ZP*BAR EXEMPLO" => ~D[2026-06-27]
+           }
+  end
 end
