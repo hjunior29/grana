@@ -22,24 +22,26 @@ defmodule Grana.Agents.Processor do
   alias Grana.Banking.Parsers.PdfText
 
   @doc """
-  Transactions in the PDF. For `"outro"` (unknown bank) it also returns the detected bank
-  and document type: `{:ok, transactions, %{detected_bank:, detected_type:}}`.
+  Transactions in the PDF, an account statement (`"extrato"`) or a card bill (`"fatura"`).
+  For `"outro"` (unknown bank) it also returns the detected bank and document type:
+  `{:ok, transactions, %{detected_bank:, detected_type:}}`.
   """
-  def extract_pdf(pdf_bytes, bank, config) do
+  def extract_pdf(pdf_bytes, bank, config, statement_type \\ "extrato") do
+    prompt = pdf_prompt(bank, statement_type)
+
     message =
       case PdfText.extract(pdf_bytes) do
         {:ok, text} ->
           sanitized_text = redact_sensitive_info(text)
 
-          prompt =
-            "#{pdf_prompt(bank)}\n\nDocument text:\n#{PromptSanitizer.wrap_transactions(sanitized_text)}"
-
-          Message.new_user!(prompt)
+          Message.new_user!(
+            "#{prompt}\n\nDocument text:\n#{PromptSanitizer.wrap_transactions(sanitized_text)}"
+          )
 
         _ ->
           Message.new_user!([
             ContentPart.file!(Base.encode64(pdf_bytes), media: :pdf, filename: "statement.pdf"),
-            ContentPart.text!(pdf_prompt(bank))
+            ContentPart.text!(prompt)
           ])
       end
 
@@ -218,12 +220,13 @@ defmodule Grana.Agents.Processor do
 
   defp to_transaction(_item), do: nil
 
+  # The model may copy a two-digit year as printed ("05/06/26"), which would be year 26.
   defp parse_date(text) do
     with [day, month, year] <- String.split(text, "/"),
          {d, ""} <- Integer.parse(day),
          {m, ""} <- Integer.parse(month),
          {y, ""} <- Integer.parse(year) do
-      Date.new(y, m, d)
+      Date.new(if(y < 100, do: 2000 + y, else: y), m, d)
     end
   end
 
@@ -272,7 +275,45 @@ defmodule Grana.Agents.Processor do
   - For Pix transfers, include the name of the recipient or sender.
   """
 
-  defp pdf_prompt("nubank") do
+  defp pdf_prompt("outro", _statement_type) do
+    """
+    Read this bank document PDF.
+    1. Identify the issuing BANK: lowercase, no spaces or accents (itau, inter, c6bank, bancodobrasil).
+    2. Identify the document type: "extrato" (bank account) or "fatura" (credit card bill).
+    3. Extract ALL individual transactions.
+    #{@transaction_fields}
+    #{@common_rules}- Ignore subtotals, balances, headers and summary lines.
+    - On a credit card bill, purchases, fees and interest are "debit"; the payment of the
+      previous bill and refunds are "credit"; the previous balance is not a transaction.
+
+    Return ONLY JSON:
+    {"bank": "itau", "document_type": "extrato", "transactions": [{"date": "01/01/2026", "description": "...", "amount": 100.00, "type": "debit"}]}
+    """
+  end
+
+  defp pdf_prompt(bank, "fatura") do
+    """
+    Extract ALL transactions from this #{bank_name(bank)} credit card bill PDF.
+    #{@transaction_fields}
+    #{@common_rules}- Dates are often printed as DD/MM: take the year from the bill's issue or due
+      date, and a month later than the due month belongs to the previous year.
+    - Purchases, fees, interest, insurance, annual fee and IOF are "debit".
+    - The payment of the previous bill ("PAGTO. POR DEB EM C/C", "Pagamento recebido") and
+      refunds (values printed negative) are "credit".
+    - Read every card section ("Cartão 4066 XXXX XXXX 5010" and the like): each holder or
+      card number lists its own transactions.
+    - Use the amount in R$; the US$ column and the exchange rate are not amounts.
+    - An installment keeps its "n/N" in the description even when glued to the name
+      ("MERCADOLIVRE*MERCADO01/02" is "MERCADOLIVRE*MERCADO 01/02"), with the date printed.
+    - Ignore "SALDO ANTERIOR", the bill summary ("Resumo da fatura", "Total da fatura"),
+      payment options, minimum payment, installment offers and the rates table.
+
+    Return ONLY a JSON array:
+    [{"date": "04/05/2026", "description": "PAGTO. POR DEB EM C/C", "amount": 4257.88, "type": "credit"}]
+    """
+  end
+
+  defp pdf_prompt("nubank", _statement_type) do
     """
     Extract ALL transactions from this Nubank bank statement PDF.
     #{@transaction_fields}
@@ -286,35 +327,33 @@ defmodule Grana.Agents.Processor do
     """
   end
 
-  defp pdf_prompt("bradesco") do
+  defp pdf_prompt("bradesco", _statement_type) do
     """
-    Extract ALL transactions from this Bradesco bank statement PDF.
+    Extract ALL transactions from this Bradesco bank statement PDF. It comes in two layouts:
+    "Bradesco Celular" (aligned columns, debits unsigned in the Débito column) and
+    "Bradesco Internet Banking" (debits printed with a minus sign, "- 60,00", in columns
+    that do not line up with the header).
     #{@transaction_fields}
-    #{@common_rules}- Ignore "COD. LANC. 0" (opening balance) and "Total" lines.
-    - When there is a "DES: name" or "REM: name" line, append the name after " - ".
-    - "credit" when the value is in the Crédito column, "debit" when in the Débito column.
-    - A line with values in both columns is two transactions.
+    #{@common_rules}- Dates may have a two-digit year ("05/06/26"): write the full year (05/06/2026).
+    - A transaction spans several lines: its kind ("Pix Enviado", "Pagto Cobranca"), the
+      line with the Docto. number and the amount, and the counterparty ("Des: name",
+      "Rem: name" or the payee alone). Append the counterparty after " - ".
+    - The date is the DD/MM/YY(YY) at the start of a line; a transaction without one has the
+      date of the transaction above it. A bare "DD/MM" after a name is the Pix date, not
+      the posting date.
+    - An amount with a minus sign is a "debit"; otherwise the column says it: Crédito is
+      "credit", Débito is "debit". A line with values in both columns is two transactions.
+    - The last number of a line, under Saldo (R$), is the running balance: never a
+      transaction and never part of an amount.
+    - Ignore "SALDO ANTERIOR", "COD. LANC. 0", the "Total" line and the whole
+      "Saldos Invest Fácil" table after it.
 
     Return ONLY a JSON array:
-    [{"date": "06/02/2026", "description": "PIX QR CODE DINAMICO - 99 FOOD", "amount": 17.18, "type": "debit"}]
+    [{"date": "06/02/2026", "description": "Pix Qrcode Din - 99 Food", "amount": 17.18, "type": "debit"}]
     """
   end
 
-  defp pdf_prompt("outro") do
-    """
-    Read this bank document PDF.
-    1. Identify the issuing BANK: lowercase, no spaces or accents (itau, inter, c6bank, bancodobrasil).
-    2. Identify the document type: "extrato" (bank account) or "fatura" (credit card bill).
-    3. Extract ALL individual transactions.
-    #{@transaction_fields}
-    #{@common_rules}- Ignore subtotals, balances, headers and summary lines.
-
-    Return ONLY JSON:
-    {"bank": "itau", "document_type": "extrato", "transactions": [{"date": "01/01/2026", "description": "...", "amount": 100.00, "type": "debit"}]}
-    """
-  end
-
-  defp pdf_prompt(_bank) do
+  defp pdf_prompt(_bank, _statement_type) do
     """
     Extract ALL transactions from this bank statement PDF.
     #{@transaction_fields}
@@ -324,4 +363,8 @@ defmodule Grana.Agents.Processor do
     [{"date": "01/01/2026", "description": "...", "amount": 100.00, "type": "debit"}]
     """
   end
+
+  defp bank_name("nubank"), do: "Nubank"
+  defp bank_name("bradesco"), do: "Bradesco"
+  defp bank_name(_bank), do: "bank"
 end
