@@ -410,6 +410,17 @@ defmodule Grana.Banking do
   defp investment_category?(%{category: %{kind: "investment"}}), do: true
   defp investment_category?(_), do: false
 
+  @doc """
+  Fixed expenses still to be charged this month (`RecurringExpenses.pending/2` over the
+  last 6 months, every bank and source): what the free balance of the month still owes.
+  """
+  def pending_fixed_expenses(user_id, today \\ Grana.LocalTime.today()) do
+    user_id
+    |> recurring_analysis(window: 6)
+    |> Map.fetch!(:fixed)
+    |> Grana.Banking.RecurringExpenses.pending(today)
+  end
+
   defp distinct_upload_counts(rows) do
     rows
     |> Enum.reduce(MapSet.new(), fn {date, statement_id}, acc ->
@@ -1382,6 +1393,10 @@ defmodule Grana.Banking do
   end
 
   defp do_monthly_summary(user_id, year, month, opts) do
+    user_id |> month_transactions(year, month, opts) |> build_summary()
+  end
+
+  defp month_transactions(user_id, year, month, opts) do
     date_from = Date.new!(year, month, 1)
     date_to = Date.end_of_month(date_from)
 
@@ -1395,9 +1410,7 @@ defmodule Grana.Banking do
           [date_from: date_from, date_to: date_to] ++ opts
       end
 
-    transactions = list_transactions(user_id, base_opts)
-
-    build_summary(transactions)
+    list_transactions(user_id, base_opts)
   end
 
   def all_time_summary(user_id, opts \\ []) do
@@ -1417,6 +1430,10 @@ defmodule Grana.Banking do
   end
 
   defp do_yearly_summary(user_id, year, opts) do
+    user_id |> year_transactions(year, opts) |> build_summary()
+  end
+
+  defp year_transactions(user_id, year, opts) do
     date_from = Date.new!(year, 1, 1)
     date_to = Date.new!(year, 12, 31)
 
@@ -1435,9 +1452,109 @@ defmodule Grana.Banking do
           [date_from: date_from, date_to: date_to] ++ opts
       end
 
-    transactions = list_transactions(user_id, base_opts)
+    list_transactions(user_id, base_opts)
+  end
 
-    build_summary(transactions)
+  @doc """
+  What the dashboard cards compare a period with. For a month: the previous month and
+  the monthly average of the last 6 months with movement before it. For a year (`month`
+  nil): the previous year, with no average. Same filters as the summaries.
+
+  Returns `%{previous: %{label, income, expenses, investments}, average: nil |
+  %{months, income, expenses, investments}}`.
+  """
+  def period_trend(user_id, year, month, opts \\ [])
+
+  def period_trend(user_id, year, nil, opts) do
+    previous =
+      user_id
+      |> monthly_income_expenses(year - 1, opts)
+      |> sum_movement()
+      |> Map.put(:label, to_string(year - 1))
+
+    %{previous: previous, average: nil}
+  end
+
+  def period_trend(user_id, year, month, opts) do
+    before =
+      (monthly_income_expenses(user_id, year - 1, opts)
+       |> Enum.map(&Map.put(&1, :year, year - 1))) ++
+        (monthly_income_expenses(user_id, year, opts) |> Enum.map(&Map.put(&1, :year, year)))
+
+    {prev_year, prev_month} = if month == 1, do: {year - 1, 12}, else: {year, month - 1}
+
+    previous =
+      before
+      |> Enum.filter(&(&1.year == prev_year and &1.month == prev_month))
+      |> sum_movement()
+      |> Map.put(:label, "#{month_name(prev_month)}/#{prev_year}")
+
+    history =
+      before
+      |> Enum.filter(&({&1.year, &1.month} < {year, month} and movement?(&1)))
+      |> Enum.sort_by(&{&1.year, &1.month})
+      |> Enum.take(-6)
+
+    average =
+      case history do
+        [] ->
+          nil
+
+        months ->
+          months
+          |> sum_movement()
+          |> Map.new(fn {key, total} ->
+            {key, total |> Decimal.div(length(months)) |> Decimal.round(2)}
+          end)
+          |> Map.put(:months, length(months))
+      end
+
+    %{previous: previous, average: average}
+  end
+
+  defp movement?(month) do
+    Enum.any?([month.income, month.expenses, month.investments], &Decimal.gt?(&1, 0))
+  end
+
+  defp sum_movement(months) do
+    Enum.reduce(
+      months,
+      %{income: Decimal.new(0), expenses: Decimal.new(0), investments: Decimal.new(0)},
+      fn m, acc ->
+        %{
+          income: Decimal.add(acc.income, m.income),
+          expenses: Decimal.add(acc.expenses, m.expenses),
+          investments: Decimal.add(acc.investments, m.investments)
+        }
+      end
+    )
+  end
+
+  @doc """
+  Where the money of a period went, by merchant: the same expenses the summary counts
+  (no internal transfers, investments or credits), grouped like `Grana.Banking.Merchants`.
+  `period` is `{:month, year, month}`, `{:year, year}` or `:total`; `opts` are the
+  summary filters (`:bank`, `:statement_type`, `:type`).
+  """
+  def merchant_spending(user_id, period, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:merchant_spending",
+      user_id,
+      {period, Enum.sort(opts)},
+      fn ->
+        transactions =
+          case period do
+            {:month, year, month} -> month_transactions(user_id, year, month, opts)
+            {:year, year} -> year_transactions(user_id, year, opts)
+            :total -> list_transactions(user_id, opts)
+          end
+
+        transactions
+        |> Enum.filter(&(&1.type == "debit" and not &1.is_internal_transfer))
+        |> Enum.reject(&investment_category?/1)
+        |> Grana.Banking.Merchants.spending()
+      end
+    )
   end
 
   defp build_summary(transactions) do
@@ -1869,7 +1986,7 @@ defmodule Grana.Banking do
           end
         end)
 
-      %{label: month_label, total: total}
+      %{label: month_label, date: projected_date, total: total}
     end)
     |> Enum.reject(fn %{total: t} -> Decimal.compare(t, 0) == :eq end)
   end

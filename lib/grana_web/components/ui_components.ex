@@ -181,7 +181,7 @@ defmodule GranaWeb.UiComponents do
   @doc """
   Número com rótulo; use dentro de `grid grid-cols-2 sm:grid-cols-3 gap-3`. `tone` colore o
   valor pelo sentido do dinheiro (`receita`, `despesa`, `investimento`) e `caption` é a
-  legenda abaixo.
+  legenda abaixo. O slot `trend` fica ao lado do rótulo (ex.: a variação contra o mês anterior).
   """
   attr :id, :string, required: true
   attr :label, :string, required: true
@@ -190,6 +190,7 @@ defmodule GranaWeb.UiComponents do
   attr :caption, :string, default: nil
   attr :navigate, :string, default: nil, doc: "vira um link com destaque ao passar o mouse"
   attr :muted, :boolean, default: false, doc: "sem dados: valor e legenda esmaecidos"
+  slot :trend
 
   def stat_tile(assigns) do
     ~H"""
@@ -202,6 +203,7 @@ defmodule GranaWeb.UiComponents do
           tone={@tone}
           caption={@caption}
           muted={@muted}
+          trend={@trend}
         />
       </.link>
     <% else %>
@@ -213,6 +215,7 @@ defmodule GranaWeb.UiComponents do
           tone={@tone}
           caption={@caption}
           muted={@muted}
+          trend={@trend}
         />
       </div>
     <% end %>
@@ -225,10 +228,15 @@ defmodule GranaWeb.UiComponents do
   attr :tone, :atom, required: true
   attr :caption, :string, default: nil
   attr :muted, :boolean, required: true
+  attr :trend, :list, default: []
 
   defp stat_body(assigns) do
     ~H"""
-    <p class="ui-caption">{@label}</p>
+    <p :if={@trend == []} class="ui-caption">{@label}</p>
+    <div :if={@trend != []} class="flex items-center justify-between gap-1">
+      <p class="ui-caption truncate">{@label}</p>
+      {render_slot(@trend)}
+    </div>
     <p
       id={"#{@id}-value"}
       class={[
