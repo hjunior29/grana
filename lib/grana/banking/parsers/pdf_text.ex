@@ -66,9 +66,9 @@ defmodule Grana.Banking.Parsers.PdfText do
   end
 
   defp run(exe, path) do
-    case System.cmd(exe, ["-layout", "-enc", "UTF-8", "-nopgbrk", path, "-"],
-           stderr_to_stdout: false
-         ) do
+    # Page breaks stay ("\f" before a page's first line): a layout whose blocks are not
+    # apart by a blank line across pages needs them (`Grana.Banking.Parsers.BradescoPdf`).
+    case System.cmd(exe, ["-layout", "-enc", "UTF-8", path, "-"], stderr_to_stdout: false) do
       {output, 0} ->
         if String.trim(output) == "" do
           {:error, :no_text_layer}

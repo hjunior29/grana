@@ -69,8 +69,14 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
   #   * `{:reset, saldo}`      — linha COD. LANC. (saldo inicial da folha)
   #   * `{:txn, txn, saldo}`   — uma transação e o saldo impresso ao lado dela
   defp events(text) do
+    if signed_layout?(text), do: signed_events(text), else: column_events(text)
+  end
+
+  defp column_events(text) do
     text
     |> String.split("\n")
+    # The page break would push the page's first line one column to the right.
+    |> Enum.map(&String.replace_prefix(&1, "\f", ""))
     |> Enum.reduce(%{cols: nil, last_date: nil, block: [], events: []}, &handle_line/2)
     |> flush_block()
     |> Map.fetch!(:events)
@@ -125,26 +131,27 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
          true <- description != "",
          false <- subtotal?(description),
          {amount, type} when not is_nil(amount) <- movement(lines, cols) do
-      {final_desc, inst_current, inst_total} = InstallmentParser.extract(description)
-      group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
-      signed = if type == "debit", do: Decimal.negate(amount), else: amount
-
-      txn = %{
-        date: date,
-        amount: signed,
-        type: type,
-        identifier: docto(lines, cols),
-        description: final_desc,
-        original_description: description,
-        installment_current: inst_current,
-        installment_total: inst_total,
-        installment_group_id: group_id
-      }
-
-      {:txn, txn, saldo}
+      {:txn, new_txn(date, description, amount, type, docto(lines, cols)), saldo}
     else
       _ -> nil
     end
+  end
+
+  defp new_txn(date, description, amount, type, identifier) do
+    {final_desc, inst_current, inst_total} = InstallmentParser.extract(description)
+    group_id = InstallmentParser.generate_group_id(final_desc, inst_total)
+
+    %{
+      date: date,
+      amount: if(type == "debit", do: Decimal.negate(amount), else: amount),
+      type: type,
+      identifier: identifier,
+      description: final_desc,
+      original_description: description,
+      installment_current: inst_current,
+      installment_total: inst_total,
+      installment_group_id: group_id
+    }
   end
 
   defp subtotal?(description) do
@@ -166,8 +173,9 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
   defp check({:reset, saldo}, {_running, issues}), do: {saldo, issues}
   # transação antes de qualquer COD. LANC.: usa o saldo impresso como baseline
   defp check({:txn, _txn, saldo}, {nil, issues}), do: {saldo, issues}
-  # sem saldo impresso legível: não dá pra conferir, mantém o acumulado
-  defp check({:txn, _txn, nil}, {running, issues}), do: {running, issues}
+  # sem saldo impresso (o Internet Banking só imprime o do último movimento do dia):
+  # não dá pra conferir, mas o movimento entra no acumulado
+  defp check({:txn, txn, nil}, {running, issues}), do: {Decimal.add(running, txn.amount), issues}
 
   defp check({:txn, txn, saldo}, {running, issues}) do
     expected = Decimal.add(running, txn.amount)
@@ -191,12 +199,13 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
     end)
   end
 
+  # dd/mm/aaaa no Bradesco Celular, dd/mm/aa no Internet Banking.
   defp parse_date(str) do
     with [d, m, y] <- String.split(str, "/"),
          {day, ""} <- Integer.parse(d),
          {month, ""} <- Integer.parse(m),
          {year, ""} <- Integer.parse(y),
-         {:ok, date} <- Date.new(year, month, day) do
+         {:ok, date} <- Date.new(if(year < 100, do: 2000 + year, else: year), month, day) do
       date
     else
       _ -> nil
@@ -290,10 +299,132 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
     fragment
     |> String.replace(~r/\s{2,}\d+\s*$/, "")
     |> String.trim()
-    |> String.replace(~r/^(DES|REM):\s*/, "")
+    |> String.replace(~r/^(DES|REM):\s*/i, "")
     |> String.replace(~r/\s+\d{2}\/\d{2}\s*$/, "")
     |> String.replace(~r/\*+\s*$/, "")
     |> String.trim()
+  end
+
+  # ---- Layout do Internet Banking ----------------------------------------
+
+  # The Internet Banking export ("Bradesco Internet Banking", dates as dd/mm/yy) does not
+  # keep the rows under the header columns, but it signs every debit ("- 60,00"), which
+  # the Bradesco Celular one never does. There a block is read by its pieces (runs of
+  # text apart by 2+ spaces): the first amount is the movement, a debit when signed, and
+  # a second one is the balance printed on the day's last movement.
+  @signed_money ~r/(?:^|\s)-\s\d[\d.]*,\d{2}/
+  @piece_money ~r/^(-\s?)?\d{1,3}(\.\d{3})*,\d{2}$/
+
+  defp signed_layout?(text), do: Regex.match?(@signed_money, text)
+
+  defp signed_events(text) do
+    text
+    |> String.split("\n")
+    |> Enum.drop_while(&is_nil(detect_columns(&1)))
+    # The "Saldos Invest Fácil" table comes after the "Total" row, across pages.
+    |> Enum.take_while(&(not String.contains?(&1, "Saldos Invest")))
+    |> Enum.reject(&detect_columns/1)
+    |> Enum.chunk_while([], &chunk_movement/2, &{:cont, Enum.reverse(&1), []})
+    |> Enum.map(&read_block/1)
+    |> Enum.reduce({nil, nil, []}, &signed_event/2)
+    |> elem(2)
+    |> Enum.reverse()
+  end
+
+  # Movements are apart by blank lines, but a new page ("\\f") may start right below the
+  # previous page's last movement.
+  defp chunk_movement(line, acc) do
+    cond do
+      String.trim(line) == "" ->
+        if acc == [], do: {:cont, []}, else: {:cont, Enum.reverse(acc), []}
+
+      String.starts_with?(line, "\f") and acc != [] ->
+        {:cont, Enum.reverse(acc), [line]}
+
+      true ->
+        {:cont, [line | acc]}
+    end
+  end
+
+  defp read_block(lines) do
+    Enum.reduce(lines, %{date: nil, text: [], docto: nil, amounts: []}, fn line, block ->
+      {date, rest} = split_date(line)
+      pieces = String.split(rest, ~r/\s{2,}/, trim: true) |> Enum.map(&String.trim/1)
+      {money, others} = Enum.split_with(pieces, &Regex.match?(@piece_money, &1))
+
+      {doctos, words} =
+        others |> Enum.flat_map(&unglue_docto/1) |> Enum.split_with(&Regex.match?(~r/^\d+$/, &1))
+
+      # "20/07" alone is the Pix date of the line above, not a posting date.
+      text =
+        words
+        |> Enum.reject(&(&1 == "" or Regex.match?(~r/^\d{2}\/\d{2}$/, &1)))
+        |> Enum.join(" ")
+        |> clean_fragment()
+
+      %{
+        block
+        | date: block.date || date,
+          text: if(text == "", do: block.text, else: block.text ++ [text]),
+          docto: block.docto || List.first(doctos),
+          amounts: block.amounts ++ Enum.map(money, &signed_amount/1)
+      }
+    end)
+  end
+
+  # "Des: Fulano 25/05 1000007": a long name leaves one space before the Docto.
+  defp unglue_docto(piece) do
+    case Regex.run(~r/^(.*\p{L}.*)\s(\d{6,})$/u, piece) do
+      [_, text, docto] -> [text, docto]
+      _ -> [piece]
+    end
+  end
+
+  defp split_date(line) do
+    case Regex.run(~r/^\s*(\d{2}\/\d{2}\/\d{2}(?:\d{2})?)(?=\s|$)(.*)$/s, line) do
+      [_, date, rest] -> {parse_date(date), rest}
+      _ -> {nil, line}
+    end
+  end
+
+  defp signed_amount(piece) do
+    value = piece |> String.replace(~r/^-\s?/, "") |> parse_br_number()
+    if String.starts_with?(piece, "-"), do: Decimal.negate(value), else: value
+  end
+
+  # A block with no amount is a movement's first lines cut by a page break: they go
+  # in front of the next block.
+  defp signed_event(%{amounts: []} = block, {last_date, _pending, events}),
+    do: {block.date || last_date, block, events}
+
+  defp signed_event(block, {last_date, pending, events}) do
+    block =
+      if pending,
+        do: %{block | text: pending.text ++ block.text, date: block.date || pending.date},
+        else: block
+
+    date = block.date || last_date
+    {date, nil, prepend(signed_txn(block, date), events)}
+  end
+
+  defp signed_txn(%{amounts: [movement | rest]} = block, date) do
+    description = Enum.join(block.text, " - ")
+    balance = List.first(rest)
+
+    cond do
+      String.starts_with?(description, "SALDO ANTERIOR") ->
+        {:reset, movement}
+
+      date == nil or description == "" or subtotal?(description) ->
+        nil
+
+      Decimal.negative?(movement) ->
+        {:txn, new_txn(date, description, Decimal.negate(movement), "debit", block.docto),
+         balance}
+
+      true ->
+        {:txn, new_txn(date, description, movement, "credit", block.docto), balance}
+    end
   end
 
   # ---- Colunas -----------------------------------------------------------
