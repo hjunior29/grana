@@ -68,4 +68,38 @@ defmodule Grana.Banking.MovementRulesTest do
     assert Decimal.equal?(summary.total_income, 5000)
     assert Decimal.equal?(summary.total_expenses, Decimal.new("47.65"))
   end
+
+  test "an operation and its reversal under the same identifier are left out, a Pix on credit is not",
+       ctx do
+    reversed = "00000000-0000-4000-8000-000000000002"
+    pix_on_credit = "00000000-0000-4000-8000-000000000001"
+
+    insert(ctx, [
+      {~D[2026-03-02], "-187.20", "Transferência enviada pelo Pix - Orgao Exemplo", "Transporte",
+       reversed},
+      {~D[2026-03-02], "187.20", "Estorno - Transferência enviada pelo Pix - Orgao Exemplo",
+       "Transporte", reversed},
+      {~D[2026-03-05], "75.00",
+       "Valor adicionado na conta por cartão de crédito - Valor adicionado para Pix no Crédito",
+       "Transferências", pix_on_credit},
+      {~D[2026-03-05], "-75.00", "Transferência enviada pelo Pix - Fulano", "Compras",
+       pix_on_credit}
+    ])
+
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+
+    internal =
+      ctx.user.id
+      |> Banking.list_transactions()
+      |> Map.new(&{&1.description, &1.is_internal_transfer})
+
+    assert internal["Transferência enviada pelo Pix - Orgao Exemplo"]
+    assert internal["Estorno - Transferência enviada pelo Pix - Orgao Exemplo"]
+
+    assert internal[
+             "Valor adicionado na conta por cartão de crédito - Valor adicionado para Pix no Crédito"
+           ]
+
+    refute internal["Transferência enviada pelo Pix - Fulano"]
+  end
 end

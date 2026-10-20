@@ -854,6 +854,10 @@ defmodule Grana.Banking do
       #    it, and the Pix paid with the card (`Grana.Banking.CardPayments`)
       mark_card_payments(user_id)
 
+      # 2b) An operation and its reversal ("Estorno - ..."), which Nubank lists under
+      #     the same identifier: neither happened
+      mark_reversals(user_id)
+
       # 3) Mark matching inter-account transfers
       mark_inter_account_transfers(user_id)
 
@@ -962,6 +966,32 @@ defmodule Grana.Banking do
 
     transactions |> CardPayments.internal_ids(bills) |> mark_ids(true)
   end
+
+  # The Pix on credit shares the identifier with the card money that paid it, but it did
+  # happen (`CardPayments` decides about it).
+  defp mark_reversals(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id and like(t.identifier, "%-%-%-%-%"))
+    |> select([t], %{
+      id: t.id,
+      key: {t.bank_statement_id, t.identifier},
+      amount: t.amount,
+      description: t.description
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.key)
+    |> Enum.flat_map(fn {_key, rows} ->
+      if reversal?(rows), do: Enum.map(rows, & &1.id), else: []
+    end)
+    |> mark_ids(true)
+  end
+
+  defp reversal?([a, b]) do
+    Decimal.equal?(Decimal.add(a.amount, b.amount), 0) and
+      not Enum.any?([a, b], &CardPayments.card_funding?(&1.description))
+  end
+
+  defp reversal?(_rows), do: false
 
   defp mark_inter_account_transfers(user_id) do
     # Load all transactions with their bank info
