@@ -372,10 +372,14 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
     end)
   end
 
-  # "Des: Fulano 25/05 1000007": a long name leaves one space before the Docto.
+  # "Des: Fulano 25/05 1000007": a long name leaves one space before the Docto. The letter
+  # is checked apart: inside the regex (".*\p{L}.*") it backtracks quadratically on a
+  # long line.
   defp unglue_docto(piece) do
-    case Regex.run(~r/^(.*\p{L}.*)\s(\d{6,})$/u, piece) do
-      [_, text, docto] -> [text, docto]
+    with [_, text, docto] <- Regex.run(~r/^(.+)\s(\d{6,})$/u, piece),
+         true <- String.match?(text, ~r/\p{L}/u) do
+      [text, docto]
+    else
       _ -> [piece]
     end
   end
