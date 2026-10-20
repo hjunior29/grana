@@ -74,6 +74,9 @@ defmodule GranaWeb.CategoriesLive do
       |> assign(:form_color, "#6366F1")
       |> assign(:form_kind, "expense")
       |> assign(:delete_target, nil)
+      |> assign(:rules_category, nil)
+      |> assign(:category_rules, [])
+      |> assign(:rule_form, to_form(%{"pattern" => ""}, as: :rule))
 
     {:ok, socket}
   end
@@ -138,7 +141,15 @@ defmodule GranaWeb.CategoriesLive do
                       "transações"
                     )}
                   </span>
-                  <span>{count_label(get_stat(cat.id, @stats, :rule_count), "regra", "regras")}</span>
+                  <button
+                    id={"category-#{cat.id}-rules"}
+                    type="button"
+                    class="cursor-pointer underline decoration-dotted underline-offset-2 transition-colors hover:text-base-content"
+                    phx-click="show_rules"
+                    phx-value-id={cat.id}
+                  >
+                    {count_label(get_stat(cat.id, @stats, :rule_count), "regra", "regras")}
+                  </button>
                 </div>
               </div>
               <.tag :if={cat.kind == "investment"} kind="neutro" class="shrink-0">
@@ -281,6 +292,68 @@ defmodule GranaWeb.CategoriesLive do
         </div>
       </.form_modal>
 
+      <.list_modal
+        :if={@rules_category}
+        id="category-rules-modal"
+        title={"Regras de #{@rules_category.name}"}
+        description="Descrições que já caem nesta categoria nas próximas importações. Uma descrição que contenha o termo recebe a categoria."
+        on_cancel={JS.push("close_rules")}
+      >
+        <p :if={@category_rules == []} class="ui-help">
+          Nenhuma regra ainda. Elas nascem quando você muda a categoria de uma transação, ou pelo campo abaixo.
+        </p>
+        <ul :if={@category_rules != []} class="divide-y divide-base-content/10">
+          <.item_row
+            :for={rule <- @category_rules}
+            id={"category-rule-#{rule.id}"}
+            title={rule.pattern}
+            title_class="ui-private-name"
+          >
+            <:actions>
+              <.button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="hero-trash"
+                class="btn-square text-error"
+                aria-label="Remover regra"
+                phx-click="delete_rule"
+                phx-value-id={rule.id}
+              >
+                <span class="sr-only">Remover</span>
+              </.button>
+            </:actions>
+          </.item_row>
+        </ul>
+        <:footer>
+          <.form
+            for={@rule_form}
+            id="category-rule-form"
+            phx-submit="add_rule"
+            class="flex items-end gap-2"
+          >
+            <div class="ui-private-name-field min-w-0 flex-1">
+              <.input
+                field={@rule_form[:pattern]}
+                label="Novo termo"
+                placeholder="Ex: ifood"
+                autocomplete="off"
+                maxlength="120"
+              />
+            </div>
+            <.button
+              id="category-rule-add"
+              variant="secondary"
+              icon="hero-plus"
+              class="mb-2"
+              loading="Adicionando…"
+            >
+              Adicionar
+            </.button>
+          </.form>
+        </:footer>
+      </.list_modal>
+
       <.confirm_modal
         :if={@delete_target}
         id="delete_modal"
@@ -421,6 +494,60 @@ defmodule GranaWeb.CategoriesLive do
 
         {:noreply, socket}
     end
+  end
+
+  def handle_event("show_rules", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    category = Banking.get_category!(GranaWeb.Params.to_int(id, -1), user_id)
+
+    {:noreply,
+     socket
+     |> assign(:rules_category, category)
+     |> assign(:rule_form, to_form(%{"pattern" => ""}, as: :rule))
+     |> load_rules()}
+  end
+
+  def handle_event("close_rules", _params, socket) do
+    {:noreply, assign(socket, rules_category: nil, category_rules: [])}
+  end
+
+  def handle_event("delete_rule", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    {:ok, _count} = Banking.delete_category_rule(user_id, GranaWeb.Params.to_int(id, -1))
+
+    {:noreply, socket |> load_rules() |> put_flash(:info, "Regra removida.")}
+  end
+
+  def handle_event("add_rule", %{"rule" => %{"pattern" => pattern}}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    pattern = pattern |> String.trim() |> String.downcase()
+
+    if pattern == "" do
+      form = to_form(%{"pattern" => ""}, as: :rule, errors: [pattern: {"digite um termo", []}])
+      {:noreply, assign(socket, :rule_form, form)}
+    else
+      {:ok, _rule} =
+        Banking.create_category_rule(%{
+          pattern: pattern,
+          category_id: socket.assigns.rules_category.id,
+          user_id: user_id
+        })
+
+      {:noreply,
+       socket
+       |> assign(:rule_form, to_form(%{"pattern" => ""}, as: :rule))
+       |> load_rules()
+       |> put_flash(:info, "Regra adicionada.")}
+    end
+  end
+
+  defp load_rules(socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    assign(socket,
+      category_rules: Banking.category_rules(user_id, socket.assigns.rules_category.id),
+      stats: Banking.category_stats(user_id)
+    )
   end
 
   defp available_icons, do: @available_icons

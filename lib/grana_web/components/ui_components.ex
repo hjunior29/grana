@@ -748,6 +748,42 @@ defmodule GranaWeb.UiComponents do
   defp type_label(other), do: other
 
   @doc """
+  Modal de consulta, sem formulário principal, controlado pelo servidor: uma lista com ações
+  por linha (ex.: as regras aprendidas). O slot `footer` fica acima do botão Fechar.
+  """
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :description, :string, default: nil
+  attr :on_cancel, :any, required: true, doc: "JS.push ou evento do fechamento"
+  slot :inner_block, required: true
+  slot :footer
+
+  def list_modal(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="modal modal-open"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={"#{@id}-title"}
+      phx-window-keydown={@on_cancel}
+      phx-key="Escape"
+    >
+      <div class="modal-box max-w-xl">
+        <h3 id={"#{@id}-title"} class="ui-card-title">{@title}</h3>
+        <p :if={@description} class="ui-help mt-1">{@description}</p>
+        <div class="mt-4 max-h-[60vh] overflow-y-auto">{render_slot(@inner_block)}</div>
+        <div :if={@footer != []} class="mt-4">{render_slot(@footer)}</div>
+        <div class="modal-action">
+          <.button type="button" variant="ghost" phx-click={@on_cancel}>Fechar</.button>
+        </div>
+      </div>
+      <div class="modal-backdrop" phx-click={@on_cancel}></div>
+    </div>
+    """
+  end
+
+  @doc """
   Modal com formulário (criar ou editar), controlado pelo servidor (`open`). Os campos vão no
   bloco principal; sem o slot `actions`, mostra Cancelar e o botão de envio.
   """
