@@ -166,7 +166,7 @@ defmodule Grana.Banking.StatementProcessor do
         case BradescoPdf.parse(text) do
           [] ->
             Logger.info("BradescoPdf found no transactions; falling back to AI")
-            read_pdf(file_content, bank, ai)
+            read_pdf(file_content, bank, "extrato", ai)
 
           transactions when is_list(transactions) ->
             log_reconciliation(text)
@@ -175,15 +175,23 @@ defmodule Grana.Banking.StatementProcessor do
 
       {:error, reason} ->
         Logger.info("PdfText unavailable (#{inspect(reason)}); falling back to AI")
-        read_pdf(file_content, bank, ai)
+        read_pdf(file_content, bank, "extrato", ai)
     end
   end
 
-  defp parse_pdf(file_content, bank, _statement_type, ai), do: read_pdf(file_content, bank, ai)
+  defp parse_pdf(file_content, "bradesco" = bank, "fatura", ai) do
+    with {:ok, transactions, bank, config} <- read_pdf(file_content, bank, "fatura", ai) do
+      {:ok, BradescoFatura.charge_dates(transactions), bank, config}
+    end
+  end
 
-  defp read_pdf(file_content, bank, ai) do
+  defp parse_pdf(file_content, bank, statement_type, ai),
+    do: read_pdf(file_content, bank, statement_type, ai)
+
+  defp read_pdf(file_content, bank, statement_type, ai) do
     with {:ok, config} <- ai.(),
-         {:ok, transactions} <- Processor.extract_pdf(file_content, bank, config) do
+         {:ok, transactions} <-
+           Processor.extract_pdf(file_content, bank, config, statement_type) do
       {:ok, transactions, bank, config}
     end
   end

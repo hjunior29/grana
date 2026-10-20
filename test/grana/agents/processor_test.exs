@@ -36,6 +36,40 @@ defmodule Grana.Agents.ProcessorTest do
   end
 
   describe "PDF reading" do
+    test "a Bradesco bill: its own prompt, two-digit years and installments by the month charged",
+         %{user: user} do
+      user = ai_fixture(user)
+
+      agent =
+        LLMStub.script([
+          pdf_reply([
+            txn("01/06/26", "PAGTO. POR DEB EM C/C", 2875.60, "credit"),
+            txn("18/02/2026", "LOJA EXEMPLO CENTRO 4/5", "412,30", "debit"),
+            txn("26/06/2026", "ANUIDADE DIFERENCIADA 5/12", 98, "debit"),
+            txn("27/06/2026", "ZP*BAR EXEMPLO", 47, "debit")
+          ]),
+          categorize_as("Compras")
+        ])
+
+      assert {:ok, %{transaction_count: 4}} =
+               StatementProcessor.process(
+                 "%PDF-1.4 fake",
+                 "bradesco",
+                 "fatura",
+                 user.id,
+                 "fatura.pdf"
+               )
+
+      [{_model, [message]} | _] = LLMStub.calls(agent)
+      assert LLMStub.text(%{content: tl(message.content)}) =~ "Bradesco credit card bill"
+
+      transactions = Map.new(Banking.list_transactions(user.id), &{&1.description, &1})
+      assert transactions["PAGTO. POR DEB EM C/C"].date == ~D[2026-06-01]
+      assert transactions["PAGTO. POR DEB EM C/C"].is_internal_transfer
+      assert transactions["LOJA EXEMPLO CENTRO"].date == ~D[2026-05-18]
+      assert transactions["ANUIDADE DIFERENCIADA"].date == ~D[2026-06-26]
+    end
+
     test "reads the PDF with the specialist and records the model on the statement", %{user: user} do
       user = ai_fixture(user)
 
