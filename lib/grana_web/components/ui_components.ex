@@ -387,6 +387,17 @@ defmodule GranaWeb.UiComponents do
     "#{pct |> Kernel.*(1.0) |> Float.round(1) |> Float.to_string() |> String.replace(".", ",")}%"
   end
 
+  @doc """
+  O que ainda dá para gastar por dia numa meta de limite (o `:pace` de
+  `Grana.Banking.goals_progress/4`), em texto com valores (use em `<.private_text>`).
+  """
+  def daily_quota(%{remaining: remaining, days_left: 1}),
+    do: "Restam #{Grana.Money.format(remaining)} para hoje"
+
+  def daily_quota(%{remaining: remaining, daily: daily, days_left: days}),
+    do:
+      "Restam #{Grana.Money.format(remaining)} (#{Grana.Money.format(daily)}/dia nos próximos #{days} dias)"
+
   def show_modal(js \\ %JS{}, id), do: JS.add_class(js, "modal-open", to: "##{id}")
   def hide_modal(js \\ %JS{}, id), do: JS.remove_class(js, "modal-open", to: "##{id}")
 

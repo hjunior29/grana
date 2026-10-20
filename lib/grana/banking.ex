@@ -1976,7 +1976,13 @@ defmodule Grana.Banking do
     Repo.delete(goal)
   end
 
-  def goals_progress(user_id, year, month) do
+  @doc """
+  Progress of each active goal in a month. In the current month, `:pace` says how far
+  the month has gone (`day_pct`, `days_left` counting today) and, for spending limits
+  with room left, what is left (`remaining`) and how much a day (`daily`); in any other
+  month it is nil.
+  """
+  def goals_progress(user_id, year, month, today \\ Grana.LocalTime.today()) do
     goals = list_financial_goals(user_id)
 
     case goals do
@@ -1987,22 +1993,90 @@ defmodule Grana.Banking do
         summary = monthly_summary(user_id, year, month)
 
         Enum.map(goals, fn goal ->
-          current =
-            case goal.type do
-              "expense_limit" -> summary.total_expenses
-              "income_goal" -> summary.total_income
-              "investment_goal" -> summary.total_investments
-              "category_limit" -> category_total(summary, goal.category_id)
-            end
-
+          current = goal_value(goal, summary)
           target = goal.target_value
           pct = calc_pct(current, target)
           status = goal_status(goal.type, pct)
 
-          %{goal: goal, current: current, target: target, pct: pct, status: status}
+          %{
+            goal: goal,
+            current: current,
+            target: target,
+            pct: pct,
+            status: status,
+            pace: goal_pace(goal, current, {year, month}, today)
+          }
         end)
     end
   end
+
+  defp goal_value(goal, summary) do
+    case goal.type do
+      "expense_limit" -> summary.total_expenses
+      "income_goal" -> summary.total_income
+      "investment_goal" -> summary.total_investments
+      "category_limit" -> category_total(summary, goal.category_id)
+    end
+  end
+
+  defp goal_pace(goal, current, {year, month}, %Date{year: year, month: month} = today) do
+    days = Date.days_in_month(today)
+    days_left = days - today.day + 1
+    remaining = Decimal.sub(goal.target_value, current)
+
+    daily =
+      if goal.type in ["expense_limit", "category_limit"] and Decimal.gt?(remaining, 0),
+        do: remaining |> Decimal.div(days_left) |> Decimal.round(2)
+
+    %{
+      day_pct: Float.round(today.day / days * 100, 1),
+      days_left: days_left,
+      remaining: if(daily, do: remaining),
+      daily: daily
+    }
+  end
+
+  defp goal_pace(_goal, _current, _period, _today), do: nil
+
+  @doc """
+  How each active goal did in the `count` months before `year`/`month`, oldest first:
+  `%{goal_id => [%{year, month, value, status}]}`, status `:met`, `:missed` or `:no_data`
+  (no transaction in the month). One query for the whole window.
+  """
+  def goals_history(user_id, year, month, count \\ 6) do
+    goals = list_financial_goals(user_id)
+    last = Date.new!(year, month, 1) |> Date.add(-1)
+    first = last |> Date.beginning_of_month() |> Date.shift(month: -(count - 1))
+
+    summaries =
+      user_id
+      |> list_transactions(date_from: first, date_to: last)
+      |> Enum.group_by(&{&1.date.year, &1.date.month})
+      |> Map.new(fn {ym, txns} -> {ym, build_summary(txns)} end)
+
+    months = Enum.map((count - 1)..0//-1, &Date.shift(Date.beginning_of_month(last), month: -&1))
+
+    Map.new(goals, fn goal ->
+      {goal.id,
+       Enum.map(months, fn date ->
+         case summaries[{date.year, date.month}] do
+           nil ->
+             %{year: date.year, month: date.month, value: nil, status: :no_data}
+
+           summary ->
+             value = goal_value(goal, summary)
+             %{year: date.year, month: date.month, value: value, status: goal_met(goal, value)}
+         end
+       end)}
+    end)
+  end
+
+  defp goal_met(%{type: type, target_value: target}, value)
+       when type in ["expense_limit", "category_limit"],
+       do: if(Decimal.compare(value, target) == :gt, do: :missed, else: :met)
+
+  defp goal_met(%{target_value: target}, value),
+    do: if(Decimal.compare(value, target) == :lt, do: :missed, else: :met)
 
   defp category_total(summary, category_id) do
     case Enum.find(summary.by_category, fn %{category: c} -> c && c.id == category_id end) do

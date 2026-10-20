@@ -38,6 +38,7 @@ defmodule GranaWeb.GoalsLive do
 
     socket
     |> assign(:goals_progress, progress)
+    |> assign(:history, Banking.goals_history(user_id, year, month))
     |> assign(:suggestions, suggestions)
     |> assign(:year, year)
     |> assign(:month, month)
@@ -323,10 +324,17 @@ defmodule GranaWeb.GoalsLive do
                 </span>
               </div>
 
-              <div class="w-full bg-base-300 rounded-full h-3 mb-1">
+              <div class="ui-goal-track w-full bg-base-300 rounded-full h-3 mb-1">
                 <div
                   class={"h-3 rounded-full transition-all #{status_bg(gp.status)}"}
                   style={"width: #{min(gp.pct, 100)}%"}
+                />
+                <span
+                  :if={gp.pace}
+                  id={"goal-#{gp.goal.id}-today"}
+                  class="ui-goal-needle"
+                  style={"left: #{gp.pace.day_pct}%"}
+                  title={"Hoje: #{format_pct(gp.pace.day_pct)} do mês"}
                 />
               </div>
 
@@ -334,6 +342,16 @@ defmodule GranaWeb.GoalsLive do
                 <span>{status_label(gp.status)}</span>
                 <span class={"font-medium #{status_color(gp.status)}"}>{format_pct(gp.pct)}</span>
               </div>
+
+              <p :if={gp.pace && gp.pace.daily} id={"goal-#{gp.goal.id}-quota"} class="ui-help mt-1">
+                <.private_text text={daily_quota(gp.pace)} />
+              </p>
+
+              <.goal_history
+                id={"goal-#{gp.goal.id}-history"}
+                months={Map.get(@history, gp.goal.id, [])}
+                hide_values={@current_scope.user.hide_values}
+              />
             </div>
           </div>
 
@@ -438,6 +456,56 @@ defmodule GranaWeb.GoalsLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  attr :id, :string, required: true
+  attr :months, :list, required: true
+  attr :hide_values, :boolean, required: true
+
+  defp goal_history(assigns) do
+    ~H"""
+    <div
+      :if={@months != []}
+      id={@id}
+      class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-base-content/10 pt-3"
+    >
+      <div class="flex items-center gap-1" role="list" aria-label="Últimos meses">
+        <span
+          :for={m <- @months}
+          role="listitem"
+          class={["ui-goal-month", "ui-goal-month-#{m.status}"]}
+          title={history_title(m, @hide_values)}
+          data-status={m.status}
+        >
+          {String.first(month_name(m.month))}
+        </span>
+      </div>
+      <span class="ui-caption">{history_summary(@months)}</span>
+    </div>
+    """
+  end
+
+  defp history_title(%{status: :no_data} = m, _hide_values),
+    do: "#{month_name(m.month)}/#{m.year}: sem dados"
+
+  defp history_title(m, true), do: "#{month_name(m.month)}/#{m.year}: #{history_status(m.status)}"
+
+  defp history_title(m, false),
+    do:
+      "#{month_name(m.month)}/#{m.year}: #{format_currency(m.value)} (#{history_status(m.status)})"
+
+  defp history_status(:met), do: "cumprida"
+  defp history_status(:missed), do: "não cumprida"
+
+  defp history_summary(months) do
+    with_data = Enum.reject(months, &(&1.status == :no_data))
+    met = Enum.count(with_data, &(&1.status == :met))
+
+    case length(with_data) do
+      0 -> "Sem dados nos últimos #{length(months)} meses"
+      1 -> "Cumprida em #{met} de 1 mês"
+      n -> "Cumprida em #{met} de #{n} meses"
+    end
   end
 
   # ── Helpers ──

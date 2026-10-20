@@ -1023,15 +1023,25 @@ defmodule GranaWeb.DashboardLive do
           </.link>
         </:aside>
         <div class="flex flex-col gap-3">
-          <div :for={gp <- @goals_progress} class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div
+            :for={gp <- @goals_progress}
+            id={"dashboard-goal-#{gp.goal.id}"}
+            class="flex flex-wrap items-center gap-x-3 gap-y-1"
+          >
             <span class="ui-help w-28 shrink-0 truncate" title={goal_short_label(gp.goal)}>
               {goal_short_label(gp.goal)}
             </span>
             <div class="min-w-16 flex-1">
-              <div class="h-2.5 w-full rounded-full bg-base-300">
+              <div class="ui-goal-track h-2.5 w-full rounded-full bg-base-300">
                 <div
                   class={"h-2.5 rounded-full transition-all #{goal_bar_color(gp.status)}"}
                   style={"width: #{min(gp.pct, 100)}%"}
+                />
+                <span
+                  :if={gp.pace}
+                  class="ui-goal-needle"
+                  style={"left: #{gp.pace.day_pct}%"}
+                  title={"Hoje: #{format_pct(gp.pace.day_pct)} do mês"}
                 />
               </div>
             </div>
@@ -1042,6 +1052,9 @@ defmodule GranaWeb.DashboardLive do
             <span class={"ui-help w-14 shrink-0 text-right font-bold #{goal_text_color(gp.status)}"}>
               {format_pct(gp.pct)}
             </span>
+            <p :if={gp.pace && gp.pace.daily} class="ui-caption w-full sm:pl-31">
+              <.private_text text={daily_quota(gp.pace)} />
+            </p>
           </div>
         </div>
       </.card>
