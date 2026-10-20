@@ -84,10 +84,23 @@ defmodule Grana.Banking.StatementProcessor do
               end)
 
             # The upload wins over Open Finance for the period it covers: those
-            # transactions leave before deduplication, which compares with other uploads.
+            # transactions leave before deduplication, which compares with other uploads,
+            # but what the user fixed by hand in them carries over to the upload.
+            provisional =
+              OpenFinance.provisional_transactions(
+                user_id,
+                bank,
+                statement_type,
+                period_start,
+                period_end
+              )
+
             OpenFinance.release_period(user_id, bank, statement_type, period_start, period_end)
 
-            entries = deduplicate(entries, user_id, bank, statement_type)
+            entries =
+              entries
+              |> deduplicate(user_id, bank, statement_type)
+              |> OpenFinance.carry_over_edits(provisional, uncategorized_id(user_id))
 
             {count, _} = Banking.bulk_insert_transactions(entries)
 
@@ -226,11 +239,7 @@ defmodule Grana.Banking.StatementProcessor do
     category_map =
       Banking.categorize_transactions(Enum.map(transactions, & &1.description), user_id)
 
-    uncategorized_id =
-      case Banking.get_uncategorized_category(user_id) do
-        nil -> nil
-        category -> category.id
-      end
+    uncategorized_id = uncategorized_id(user_id)
 
     by_name = Map.new(categories, &{&1.name, &1.id})
 
@@ -324,6 +333,13 @@ defmodule Grana.Banking.StatementProcessor do
   defp fingerprint(%{date: date, description: desc, amount: amount}) do
     normalized_amount = amount |> Decimal.round(2) |> Decimal.to_string(:normal)
     {date, String.downcase(String.trim(desc)), normalized_amount}
+  end
+
+  defp uncategorized_id(user_id) do
+    case Banking.get_uncategorized_category(user_id) do
+      nil -> nil
+      category -> category.id
+    end
   end
 
   defp get_period(transactions) do

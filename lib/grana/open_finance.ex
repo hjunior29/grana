@@ -273,6 +273,68 @@ defmodule Grana.OpenFinance do
   end
 
   @doc """
+  Transações do Open Finance de um banco/tipo em `inicio..fim`, alargado pela margem da
+  conciliação: as que um upload vai substituir, lidas antes do `release_period/5` para
+  `carry_over_edits/3` levar o que o usuário ajustou nelas.
+  """
+  def provisional_transactions(user_id, bank, statement_type, period_start, period_end) do
+    from(t in BankingTransaction,
+      join: s in assoc(t, :bank_statement),
+      where:
+        t.user_id == ^user_id and s.source == "open_finance" and s.bank == ^bank and
+          s.statement_type == ^statement_type and
+          t.date >= ^Date.add(period_start, -@boundary_days) and
+          t.date <= ^Date.add(period_end, @boundary_days)
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Leva para as transações do upload (`entries`, mapas prontos para inserir) o que foi
+  ajustado à mão nas do Open Finance que elas substituem, casadas pelo mesmo valor em
+  centavos e até #{@boundary_days} dias de diferença: a categoria, quando a do upload seria
+  "Sem Categoria", e a marcação manual de transferência interna. Sem aviso na tela.
+  """
+  def carry_over_edits(entries, [], _uncategorized_id), do: entries
+
+  def carry_over_edits(entries, provisional, uncategorized_id) do
+    {carried, _left} =
+      Enum.map_reduce(entries, provisional, fn entry, left ->
+        case closest_match(left, entry) do
+          nil -> {entry, left}
+          match -> {apply_edits(entry, match, uncategorized_id), List.delete(left, match)}
+        end
+      end)
+
+    carried
+  end
+
+  defp closest_match(provisional, entry) do
+    provisional
+    |> Enum.filter(fn t ->
+      t.type == entry.type and cents(t.amount) == cents(entry.amount) and
+        abs(Date.diff(t.date, entry.date)) <= @boundary_days
+    end)
+    |> Enum.min_by(&abs(Date.diff(&1.date, entry.date)), fn -> nil end)
+  end
+
+  defp apply_edits(entry, match, uncategorized_id) do
+    entry =
+      if entry.category_id in [nil, uncategorized_id] and
+           match.category_id not in [nil, uncategorized_id],
+         do: %{entry | category_id: match.category_id},
+         else: entry
+
+    case match.internal_override do
+      nil ->
+        entry
+
+      override ->
+        Map.merge(entry, %{internal_override: override, is_internal_transfer: override})
+    end
+  end
+
+  @doc """
   Sincroniza pelo id da conexão (usado pelo worker) e, de carona, garante o webhook
   do usuário. Conexão já removida é ignorada.
   """
