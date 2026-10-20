@@ -54,4 +54,53 @@ defmodule GranaWeb.PrivacyTest do
 
     assert has_element?(view, ".ui-private-name", "extrato-joao-silva.csv")
   end
+
+  describe "modo privacidade no cabeçalho e na busca rápida" do
+    test "o olho liga e desliga valores e nomes juntos", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+      assert has_element?(view, "#privacy-toggle[aria-pressed=false] .hero-eye")
+      refute has_element?(view, "#privacy-toggle.is-active")
+
+      view |> element("#privacy-toggle") |> render_click()
+
+      assert has_element?(view, "#app-shell.ui-hide-values.ui-hide-names")
+      assert has_element?(view, "#privacy-toggle.is-active[aria-pressed=true] .hero-eye-slash")
+      assert %{hide_values: true, hide_names: true} = Accounts.get_user!(user.id)
+
+      view |> element("#privacy-toggle") |> render_click()
+
+      refute has_element?(view, "#app-shell.ui-hide-values")
+      refute has_element?(view, "#app-shell.ui-hide-names")
+    end
+
+    test "com só um deles ligado, o olho liga os dois", %{conn: conn, user: user} do
+      hide(user, %{hide_names: true})
+      {:ok, view, _html} = live(conn, ~p"/transactions")
+
+      assert has_element?(view, "#privacy-toggle[aria-pressed=false] .hero-eye-slash")
+      view |> element("#privacy-toggle") |> render_click()
+
+      assert has_element?(view, "#app-shell.ui-hide-values.ui-hide-names")
+    end
+
+    test "a busca rápida traz os comandos de privacidade, juntos e separados", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/goals")
+
+      assert has_element?(
+               view,
+               "#quick-actions-privacy #quick-action-privacy-all[data-privacy=all]"
+             )
+
+      assert has_element?(view, "#quick-action-privacy-all[data-suggested=true]")
+      assert has_element?(view, "#quick-action-privacy-values[data-privacy=values]")
+      assert has_element?(view, "#quick-action-privacy-names[data-privacy=names]")
+
+      # O hook manda o mesmo evento das Configurações, só com o que muda.
+      render_hook(view, "set_preference", %{"hide_names" => "true"})
+
+      assert has_element?(view, "#app-shell.ui-hide-names")
+      refute has_element?(view, "#app-shell.ui-hide-values")
+    end
+  end
 end

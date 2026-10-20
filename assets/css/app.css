@@ -163,6 +163,12 @@
   transition: background-color 120ms;
 }
 
+button.quick-actions-option {
+  width: calc(100% - 1rem);
+  text-align: left;
+  cursor: pointer;
+}
+
 .quick-actions-option[aria-selected="true"] {
   background: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
   outline: 1px solid color-mix(in oklch, var(--color-primary) 35%, transparent);
@@ -3081,6 +3087,13 @@ html {
 }
 .ui-projection-sim { fill: var(--color-primary); transition: filter 150ms ease-out; }
 .ui-projection-sim:hover { filter: brightness(1.1); }
+
+/* Modo privacidade no cabeçalho: ativo fica na cor primária */
+.privacy-toggle { padding-inline: 0.5rem; }
+.privacy-toggle.is-active {
+  color: var(--color-primary);
+  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .ui-simulation { animation: none; }

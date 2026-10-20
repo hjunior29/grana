@@ -33,7 +33,7 @@ defmodule GranaWeb.QuickActionComponents do
           <div>
             <h2 id="quick-actions-title" class="ui-section-title">Busca rápida</h2>
             <p id="quick-actions-description" class="ui-help mt-1 hidden sm:block">
-              Encontre uma tela, ação ou busca salva.
+              Encontre uma tela, ação ou busca salva, ou ative o modo privacidade.
             </p>
           </div>
           <button
@@ -66,30 +66,56 @@ defmodule GranaWeb.QuickActionComponents do
 
         <div class="quick-actions-scroll">
           <div id="quick-actions-results" role="listbox" aria-label="Resultados da busca rápida">
-            <section
-              :for={{title, actions} <- @groups}
-              data-quick-group
-              role="group"
-              aria-label={title}
-            >
-              <h3 class="quick-actions-group-title ui-caption" aria-hidden="true">{title}</h3>
-              <.link
-                :for={{id, label, icon, path, keywords, suggested} <- actions}
-                id={"quick-action-#{id}"}
-                navigate={path}
-                class="quick-actions-option"
-                role="option"
-                tabindex="-1"
-                aria-selected="false"
-                data-quick-action
-                data-keywords={keywords}
-                data-suggested={to_string(suggested)}
+            <%= for {title, actions} <- @groups do %>
+              <section
+                data-quick-group
+                role="group"
+                aria-label={title}
               >
-                <.icon name={icon} class="size-4 shrink-0" />
-                <span class="min-w-0 flex-1 truncate" data-quick-label>{label}</span>
-                <.icon name="hero-arrow-up-right" class="size-3.5 shrink-0 ui-text-tertiary" />
-              </.link>
-            </section>
+                <h3 class="quick-actions-group-title ui-caption" aria-hidden="true">{title}</h3>
+                <.link
+                  :for={{id, label, icon, path, keywords, suggested} <- actions}
+                  id={"quick-action-#{id}"}
+                  navigate={path}
+                  class="quick-actions-option"
+                  role="option"
+                  tabindex="-1"
+                  aria-selected="false"
+                  data-quick-action
+                  data-keywords={keywords}
+                  data-suggested={to_string(suggested)}
+                >
+                  <.icon name={icon} class="size-4 shrink-0" />
+                  <span class="min-w-0 flex-1 truncate" data-quick-label>{label}</span>
+                  <.icon name="hero-arrow-up-right" class="size-3.5 shrink-0 ui-text-tertiary" />
+                </.link>
+              </section>
+              <section
+                :if={title == "Ações"}
+                id="quick-actions-privacy"
+                data-quick-group
+                role="group"
+                aria-label="Privacidade"
+              >
+                <h3 class="quick-actions-group-title ui-caption" aria-hidden="true">Privacidade</h3>
+                <button
+                  :for={{kind, label, icon, keywords, suggested} <- privacy_actions()}
+                  id={"quick-action-privacy-#{kind}"}
+                  type="button"
+                  class="quick-actions-option"
+                  role="option"
+                  tabindex="-1"
+                  aria-selected="false"
+                  data-quick-action
+                  data-privacy={kind}
+                  data-keywords={keywords}
+                  data-suggested={to_string(suggested)}
+                >
+                  <.icon name={icon} class="size-4 shrink-0" />
+                  <span class="min-w-0 flex-1 truncate" data-quick-label>{label}</span>
+                </button>
+              </section>
+            <% end %>
             <section
               id="quick-actions-saved"
               data-quick-group
@@ -132,6 +158,19 @@ defmodule GranaWeb.QuickActionComponents do
       </dialog>
     </div>
     """
+  end
+
+  # Labels for the state before opening; the hook rewrites them ("Ocultar" or "Mostrar")
+  # from the classes of the app shell each time the palette opens.
+  defp privacy_actions do
+    [
+      {"all", "Alternar modo privacidade (valores e nomes)", "hero-eye-slash",
+       "privacidade ocultar mostrar esconder valores nomes gravar tela olho", true},
+      {"values", "Alternar ocultar valores", "hero-banknotes",
+       "privacidade ocultar mostrar esconder valores reais dinheiro", false},
+      {"names", "Alternar ocultar nomes", "hero-user",
+       "privacidade ocultar mostrar esconder nomes descrições pessoas lojas", false}
+    ]
   end
 
   defp groups do
