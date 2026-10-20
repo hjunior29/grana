@@ -294,7 +294,7 @@ defmodule Grana.Banking.Parsers.BradescoPdf do
 
   # Limpa um fragmento de descrição. Em blocos de linha única o nº do docto pode
   # vazar à direita; em linhas "DES:/REM:" remove o prefixo e a data final
-  # (ex.: "DES: 99 FOOD 06/02" -> "99 FOOD"). Remove "*" final.
+  # (ex.: "DES: PADARIA EXEMPLO 06/02" -> "PADARIA EXEMPLO"). Remove "*" final.
   defp clean_fragment(fragment) do
     fragment
     |> String.replace(~r/\s{2,}\d+\s*$/, "")
