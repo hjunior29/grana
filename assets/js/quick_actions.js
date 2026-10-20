@@ -79,6 +79,7 @@ const QuickActions = {
     this.previousOverflow = document.documentElement.style.overflow
     this.wasOpen = true
     this.input.value = ""
+    this.syncPrivacy()
     this.dialog.showModal()
     this.updateViewport()
     document.documentElement.style.overflow = "hidden"
@@ -213,9 +214,47 @@ const QuickActions = {
     }
   },
 
+  privacyState() {
+    const shell = document.getElementById("app-shell")
+    return {
+      values: !!shell?.classList.contains("ui-hide-values"),
+      names: !!shell?.classList.contains("ui-hide-names"),
+    }
+  },
+
+  syncPrivacy() {
+    const {values, names} = this.privacyState()
+    const labels = {
+      all: values && names ? "Mostrar valores e nomes" : "Ativar modo privacidade (ocultar valores e nomes)",
+      values: values ? "Mostrar valores" : "Ocultar valores",
+      names: names ? "Mostrar nomes" : "Ocultar nomes",
+    }
+    this.el.querySelectorAll("[data-privacy]").forEach(option => {
+      option.querySelector("[data-quick-label]").textContent = labels[option.dataset.privacy]
+    })
+  },
+
+  // Same `set_preference` as Settings and the header button (`GranaWeb.PreferencesHook`):
+  // the server saves it and every open tab follows.
+  togglePrivacy(kind) {
+    const {values, names} = this.privacyState()
+    const all = !(values && names)
+    const params = {
+      all: {hide_values: String(all), hide_names: String(all)},
+      values: {hide_values: String(!values)},
+      names: {hide_names: String(!names)},
+    }[kind]
+    if (params) this.pushEvent("set_preference", params)
+  },
+
   click(event) {
+    const privacy = event.target.closest("[data-privacy]")
     if (event.target.closest("#quick-actions-open")) this.open()
     else if (event.target.closest("#quick-actions-close")) this.close()
+    else if (privacy) {
+      this.togglePrivacy(privacy.dataset.privacy)
+      this.close()
+    }
     else if (event.target.closest("[data-quick-action]")) this.close(false)
     else if (event.target === this.dialog) {
       const rect = this.dialog.getBoundingClientRect()

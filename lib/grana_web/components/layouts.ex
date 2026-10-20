@@ -72,6 +72,7 @@ defmodule GranaWeb.Layouts do
           </details>
         </div>
         <GranaWeb.QuickActionComponents.palette :if={@current_scope && !@hide_nav} />
+        <.privacy_toggle :if={@current_scope && !@hide_nav} user={@current_scope.user} />
         <%!-- Desktop nav --%>
         <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">
           <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
@@ -223,6 +224,33 @@ defmodule GranaWeb.Layouts do
         <span>Reconectando…</span>
       </div>
     </div>
+    """
+  end
+
+  attr :user, :map, required: true
+
+  # Modo privacidade num clique: liga ou desliga "ocultar valores" e "ocultar nomes" juntos
+  # (com só um ligado, liga os dois). Grava pelo `GranaWeb.PreferencesHook`.
+  defp privacy_toggle(assigns) do
+    assigns = assign(assigns, :on, assigns.user.hide_values and assigns.user.hide_names)
+
+    ~H"""
+    <button
+      id="privacy-toggle"
+      type="button"
+      class={["quick-actions-trigger privacy-toggle shrink-0", @on && "is-active"]}
+      phx-click="set_preference"
+      phx-value-hide_values={to_string(!@on)}
+      phx-value-hide_names={to_string(!@on)}
+      aria-pressed={to_string(@on)}
+      aria-label={if @on, do: "Mostrar valores e nomes", else: "Ocultar valores e nomes"}
+      title={if @on, do: "Mostrar valores e nomes", else: "Ocultar valores e nomes"}
+    >
+      <.icon
+        name={if @user.hide_values or @user.hide_names, do: "hero-eye-slash", else: "hero-eye"}
+        class="size-4"
+      />
+    </button>
     """
   end
 
