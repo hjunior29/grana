@@ -45,7 +45,7 @@ defmodule GranaWeb.ChatHTMLTest do
   end
 
   test "known names get the privacy-name span, money inside the rest" do
-    names = ~r/(?<![\p{L}\p{N}])(?:unimed bh)(?![\p{L}\p{N}])/iu
+    names = [~r/(?<![\p{L}\p{N}])(?:unimed bh)(?![\p{L}\p{N}])/iu]
 
     assert ChatHTML.render("<p>Unimed BH: R$ 450,00</p>", names) |> Phoenix.HTML.safe_to_string() ==
              ~s|<p><span class="ui-private-name">Unimed BH</span>: <span class="ui-private whitespace-nowrap">R$ 450,00</span></p>|

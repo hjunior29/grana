@@ -78,4 +78,31 @@ defmodule Grana.Banking.MerchantsTest do
     assert PrivateNames.split("x", nil) == [{"x", false}]
     assert PrivateNames.pattern(user_fixture().id) == nil
   end
+
+  test "PrivateNames.pattern/1 takes more names than fit in one regex" do
+    user = user_fixture()
+
+    transactions_fixture(
+      user,
+      for(i <- 1..2000, do: %{description: "PIX - CLIENTE NUMERO #{i} DA SILVA PEREIRA"}) ++
+        [%{description: "PIX - CLIENTE NUMERO 1500"}]
+    )
+
+    pattern = PrivateNames.pattern(user.id)
+    assert length(pattern) > 1
+
+    text =
+      "Pix para cliente numero 1 da silva pereira, CLIENTE NUMERO 1500 DA SILVA PEREIRA " <>
+        "e CLIENTE NUMERO 1500, não CLIENTE NUMERO 20000 DA SILVA PEREIRA."
+
+    assert PrivateNames.split(text, pattern) == [
+             {"Pix para ", false},
+             {"cliente numero 1 da silva pereira", true},
+             {", ", false},
+             {"CLIENTE NUMERO 1500 DA SILVA PEREIRA", true},
+             {" e ", false},
+             {"CLIENTE NUMERO 1500", true},
+             {", não CLIENTE NUMERO 20000 DA SILVA PEREIRA.", false}
+           ]
+  end
 end
