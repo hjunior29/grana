@@ -54,11 +54,15 @@ defmodule GranaWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug :rewrite_scheme_from_proxy
   plug :session
   plug GranaWeb.Router
 
-  defp rewrite_scheme_from_proxy(conn, _) do
+  # Phoenix dispatches the LiveView socket before any plug above, and `check_origin: :conn`
+  # compares the browser's origin with the scheme of the connection: behind an HTTPS proxy
+  # the scheme has to be rewritten first, or LiveView never connects.
+  def call(conn, opts), do: conn |> rewrite_scheme_from_proxy() |> super(opts)
+
+  defp rewrite_scheme_from_proxy(conn) do
     if Application.get_env(:grana, :trust_proxy_headers, false) do
       Plug.RewriteOn.call(
         conn,
