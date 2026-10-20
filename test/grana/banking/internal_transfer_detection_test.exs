@@ -15,7 +15,7 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
     user = user_fixture()
 
     {:ok, user} =
-      Accounts.update_user_identity(user, %{name: "Ana Costa Ramos", cpf: "123.555.444-45"})
+      Accounts.update_user_identity(user, %{name: "Ana Costa Ramos", cpf: "123.555.444-99"})
 
     Banking.ensure_default_categories(user.id)
     cat = Banking.get_uncategorized_category(user.id)

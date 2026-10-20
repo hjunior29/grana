@@ -6,7 +6,7 @@ defmodule Grana.Banking.TransferIdentityTest do
   @nubank_self "Transferência enviada pelo Pix - Ana Costa Ramos - •••.555.444-•• - Nubank (0260) Agência: 1 Conta: 11112222-3"
   @nubank_other "Transferência recebida pelo Pix - João Pereira Souza - •••.999.888-•• - BANCO INTER (0077) Agência: 1 Conta: 1-0"
   @bradesco_self "TRANSFERENCIA PIX - ANA COSTA RAMOS"
-  @company "Transferência enviada pelo Pix - ICATU SEGUROS"
+  @company "Transferência enviada pelo Pix - SEGURADORA EXEMPLO"
 
   test "transfer? reconhece pix/ted/doc/transferência e ignora o resto" do
     assert TI.transfer?(@nubank_self)
@@ -21,14 +21,14 @@ defmodule Grana.Banking.TransferIdentityTest do
 
   test "cpf_middle pega posições 4-9 do CPF completo" do
     assert TI.cpf_middle("12355544445") == "555444"
-    assert TI.cpf_middle("123.555.444-45") == "555444"
+    assert TI.cpf_middle("123.555.444-99") == "555444"
     assert TI.cpf_middle("123") == nil
   end
 
   test "counterparty_name extrai o nome normalizado" do
     assert TI.counterparty_name(@nubank_self) == "ana costa ramos"
     assert TI.counterparty_name(@bradesco_self) == "ana costa ramos"
-    assert TI.counterparty_name(@company) == "icatu seguros"
+    assert TI.counterparty_name(@company) == "seguradora exemplo"
   end
 
   test "own_identity? casa por nome completo ou pelo CPF do meio" do

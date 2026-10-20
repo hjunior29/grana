@@ -5,7 +5,7 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
 
   test "parses fatura transactions" do
     csv = """
-    Data: 15/02/2026 11:00:04\r\rSituação da Fatura: PAGO\r\rFULANO DE TAL ;;; 0001\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r05/02;TIMES OFFICE 1/3;0,00;156,00\r\r04/02;DROGASIL 1419 ;0,00;105,80\r\rTotal da fatura em Real: ;;;261,80
+    Data: 15/02/2026 11:00:04\r\rSituação da Fatura: PAGO\r\rFULANO DE TAL ;;; 0000\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r05/02;TIMES OFFICE 1/3;0,00;156,00\r\r04/02;DROGASIL 1419 ;0,00;105,80\r\rTotal da fatura em Real: ;;;261,80
     """
 
     result = BradescoFatura.parse(csv)
@@ -33,7 +33,7 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
 
   test "skips summary and metadata lines" do
     csv = """
-    Data: 15/02/2026 11:00:04\r\rSituação da Fatura: PAGO\r\rFULANO DE TAL ;;; 0001\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r02/02;DROGASIL 2515 ;0,00;226,49\r\rTotal da fatura em Real: ;;;226,49\r\rResumo das Despesas;Real\r\rSaldo Anterior;0,00;
+    Data: 15/02/2026 11:00:04\r\rSituação da Fatura: PAGO\r\rFULANO DE TAL ;;; 0000\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r02/02;DROGASIL 2515 ;0,00;226,49\r\rTotal da fatura em Real: ;;;226,49\r\rResumo das Despesas;Real\r\rSaldo Anterior;0,00;
     """
 
     result = BradescoFatura.parse(csv)
