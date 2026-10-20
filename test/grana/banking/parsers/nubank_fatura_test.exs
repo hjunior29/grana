@@ -53,4 +53,11 @@ defmodule Grana.Banking.Parsers.NubankFaturaTest do
     assert debits != []
     assert credits != []
   end
+
+  test "skips zero rows" do
+    csv =
+      "date,title,amount\n2025-04-10,Encerramento de dívida,0.00\n2025-04-10,Juros de dívida encerrada,0.00\n2025-04-08,Pagamento recebido,-2410.55\n"
+
+    assert [%{description: "Pagamento recebido"}] = NubankFatura.parse(csv)
+  end
 end
