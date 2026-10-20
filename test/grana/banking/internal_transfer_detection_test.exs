@@ -7,7 +7,7 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
   alias Grana.Banking
   alias Grana.Banking.Transaction
 
-  @self_pix "Transferência enviada pelo Pix - Amanda Silva Lima - •••.022.012-•• - Nubank (0260) Agência: 1 Conta: 25409235-0"
+  @self_pix "Transferência enviada pelo Pix - Ana Costa Ramos - •••.555.444-•• - Nubank (0260) Agência: 1 Conta: 11112222-3"
   @other_pix "Transferência enviada pelo Pix - Joao Pereira Souza - •••.999.888-•• - BANCO INTER (0077) Agência: 1 Conta: 1-0"
   @other_pix2 "Transferência recebida pelo Pix - Joao Pereira Souza - •••.999.888-•• - BANCO C6 (0336) Agência: 1 Conta: 2-0"
 
@@ -15,7 +15,7 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
     user = user_fixture()
 
     {:ok, user} =
-      Accounts.update_user_identity(user, %{name: "Amanda Silva Lima", cpf: "123.022.012-45"})
+      Accounts.update_user_identity(user, %{name: "Ana Costa Ramos", cpf: "123.555.444-99"})
 
     Banking.ensure_default_categories(user.id)
     cat = Banking.get_uncategorized_category(user.id)

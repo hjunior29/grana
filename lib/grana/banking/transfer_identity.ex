@@ -5,12 +5,12 @@ defmodule Grana.Banking.TransferIdentity do
 
   Formatos reais observados:
 
-      "Transferência enviada pelo Pix - <NOME> - •••.022.012-•• - <BANCO> (0260) Agência: 1 Conta: ..."
-      "Transferência Recebida - <NOME> - •••.022.012-•• - ..."
+      "Transferência enviada pelo Pix - <NOME> - •••.555.444-•• - <BANCO> (0260) Agência: 1 Conta: ..."
+      "Transferência Recebida - <NOME> - •••.555.444-•• - ..."
       "TRANSFERENCIA PIX - <NOME>"            (Bradesco, sem CPF)
-      "Transferência enviada pelo Pix - ICATU SEGUROS"   (empresa, sem CPF)
+      "Transferência enviada pelo Pix - SEGURADORA EXEMPLO"   (empresa, sem CPF)
 
-  O CPF vem **mascarado**: só os 6 dígitos do meio aparecem (`•••.022.012-••`),
+  O CPF vem **mascarado**: só os 6 dígitos do meio aparecem (`•••.555.444-••`),
   que correspondem às posições 4–9 do CPF completo.
   """
 
