@@ -2967,6 +2967,43 @@ html {
   box-shadow: 0 1px 2px color-mix(in oklch, var(--color-base-content) 12%, transparent);
 }
 
+/* Agulha do dia de hoje nas barras das metas */
+.ui-goal-track { position: relative; }
+.ui-goal-needle {
+  position: absolute;
+  top: -0.25rem;
+  bottom: -0.25rem;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background-color: var(--color-base-content);
+  box-shadow: 0 0 0 1.5px var(--color-base-200);
+}
+
+/* Histórico de cumprimento das metas: um bloco por mês, com o mesmo tom das tags */
+.ui-goal-month {
+  --ui-tone: var(--color-neutral);
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid color-mix(in oklch, var(--ui-tone) 40%, transparent);
+  border-radius: var(--radius-field);
+  background-color: color-mix(in oklch, var(--ui-tone) 14%, transparent);
+  color: color-mix(in oklch, var(--ui-tone) 55%, var(--color-base-content));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  transition: transform 150ms ease-out;
+}
+.ui-goal-month:hover { transform: translateY(-1px); }
+.ui-goal-month-met { --ui-tone: var(--ui-receita); }
+.ui-goal-month-missed { --ui-tone: var(--ui-despesa); }
+.ui-goal-month-no_data {
+  border-style: dashed;
+  background-color: transparent;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+}
+
 /* Calendário de gastos: tons do vermelho de despesa conforme o gasto */
 .ui-heat { display: flex; flex-direction: column; gap: 0.3rem; }
 .ui-heat-row { display: flex; gap: 0.3rem; align-items: stretch; }
