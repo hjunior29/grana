@@ -78,6 +78,77 @@ defmodule Grana.Banking.StatementProcessorTest do
     assert length(uploaded) == result.transaction_count + 1
   end
 
+  test "o que foi ajustado à mão no Open Finance passa para o upload que o substitui", %{
+    user: user
+  } do
+    account = account_fixture(connection_fixture(user))
+
+    statement =
+      open_finance_statement_fixture(account, %{
+        period_start: ~D[2026-02-01],
+        period_end: ~D[2026-02-28]
+      })
+
+    moradia = Enum.find(Banking.list_categories(user.id), &(&1.name == "Moradia"))
+    lazer = Enum.find(Banking.list_categories(user.id), &(&1.name == "Lazer"))
+
+    {4, _} =
+      Banking.bulk_insert_transactions([
+        # Recategorized by hand: two days before the upload's date, same amount.
+        of_row(user, statement, ~D[2026-02-03], "BOLETO QWERTY", "-100.00",
+          category_id: moradia.id
+        ),
+        # Marked by hand as an internal transfer.
+        of_row(user, statement, ~D[2026-02-08], "PIX JOAO", "-250.00", internal_override: true),
+        # The upload already has its own category: it stays.
+        of_row(user, statement, ~D[2026-02-07], "FARMACIA", "-55.90", category_id: lazer.id),
+        # Same date, other amount: does not match.
+        of_row(user, statement, ~D[2026-02-05], "OUTRA", "-99.00", category_id: lazer.id)
+      ])
+
+    content = """
+    Data,Valor,Identificador,Descrição
+    05/02/2026,-100.00,id-1,Boleto pago - ZQWX SERVICOS
+    06/02/2026,-250.00,id-2,Transferencia enviada pelo Pix - JOAO TESTE
+    07/02/2026,-55.90,id-3,Compra no débito - FARMACIA ALFA
+    07/02/2026,-12.00,id-4,Compra no débito - LOJA SEM PAR
+    """
+
+    {:ok, _} = StatementProcessor.process(content, "nubank", "extrato", user.id, "fev.csv")
+
+    uploaded =
+      user.id
+      |> Banking.list_transactions(statement_type: "extrato")
+      |> Enum.filter(&(&1.bank_statement.source == "upload"))
+      |> Map.new(&{&1.description, &1})
+
+    uncategorized = Banking.get_uncategorized_category(user.id)
+
+    assert uploaded["Boleto pago - ZQWX SERVICOS"].category_id == moradia.id
+
+    pix = uploaded["Transferencia enviada pelo Pix - JOAO TESTE"]
+    assert pix.internal_override == true
+    assert pix.is_internal_transfer == true
+
+    assert uploaded["Compra no débito - FARMACIA ALFA"].category.name == "Saúde"
+    assert uploaded["Compra no débito - LOJA SEM PAR"].category_id == uncategorized.id
+    assert uploaded["Compra no débito - LOJA SEM PAR"].internal_override == nil
+  end
+
+  defp of_row(user, statement, date, description, amount, extra) do
+    Map.merge(
+      %{
+        date: date,
+        description: description,
+        amount: Decimal.new(amount),
+        type: "debit",
+        bank_statement_id: statement.id,
+        user_id: user.id
+      },
+      Map.new(extra)
+    )
+  end
+
   test "isolamento: o statement importado pertence ao usuário", %{user: user, content: content} do
     other = user_fixture()
     {:ok, _} = StatementProcessor.process(content, "nubank", "extrato", user.id, "extrato.csv")
