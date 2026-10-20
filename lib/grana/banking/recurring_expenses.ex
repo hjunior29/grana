@@ -42,7 +42,7 @@ defmodule Grana.Banking.RecurringExpenses do
     * `:total_fixed`/`:total_variable` — somas na janela (Decimal)
 
   Cada item de `:fixed` é um mapa:
-  `%{name, category, months_present, occurrences, avg_amount, last_amount,
+  `%{name, category, months_present, occurrences, avg_amount, last_amount, last_date,
      typical_day, pattern, patterns}`.
   """
   def analyze(transactions, opts \\ []) do
@@ -315,8 +315,25 @@ defmodule Grana.Banking.RecurringExpenses do
       occurrences: length(txns),
       avg_amount: average(amounts, length(amounts)),
       last_amount: latest.amount,
+      last_date: Date.new!(elem(latest.ym, 0), elem(latest.ym, 1), latest.day),
       typical_day: median_int(Enum.map(txns, & &1.day))
     }
+  end
+
+  @doc """
+  The fixed expenses (`:fixed` of `analyze/2`) still to be charged in the month of `today`:
+  charged last month but not yet in this one, by typical day.
+  """
+  def pending(fixed, today) do
+    month_start = Date.beginning_of_month(today)
+    previous_start = Date.shift(month_start, month: -1)
+
+    fixed
+    |> Enum.filter(fn item ->
+      Date.before?(item.last_date, month_start) and
+        not Date.before?(item.last_date, previous_start)
+    end)
+    |> Enum.sort_by(&(&1.typical_day || 32))
   end
 
   defp display_name(txns) do

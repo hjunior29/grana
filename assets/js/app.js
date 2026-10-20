@@ -385,7 +385,7 @@ const DailyChart = {
     const data = JSON.parse(this.el.dataset.daily || "[]")
     if (!data.length) return
 
-    const maxVal = Math.max(...data.map(d => d.value))
+    const maxVal = Math.max(...data.map(d => d.value + (d.sim || 0)))
     if (maxVal === 0) return
 
     const width = 500
@@ -747,7 +747,11 @@ const ProjectionChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-proj-label]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${privateBRL(parseFloat(target.dataset.projValue))}`)
+      const sim = parseFloat(target.dataset.projSim || "0")
+      const detail = sim > 0
+        ? `Parcelas: ${privateBRL(parseFloat(target.dataset.projValue))}<br>Simulada: ${privateBRL(sim)}`
+        : privateBRL(parseFloat(target.dataset.projValue))
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${detail}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
   },
@@ -756,7 +760,7 @@ const ProjectionChart = {
     const data = JSON.parse(this.el.dataset.projections || "[]")
     if (!data.length) return
 
-    const maxVal = Math.max(...data.map(d => d.value))
+    const maxVal = Math.max(...data.map(d => d.value + (d.sim || 0)))
     if (maxVal === 0) return
 
     const width = 700
@@ -770,12 +774,17 @@ const ProjectionChart = {
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-56">`
 
     data.forEach((item, i) => {
+      const sim = item.sim || 0
       const barHeight = (item.value / maxVal) * chartHeight
+      const simHeight = (sim / maxVal) * chartHeight
       const x = padding.left + i * slot + (slot - barWidth) / 2
       const y = padding.top + chartHeight - barHeight
 
       const safeLabel = escapeHtml(item.label)
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-(--ui-despesa) hover:brightness-110 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
+      const attrs = `data-proj-label="${safeLabel}" data-proj-value="${item.value}" data-proj-sim="${sim}"`
+      if (barHeight > 0) svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-(--ui-despesa) hover:brightness-110 transition-opacity cursor-pointer" ${attrs}></rect>`
+      // A simulated purchase stacks on top, in the primary color, so it reads as "what if".
+      if (simHeight > 0) svg += `<rect x="${x}" y="${y - simHeight}" width="${barWidth}" height="${simHeight}" rx="2" class="ui-projection-sim cursor-pointer" ${attrs}></rect>`
       svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${safeLabel}</text>`
     })
 
