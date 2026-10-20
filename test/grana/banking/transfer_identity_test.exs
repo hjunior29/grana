@@ -51,6 +51,13 @@ defmodule Grana.Banking.TransferIdentityTest do
            )
   end
 
+  test "own_identity? accepts the name cut by the bank, from three words on" do
+    assert TI.own_identity?("Pix Recebido - Ana Costa Ramos d", "Ana Costa Ramos Dias", nil)
+    assert TI.own_identity?("Pix Enviado - Ana Costa Ramos", "Ana Costa Ramos Dias", nil)
+    refute TI.own_identity?("Pix Recebido - Ana Costa", "Ana Costa Ramos Dias", nil)
+    refute TI.own_identity?("Pix Recebido - Ana Costa Pinto", "Ana Costa Ramos Dias", nil)
+  end
+
   test "rule_key prefere cpf, cai para nome" do
     assert TI.rule_key(@nubank_self) == "cpf:555444"
     assert TI.rule_key(@bradesco_self) == "name:ana costa ramos"
