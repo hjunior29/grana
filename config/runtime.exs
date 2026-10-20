@@ -164,13 +164,6 @@ if config_env() == :prod do
       [host: "localhost"]
     end
 
-  force_ssl =
-    if public_uri && public_uri.scheme == "https" do
-      [rewrite_on: [:x_forwarded_proto], hsts: true, host: nil]
-    else
-      false
-    end
-
   listen_ip =
     case :inet.parse_address(String.to_charlist(System.get_env("LISTEN_IP", "127.0.0.1"))) do
       {:ok, ip} -> ip
@@ -179,7 +172,10 @@ if config_env() == :prod do
 
   port = String.to_integer(System.get_env("PORT", "4000"))
 
-  endpoint_config = [
+  # No :force_ssl: the HTTPS of the domain is the proxy's job, the app also answers plain
+  # HTTP on the local network, and Phoenix reads :force_ssl at compile time (set here, the
+  # release refuses to boot).
+  config :grana, GranaWeb.Endpoint,
     url: endpoint_url,
     check_origin: :conn,
     http: [
@@ -187,14 +183,4 @@ if config_env() == :prod do
       port: port
     ],
     secret_key_base: secret_key_base
-  ]
-
-  endpoint_config =
-    if force_ssl do
-      Keyword.put(endpoint_config, :force_ssl, force_ssl)
-    else
-      endpoint_config
-    end
-
-  config :grana, GranaWeb.Endpoint, endpoint_config
 end
