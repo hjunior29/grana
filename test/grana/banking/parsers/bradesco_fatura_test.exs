@@ -92,4 +92,16 @@ defmodule Grana.Banking.Parsers.BradescoFaturaTest do
     assert compra.type == "debit"
     assert Decimal.compare(compra.amount, Decimal.new("-50.00")) == :eq
   end
+
+  test "drops the previous bill's balance and keeps its payment as a credit" do
+    csv = """
+    Data: 18/10/2026 11:20:18\r\rSituação da Fatura: PAGO\r\rFULANO DE TAL ;;; 0000\r\rData;Histórico;Valor(US\$);Valor(R\$);\r\r01/06;SALDO ANTERIOR ;0,00;2875,60\r\r01/06;PAGTO. POR DEB EM C/C ;0,00;-2875,60\r\r01/06;RESTAURANTE EXEMPLO ;0,00;37,20
+    """
+
+    assert [payment, purchase] = BradescoFatura.parse(csv)
+    assert payment.description == "PAGTO. POR DEB EM C/C"
+    assert payment.type == "credit"
+    assert Decimal.equal?(payment.amount, Decimal.new("2875.60"))
+    assert purchase.type == "debit"
+  end
 end

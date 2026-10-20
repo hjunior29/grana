@@ -4,6 +4,7 @@ defmodule Grana.Banking do
 
   alias Grana.Banking.{
     BankStatement,
+    CardPayments,
     Transaction,
     Category,
     CategoryRule,
@@ -828,26 +829,6 @@ defmodule Grana.Banking do
 
   # Internal Transfer Detection
 
-  # Known credit card company names used with "pagto eletron" detection
-  @cc_issuers [
-    "nu pagamentos",
-    "nubank"
-  ]
-
-  # Standalone patterns that always indicate CC bill payment. Quando a fatura do
-  # cartão é importada, o lançamento agregado no extrato ("GASTOS CARTAO DE
-  # CREDITO", "GASTOS CARTOES", etc.) duplica os gastos detalhados da fatura —
-  # por isso é tratado como transferência interna e excluído dos totais.
-  @cc_payment_patterns [
-    "pagamento de fatura",
-    "pag fatura",
-    "pgto fatura",
-    "gastos cartao",
-    "gastos cartoes",
-    "gasto cartao",
-    "gastos com cartao"
-  ]
-
   @transfer_patterns [
     "pix",
     "transferência",
@@ -869,8 +850,9 @@ defmodule Grana.Banking do
         set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
       )
 
-      # 2) Mark credit card bill payments in extratos
-      mark_cc_bill_payments(user_id)
+      # 2) Mark credit card bill payments, on the bill and on the account that paid
+      #    it, and the Pix paid with the card (`Grana.Banking.CardPayments`)
+      mark_card_payments(user_id)
 
       # 3) Mark matching inter-account transfers
       mark_inter_account_transfers(user_id)
@@ -955,52 +937,30 @@ defmodule Grana.Banking do
     )
   end
 
-  defp mark_cc_bill_payments(user_id) do
-    faturas =
-      BankStatement
-      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "fatura")
-      |> select([bs], {bs.period_start, bs.period_end})
+  defp mark_card_payments(user_id) do
+    transactions =
+      Transaction
+      |> join(:inner, [t], bs in assoc(t, :bank_statement))
+      |> where([t], t.user_id == ^user_id)
+      |> select([t, bs], %{
+        id: t.id,
+        date: t.date,
+        amount: t.amount,
+        type: t.type,
+        description: t.description,
+        statement_id: bs.id,
+        statement_type: bs.statement_type,
+        bank: bs.bank
+      })
       |> Repo.all()
 
-    if faturas != [] do
-      extrato_stmt_ids =
-        BankStatement
-        |> where([bs], bs.user_id == ^user_id and bs.statement_type == "extrato")
-        |> select([bs], bs.id)
+    bills =
+      BankStatement
+      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "fatura")
+      |> select([bs], {bs.bank, bs.period_start, bs.period_end})
+      |> Repo.all()
 
-      transactions =
-        Transaction
-        |> where([t], t.user_id == ^user_id and t.type == "debit")
-        |> where([t], t.bank_statement_id in subquery(extrato_stmt_ids))
-        |> Repo.all()
-
-      cc_payment_ids =
-        transactions
-        |> Enum.filter(fn t ->
-          desc = String.downcase(t.description)
-
-          matches_pattern? =
-            Enum.any?(@cc_payment_patterns, &String.contains?(desc, &1)) or
-              (String.contains?(desc, "pagto eletron") and
-                 Enum.any?(@cc_issuers, &String.contains?(desc, &1)))
-
-          matches_pattern? and
-            Enum.any?(faturas, fn {p_start, p_end} ->
-              (p_end && abs(Date.diff(t.date, p_end)) <= 45) or
-                (p_start && abs(Date.diff(t.date, p_start)) <= 45) or
-                (is_nil(p_start) and is_nil(p_end))
-            end)
-        end)
-        |> Enum.map(& &1.id)
-
-      if cc_payment_ids != [] do
-        Transaction
-        |> where([t], t.id in ^cc_payment_ids)
-        |> Repo.update_all(
-          set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)]
-        )
-      end
-    end
+    transactions |> CardPayments.internal_ids(bills) |> mark_ids(true)
   end
 
   defp mark_inter_account_transfers(user_id) do
@@ -1540,11 +1500,14 @@ defmodule Grana.Banking do
       not String.contains?(desc, "estorno")
   end
 
+  # Any other credit on a card bill gives back a purchase (Bradesco lists a refund
+  # under the merchant's name alone): it discounts the spending, it is not income.
   defp refund?(t) do
     desc = String.downcase(t.description)
 
     t.type == "credit" and
-      (String.contains?(desc, "estorno") or
+      (match?(%{bank_statement: %BankStatement{statement_type: "fatura"}}, t) or
+         String.contains?(desc, "estorno") or
          String.contains?(desc, "devolução") or
          String.contains?(desc, "devoluç") or
          String.contains?(desc, "reembolso") or

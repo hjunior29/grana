@@ -55,6 +55,11 @@ defmodule Grana.Banking.Parsers.BradescoFatura do
 
   defp parse_line(line, ref) do
     case String.split(line, ";") do
+      # The previous bill's balance, repeated at the top of each card's list: the payment
+      # right below settles it, and its purchases were on that bill.
+      [_date, "SALDO ANTERIOR" <> _, _usd, _brl | _] ->
+        nil
+
       [date_str, description, _usd, brl | _] ->
         case parse_date(String.trim(date_str), ref) do
           {:ok, date} ->
