@@ -4699,6 +4699,8 @@ html {
     color-mix(in oklch, var(--color-base-content) 12%, transparent); }
 .lp-install-copy h3 { margin: 0.45rem 0 0.5rem; font-size: 1.15rem; font-weight: 700; }
 .lp-install-copy code { padding: 0.05rem 0.3rem; border-radius: var(--radius-field); background: color-mix(in oklch, var(--color-base-content) 8%, transparent); font-size: 0.85em; }
+.lp-install-tips { display: grid; gap: 0.3rem; margin-top: 0.6rem; padding-left: 1.1rem; list-style: disc; }
+.lp-install-tips li::marker { color: var(--color-primary); }
 @media (min-width: 1024px) {
   .lp-install-step { grid-template-columns: 2.75rem minmax(0, 0.85fr) minmax(0, 1.15fr); column-gap: 2rem; }
   .lp-install-rail { grid-row: auto; }

@@ -33,7 +33,7 @@ defmodule GranaWeb.LandingLive do
     do: {:noreply, update(socket, :hide_names, &(!&1))}
 
   def handle_event("set_install_method", %{"method" => method}, socket)
-      when method in ~w(script docker) do
+      when method in ~w(script docker fly) do
     {:noreply, assign(socket, :install_method, method)}
   end
 
@@ -1321,10 +1321,11 @@ defmodule GranaWeb.LandingLive do
         <div class="lp-wrap">
           <div class="text-center mb-10">
             <p class="lp-kicker lp-rise">Instalação</p>
-            <h2 class="lp-h2 lp-rise" style="--d: 0.05">Instale no seu servidor</h2>
+            <h2 class="lp-h2 lp-rise" style="--d: 0.05">Instale onde preferir</h2>
             <p class="lp-lead mx-auto max-w-2xl lp-rise" style="--d: 0.1">
-              Debian 12+ ou Ubuntu 22.04+, em x86_64 ou arm64. Nenhuma variável de ambiente é
-              obrigatória: o resto se configura pela tela.
+              No seu servidor (Debian 12+ ou Ubuntu 22.04+, x86_64 ou arm64), com Docker ou na
+              nuvem do Fly.io. Nenhuma variável de ambiente é obrigatória: o resto se configura
+              pela tela.
             </p>
             <div class="lp-seg lp-rise" style="--d: 0.15" role="group" aria-label="Forma de instalar">
               <button
@@ -1359,10 +1360,21 @@ defmodule GranaWeb.LandingLive do
                   quiser, num <code>.env</code>
                   ao lado do compose.
                 </p>
+                <div :if={@install_method == "fly"} id="instalacao-fly" class="ui-help">
+                  <p>
+                    Uma máquina pequena roda a mesma imagem, com o banco num volume e HTTPS em <code>meu-grana.fly.dev</code>. O
+                    <code>fly.toml</code>
+                    já vem pronto: troque <code>meu-grana</code>
+                    pelo nome do seu app.
+                  </p>
+                  <ul class="lp-install-tips">
+                    <li :for={tip <- fly_tips()}>{tip}</li>
+                  </ul>
+                </div>
               </div>
               <.terminal
                 id="instalacao-terminal-1"
-                title="seu-servidor — bash"
+                title={terminal_title(@install_method)}
                 commands={install_commands(@install_method)}
                 output={install_output(@install_method)}
               />
@@ -1375,15 +1387,15 @@ defmodule GranaWeb.LandingLive do
               <div class="lp-install-copy lp-rise">
                 <h3>Pegue o código do primeiro acesso</h3>
                 <p class="ui-help">
-                  Sem dono, a instância leva qualquer endereço ao setup, que pede um código de uso
+                  Sem dono, a instância leva as telas do app ao setup, que pede um código de uso
                   único impresso no log. Ele vale até a conta ser criada.
                 </p>
               </div>
               <.terminal
                 id="instalacao-terminal-2"
-                title="seu-servidor — bash"
+                title={terminal_title(@install_method)}
                 commands={log_commands(@install_method)}
-                output={log_output()}
+                output={log_output(@install_method)}
               />
             </li>
 
@@ -1394,19 +1406,17 @@ defmodule GranaWeb.LandingLive do
               <div class="lp-install-copy lp-rise">
                 <h3>Configure a sua instância</h3>
                 <p class="ui-help">
-                  Abra <code>http://seu-servidor:4000</code>, digite o código e crie a sua conta, ou
-                  restaure um backup. Um onboarding opcional configura o resto; cada etapa pode ser
-                  pulada e refeita em Configurações.
+                  Abra <code>{setup_url(@install_method)}</code>, digite o código e crie a sua
+                  conta, ou restaure um backup. Um onboarding opcional configura o resto; cada
+                  etapa pode ser pulada e refeita em Configurações.
                 </p>
-                <p class="ui-help mt-2">
-                  HTTPS fica com o seu proxy reverso: Caddy, Nginx ou Cloudflare Tunnel.
-                </p>
+                <p class="ui-help mt-2">{https_note(@install_method)}</p>
               </div>
               <div class="lp-browser lp-rise" style="--d: 0.12" aria-hidden="true">
                 <div class="lp-term-bar">
                   <span class="lp-term-dots"><i></i><i></i><i></i></span>
                   <span class="lp-browser-url">
-                    <.icon name="hero-globe-alt" class="size-3.5" /> seu-servidor:4000/setup
+                    <.icon name="hero-globe-alt" class="size-3.5" /> {setup_host(@install_method)}/setup
                   </span>
                 </div>
                 <div class="lp-browser-body">
@@ -1433,7 +1443,15 @@ defmodule GranaWeb.LandingLive do
             </li>
           </ol>
 
-          <p class="text-center mt-12 lp-rise" style="--d: 0.5">
+          <p id="instalacao-pikapods" class="ui-help text-center mt-12 lp-rise" style="--d: 0.45">
+            Sem terminal? O
+            <a href="https://www.pikapods.com" target="_blank" class="link">PikaPods</a>
+            hospeda apps open source do catálogo dele, a partir de US$ 1,80/mês. O Grana ainda não
+            está lá:
+            <a href="https://feedback.pikapods.com" target="_blank" class="link">peça o Grana</a>
+          </p>
+
+          <p class="text-center mt-6 lp-rise" style="--d: 0.5">
             <a
               id="instalacao-readme"
               href="https://github.com/hjunior29/grana#readme"
@@ -1929,7 +1947,8 @@ defmodule GranaWeb.LandingLive do
   defp install_methods do
     [
       {"script", "hero-command-line", "Script + systemd"},
-      {"docker", "hero-cube", "Docker Compose"}
+      {"docker", "hero-cube", "Docker Compose"},
+      {"fly", "hero-cloud", "Fly.io"}
     ]
   end
 
@@ -1940,6 +1959,14 @@ defmodule GranaWeb.LandingLive do
 
   defp install_commands("docker"),
     do: ["curl -fsSLO #{@repo_raw}/docker-compose.yml", "docker compose up -d"]
+
+  defp install_commands("fly"),
+    do: [
+      "curl -fsSLO #{@repo_raw}/deploy/fly.toml",
+      "fly apps create meu-grana",
+      "fly volumes create grana_data -a meu-grana -r gru -s 1 -y",
+      "fly deploy -a meu-grana --ha=false"
+    ]
 
   # What deploy/install.sh and compose print along the way.
   defp install_output("script") do
@@ -1959,19 +1986,51 @@ defmodule GranaWeb.LandingLive do
     ]
   end
 
+  defp install_output("fly") do
+    [
+      {:ok, "New app created: meu-grana"},
+      {:ok, "Volume grana_data · 1GB · gru"},
+      {:text, "Visit your newly deployed app at https://meu-grana.fly.dev/"}
+    ]
+  end
+
+  defp fly_tips do
+    [
+      "Auto stop: sem acesso, a máquina para e só o volume é cobrado; o próximo acesso a liga em alguns segundos.",
+      "Parada, nada roda em segundo plano: deixe a aba aberta numa importação longa.",
+      "Snapshots diários do volume, além do backup pela tela."
+    ]
+  end
+
   defp log_commands("script"),
     do: [~s(sudo journalctl -u grana | grep -A3 "configuração inicial")]
 
   defp log_commands("docker"), do: ["docker compose logs grana"]
+  defp log_commands("fly"), do: ["fly logs -a meu-grana --no-tail"]
 
   # The banner `Grana.Setup` logs on a boot without an owner.
-  defp log_output do
+  defp log_output(method) do
     [
       {:text, "GRANA — configuração inicial"},
-      {:text, "Abra:   http://seu-servidor:4000/setup"},
+      {:text, "Abra:   #{setup_url(method)}/setup"},
       {:code, "Código: ", setup_code()}
     ]
   end
+
+  # The fly commands run on your own machine, not on a server.
+  defp terminal_title("fly"), do: "seu-computador — bash"
+  defp terminal_title(_method), do: "seu-servidor — bash"
+
+  defp setup_host("fly"), do: "meu-grana.fly.dev"
+  defp setup_host(_method), do: "seu-servidor:4000"
+
+  defp setup_url("fly"), do: "https://meu-grana.fly.dev"
+  defp setup_url(_method), do: "http://seu-servidor:4000"
+
+  defp https_note("fly"), do: "O HTTPS já vem do Fly, no endereço do app ou num domínio seu."
+
+  defp https_note(_method),
+    do: "HTTPS fica com o seu proxy reverso: Caddy, Nginx ou Cloudflare Tunnel."
 
   defp setup_code, do: "K7QF-2M9X"
 

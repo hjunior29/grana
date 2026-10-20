@@ -23,7 +23,8 @@ no seu servidor.
 
 ## Requisitos
 
-- Linux com systemd (Debian 12+/Ubuntu 22.04+, glibc ≥ 2.35 e OpenSSL 3) **ou** Docker.
+- Linux com systemd (Debian 12+/Ubuntu 22.04+, glibc ≥ 2.35 e OpenSSL 3), Docker **ou** uma
+  conta no [Fly.io](https://fly.io) (sem servidor seu).
 - `poppler-utils` (`pdftotext`) para ler PDFs — o `install.sh` e a imagem Docker já cuidam disso.
 - Para compilar no próprio servidor: Erlang/OTP 28 e Elixir 1.18 (o `.tool-versions` fixa as
   versões; funciona com [mise](https://mise.jdx.dev) ou asdf).
@@ -78,12 +79,52 @@ A imagem (`ghcr.io/hjunior29/grana`, amd64 e arm64) guarda tudo no volume `grana
 só nesta máquina (`127.0.0.1:4000`): `BIND_IP=0.0.0.0` no `.env` a abre para a rede local, e
 `PORT` troca a porta do host (dentro do container é sempre a 4000).
 
+### Fly.io (na nuvem, sem servidor seu)
+
+O [Fly.io](https://fly.io) roda a imagem pronta numa máquina pequena, com o banco num volume
+e HTTPS no endereço `https://<app>.fly.dev`. Com o [`flyctl`](https://fly.io/docs/flyctl/install/)
+instalado e logado (`fly auth login`), numa pasta vazia:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/hjunior29/grana/main/deploy/fly.toml
+fly apps create meu-grana                                  # nome único: vira meu-grana.fly.dev
+fly volumes create grana_data -a meu-grana -r gru -s 1 -y  # 1 GB em São Paulo
+fly deploy -a meu-grana --ha=false                         # uma máquina só: o banco é SQLite
+fly logs -a meu-grana --no-tail                            # o código do setup
+```
+
+Troque `meu-grana` pelo nome do seu app em todos os comandos. O
+[`deploy/fly.toml`](deploy/fly.toml) já traz o volume em `/data`, o
+`TRUST_PROXY_HEADERS=true` que o proxy HTTPS do Fly exige, o health check e uma máquina de
+512 MB. Dicas:
+
+- **Auto stop:** sem acesso por alguns minutos, a máquina para e só o volume é cobrado; o
+  próximo acesso a liga em alguns segundos. `auto_stop_machines = "suspend"` volta mais
+  rápido, e `min_machines_running = 1` a deixa sempre ligada.
+- **Com a máquina parada, nada roda em segundo plano:** a releitura do Open Finance espera o
+  próximo acesso (o webhook da Pluggy acorda a máquina), e uma importação longa precisa da
+  aba aberta até terminar.
+- **Um código por boot:** se a máquina parar antes de você criar a conta, o próximo acesso gera
+  outro código; vale o último do `fly logs`.
+- **Backup:** o Fly tira snapshots diários do volume (5 dias; `snapshot_retention` no
+  `fly.toml` vai até 60), e o backup pela tela continua valendo.
+- **Links de email e webhook:** `fly secrets set -a meu-grana PUBLIC_URL=https://meu-grana.fly.dev`.
+  Os outros segredos (SMTP, chaves de IA, Pluggy) também vão por `fly secrets set`, ou pela tela.
+- **Outra região:** `fly platform regions`; o volume e o `primary_region` precisam ser da mesma.
+
+### PikaPods
+
+O [PikaPods](https://www.pikapods.com) hospeda apps open source do catálogo deles, sem
+terminal, a partir de US$ 1,80/mês. O Grana ainda não está no catálogo: para pedir, vote ou
+sugira o app em [feedback.pikapods.com](https://feedback.pikapods.com). Até lá, o Fly.io é o
+caminho na nuvem.
+
 ## Primeiro acesso
 
 O app escuta só na própria máquina (`127.0.0.1:4000`). Para abrir de outro computador da
 rede, defina `LISTEN_IP=0.0.0.0` em `/etc/grana/grana.env` (systemd) ou `BIND_IP=0.0.0.0` no
 `.env` (Docker) e abra `http://IP-DO-SERVIDOR:4000`; para um domínio com HTTPS, veja
-[HTTPS e rede local](#https-e-rede-local).
+[HTTPS e rede local](#https-e-rede-local). No Fly.io, abra `https://<app>.fly.dev`.
 
 Com a instância sem dono, as telas do app levam ao assistente de setup (`/setup`), que pede o
 **código de uso único** impresso no log:
@@ -91,6 +132,7 @@ Com a instância sem dono, as telas do app levam ao assistente de setup (`/setup
 ```bash
 sudo journalctl -u grana | grep -A3 "configuração inicial"   # systemd
 docker compose logs grana                                     # Docker
+fly logs -a meu-grana --no-tail                               # Fly.io
 ```
 
 O assistente explica como o Grana funciona e pergunta se você quer uma **nova instalação** ou
@@ -117,7 +159,7 @@ quando não há nada no ambiente).
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`, `MAIL_FROM_NAME`, `MAIL_FROM_ADDRESS` | SMTP (liga o 2FA) |
 | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Provedores de IA pelo ambiente (aparecem na tela como `.env`) |
 | `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_URL` | Open Finance |
-| `TRUST_PROXY_HEADERS` | `true` atrás de proxy reverso: confia no `X-Forwarded-*` para o HTTPS (cookies seguros e o LiveView) e para o IP real no rate limit. Sem proxy na frente, deixe desligado |
+| `TRUST_PROXY_HEADERS` | `true` atrás de proxy reverso ou no Fly.io: confia no `X-Forwarded-*` para o HTTPS (cookies seguros e o LiveView) e para o IP real no rate limit. Sem proxy na frente, deixe desligado |
 | `POOL_SIZE`, `CACHE_ENABLED`, `CACHE_TTL_SECONDS`, `SKIP_MIGRATIONS` | Ajustes finos |
 
 > **Guarde a `CLOAK_KEY`** em local seguro e **separada** do arquivo de backup (por exemplo, no seu gerenciador de senhas). Ela
@@ -203,6 +245,7 @@ apontando para `http://localhost:4000`), com `PUBLIC_URL` no domínio do túnel.
 bash install.sh --update                        # systemd, pelo tarball: baixa a última versão e reinicia
 git pull && ./deploy/install.sh --from-source   # systemd, compilado no servidor
 docker compose pull && docker compose up -d     # Docker
+fly deploy -a meu-grana --ha=false              # Fly.io: baixa a imagem latest de novo
 ```
 
 As migrations rodam sozinhas no boot. **Baixe um backup antes** (Configurações → Backup).
@@ -229,6 +272,7 @@ chegar), gere o link no servidor:
 ```bash
 sudo -u grana /opt/grana/bin/grana-reset-password   # systemd
 docker exec grana /app/bin/grana-reset-password     # Docker
+fly ssh console -a meu-grana -C "su -s /bin/sh grana -c 'DATA_DIR=/data /app/bin/grana-reset-password'"   # Fly.io
 ```
 
 Se um SMTP salvo pela tela estiver quebrado e o 2FA te trancou para fora:
@@ -236,7 +280,10 @@ Se um SMTP salvo pela tela estiver quebrado e o 2FA te trancou para fora:
 ```bash
 sudo -u grana /opt/grana/bin/grana-disable-smtp
 docker exec grana /app/bin/grana-disable-smtp
+fly ssh console -a meu-grana -C "su -s /bin/sh grana -c 'DATA_DIR=/data /app/bin/grana-disable-smtp'"
 ```
+
+No Fly.io, abra o site antes para acordar a máquina se ela estiver parada.
 
 (SMTP vindo de variáveis de ambiente só se desliga removendo as variáveis e reiniciando.)
 
