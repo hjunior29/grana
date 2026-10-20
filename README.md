@@ -338,3 +338,9 @@ Para validar uma release como em produção:
 MIX_ENV=prod mix assets.deploy && MIX_ENV=prod mix release
 DATA_DIR=$(mktemp -d) PORT=4010 PHX_SERVER=true _build/prod/rel/grana/bin/grana start
 ```
+
+## Licença
+
+[AGPL-3.0](LICENSE). Você pode usar, modificar e hospedar o Grana à vontade; se oferecer uma
+versão modificada como serviço para outras pessoas, publique o código dessas mudanças sob a
+mesma licença.
