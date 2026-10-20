@@ -62,6 +62,7 @@ defmodule GranaWeb.DashboardLive do
       |> assign(:rec_window, "6")
       |> assign(:rec_bank, "all")
       |> assign(:rec_type, "all")
+      |> assign(:rec_rules_open, false)
       |> assign_today()
 
     # O Open Finance é relido em segundo plano se a última leitura tiver mais de
@@ -130,6 +131,25 @@ defmodule GranaWeb.DashboardLive do
 
   def handle_event("rec_select_type", %{"type" => type}, socket) do
     {:noreply, socket |> assign(:rec_type, type) |> load_recurring_data()}
+  end
+
+  def handle_event("open_rec_rules", _params, socket) do
+    {:noreply, assign(socket, :rec_rules_open, true)}
+  end
+
+  def handle_event("close_rec_rules", _params, socket) do
+    {:noreply, assign(socket, :rec_rules_open, false)}
+  end
+
+  def handle_event("delete_rec_rule", %{"pattern" => pattern}, socket) do
+    Banking.delete_recurring_rule(socket.assigns.current_scope.user.id, pattern)
+
+    socket = load_recurring_data(socket)
+
+    {:noreply,
+     socket
+     |> assign(:rec_rules_open, socket.assigns.rec_rules != [])
+     |> put_flash(:info, "Regra removida. A despesa volta à detecção automática.")}
   end
 
   # ── Events: Period Selection ──
@@ -321,6 +341,7 @@ defmodule GranaWeb.DashboardLive do
     socket
     |> assign(:rec_analysis, analysis)
     |> assign(:rec_chart, rec_chart_data(analysis))
+    |> assign(:rec_rules, Banking.list_recurring_rules(socket.assigns.current_scope.user.id))
     |> assign(:rec_loaded, true)
   end
 
@@ -684,7 +705,54 @@ defmodule GranaWeb.DashboardLive do
       </.chip_group>
       <.bank_filter banks={@banks} selected={@rec_bank} event="rec_select_bank" />
       <.source_filter selected={@rec_type} event="rec_select_type" />
+      <.button
+        :if={@rec_rules != []}
+        id="rec-rules-open"
+        type="button"
+        variant="ghost"
+        size="sm"
+        icon="hero-adjustments-horizontal"
+        class="ml-auto"
+        phx-click="open_rec_rules"
+      >
+        Regras salvas ({length(@rec_rules)})
+      </.button>
     </.filter_bar>
+
+    <.list_modal
+      :if={@rec_rules_open}
+      id="rec-rules-modal"
+      title="Regras salvas"
+      description="Despesas que você marcou como fixas ou como variáveis. Remover uma regra devolve a despesa à detecção automática."
+      on_cancel={JS.push("close_rec_rules")}
+    >
+      <ul class="divide-y divide-base-content/10">
+        <.item_row
+          :for={rule <- @rec_rules}
+          id={"rec-rule-#{rule.id}"}
+          title={rule.pattern}
+          title_class="ui-private-name"
+        >
+          <:tags>
+            <.tag kind="neutro">{if rule.mode == "fixed", do: "fixa", else: "variável"}</.tag>
+          </:tags>
+          <:actions>
+            <.button
+              type="button"
+              variant="ghost"
+              size="sm"
+              icon="hero-trash"
+              class="btn-square text-error"
+              aria-label={"Remover regra de #{rule.pattern}"}
+              phx-click="delete_rec_rule"
+              phx-value-pattern={rule.pattern}
+            >
+              <span class="sr-only">Remover</span>
+            </.button>
+          </:actions>
+        </.item_row>
+      </ul>
+    </.list_modal>
 
     <.empty_state
       :if={@rec_analysis.total_months == 0}

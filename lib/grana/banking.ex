@@ -932,6 +932,20 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
+  @doc """
+  Forgets a learned counterparty rule and runs the detection again, so its transactions
+  go back to what the automatic heuristics say.
+  """
+  def delete_internal_transfer_rule(user_id, rule_id) do
+    {count, _} =
+      InternalTransferRule
+      |> where([r], r.user_id == ^user_id and r.id == ^rule_id)
+      |> Repo.delete_all()
+
+    if count > 0, do: detect_internal_transfers(user_id)
+    {:ok, count}
+  end
+
   defp upsert_internal_transfer_rule(user_id, pattern, kind) do
     %InternalTransferRule{user_id: user_id}
     |> InternalTransferRule.changeset(%{pattern: pattern, kind: kind})
@@ -1130,6 +1144,24 @@ defmodule Grana.Banking do
     |> where([r], r.user_id == ^user_id)
     |> preload(:category)
     |> Repo.all()
+  end
+
+  @doc "The learned patterns of one category, alphabetically."
+  def category_rules(user_id, category_id) do
+    CategoryRule
+    |> where([r], r.user_id == ^user_id and r.category_id == ^category_id)
+    |> order_by([r], asc: r.pattern)
+    |> Repo.all()
+  end
+
+  def delete_category_rule(user_id, rule_id) do
+    {count, _} =
+      CategoryRule
+      |> where([r], r.user_id == ^user_id and r.id == ^rule_id)
+      |> Repo.delete_all()
+
+    Grana.Cache.invalidate_user(user_id)
+    {:ok, count}
   end
 
   def create_category_rule(attrs) do

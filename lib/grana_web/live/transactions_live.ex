@@ -29,6 +29,8 @@ defmodule GranaWeb.TransactionsLive do
       |> assign(:saved_searches, Banking.list_saved_searches(user_id))
       |> assign(:save_form, nil)
       |> assign(:delete_saved, nil)
+      |> assign(:internal_rules, Banking.list_internal_transfer_rules(user_id))
+      |> assign(:internal_rules_open, false)
       |> assign_ai_search(Run.current(user_id, :search))
 
     # Meses sem upload vêm do Open Finance; relê se a última leitura passou de 1h.
@@ -290,10 +292,31 @@ defmodule GranaWeb.TransactionsLive do
 
     socket =
       socket
+      |> assign(:internal_rules, Banking.list_internal_transfer_rules(user_id))
       |> put_flash(:info, msg)
       |> push_patch(to: transactions_url(socket.assigns.filters, socket.assigns.page))
 
     {:noreply, socket}
+  end
+
+  def handle_event("open_internal_rules", _params, socket) do
+    {:noreply, assign(socket, :internal_rules_open, true)}
+  end
+
+  def handle_event("close_internal_rules", _params, socket) do
+    {:noreply, assign(socket, :internal_rules_open, false)}
+  end
+
+  def handle_event("delete_internal_rule", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    {:ok, _count} = Banking.delete_internal_transfer_rule(user_id, parse_int(id, -1))
+    rules = Banking.list_internal_transfer_rules(user_id)
+
+    {:noreply,
+     socket
+     |> assign(internal_rules: rules, internal_rules_open: rules != [])
+     |> load_transactions(user_id)
+     |> put_flash(:info, "Regra removida e transferências recalculadas.")}
   end
 
   def handle_event("toggle-select", %{"id" => id}, socket) do
@@ -726,8 +749,20 @@ defmodule GranaWeb.TransactionsLive do
               Investimentos <.money value={@summary.bank_investments} tone={:investimento} />
             </span>
 
-            <div :if={@total > 0} class="ml-auto flex gap-2">
+            <div :if={@total > 0 or @internal_rules != []} class="ml-auto flex gap-2">
               <.button
+                :if={@internal_rules != []}
+                id="internal-rules-open"
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="hero-arrows-right-left"
+                phx-click="open_internal_rules"
+              >
+                Regras internas ({length(@internal_rules)})
+              </.button>
+              <.button
+                :if={@total > 0}
                 id="export-csv"
                 href={export_href(@filters)}
                 variant="secondary"
@@ -981,6 +1016,41 @@ defmodule GranaWeb.TransactionsLive do
           Busca: <code class="ui-query-code">{@save_form[:query].value}</code>
         </p>
       </.form_modal>
+
+      <.list_modal
+        :if={@internal_rules_open}
+        id="internal-rules-modal"
+        title="Regras internas"
+        description="Contrapartes que você marcou como transferência entre suas contas ou como externa. Remover uma regra recalcula as transferências delas."
+        on_cancel={JS.push("close_internal_rules")}
+      >
+        <ul class="divide-y divide-base-content/10">
+          <.item_row
+            :for={rule <- @internal_rules}
+            id={"internal-rule-#{rule.id}"}
+            title={internal_rule_label(rule.pattern)}
+            title_class="ui-private-name"
+          >
+            <:tags>
+              <.tag kind="neutro">{if rule.kind == "internal", do: "interna", else: "externa"}</.tag>
+            </:tags>
+            <:actions>
+              <.button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="hero-trash"
+                class="btn-square text-error"
+                aria-label="Remover regra"
+                phx-click="delete_internal_rule"
+                phx-value-id={rule.id}
+              >
+                <span class="sr-only">Remover</span>
+              </.button>
+            </:actions>
+          </.item_row>
+        </ul>
+      </.list_modal>
 
       <.confirm_modal
         :if={@delete_saved}
@@ -1585,6 +1655,13 @@ defmodule GranaWeb.TransactionsLive do
   defp range_clause(field, from, ""), do: "#{field}>=#{from}"
   defp range_clause(field, "", to), do: "#{field}<=#{to}"
   defp range_clause(field, from, to), do: "#{field}:#{from}..#{to}"
+
+  # "cpf:123456" (the visible middle of a masked CPF) or "name:joao silva".
+  defp internal_rule_label("cpf:" <> digits),
+    do: "CPF •••.#{String.slice(digits, 0, 3)}.#{String.slice(digits, 3, 3)}-••"
+
+  defp internal_rule_label("name:" <> name), do: String.upcase(name)
+  defp internal_rule_label(pattern), do: pattern
 
   defp internal_clause("hide"), do: "internal:false"
   defp internal_clause("only"), do: "internal:true"
