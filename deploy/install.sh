@@ -141,6 +141,12 @@ as_root install -m 644 "$RELEASE_SRC/grana.service" "$UNIT_FILE"
 as_root systemctl daemon-reload
 as_root systemctl enable grana >/dev/null
 
+if [ "$MODE" = "source" ]; then
+  UPDATE_CMD="git pull && ./deploy/install.sh --from-source"
+else
+  UPDATE_CMD="bash install.sh --update"
+fi
+
 # restart serve para instalar pela primeira vez e para atualizar (--update).
 log "Iniciando o serviço"
 as_root systemctl restart grana
@@ -149,12 +155,14 @@ cat <<MSG
 
 Grana instalado e rodando em http://localhost:4000
 
-Primeiro acesso: abra a URL do servidor e digite o código do setup, impresso no log:
+Primeiro acesso: abra a URL do servidor e digite o código do setup, impresso no log.
+O app escuta só nesta máquina: para abrir de outra, defina LISTEN_IP=0.0.0.0 em
+$ENV_FILE (rede local) ou ponha um proxy com HTTPS na frente (veja o README).
 
     sudo journalctl -u grana | grep -A3 "configuração inicial"
 
 Configuração:    $ENV_FILE   (opcional; tudo também pode ser feito pela tela)
 Dados e banco:   $DATA_DIR
-Atualizar:       ./deploy/install.sh --update   (faça um backup em Configurações antes)
+Atualizar:       $UPDATE_CMD   (faça um backup em Configurações antes)
 Esqueci a senha: sudo -u grana $APP_DIR/bin/grana-reset-password
 MSG

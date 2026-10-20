@@ -52,9 +52,19 @@ git clone https://github.com/hjunior29/grana && cd grana
 ```
 
 **Tarball manual:** baixe `grana-vX.Y.Z-linux-<arch>.tar.gz` e o `.sha256` em
-[Releases](https://github.com/hjunior29/grana/releases), confira com `sha256sum -c`,
-extraia em `/opt/grana`, copie `env.example` para `/etc/grana/grana.env` e `grana.service`
-para `/etc/systemd/system/`.
+[Releases](https://github.com/hjunior29/grana/releases) e, na mesma pasta:
+
+```bash
+sha256sum -c grana-vX.Y.Z-linux-<arch>.tar.gz.sha256
+sudo useradd --system --home-dir /var/lib/grana --shell /usr/sbin/nologin grana
+sudo mkdir -p /opt/grana /etc/grana
+sudo tar -xzf grana-vX.Y.Z-linux-<arch>.tar.gz -C /opt/grana --strip-components=1
+sudo install -m 640 -o root -g grana /opt/grana/env.example /etc/grana/grana.env
+sudo cp /opt/grana/grana.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now grana
+```
+
+O serviço cria `/var/lib/grana` sozinho.
 
 ### Docker Compose
 
@@ -64,12 +74,19 @@ docker compose up -d
 ```
 
 A imagem (`ghcr.io/hjunior29/grana`, amd64 e arm64) guarda tudo no volume `grana-data`
-(`/data`). Para variáveis de ambiente, crie um `.env` ao lado do compose.
+(`/data`). Para variáveis de ambiente, crie um `.env` ao lado do compose. A porta é publicada
+só nesta máquina (`127.0.0.1:4000`): `BIND_IP=0.0.0.0` no `.env` a abre para a rede local, e
+`PORT` troca a porta do host (dentro do container é sempre a 4000).
 
 ## Primeiro acesso
 
-Abra `http://IP-DO-SERVIDOR:4000`. Com a instância sem dono, qualquer endereço leva ao
-assistente de setup, que pede o **código de uso único** impresso no log:
+O app escuta só na própria máquina (`127.0.0.1:4000`). Para abrir de outro computador da
+rede, defina `LISTEN_IP=0.0.0.0` em `/etc/grana/grana.env` (systemd) ou `BIND_IP=0.0.0.0` no
+`.env` (Docker) e abra `http://IP-DO-SERVIDOR:4000`; para um domínio com HTTPS, veja
+[HTTPS e rede local](#https-e-rede-local).
+
+Com a instância sem dono, as telas do app levam ao assistente de setup (`/setup`), que pede o
+**código de uso único** impresso no log:
 
 ```bash
 sudo journalctl -u grana | grep -A3 "configuração inicial"   # systemd
@@ -92,13 +109,15 @@ quando não há nada no ambiente).
 |---|---|
 | `DATA_DIR` | Pasta de dados (padrão `/var/lib/grana`; `/data` no Docker) |
 | `DATABASE_PATH` | Caminho do banco (padrão `$DATA_DIR/grana.db`) |
-| `PORT` | Porta HTTP (4000) |
+| `PORT` | Porta HTTP (4000). No Docker Compose, a porta publicada no host (o container usa sempre a 4000) |
+| `LISTEN_IP` | IP em que o app escuta (padrão `127.0.0.1`; `0.0.0.0` abre para a rede local). A imagem Docker já usa `0.0.0.0` |
+| `BIND_IP` | Docker Compose: IP do host em que a porta é publicada (padrão `127.0.0.1`; `0.0.0.0` para a rede local) |
 | `PUBLIC_URL` | URL pública, usada nos links de email e no webhook da Pluggy |
 | `SECRET_KEY_BASE`, `CLOAK_KEY` | Gerados no primeiro boot em `$DATA_DIR/secrets/`; defina só para controlá-los |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`, `MAIL_FROM_NAME`, `MAIL_FROM_ADDRESS` | SMTP (liga o 2FA) |
 | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Provedores de IA pelo ambiente (aparecem na tela como `.env`) |
 | `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_URL` | Open Finance |
-| `TRUST_PROXY_HEADERS` | `true` atrás de proxy reverso (usa `X-Forwarded-For` no rate limit) |
+| `TRUST_PROXY_HEADERS` | `true` atrás de proxy reverso: confia no `X-Forwarded-*` para o HTTPS (cookies seguros e o LiveView) e para o IP real no rate limit. Sem proxy na frente, deixe desligado |
 | `POOL_SIZE`, `CACHE_ENABLED`, `CACHE_TTL_SECONDS`, `SKIP_MIGRATIONS` | Ajustes finos |
 
 > **Guarde a `CLOAK_KEY`** em local seguro e **separada** do arquivo de backup (por exemplo, no seu gerenciador de senhas). Ela
@@ -181,8 +200,9 @@ apontando para `http://localhost:4000`), com `PUBLIC_URL` no domínio do túnel.
 ## Atualização
 
 ```bash
-./deploy/install.sh --update              # systemd: refaz o download/build e reinicia
-docker compose pull && docker compose up -d   # Docker
+bash install.sh --update                        # systemd, pelo tarball: baixa a última versão e reinicia
+git pull && ./deploy/install.sh --from-source   # systemd, compilado no servidor
+docker compose pull && docker compose up -d     # Docker
 ```
 
 As migrations rodam sozinhas no boot. **Baixe um backup antes** (Configurações → Backup).
@@ -207,15 +227,15 @@ Com SMTP configurado, use *Esqueci a senha* na tela de login. Sem ele (ou se o e
 chegar), gere o link no servidor:
 
 ```bash
-sudo -u grana /opt/grana/bin/grana-reset-password          # systemd
-docker exec -u nobody grana /app/bin/grana-reset-password  # Docker
+sudo -u grana /opt/grana/bin/grana-reset-password   # systemd
+docker exec grana /app/bin/grana-reset-password     # Docker
 ```
 
 Se um SMTP salvo pela tela estiver quebrado e o 2FA te trancou para fora:
 
 ```bash
 sudo -u grana /opt/grana/bin/grana-disable-smtp
-docker exec -u nobody grana /app/bin/grana-disable-smtp
+docker exec grana /app/bin/grana-disable-smtp
 ```
 
 (SMTP vindo de variáveis de ambiente só se desliga removendo as variáveis e reiniciando.)
