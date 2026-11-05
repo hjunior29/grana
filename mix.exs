@@ -4,7 +4,7 @@ defmodule Grana.MixProject do
   def project do
     [
       app: :grana,
-      version: "1.1.0",
+      version: version(),
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -22,6 +22,10 @@ defmodule Grana.MixProject do
       ]
     ]
   end
+
+  # A versão vem da tag da release: o release.yml passa `vX.Y.Z` como GRANA_VERSION=X.Y.Z
+  # ao tarball e à imagem. Em dev, nos testes e em builds locais, vale a de desenvolvimento.
+  defp version, do: System.get_env("GRANA_VERSION", "0.0.0-dev")
 
   # Configuration for the OTP application.
   #

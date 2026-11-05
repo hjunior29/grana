@@ -53,6 +53,11 @@ COPY priv priv
 
 COPY lib lib
 
+# Versão do app (mix.exs), passada pelo release.yml a partir da tag. Fica depois das deps
+# para não invalidar o cache delas a cada versão.
+ARG GRANA_VERSION=0.0.0-dev
+ENV GRANA_VERSION=${GRANA_VERSION}
+
 # Compile the release
 RUN mix compile
 

@@ -340,6 +340,14 @@ MIX_ENV=prod mix assets.deploy && MIX_ENV=prod mix release
 DATA_DIR=$(mktemp -d) PORT=4010 PHX_SERVER=true _build/prod/rel/grana/bin/grana start
 ```
 
+Para publicar uma versão, basta a tag: o `release.yml` usa `vX.Y.Z` como versão do app
+(`GRANA_VERSION`, lida pelo `mix.exs`) e publica os tarballs, a imagem e o GitHub Release.
+Não há versão para editar no código; fora de uma release, ela é `0.0.0-dev`.
+
+```bash
+git tag -a v1.2.0 -m "Grana 1.2.0" && git push origin v1.2.0
+```
+
 ## Demonstração pública
 
 Para divulgar o Grana, a mesma imagem sobe como demonstração com `GRANA_DEMO=true`. Nesse
