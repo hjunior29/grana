@@ -9,14 +9,19 @@ defmodule Grana.Workers.OpenFinanceSyncWorker do
   """
   use Oban.Worker,
     queue: :open_finance,
-    max_attempts: 3,
-    # Uma atualização na Pluggy dispara vários webhooks seguidos (item/updated,
-    # transactions/*); basta uma sincronização para todos.
-    unique: [period: 60, states: :incomplete]
+    max_attempts: 3
 
   alias Grana.Accounts.{Scope, User}
   alias Grana.OpenFinance
   alias Grana.Repo
+
+  @unique_opts [period: 60, states: [:available, :scheduled, :retryable]]
+
+  @impl Oban.Worker
+  def new(args, opts) when is_map(args) and is_list(opts) do
+    opts = Keyword.merge([unique: @unique_opts], opts)
+    super(args, opts)
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"connection_id" => connection_id}}) do

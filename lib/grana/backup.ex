@@ -25,10 +25,33 @@ defmodule Grana.Backup do
 
   ## Download
 
-  @doc "Grava uma cópia consistente do banco em `dest` (`VACUUM INTO`)."
+  @doc "Grava uma cópia consistente do banco em `dest` (`VACUUM INTO`), limpando dados transitórios."
   def create(dest) do
-    case Repo.query("VACUUM INTO ?", [dest]) do
-      {:ok, _} -> :ok
+    with {:ok, _} <- Repo.query("VACUUM INTO ?", [dest]),
+         :ok <-
+           with_temp_repo(dest, fn ->
+             %{rows: rows} =
+               Repo.query!("SELECT name FROM sqlite_master WHERE type = 'table'")
+
+             tables_to_clear =
+               rows
+               |> Enum.map(&hd/1)
+               |> Enum.filter(fn name ->
+                 name == "users_tokens" or
+                   (String.starts_with?(name, ["oban_", "error_tracker_"]) and
+                      not String.starts_with?(name, "sqlite_"))
+               end)
+
+             for table <- tables_to_clear do
+               Repo.query!(~s|DELETE FROM "#{table}"|)
+             end
+
+             Repo.query!("VACUUM")
+             :ok
+           end) do
+      :ok
+    else
+      {:error, error} when is_binary(error) -> {:error, error}
       {:error, error} -> {:error, Exception.message(error)}
     end
   end
@@ -94,11 +117,19 @@ defmodule Grana.Backup do
   defp prepare_copy(work) do
     with_temp_repo(work, fn ->
       with :ok <- integrity_check(),
+           :ok <- check_triggers_and_views(),
            :ok <- check_migrations(),
            :ok <- migrate() do
         list_users()
       end
     end)
+  end
+
+  defp check_triggers_and_views do
+    case Repo.query!("SELECT count(*) FROM sqlite_master WHERE type IN ('view', 'trigger')") do
+      %{rows: [[0]]} -> :ok
+      _ -> {:error, :untrusted_objects}
+    end
   end
 
   defp integrity_check do
@@ -283,6 +314,7 @@ defmodule Grana.Backup do
         Repo.put_dynamic_repo(pid)
 
         try do
+          Repo.query!("PRAGMA trusted_schema = OFF")
           fun.()
         rescue
           e ->
@@ -300,6 +332,7 @@ defmodule Grana.Backup do
 
   defp apply_to_live(path) do
     replace_live_data(fn ->
+      Repo.query!("PRAGMA trusted_schema = OFF")
       Repo.query!("ATTACH DATABASE ? AS restore", [path])
 
       try do
@@ -331,8 +364,25 @@ defmodule Grana.Backup do
         end)
       end)
 
+    File.rm_rf(DataDir.tmp_dir())
+    File.mkdir_p!(DataDir.tmp_dir())
+    File.chmod!(DataDir.tmp_dir(), 0o700)
+
+    stop_dynamic_supervisors()
+    Grana.OpenFinance.Pluggy.clear_cache()
+
     Setup.generate_code()
     result
+  end
+
+  defp stop_dynamic_supervisors do
+    for sup <- [Grana.Chat.ReplySupervisor, Grana.Agents.RunSupervisor] do
+      if Process.whereis(sup) do
+        for {_, pid, _, _} <- DynamicSupervisor.which_children(sup) do
+          DynamicSupervisor.terminate_child(sup, pid)
+        end
+      end
+    end
   end
 
   # Pausa o Oban, troca os dados e depois derruba sessões e caches. Os tokens de
@@ -372,7 +422,21 @@ defmodule Grana.Backup do
       String.starts_with?(name, ["sqlite_", "oban_", "error_tracker_"])
   end
 
-  defp extra_tables, do: ["oban_jobs", "error_tracker_occurrences", "error_tracker_errors"]
+  defp extra_tables do
+    candidates = [
+      "oban_jobs",
+      "oban_peers",
+      "error_tracker_occurrences",
+      "error_tracker_errors",
+      "error_tracker_meta"
+    ]
+
+    %{rows: rows} =
+      Repo.query!("SELECT name FROM main.sqlite_master WHERE type = 'table'")
+
+    existing = Enum.map(rows, &hd/1)
+    Enum.filter(candidates, &(&1 in existing))
+  end
 
   defp copy_table(table) do
     columns = shared_columns(table)

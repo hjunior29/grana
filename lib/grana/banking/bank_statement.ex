@@ -10,6 +10,8 @@ defmodule Grana.Banking.BankStatement do
     field :period_start, :date
     field :period_end, :date
     field :total_transactions, :integer, default: 0
+    field :ai_provider, :string
+    field :ai_model, :string
 
     # "upload" (arquivo importado) ou "open_finance" (extrato/fatura virtual que
     # cobre um período sem upload; definido pelo Grana, nunca pelo usuário).
@@ -33,7 +35,8 @@ defmodule Grana.Banking.BankStatement do
       :period_start,
       :period_end,
       :total_transactions,
-      :user_id
+      :ai_provider,
+      :ai_model
     ])
     |> validate_required([:bank, :filename, :user_id])
     |> validate_inclusion(:status, ["processing", "completed", "error"])

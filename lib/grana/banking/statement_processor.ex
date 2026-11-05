@@ -1,4 +1,12 @@
 defmodule Grana.Banking.StatementProcessor do
+  @moduledoc """
+  Imports one statement file: parses it (deterministic parsers first, the processing
+  specialist for PDFs they cannot read), categorizes, deduplicates and saves. When the
+  specialist is used, its provider and model are recorded on the statement.
+  """
+
+  alias Grana.AI
+  alias Grana.Agents.Processor
   alias Grana.Banking
 
   alias Grana.Banking.Parsers.{
@@ -7,39 +15,41 @@ defmodule Grana.Banking.StatementProcessor do
     Bradesco,
     BradescoFatura,
     BradescoPdf,
-    PdfText,
-    PdfExtractor
+    PdfText
   }
 
   require Logger
-  alias Grana.Banking.AICategorizer
   alias Grana.Banking.KeywordCategorizer
   alias Grana.OpenFinance
 
-  def process(file_content, bank, statement_type, user_id, filename) do
+  @doc "`choice` picks the model for this file (`Grana.AI.choice/2`); nil uses the default."
+  def process(file_content, bank, statement_type, user_id, filename, choice \\ nil) do
     categories = Banking.ensure_default_categories(user_id)
+    ai = fn -> AI.resolve(user_id, Processor.key(), choice) end
 
-    parsed = parse_file(file_content, bank, statement_type, filename, user_id)
-
-    case parsed do
+    case parse_file(file_content, bank, statement_type, filename, ai) do
       {:error, reason} ->
         {:error, reason}
 
-      [] ->
+      {:ok, [], _bank, _config} ->
         {:error, "No transactions found in file"}
 
-      {transactions, detected_bank} when is_list(transactions) ->
-        do_process(transactions, detected_bank, statement_type, user_id, filename, categories)
+      {:ok, transactions, bank, pdf_config} ->
+        {categorized, categorize_config} = categorize_all(transactions, categories, user_id, ai)
 
-      transactions when is_list(transactions) ->
-        do_process(transactions, bank, statement_type, user_id, filename, categories)
+        save(
+          categorized,
+          bank,
+          statement_type,
+          user_id,
+          filename,
+          pdf_config || categorize_config
+        )
     end
   end
 
-  defp do_process(transactions, bank, statement_type, user_id, filename, categories) do
+  defp save(transactions, bank, statement_type, user_id, filename, ai_config) do
     {period_start, period_end} = get_period(transactions)
-
-    categorized_transactions = categorize_all(transactions, categories, user_id)
 
     transaction_result =
       Grana.Repo.transaction(fn ->
@@ -50,11 +60,13 @@ defmodule Grana.Banking.StatementProcessor do
                user_id: user_id,
                period_start: period_start,
                period_end: period_end,
-               status: "processing"
+               status: "processing",
+               ai_provider: ai_config && ai_config.name,
+               ai_model: ai_config && ai_config.model
              }) do
           {:ok, statement} ->
             entries =
-              Enum.map(categorized_transactions, fn txn ->
+              Enum.map(transactions, fn txn ->
                 %{
                   date: txn.date,
                   description: txn.description,
@@ -71,17 +83,24 @@ defmodule Grana.Banking.StatementProcessor do
                 }
               end)
 
-            # O upload vence o Open Finance no período que cobre: as transações
-            # dele saem antes da deduplicação, que compara só com outros uploads.
-            OpenFinance.release_period(
-              user_id,
-              bank,
-              statement_type,
-              period_start,
-              period_end
-            )
+            # The upload wins over Open Finance for the period it covers: those
+            # transactions leave before deduplication, which compares with other uploads,
+            # but what the user fixed by hand in them carries over to the upload.
+            provisional =
+              OpenFinance.provisional_transactions(
+                user_id,
+                bank,
+                statement_type,
+                period_start,
+                period_end
+              )
 
-            entries = deduplicate(entries, user_id)
+            OpenFinance.release_period(user_id, bank, statement_type, period_start, period_end)
+
+            entries =
+              entries
+              |> deduplicate(user_id, bank, statement_type)
+              |> OpenFinance.carry_over_edits(provisional, uncategorized_id(user_id))
 
             {count, _} = Banking.bulk_insert_transactions(entries)
 
@@ -118,85 +137,87 @@ defmodule Grana.Banking.StatementProcessor do
     end
   end
 
-  defp parse_file(file_content, "outro", statement_type, filename, user_id) do
+  defp parse_file(file_content, "outro", statement_type, filename, ai) do
     case file_type(filename) do
-      :pdf ->
-        case PdfExtractor.extract(file_content, "outro", user_id) do
-          {:ok, transactions, %{detected_bank: detected_bank, detected_type: detected_type}} ->
-            if detected_type != statement_type do
-              type_label = if detected_type == "fatura", do: "uma fatura", else: "um extrato"
-              selected_label = if statement_type == "fatura", do: "fatura", else: "extrato"
-
-              {:error,
-               "O documento parece ser #{type_label}, mas foi selecionado #{selected_label}. Selecione o tipo correto e tente novamente."}
-            else
-              {transactions, detected_bank}
-            end
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      :csv ->
-        {:error, "Arquivos CSV não são suportados para \"Outro banco\". Use PDF."}
+      :pdf -> read_unknown_bank(file_content, statement_type, ai)
+      :csv -> {:error, "Arquivos CSV não são suportados para \"Outro banco\". Use PDF."}
     end
   end
 
-  defp parse_file(file_content, bank, statement_type, filename, user_id) do
+  defp parse_file(file_content, bank, statement_type, filename, ai) do
     case file_type(filename) do
-      :pdf ->
-        parse_pdf(file_content, bank, statement_type, user_id)
-
-      :csv ->
-        parse_csv(file_content, bank, statement_type)
+      :pdf -> parse_pdf(file_content, bank, statement_type, ai)
+      :csv -> csv_result(parse_csv(file_content, bank, statement_type), bank)
     end
   end
 
-  # Extrato do Bradesco: tenta o parser determinístico (pdftotext + regex,
-  # sem IA, sem alucinação). Cai no fallback de IA se o PDF não tiver camada de
-  # texto, o pdftotext não estiver disponível, ou nada reconhecível for achado.
-  defp parse_pdf(file_content, "bradesco" = bank, "extrato", user_id) do
+  defp csv_result({:error, reason}, _bank), do: {:error, reason}
+  defp csv_result(transactions, bank), do: {:ok, transactions, bank, nil}
+
+  defp read_unknown_bank(file_content, statement_type, ai) do
+    with {:ok, config} <- ai.(),
+         {:ok, transactions, %{detected_bank: bank, detected_type: detected_type}} <-
+           Processor.extract_pdf(file_content, "outro", config) do
+      if detected_type == statement_type do
+        {:ok, transactions, bank, config}
+      else
+        found = if detected_type == "fatura", do: "uma fatura", else: "um extrato"
+        selected = if statement_type == "fatura", do: "fatura", else: "extrato"
+
+        {:error,
+         "O documento parece ser #{found}, mas foi selecionado #{selected}. Selecione o tipo correto e tente novamente."}
+      end
+    end
+  end
+
+  # Bradesco account statements go through pdftotext + regex first (no AI, no
+  # hallucination). The specialist reads it only when the PDF has no text layer,
+  # pdftotext is missing or nothing recognizable is found.
+  defp parse_pdf(file_content, "bradesco" = bank, "extrato", ai) do
     case PdfText.extract(file_content) do
       {:ok, text} ->
         case BradescoPdf.parse(text) do
           [] ->
-            Logger.info("BradescoPdf não encontrou transações; usando fallback de IA")
-            ai_pdf(file_content, bank, user_id)
+            Logger.info("BradescoPdf found no transactions; falling back to AI")
+            read_pdf(file_content, bank, "extrato", ai)
 
           transactions when is_list(transactions) ->
             log_reconciliation(text)
-            transactions
+            {:ok, transactions, bank, nil}
         end
 
       {:error, reason} ->
-        Logger.info("PdfText indisponível (#{inspect(reason)}); usando fallback de IA")
-        ai_pdf(file_content, bank, user_id)
+        Logger.info("PdfText unavailable (#{inspect(reason)}); falling back to AI")
+        read_pdf(file_content, bank, "extrato", ai)
     end
   end
 
-  defp parse_pdf(file_content, bank, _statement_type, user_id) do
-    ai_pdf(file_content, bank, user_id)
-  end
-
-  defp ai_pdf(file_content, bank, user_id) do
-    case PdfExtractor.extract(file_content, bank, user_id) do
-      {:ok, transactions} -> transactions
-      {:error, reason} -> {:error, reason}
+  defp parse_pdf(file_content, "bradesco" = bank, "fatura", ai) do
+    with {:ok, transactions, bank, config} <- read_pdf(file_content, bank, "fatura", ai) do
+      {:ok, BradescoFatura.charge_dates(transactions), bank, config}
     end
   end
 
-  # Confere os valores extraídos contra o saldo impresso no extrato. Não bloqueia
-  # a importação — apenas registra divergências (sinal de mudança de layout).
+  defp parse_pdf(file_content, bank, statement_type, ai),
+    do: read_pdf(file_content, bank, statement_type, ai)
+
+  defp read_pdf(file_content, bank, statement_type, ai) do
+    with {:ok, config} <- ai.(),
+         {:ok, transactions} <-
+           Processor.extract_pdf(file_content, bank, config, statement_type) do
+      {:ok, transactions, bank, config}
+    end
+  end
+
+  # Checks the extracted values against the balance printed on the statement. It never
+  # blocks the import, only logs mismatches (a sign the layout changed).
   defp log_reconciliation(text) do
     case BradescoPdf.reconcile(text) do
       :ok ->
         :ok
 
       {:error, issues} ->
-        Logger.warning(
-          "BradescoPdf: #{length(issues)} divergência(s) de reconciliação saldo↔movimento: " <>
-            inspect(Enum.take(issues, 5))
-        )
+        Logger.warning("BradescoPdf: #{length(issues)} balance reconciliation mismatch(es)")
     end
   end
 
@@ -212,90 +233,82 @@ defmodule Grana.Banking.StatementProcessor do
     end
   end
 
-  defp categorize_all(transactions, categories, user_id) do
-    descriptions = Enum.map(transactions, & &1.description)
-    category_map = Banking.categorize_transactions(descriptions, user_id)
+  # Rules first, then keywords, then the specialist for whatever is still uncategorized.
+  # Returns the transactions and the AI config when the specialist was used.
+  defp categorize_all(transactions, categories, user_id, ai) do
+    category_map =
+      Banking.categorize_transactions(Enum.map(transactions, & &1.description), user_id)
 
-    rule_categorized =
+    uncategorized_id = uncategorized_id(user_id)
+
+    by_name = Map.new(categories, &{&1.name, &1.id})
+
+    base =
       Enum.map(transactions, fn txn ->
-        category_id = Map.get(category_map, txn.description)
-        Map.put(txn, :category_id, category_id)
-      end)
+        txn = Map.put(txn, :category_id, Map.get(category_map, txn.description))
 
-    uncategorized_cat = Banking.get_uncategorized_category(user_id)
-    uncategorized_id = if uncategorized_cat, do: uncategorized_cat.id
-    cat_by_name = Map.new(categories, &{&1.name, &1.id})
-
-    # Camada determinística (palavra-chave) antes da IA: preenche o que as regras
-    # do usuário não cobriram (ex.: Impostos e Taxas para IOF/DAS/multa).
-    base_categorized =
-      Enum.map(rule_categorized, fn txn ->
-        if is_nil(txn.category_id) or txn.category_id == uncategorized_id do
-          case KeywordCategorizer.categorize(txn.description) do
-            nil -> txn
-            name -> Map.put(txn, :category_id, cat_by_name[name] || txn.category_id)
-          end
+        with true <- txn.category_id in [nil, uncategorized_id],
+             name when is_binary(name) <- KeywordCategorizer.categorize(txn.description) do
+          Map.put(txn, :category_id, by_name[name] || txn.category_id)
         else
-          txn
+          _ -> txn
         end
       end)
 
-    uncategorized =
-      base_categorized
-      |> Enum.filter(fn txn ->
-        txn.category_id == uncategorized_id || is_nil(txn.category_id)
-      end)
-
-    case uncategorized do
-      [] ->
-        base_categorized
-
-      items ->
-        descriptions = Enum.map(items, & &1.description)
-
-        case AICategorizer.categorize_batch(descriptions, categories, user_id) do
-          {:ok, ai_category_ids} when length(ai_category_ids) == length(descriptions) ->
-            # zip casa por posição: só aplicamos se a contagem bater exatamente,
-            # senão o alinhamento descrição↔categoria estaria quebrado.
-            ai_map =
-              Enum.zip(descriptions, ai_category_ids)
-              |> Map.new()
-
-            Enum.map(base_categorized, fn txn ->
-              case Map.get(ai_map, txn.description) do
-                nil ->
-                  txn
-
-                cat_id when txn.category_id == uncategorized_id or is_nil(txn.category_id) ->
-                  Map.put(txn, :category_id, cat_id || uncategorized_id)
-
-                _ ->
-                  txn
-              end
-            end)
-
-          {:ok, _mismatched} ->
-            require Logger
-
-            Logger.warning(
-              "AICategorizer: contagem divergente (#{length(descriptions)} descrições); mantendo categorização por regras"
-            )
-
-            base_categorized
-
-          {:error, _} ->
-            base_categorized
-        end
+    case Enum.filter(base, &(&1.category_id in [nil, uncategorized_id])) do
+      [] -> {base, nil}
+      pending -> categorize_with_ai(base, pending, categories, uncategorized_id, ai)
     end
   end
 
-  defp deduplicate(entries, user_id) do
+  defp categorize_with_ai(base, pending, categories, uncategorized_id, ai) do
+    descriptions = Enum.map(pending, & &1.description)
+
+    with {:ok, config} <- ai.(),
+         {:ok, ids} when length(ids) == length(descriptions) <-
+           Processor.categorize(descriptions, categories, config) do
+      # Matched by position: only applied when the counts are equal.
+      by_description = descriptions |> Enum.zip(ids) |> Map.new()
+
+      categorized =
+        Enum.map(base, fn txn ->
+          case Map.fetch(by_description, txn.description) do
+            {:ok, id} when txn.category_id in [nil, uncategorized_id] ->
+              Map.put(txn, :category_id, id || uncategorized_id)
+
+            _ ->
+              txn
+          end
+        end)
+
+      {categorized, config}
+    else
+      {:ok, _mismatched} ->
+        Logger.warning(
+          "Processor: category count mismatch for #{length(descriptions)} descriptions; keeping rule-based categories"
+        )
+
+        {base, nil}
+
+      _ ->
+        {base, nil}
+    end
+  end
+
+  defp deduplicate(entries, user_id, bank, statement_type) do
     dates = Enum.map(entries, & &1.date)
     date_from = Enum.min(dates, Date)
     date_to = Enum.max(dates, Date)
 
+    opts =
+      [date_from: date_from, date_to: date_to]
+      |> then(fn o -> if bank, do: Keyword.put(o, :bank, bank), else: o end)
+      |> then(fn o ->
+        if statement_type, do: Keyword.put(o, :statement_type, statement_type), else: o
+      end)
+
     existing =
-      Banking.list_transactions(user_id, date_from: date_from, date_to: date_to)
+      Banking.list_transactions(user_id, opts)
 
     existing_freq =
       existing
@@ -320,6 +333,13 @@ defmodule Grana.Banking.StatementProcessor do
   defp fingerprint(%{date: date, description: desc, amount: amount}) do
     normalized_amount = amount |> Decimal.round(2) |> Decimal.to_string(:normal)
     {date, String.downcase(String.trim(desc)), normalized_amount}
+  end
+
+  defp uncategorized_id(user_id) do
+    case Banking.get_uncategorized_category(user_id) do
+      nil -> nil
+      category -> category.id
+    end
   end
 
   defp get_period(transactions) do

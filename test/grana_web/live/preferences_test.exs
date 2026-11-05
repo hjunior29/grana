@@ -32,6 +32,62 @@ defmodule GranaWeb.PreferencesTest do
     assert Accounts.get_user!(user.id).visual_style == "signal"
   end
 
+  test "ocultar valores grava no servidor e cobre os valores na hora", %{conn: conn, user: user} do
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+    refute user.hide_values
+    refute has_element?(lv, "#app-shell.ui-hide-values")
+    assert has_element?(lv, ~s|#hide-values-toggle[role="switch"][aria-checked="false"]|)
+
+    lv |> element("#hide-values-toggle") |> render_click()
+
+    assert Accounts.get_user!(user.id).hide_values
+    assert has_element?(lv, "#app-shell.ui-hide-values")
+    assert has_element?(lv, ~s|#hide-values-toggle[aria-checked="true"]|)
+
+    lv |> element("#hide-values-toggle") |> render_click()
+
+    refute Accounts.get_user!(user.id).hide_values
+    refute has_element?(lv, "#app-shell.ui-hide-values")
+  end
+
+  test "ocultar nomes grava no servidor e cobre os nomes na hora", %{conn: conn, user: user} do
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+    refute has_element?(lv, "#app-shell.ui-hide-names")
+
+    lv |> element("#hide-names-toggle") |> render_click()
+
+    assert Accounts.get_user!(user.id).hide_names
+    assert has_element?(lv, "#app-shell.ui-hide-names")
+    assert has_element?(lv, ~s|#hide-names-toggle[aria-checked="true"]|)
+    refute has_element?(lv, "#app-shell.ui-hide-values")
+  end
+
+  test "as outras telas abertas mudam junto, sem recarregar", %{conn: conn, user: user} do
+    {:ok, dashboard, _html} = live(conn, ~p"/dashboard")
+    {:ok, settings, _html} = live(conn, ~p"/users/settings")
+
+    settings |> element("#hide-values-toggle") |> render_click()
+    settings |> element("#hide-names-toggle") |> render_click()
+
+    assert has_element?(dashboard, "#app-shell.ui-hide-values.ui-hide-names")
+
+    settings |> element("#hide-values-toggle") |> render_click()
+
+    refute has_element?(dashboard, "#app-shell.ui-hide-values")
+    assert has_element?(dashboard, "#app-shell.ui-hide-names")
+    assert Accounts.get_user!(user.id).hide_names
+  end
+
+  test "com valores ocultos, as telas já abrem cobertas", %{conn: conn, user: user} do
+    {:ok, _} = Accounts.update_user_preferences(user, %{hide_values: true, hide_names: true})
+
+    {:ok, lv, _html} = live(conn, ~p"/dashboard")
+
+    assert has_element?(lv, "#app-shell.ui-hide-values.ui-hide-names")
+  end
+
   test "valores inválidos são ignorados", %{conn: conn, user: user} do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
 

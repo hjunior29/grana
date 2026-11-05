@@ -84,10 +84,13 @@ defmodule GranaWeb.TransactionsLiveExtendedTest do
 
       {:ok, view, _html} = live(conn, ~p"/transactions")
 
-      render_click(view, "toggle-description", %{"id" => "banking-#{txn.id}"})
+      selector = "#transaction-banking-#{txn.id} span[title='MERCADO LIVRE']"
+      # The name itself is what truncates, so the privacy plate is never clipped.
+      assert has_element?(view, "#{selector} .ui-private-name.truncate")
 
-      html = render(view)
-      assert html =~ "MERCADO LIVRE"
+      view |> element(selector) |> render_click()
+
+      refute has_element?(view, "#{selector} .ui-private-name.truncate")
     end
 
     test "collapses when toggled again", %{conn: conn, user: user} do

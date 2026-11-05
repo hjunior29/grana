@@ -3,6 +3,9 @@
 #   docker compose up -d
 #   docker compose logs grana        # o código do setup aparece aqui no primeiro acesso
 #
+# A porta fica só nesta máquina (127.0.0.1:4000). No .env, BIND_IP=0.0.0.0 a abre para a
+# rede local e PORT troca a porta do host; dentro do container é sempre a 4000.
+#
 # Opcional: crie um .env ao lado deste arquivo (veja .env.example) para SMTP, Gemini,
 # Pluggy etc. Sem ele, tudo se configura pela tela. Os dados (banco e segredos) ficam
 # no volume grana-data: faça backup em Configurações → Backup.
@@ -12,12 +15,24 @@ services:
     container_name: grana
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "${BIND_IP:-127.0.0.1}:${PORT:-4000}:4000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    init: true
+    pids_limit: 512
     volumes:
       - grana-data:/data
     env_file:
       - path: .env
         required: false
+    environment:
+      # O PORT do .env é a porta do host; o app no container escuta na 4000.
+      PORT: "4000"
 
 volumes:
   grana-data:

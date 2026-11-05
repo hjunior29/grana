@@ -59,11 +59,19 @@ defmodule Grana.PlatformImport do
 
   # ── Banking ────────────────────────────────────────────────────────────────
 
+  @formula_prefixes ["=", "+", "-", "@", "\t", "\r"]
+
+  defp unquote_formula("'" <> rest = val) do
+    if String.starts_with?(String.trim_leading(rest), @formula_prefixes), do: rest, else: val
+  end
+
+  defp unquote_formula(val), do: val
+
   defp parse_banking(cols, rows) do
     rows
     |> Enum.map(fn row ->
       date = parse_date(at(cols, row, "data"))
-      desc = at(cols, row, "descricao") || ""
+      desc = unquote_formula(at(cols, row, "descricao") || "")
       type = banking_type(at(cols, row, "tipo"))
       amount = parse_amount(at(cols, row, "valor"), type)
 
@@ -73,7 +81,8 @@ defmodule Grana.PlatformImport do
         %{
           date: date,
           description: desc,
-          original_description: blank_to_nil(at(cols, row, "descricao original")) || desc,
+          original_description:
+            unquote_formula(blank_to_nil(at(cols, row, "descricao original")) || desc),
           amount: amount,
           type: type,
           category_name: blank_to_nil(at(cols, row, "categoria")),
@@ -97,13 +106,15 @@ defmodule Grana.PlatformImport do
     cat_map = resolve_categories(user_id, rows)
     uncategorized_id = uncategorized_category_id(user_id)
 
-    count =
-      rows
-      |> Enum.group_by(fn r -> {r.bank, r.statement_type} end)
-      |> Enum.map(fn {{bank, stype}, group} ->
-        import_banking_group(user_id, bank, stype, group, filename, cat_map, uncategorized_id)
+    {:ok, count} =
+      Repo.transaction(fn ->
+        rows
+        |> Enum.group_by(fn r -> {r.bank, r.statement_type} end)
+        |> Enum.map(fn {{bank, stype}, group} ->
+          import_banking_group(user_id, bank, stype, group, filename, cat_map, uncategorized_id)
+        end)
+        |> Enum.sum()
       end)
-      |> Enum.sum()
 
     Grana.OpenFinance.uploads_changed(user_id)
     Banking.detect_internal_transfers(user_id)
@@ -129,14 +140,22 @@ defmodule Grana.PlatformImport do
           identifier: r.identifier,
           installment_current: r.installment_current,
           installment_total: r.installment_total,
-          installment_group_id: nil,
+          installment_group_id:
+            Grana.Banking.Parsers.InstallmentParser.generate_group_id(
+              r.description,
+              r.installment_total
+            ),
           is_internal_transfer: r.is_internal_transfer,
+          internal_override:
+            if(is_boolean(r.is_internal_transfer), do: r.is_internal_transfer, else: nil),
           bank_statement_id: stmt.id,
           user_id: user_id,
           category_id: Map.get(cat_map, norm(r.category_name), uncategorized_id)
         }
       end)
-      |> dedup(user_id, &banking_fingerprint/1, &existing_banking_fingerprints/3)
+      |> dedup(user_id, &banking_fingerprint/1, fn uid, f, t ->
+        existing_banking_fingerprints(uid, f, t, bank, stype)
+      end)
 
     {count, _} = Banking.bulk_insert_transactions(entries)
     Banking.update_statement(stmt, %{status: "completed", total_transactions: count})
@@ -207,8 +226,15 @@ defmodule Grana.PlatformImport do
     {date, norm(desc), money_key(amount)}
   end
 
-  defp existing_banking_fingerprints(user_id, date_from, date_to) do
-    Banking.list_transactions(user_id, date_from: date_from, date_to: date_to)
+  defp existing_banking_fingerprints(user_id, date_from, date_to, bank, statement_type) do
+    opts =
+      [date_from: date_from, date_to: date_to]
+      |> then(fn o -> if bank, do: Keyword.put(o, :bank, bank), else: o end)
+      |> then(fn o ->
+        if statement_type, do: Keyword.put(o, :statement_type, statement_type), else: o
+      end)
+
+    Banking.list_transactions(user_id, opts)
     |> Enum.map(&banking_fingerprint/1)
     |> Enum.frequencies()
   end
@@ -314,12 +340,16 @@ defmodule Grana.PlatformImport do
   defp parse_decimal(""), do: nil
 
   defp parse_decimal(str) do
+    trimmed = str |> to_string() |> String.trim()
+
     cleaned =
-      str
-      |> to_string()
-      |> String.trim()
-      |> String.replace(".", "")
-      |> String.replace(",", ".")
+      if String.contains?(trimmed, ",") do
+        trimmed
+        |> String.replace(".", "")
+        |> String.replace(",", ".")
+      else
+        trimmed
+      end
 
     case Decimal.parse(cleaned) do
       {dec, _} -> dec

@@ -439,6 +439,16 @@ defmodule Grana.BankingTest do
           user_id: user.id
         })
 
+      {:ok, _fatura} =
+        Banking.create_statement(%{
+          bank: "nubank",
+          filename: "fatura.csv",
+          statement_type: "fatura",
+          period_start: ~D[2026-01-01],
+          period_end: ~D[2026-01-31],
+          user_id: user.id
+        })
+
       Banking.bulk_insert_transactions([
         %{
           date: ~D[2026-01-10],
@@ -484,6 +494,16 @@ defmodule Grana.BankingTest do
           bank: "bradesco",
           filename: "e.csv",
           statement_type: "extrato",
+          user_id: user.id
+        })
+
+      {:ok, _fatura} =
+        Banking.create_statement(%{
+          bank: "bradesco",
+          filename: "f.csv",
+          statement_type: "fatura",
+          period_start: ~D[2026-05-01],
+          period_end: ~D[2026-05-31],
           user_id: user.id
         })
 
@@ -538,6 +558,11 @@ defmodule Grana.BankingTest do
       assert Decimal.compare(summary.total_income, Decimal.new("5000.00")) == :eq
       assert Decimal.compare(summary.total_expenses, Decimal.new("200.00")) == :eq
       assert summary.transaction_count == 2
+
+      assert [%{category: %{name: "Alimentação"}, total: income, count: 1}] =
+               summary.income_by_category
+
+      assert Decimal.compare(income, Decimal.new("5000.00")) == :eq
     end
 
     test "subtracts refunds, separates investments, excludes internal transfers", %{user: user} do
@@ -617,26 +642,6 @@ defmodule Grana.BankingTest do
       top_income_descriptions = Enum.map(summary.top_income, & &1.description)
       assert "Salário" in top_income_descriptions
       refute "Estorno compra" in top_income_descriptions
-    end
-  end
-
-  describe "get_ai_analysis!/2 authorization (IDOR)" do
-    test "raises when the analysis belongs to another user", %{user: user} do
-      other = user_fixture()
-
-      {:ok, analysis} =
-        Banking.create_ai_analysis(%{
-          user_id: other.id,
-          prompt: nil,
-          filters_json: %{},
-          result_json: %{"titulo" => "x"}
-        })
-
-      assert_raise Ecto.NoResultsError, fn ->
-        Banking.get_ai_analysis!(analysis.id, user.id)
-      end
-
-      assert Banking.get_ai_analysis!(analysis.id, other.id).id == analysis.id
     end
   end
 

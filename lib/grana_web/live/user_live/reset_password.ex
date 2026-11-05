@@ -7,14 +7,11 @@ defmodule GranaWeb.UserLive.ResetPassword do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm space-y-4">
-        <div class="text-center">
-          <.header>
-            <p>Nova senha</p>
-            <:subtitle>Escolha uma senha nova para a sua conta.</:subtitle>
-          </.header>
-        </div>
-
+      <.auth_card
+        id="reset-password-card"
+        title="Nova senha"
+        subtitle="Escolha uma senha nova para a sua conta."
+      >
         <.form for={@form} id="reset_password_form" phx-change="validate" phx-submit="save" novalidate>
           <.input
             field={@form[:password]}
@@ -27,15 +24,13 @@ defmodule GranaWeb.UserLive.ResetPassword do
           <.input
             field={@form[:password_confirmation]}
             type="password"
-            label="Confirmar"
+            label="Confirmar nova senha"
             autocomplete="new-password"
             required
           />
-          <.button class="btn btn-primary w-full" phx-disable-with="Salvando...">
-            Redefinir senha
-          </.button>
+          <.button variant="primary" class="w-full" loading="Salvando…">Redefinir senha</.button>
         </.form>
-      </div>
+      </.auth_card>
     </Layouts.app>
     """
   end
@@ -45,6 +40,7 @@ defmodule GranaWeb.UserLive.ResetPassword do
     if user = Accounts.get_user_by_reset_password_token(token) do
       {:ok,
        socket
+       |> assign(:token, token)
        |> assign(:user, user)
        |> assign(:form, to_form(Accounts.change_user_password(user, %{}, hash_password: false)))}
     else
@@ -67,17 +63,26 @@ defmodule GranaWeb.UserLive.ResetPassword do
   end
 
   def handle_event("save", %{"user" => params}, socket) do
-    case Accounts.reset_user_password(socket.assigns.user, params) do
-      {:ok, {_user, expired_tokens}} ->
-        GranaWeb.UserAuth.disconnect_sessions(expired_tokens)
-
+    case Accounts.get_user_by_reset_password_token(socket.assigns.token) do
+      nil ->
         {:noreply,
          socket
-         |> put_flash(:info, "Senha redefinida. Entre com a nova senha.")
+         |> put_flash(:error, "O link de recuperação é inválido ou expirou.")
          |> push_navigate(to: ~p"/users/log-in")}
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, action: :insert))}
+      user ->
+        case Accounts.reset_user_password(user, params) do
+          {:ok, {_user, expired_tokens}} ->
+            GranaWeb.UserAuth.disconnect_sessions(expired_tokens)
+
+            {:noreply,
+             socket
+             |> put_flash(:info, "Senha redefinida. Entre com a nova senha.")
+             |> push_navigate(to: ~p"/users/log-in")}
+
+          {:error, changeset} ->
+            {:noreply, assign(socket, :form, to_form(changeset, action: :insert))}
+        end
     end
   end
 end

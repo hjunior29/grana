@@ -16,6 +16,7 @@ defmodule GranaWeb.BackupHooks do
       |> assign(:restore_context, context)
       |> assign(:restore_stage, :idle)
       |> assign(:restore_analysis, nil)
+      |> assign(:restore_upload_error, nil)
       |> assign(:restore_form, restore_form(%{}))
       |> allow_upload(:backup,
         accept: :any,
@@ -29,34 +30,47 @@ defmodule GranaWeb.BackupHooks do
 
   defp restore_form(params), do: to_form(params, as: :restore)
 
-  defp handle_event("restore_validate_upload", _params, socket), do: {:halt, socket}
+  defp handle_event("restore_validate_upload", _params, socket) do
+    if authorized?(socket) do
+      {:halt, assign(socket, :restore_upload_error, nil)}
+    else
+      entries = socket.assigns.uploads.backup.entries
+      socket = Enum.reduce(entries, socket, &cancel_upload(&2, :backup, &1.ref))
+      {:halt, unauthorized(socket)}
+    end
+  end
 
   defp handle_event("restore_analyze", _params, socket) do
-    discard(socket.assigns.restore_analysis)
+    if authorized?(socket) do
+      discard(socket.assigns.restore_analysis)
 
-    results =
-      consume_uploaded_entries(socket, :backup, fn %{path: path}, _entry ->
-        {:ok, Backup.analyze(path)}
-      end)
+      results =
+        consume_uploaded_entries(socket, :backup, fn %{path: path}, _entry ->
+          {:ok, Backup.analyze(path)}
+        end)
 
-    case results do
-      [{:ok, analysis}] ->
-        first = hd(analysis.users)
+      case results do
+        [{:ok, analysis}] ->
+          first = hd(analysis.users)
 
-        {:halt,
-         socket
-         |> assign(:restore_stage, :options)
-         |> assign(:restore_analysis, analysis)
-         |> assign(:restore_form, restore_form(%{"user_id" => to_string(first.id)}))}
+          {:halt,
+           socket
+           |> assign(:restore_stage, :options)
+           |> assign(:restore_analysis, analysis)
+           |> assign(:restore_form, restore_form(%{"user_id" => to_string(first.id)}))}
 
-      [{:error, reason}] ->
-        {:halt,
-         socket
-         |> assign(:restore_stage, :idle)
-         |> put_flash(:error, error_message(reason))}
+        [{:error, reason}] ->
+          {:halt,
+           socket
+           |> assign(:restore_stage, :idle)
+           |> put_flash(:error, error_message(reason))}
 
-      [] ->
-        {:halt, put_flash(socket, :error, "Escolha o arquivo de backup (.db) primeiro.")}
+        [] ->
+          {:halt,
+           assign(socket, :restore_upload_error, "Escolha o arquivo de backup (.db) primeiro.")}
+      end
+    else
+      {:halt, unauthorized(socket)}
     end
   end
 
@@ -148,6 +162,9 @@ defmodule GranaWeb.BackupHooks do
   defp error_message(reason) when reason in [:corrupted, :invalid_file],
     do: "O arquivo está corrompido ou não pôde ser lido."
 
+  defp error_message(:untrusted_objects),
+    do: "O arquivo contém objetos não permitidos (views ou triggers)."
+
   defp error_message(:not_grana_backup), do: "Este arquivo não parece um backup do Grana."
 
   defp error_message(:newer_backup),
@@ -163,4 +180,13 @@ defmodule GranaWeb.BackupHooks do
 
   defp error_message(:password_invalid), do: "A nova senha deve ter entre 12 e 72 caracteres."
   defp error_message(_), do: "Não foi possível restaurar o backup."
+
+  @doc "Descarta análise de restauração pendente, apagando arquivo temporário restore-*.db"
+  def cleanup(socket) do
+    if analysis = socket.assigns[:restore_analysis] do
+      discard(analysis)
+    end
+
+    :ok
+  end
 end

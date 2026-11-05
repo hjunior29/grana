@@ -4,6 +4,7 @@ defmodule Grana.Banking do
 
   alias Grana.Banking.{
     BankStatement,
+    CardPayments,
     Transaction,
     Category,
     CategoryRule,
@@ -12,21 +13,23 @@ defmodule Grana.Banking do
     TransferIdentity,
     KeywordCategorizer,
     AIAnalysis,
-    FinancialGoal
+    FinancialGoal,
+    SavedSearch,
+    Search
   }
 
   # Categories
 
   def list_categories(user_id) do
     Category
-    |> where([c], is_nil(c.user_id) or c.user_id == ^user_id)
+    |> where([c], c.user_id == ^user_id)
     |> order_by([c], asc: c.name)
     |> Repo.all()
   end
 
   def get_category!(id, user_id) do
     Category
-    |> where([c], c.id == ^id and (is_nil(c.user_id) or c.user_id == ^user_id))
+    |> where([c], c.id == ^id and c.user_id == ^user_id)
     |> Repo.one!()
   end
 
@@ -54,9 +57,11 @@ defmodule Grana.Banking do
 
   def category_stats(user_id) do
     Category
-    |> where([c], is_nil(c.user_id) or c.user_id == ^user_id)
-    |> join(:left, [c], t in Transaction, on: t.category_id == c.id)
-    |> join(:left, [c, _t], r in CategoryRule, on: r.category_id == c.id)
+    |> where([c], c.user_id == ^user_id)
+    |> join(:left, [c], t in Transaction, on: t.category_id == c.id and t.user_id == ^user_id)
+    |> join(:left, [c, _t], r in CategoryRule,
+      on: r.category_id == c.id and r.user_id == ^user_id
+    )
     |> group_by([c, _t, _r], c.id)
     |> select([c, t, r], %{
       category_id: c.id,
@@ -206,7 +211,9 @@ defmodule Grana.Banking do
   end
 
   def create_statement(attrs) do
-    %BankStatement{}
+    user_id = attrs[:user_id] || attrs["user_id"]
+
+    %BankStatement{user_id: user_id}
     |> BankStatement.changeset(attrs)
     |> Repo.insert()
     |> invalidate_cache()
@@ -313,6 +320,52 @@ defmodule Grana.Banking do
   end
 
   @doc """
+  Transações que casam com a pesquisa avançada (`Grana.Banking.Search`). `opts` aceita os
+  mesmos `:sort_by` e `:sort_dir` de `list_transactions/2`.
+  """
+  def search_transactions(user_id, %Search{} = search, opts \\ []) do
+    transactions = list_transactions(user_id, Keyword.take(opts, [:sort_by, :sort_dir]))
+
+    recurring =
+      if Search.uses_recurrence?(search),
+        do: recurring_statuses(user_id, transactions),
+        else: %{}
+
+    Search.filter(search, transactions, recurring)
+  end
+
+  # Saved searches
+
+  def list_saved_searches(user_id) do
+    SavedSearch
+    |> where([s], s.user_id == ^user_id)
+    |> Repo.all()
+    |> Enum.sort_by(&Search.fold(&1.name))
+  end
+
+  def get_saved_search(user_id, id) do
+    Repo.get_by(SavedSearch, id: id, user_id: user_id)
+  end
+
+  def change_saved_search(%SavedSearch{} = saved_search, attrs \\ %{}) do
+    SavedSearch.changeset(saved_search, attrs)
+  end
+
+  def create_saved_search(user_id, attrs) do
+    %SavedSearch{user_id: user_id}
+    |> SavedSearch.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_saved_search(%SavedSearch{} = saved_search, attrs) do
+    saved_search
+    |> SavedSearch.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_saved_search(%SavedSearch{} = saved_search), do: Repo.delete(saved_search)
+
+  @doc """
   Análise de despesas fixas (recorrentes) vs variáveis.
 
   `:window` é o número de meses analisados (default 6) ou `:all` para tudo.
@@ -357,6 +410,17 @@ defmodule Grana.Banking do
   defp investment_category?(%{category: %{kind: "investment"}}), do: true
   defp investment_category?(_), do: false
 
+  @doc """
+  Fixed expenses still to be charged this month (`RecurringExpenses.pending/2` over the
+  last 6 months, every bank and source): what the free balance of the month still owes.
+  """
+  def pending_fixed_expenses(user_id, today \\ Grana.LocalTime.today()) do
+    user_id
+    |> recurring_analysis(window: 6)
+    |> Map.fetch!(:fixed)
+    |> Grana.Banking.RecurringExpenses.pending(today)
+  end
+
   defp distinct_upload_counts(rows) do
     rows
     |> Enum.reduce(MapSet.new(), fn {date, statement_id}, acc ->
@@ -393,8 +457,8 @@ defmodule Grana.Banking do
   def upsert_recurring_rule(user_id, pattern, mode) do
     pattern = Grana.Banking.RecurringExpenses.normalize(pattern)
 
-    %RecurringRule{}
-    |> RecurringRule.changeset(%{user_id: user_id, pattern: pattern, mode: mode})
+    %RecurringRule{user_id: user_id}
+    |> RecurringRule.changeset(%{pattern: pattern, mode: mode})
     |> Repo.insert(
       on_conflict: [set: [mode: mode, updated_at: DateTime.utc_now(:second)]],
       conflict_target: [:user_id, :pattern]
@@ -610,14 +674,16 @@ defmodule Grana.Banking do
   defp filter_by_search(query, ""), do: query
 
   defp filter_by_search(query, term) do
+    escaped = escape_like(term)
+
     patterns =
-      [term, String.upcase(term), String.downcase(term)]
+      [escaped, String.upcase(escaped), String.downcase(escaped)]
       |> Enum.uniq()
       |> Enum.map(&"%#{&1}%")
 
     cat_filter =
       Enum.reduce(patterns, dynamic(false), fn p, acc ->
-        dynamic([c], ^acc or like(c.name, ^p))
+        dynamic([c], ^acc or fragment("? LIKE ? ESCAPE '\\'", c.name, ^p))
       end)
 
     cat_ids =
@@ -627,13 +693,20 @@ defmodule Grana.Banking do
 
     txn_filter =
       Enum.reduce(patterns, dynamic(false), fn p, acc ->
-        dynamic([t], ^acc or like(t.description, ^p))
+        dynamic([t], ^acc or fragment("? LIKE ? ESCAPE '\\'", t.description, ^p))
       end)
 
     where_filter =
       dynamic([t], ^txn_filter or t.category_id in subquery(cat_ids))
 
     where(query, ^where_filter)
+  end
+
+  defp escape_like(term) do
+    term
+    |> String.replace("\\", "\\\\")
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
   end
 
   defp filter_by_bank(query, nil, _user_id), do: query
@@ -708,14 +781,18 @@ defmodule Grana.Banking do
   end
 
   def bulk_update_categories(transaction_ids, category_id, user_id) do
-    result =
-      from(t in Transaction,
-        where: t.id in ^transaction_ids and t.user_id == ^user_id
-      )
-      |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
+    if category_id && !category_belongs_to_user?(category_id, user_id) do
+      {:error, :unauthorized}
+    else
+      result =
+        from(t in Transaction,
+          where: t.id in ^transaction_ids and t.user_id == ^user_id
+        )
+        |> Repo.update_all(set: [category_id: category_id, updated_at: DateTime.utc_now(:second)])
 
-    Grana.Cache.invalidate_user(user_id)
-    result
+      Grana.Cache.invalidate_user(user_id)
+      result
+    end
   end
 
   @transaction_defaults %{
@@ -763,26 +840,6 @@ defmodule Grana.Banking do
 
   # Internal Transfer Detection
 
-  # Known credit card company names used with "pagto eletron" detection
-  @cc_issuers [
-    "nu pagamentos",
-    "nubank"
-  ]
-
-  # Standalone patterns that always indicate CC bill payment. Quando a fatura do
-  # cartão é importada, o lançamento agregado no extrato ("GASTOS CARTAO DE
-  # CREDITO", "GASTOS CARTOES", etc.) duplica os gastos detalhados da fatura —
-  # por isso é tratado como transferência interna e excluído dos totais.
-  @cc_payment_patterns [
-    "pagamento de fatura",
-    "pag fatura",
-    "pgto fatura",
-    "gastos cartao",
-    "gastos cartoes",
-    "gasto cartao",
-    "gastos com cartao"
-  ]
-
   @transfer_patterns [
     "pix",
     "transferência",
@@ -794,15 +851,23 @@ defmodule Grana.Banking do
 
   def detect_internal_transfers(user_id) do
     Repo.transaction(fn ->
-      # 1) Reset all
+      # 1) Reset non-overridden
       Transaction
-      |> where([t], t.user_id == ^user_id and t.is_internal_transfer == true)
+      |> where(
+        [t],
+        t.user_id == ^user_id and t.is_internal_transfer == true and is_nil(t.internal_override)
+      )
       |> Repo.update_all(
         set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
       )
 
-      # 2) Mark credit card bill payments in extratos
-      mark_cc_bill_payments(user_id)
+      # 2) Mark credit card bill payments, on the bill and on the account that paid
+      #    it, and the Pix paid with the card (`Grana.Banking.CardPayments`)
+      mark_card_payments(user_id)
+
+      # 2b) An operation and its reversal ("Estorno - ..."), which Nubank lists under
+      #     the same identifier: neither happened
+      mark_reversals(user_id)
 
       # 3) Mark matching inter-account transfers
       mark_inter_account_transfers(user_id)
@@ -814,6 +879,17 @@ defmodule Grana.Banking do
       # 4) Apply learned per-counterparty rules LAST: "internal" força interna e
       #    "external" sobrepõe a heurística (correção manual do usuário vence).
       apply_internal_transfer_rules(user_id)
+
+      # 5) Reapply manual overrides: true forces internal, false forces external.
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.internal_override == true)
+      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
+
+      Transaction
+      |> where([t], t.user_id == ^user_id and t.internal_override == false)
+      |> Repo.update_all(
+        set: [is_internal_transfer: false, updated_at: DateTime.utc_now(:second)]
+      )
     end)
     |> case do
       {:ok, _} ->
@@ -841,7 +917,15 @@ defmodule Grana.Banking do
 
     case TransferIdentity.rule_key(transaction.description) do
       nil ->
-        mark_ids([transaction.id], internal?)
+        from(t in Transaction, where: t.id == ^transaction.id)
+        |> Repo.update_all(
+          set: [
+            is_internal_transfer: internal?,
+            internal_override: internal?,
+            updated_at: DateTime.utc_now(:second)
+          ]
+        )
+
         Grana.Cache.invalidate_user(user_id)
         {:ok, :single}
 
@@ -859,44 +943,80 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
+  @doc """
+  Forgets a learned counterparty rule and runs the detection again, so its transactions
+  go back to what the automatic heuristics say.
+  """
+  def delete_internal_transfer_rule(user_id, rule_id) do
+    {count, _} =
+      InternalTransferRule
+      |> where([r], r.user_id == ^user_id and r.id == ^rule_id)
+      |> Repo.delete_all()
+
+    if count > 0, do: detect_internal_transfers(user_id)
+    {:ok, count}
+  end
+
   defp upsert_internal_transfer_rule(user_id, pattern, kind) do
-    %InternalTransferRule{}
-    |> InternalTransferRule.changeset(%{user_id: user_id, pattern: pattern, kind: kind})
+    %InternalTransferRule{user_id: user_id}
+    |> InternalTransferRule.changeset(%{pattern: pattern, kind: kind})
     |> Repo.insert(
       on_conflict: [set: [kind: kind, updated_at: DateTime.utc_now(:second)]],
       conflict_target: [:user_id, :pattern]
     )
   end
 
-  defp mark_cc_bill_payments(user_id) do
-    extrato_stmt_ids =
-      BankStatement
-      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "extrato")
-      |> select([bs], bs.id)
-
+  defp mark_card_payments(user_id) do
     transactions =
       Transaction
-      |> where([t], t.user_id == ^user_id and t.type == "debit")
-      |> where([t], t.bank_statement_id in subquery(extrato_stmt_ids))
+      |> join(:inner, [t], bs in assoc(t, :bank_statement))
+      |> where([t], t.user_id == ^user_id)
+      |> select([t, bs], %{
+        id: t.id,
+        date: t.date,
+        amount: t.amount,
+        type: t.type,
+        description: t.description,
+        statement_id: bs.id,
+        statement_type: bs.statement_type,
+        bank: bs.bank
+      })
       |> Repo.all()
 
-    cc_payment_ids =
-      transactions
-      |> Enum.filter(fn t ->
-        desc = String.downcase(t.description)
+    bills =
+      BankStatement
+      |> where([bs], bs.user_id == ^user_id and bs.statement_type == "fatura")
+      |> select([bs], {bs.bank, bs.period_start, bs.period_end})
+      |> Repo.all()
 
-        Enum.any?(@cc_payment_patterns, &String.contains?(desc, &1)) or
-          (String.contains?(desc, "pagto eletron") and
-             Enum.any?(@cc_issuers, &String.contains?(desc, &1)))
-      end)
-      |> Enum.map(& &1.id)
-
-    if cc_payment_ids != [] do
-      Transaction
-      |> where([t], t.id in ^cc_payment_ids)
-      |> Repo.update_all(set: [is_internal_transfer: true, updated_at: DateTime.utc_now(:second)])
-    end
+    transactions |> CardPayments.internal_ids(bills) |> mark_ids(true)
   end
+
+  # The Pix on credit shares the identifier with the card money that paid it, but it did
+  # happen (`CardPayments` decides about it).
+  defp mark_reversals(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id and like(t.identifier, "%-%-%-%-%"))
+    |> select([t], %{
+      id: t.id,
+      key: {t.bank_statement_id, t.identifier},
+      amount: t.amount,
+      description: t.description
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.key)
+    |> Enum.flat_map(fn {_key, rows} ->
+      if reversal?(rows), do: Enum.map(rows, & &1.id), else: []
+    end)
+    |> mark_ids(true)
+  end
+
+  defp reversal?([a, b]) do
+    Decimal.equal?(Decimal.add(a.amount, b.amount), 0) and
+      not Enum.any?([a, b], &CardPayments.card_funding?(&1.description))
+  end
+
+  defp reversal?(_rows), do: false
 
   defp mark_inter_account_transfers(user_id) do
     # Load all transactions with their bank info
@@ -1037,14 +1157,39 @@ defmodule Grana.Banking do
     |> Repo.all()
   end
 
+  @doc "The learned patterns of one category, alphabetically."
+  def category_rules(user_id, category_id) do
+    CategoryRule
+    |> where([r], r.user_id == ^user_id and r.category_id == ^category_id)
+    |> order_by([r], asc: r.pattern)
+    |> Repo.all()
+  end
+
+  def delete_category_rule(user_id, rule_id) do
+    {count, _} =
+      CategoryRule
+      |> where([r], r.user_id == ^user_id and r.id == ^rule_id)
+      |> Repo.delete_all()
+
+    Grana.Cache.invalidate_user(user_id)
+    {:ok, count}
+  end
+
   def create_category_rule(attrs) do
-    %CategoryRule{}
-    |> CategoryRule.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: {:replace, [:category_id, :updated_at]},
-      conflict_target: [:pattern, :user_id]
-    )
-    |> invalidate_cache()
+    user_id = attrs[:user_id] || attrs["user_id"]
+    category_id = attrs[:category_id] || attrs["category_id"]
+
+    if category_id && user_id && !category_belongs_to_user?(category_id, user_id) do
+      {:error, :unauthorized}
+    else
+      %CategoryRule{}
+      |> CategoryRule.changeset(attrs)
+      |> Repo.insert(
+        on_conflict: {:replace, [:category_id, :updated_at]},
+        conflict_target: [:pattern, :user_id]
+      )
+      |> invalidate_cache()
+    end
   end
 
   def categorize_transaction(description, user_id) do
@@ -1248,6 +1393,10 @@ defmodule Grana.Banking do
   end
 
   defp do_monthly_summary(user_id, year, month, opts) do
+    user_id |> month_transactions(year, month, opts) |> build_summary()
+  end
+
+  defp month_transactions(user_id, year, month, opts) do
     date_from = Date.new!(year, month, 1)
     date_to = Date.end_of_month(date_from)
 
@@ -1261,9 +1410,7 @@ defmodule Grana.Banking do
           [date_from: date_from, date_to: date_to] ++ opts
       end
 
-    transactions = list_transactions(user_id, base_opts)
-
-    build_summary(transactions)
+    list_transactions(user_id, base_opts)
   end
 
   def all_time_summary(user_id, opts \\ []) do
@@ -1283,6 +1430,10 @@ defmodule Grana.Banking do
   end
 
   defp do_yearly_summary(user_id, year, opts) do
+    user_id |> year_transactions(year, opts) |> build_summary()
+  end
+
+  defp year_transactions(user_id, year, opts) do
     date_from = Date.new!(year, 1, 1)
     date_to = Date.new!(year, 12, 31)
 
@@ -1301,9 +1452,109 @@ defmodule Grana.Banking do
           [date_from: date_from, date_to: date_to] ++ opts
       end
 
-    transactions = list_transactions(user_id, base_opts)
+    list_transactions(user_id, base_opts)
+  end
 
-    build_summary(transactions)
+  @doc """
+  What the dashboard cards compare a period with. For a month: the previous month and
+  the monthly average of the last 6 months with movement before it. For a year (`month`
+  nil): the previous year, with no average. Same filters as the summaries.
+
+  Returns `%{previous: %{label, income, expenses, investments}, average: nil |
+  %{months, income, expenses, investments}}`.
+  """
+  def period_trend(user_id, year, month, opts \\ [])
+
+  def period_trend(user_id, year, nil, opts) do
+    previous =
+      user_id
+      |> monthly_income_expenses(year - 1, opts)
+      |> sum_movement()
+      |> Map.put(:label, to_string(year - 1))
+
+    %{previous: previous, average: nil}
+  end
+
+  def period_trend(user_id, year, month, opts) do
+    before =
+      (monthly_income_expenses(user_id, year - 1, opts)
+       |> Enum.map(&Map.put(&1, :year, year - 1))) ++
+        (monthly_income_expenses(user_id, year, opts) |> Enum.map(&Map.put(&1, :year, year)))
+
+    {prev_year, prev_month} = if month == 1, do: {year - 1, 12}, else: {year, month - 1}
+
+    previous =
+      before
+      |> Enum.filter(&(&1.year == prev_year and &1.month == prev_month))
+      |> sum_movement()
+      |> Map.put(:label, "#{month_name(prev_month)}/#{prev_year}")
+
+    history =
+      before
+      |> Enum.filter(&({&1.year, &1.month} < {year, month} and movement?(&1)))
+      |> Enum.sort_by(&{&1.year, &1.month})
+      |> Enum.take(-6)
+
+    average =
+      case history do
+        [] ->
+          nil
+
+        months ->
+          months
+          |> sum_movement()
+          |> Map.new(fn {key, total} ->
+            {key, total |> Decimal.div(length(months)) |> Decimal.round(2)}
+          end)
+          |> Map.put(:months, length(months))
+      end
+
+    %{previous: previous, average: average}
+  end
+
+  defp movement?(month) do
+    Enum.any?([month.income, month.expenses, month.investments], &Decimal.gt?(&1, 0))
+  end
+
+  defp sum_movement(months) do
+    Enum.reduce(
+      months,
+      %{income: Decimal.new(0), expenses: Decimal.new(0), investments: Decimal.new(0)},
+      fn m, acc ->
+        %{
+          income: Decimal.add(acc.income, m.income),
+          expenses: Decimal.add(acc.expenses, m.expenses),
+          investments: Decimal.add(acc.investments, m.investments)
+        }
+      end
+    )
+  end
+
+  @doc """
+  Where the money of a period went, by merchant: the same expenses the summary counts
+  (no internal transfers, investments or credits), grouped like `Grana.Banking.Merchants`.
+  `period` is `{:month, year, month}`, `{:year, year}` or `:total`; `opts` are the
+  summary filters (`:bank`, `:statement_type`, `:type`).
+  """
+  def merchant_spending(user_id, period, opts \\ []) do
+    Grana.Cache.get_or_store(
+      "banking:merchant_spending",
+      user_id,
+      {period, Enum.sort(opts)},
+      fn ->
+        transactions =
+          case period do
+            {:month, year, month} -> month_transactions(user_id, year, month, opts)
+            {:year, year} -> year_transactions(user_id, year, opts)
+            :total -> list_transactions(user_id, opts)
+          end
+
+        transactions
+        |> Enum.filter(&(&1.type == "debit" and not &1.is_internal_transfer))
+        |> Enum.reject(&investment_category?/1)
+        |> Grana.Banking.Merchants.spending()
+      end
+    )
   end
 
   defp build_summary(transactions) do
@@ -1316,8 +1567,10 @@ defmodule Grana.Banking do
     # 2) Separate refunds (estornos) — these discount from expenses
     {refunds, rest} = Enum.split_with(relevant, &refund?/1)
 
-    # 3) Income = remaining credits (real income from extratos)
-    income_txns = Enum.filter(rest, &(&1.type == "credit"))
+    # 3) Income = remaining credits, but what comes back from an investment (a
+    #    redemption, a sale) is the user's own money: it nets the investments instead
+    {investment_credits, income_txns} =
+      rest |> Enum.filter(&(&1.type == "credit")) |> Enum.split_with(&investment_category?/1)
 
     total_income =
       Enum.reduce(income_txns, Decimal.new(0), fn t, acc ->
@@ -1333,10 +1586,7 @@ defmodule Grana.Banking do
         t.category && t.category.kind == "investment"
       end)
 
-    total_investments =
-      Enum.reduce(investment_debits, Decimal.new(0), fn t, acc ->
-        Decimal.add(acc, Decimal.abs(t.amount))
-      end)
+    total_investments = Decimal.sub(sum_abs(investment_debits), sum_abs(investment_credits))
 
     # 6) Gross expenses = debits in expense categories only
     gross_expenses =
@@ -1368,7 +1618,7 @@ defmodule Grana.Banking do
         %{category: category, total: Decimal.max(Decimal.new(0), net), count: length(txns)}
       end)
       |> Enum.reject(fn %{total: t} -> Decimal.compare(t, 0) == :eq end)
-      |> Enum.sort_by(fn %{total: t} -> Decimal.to_float(t) end, :desc)
+      |> Enum.sort_by(& &1.total, {:desc, Decimal})
 
     # Pre-compute only the top debits/credits instead of returning (and holding
     # in LiveView assigns) the full transaction list, which can be thousands of rows.
@@ -1378,18 +1628,27 @@ defmodule Grana.Banking do
     top_expenses = top_n_by_amount(expense_debits, "debit", 15)
     top_income = top_n_by_amount(income_txns, "credit", 15)
 
+    income_by_category =
+      income_txns
+      |> Enum.group_by(& &1.category)
+      |> Enum.map(fn {category, txns} ->
+        %{category: category, total: sum_abs(txns), count: length(txns)}
+      end)
+      |> Enum.sort_by(& &1.total, {:desc, Decimal})
+
     %{
       total_income: total_income,
       total_expenses: total_expenses,
       total_investments: total_investments,
       balance: Decimal.sub(total_income, Decimal.add(total_expenses, total_investments)),
       by_category: by_category,
+      income_by_category: income_by_category,
       top_expenses: top_expenses,
       top_income: top_income,
       transaction_count: length(relevant),
       income_count: length(income_txns),
       expense_count: length(expense_debits),
-      investment_count: length(investment_debits),
+      investment_count: length(investment_debits) + length(investment_credits),
       refund_count: length(refunds),
       internal_count: length(internal)
     }
@@ -1398,7 +1657,7 @@ defmodule Grana.Banking do
   defp top_n_by_amount(transactions, type, limit) do
     transactions
     |> Enum.filter(&(&1.type == type))
-    |> Enum.sort_by(fn t -> Decimal.to_float(Decimal.abs(t.amount)) end, :desc)
+    |> Enum.sort_by(&Decimal.abs(&1.amount), {:desc, Decimal})
     |> Enum.take(limit)
   end
 
@@ -1419,15 +1678,27 @@ defmodule Grana.Banking do
       not String.contains?(desc, "estorno")
   end
 
+  @refund_words ["estorno", "devoluc", "devolvid", "reembolso", "chargeback", "ajuste de compra"]
+
+  # Any other credit on a card bill gives back a purchase (Bradesco lists a refund
+  # under the merchant's name alone): it discounts the spending, it is not income.
+  # Banks write without accents too ("Devolucao Pix").
   defp refund?(t) do
-    desc = String.downcase(t.description)
+    desc = TransferIdentity.normalize(t.description)
 
     t.type == "credit" and
-      (String.contains?(desc, "estorno") or
-         String.contains?(desc, "devolução") or
-         String.contains?(desc, "devoluç") or
-         String.contains?(desc, "reembolso") or
-         String.contains?(desc, "chargeback"))
+      (match?(%{bank_statement: %BankStatement{statement_type: "fatura"}}, t) or
+         Enum.any?(@refund_words, &String.contains?(desc, &1)))
+  end
+
+  @doc """
+  Whether the user has any transaction at all, imported or from Open Finance. Until
+  then the screens that read the data show only how to bring it in (`GranaWeb.DataHook`).
+  """
+  def has_transactions?(user_id) do
+    Transaction
+    |> where([t], t.user_id == ^user_id)
+    |> Repo.exists?()
   end
 
   def available_months(user_id) do
@@ -1564,10 +1835,10 @@ defmodule Grana.Banking do
       relevant = Enum.reject(txns, &bill_payment?/1)
       {refunds, rest} = Enum.split_with(relevant, &refund?/1)
 
-      income =
-        rest
-        |> Enum.filter(&(&1.type == "credit"))
-        |> Enum.reduce(Decimal.new(0), fn t, acc -> Decimal.add(acc, Decimal.abs(t.amount)) end)
+      {investment_credits, income_credits} =
+        rest |> Enum.filter(&(&1.type == "credit")) |> Enum.split_with(&investment_category?/1)
+
+      income = sum_abs(income_credits)
 
       debits = Enum.filter(rest, &(&1.type == "debit"))
 
@@ -1579,10 +1850,7 @@ defmodule Grana.Banking do
           Decimal.add(acc, Decimal.abs(t.amount))
         end)
 
-      investments =
-        Enum.reduce(inv_debits, Decimal.new(0), fn t, acc ->
-          Decimal.add(acc, Decimal.abs(t.amount))
-        end)
+      investments = Decimal.sub(sum_abs(inv_debits), sum_abs(investment_credits))
 
       refund_total =
         Enum.reduce(refunds, Decimal.new(0), fn t, acc ->
@@ -1597,62 +1865,6 @@ defmodule Grana.Banking do
       }
     end)
     |> Enum.sort_by(& &1.month)
-  end
-
-  def transactions_summary(user_id, opts) do
-    Grana.Cache.get_or_store("banking:transactions_summary", user_id, Enum.sort(opts), fn ->
-      do_transactions_summary(user_id, opts)
-    end)
-  end
-
-  defp do_transactions_summary(user_id, opts) do
-    build_transactions_query(user_id, opts)
-    |> exclude(:preload)
-    |> exclude(:order_by)
-    |> where([t], t.is_internal_transfer == false)
-    |> join(:left, [t], c in Category, on: t.category_id == c.id)
-    |> select([t, c], %{
-      total_income:
-        type(
-          coalesce(
-            sum(fragment("CASE WHEN ? = 'credit' THEN ABS(?) ELSE 0 END", t.type, t.amount)),
-            0
-          ),
-          :decimal
-        ),
-      total_expenses:
-        type(
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'debit' AND (? IS NULL OR ? != 'investment') THEN ABS(?) ELSE 0 END",
-                t.type,
-                c.kind,
-                c.kind,
-                t.amount
-              )
-            ),
-            0
-          ),
-          :decimal
-        ),
-      total_investments:
-        type(
-          coalesce(
-            sum(
-              fragment(
-                "CASE WHEN ? = 'debit' AND ? = 'investment' THEN ABS(?) ELSE 0 END",
-                t.type,
-                c.kind,
-                t.amount
-              )
-            ),
-            0
-          ),
-          :decimal
-        )
-    })
-    |> Repo.one()
   end
 
   def uncategorized_count(user_id) do
@@ -1774,7 +1986,7 @@ defmodule Grana.Banking do
           end
         end)
 
-      %{label: month_label, total: total}
+      %{label: month_label, date: projected_date, total: total}
     end)
     |> Enum.reject(fn %{total: t} -> Decimal.compare(t, 0) == :eq end)
   end
@@ -1782,26 +1994,11 @@ defmodule Grana.Banking do
   # AI Analyses
 
   def create_ai_analysis(attrs) do
-    %AIAnalysis{}
+    user_id = attrs[:user_id] || attrs["user_id"]
+
+    %AIAnalysis{user_id: user_id}
     |> AIAnalysis.changeset(attrs)
     |> Repo.insert()
-  end
-
-  def list_ai_analyses(user_id) do
-    AIAnalysis
-    |> where([a], a.user_id == ^user_id)
-    |> order_by([a], desc: a.inserted_at)
-    |> Repo.all()
-  end
-
-  def get_ai_analysis!(id, user_id) do
-    AIAnalysis
-    |> where([a], a.id == ^id and a.user_id == ^user_id)
-    |> Repo.one!()
-  end
-
-  def delete_ai_analysis(%AIAnalysis{} = analysis) do
-    Repo.delete(analysis)
   end
 
   # Shared helpers
@@ -1896,7 +2093,13 @@ defmodule Grana.Banking do
     Repo.delete(goal)
   end
 
-  def goals_progress(user_id, year, month) do
+  @doc """
+  Progress of each active goal in a month. In the current month, `:pace` says how far
+  the month has gone (`day_pct`, `days_left` counting today) and, for spending limits
+  with room left, what is left (`remaining`) and how much a day (`daily`); in any other
+  month it is nil.
+  """
+  def goals_progress(user_id, year, month, today \\ Grana.LocalTime.today()) do
     goals = list_financial_goals(user_id)
 
     case goals do
@@ -1907,22 +2110,90 @@ defmodule Grana.Banking do
         summary = monthly_summary(user_id, year, month)
 
         Enum.map(goals, fn goal ->
-          current =
-            case goal.type do
-              "expense_limit" -> summary.total_expenses
-              "income_goal" -> summary.total_income
-              "investment_goal" -> summary.total_investments
-              "category_limit" -> category_total(summary, goal.category_id)
-            end
-
+          current = goal_value(goal, summary)
           target = goal.target_value
           pct = calc_pct(current, target)
           status = goal_status(goal.type, pct)
 
-          %{goal: goal, current: current, target: target, pct: pct, status: status}
+          %{
+            goal: goal,
+            current: current,
+            target: target,
+            pct: pct,
+            status: status,
+            pace: goal_pace(goal, current, {year, month}, today)
+          }
         end)
     end
   end
+
+  defp goal_value(goal, summary) do
+    case goal.type do
+      "expense_limit" -> summary.total_expenses
+      "income_goal" -> summary.total_income
+      "investment_goal" -> summary.total_investments
+      "category_limit" -> category_total(summary, goal.category_id)
+    end
+  end
+
+  defp goal_pace(goal, current, {year, month}, %Date{year: year, month: month} = today) do
+    days = Date.days_in_month(today)
+    days_left = days - today.day + 1
+    remaining = Decimal.sub(goal.target_value, current)
+
+    daily =
+      if goal.type in ["expense_limit", "category_limit"] and Decimal.gt?(remaining, 0),
+        do: remaining |> Decimal.div(days_left) |> Decimal.round(2)
+
+    %{
+      day_pct: Float.round(today.day / days * 100, 1),
+      days_left: days_left,
+      remaining: if(daily, do: remaining),
+      daily: daily
+    }
+  end
+
+  defp goal_pace(_goal, _current, _period, _today), do: nil
+
+  @doc """
+  How each active goal did in the `count` months before `year`/`month`, oldest first:
+  `%{goal_id => [%{year, month, value, status}]}`, status `:met`, `:missed` or `:no_data`
+  (no transaction in the month). One query for the whole window.
+  """
+  def goals_history(user_id, year, month, count \\ 6) do
+    goals = list_financial_goals(user_id)
+    last = Date.new!(year, month, 1) |> Date.add(-1)
+    first = last |> Date.beginning_of_month() |> Date.shift(month: -(count - 1))
+
+    summaries =
+      user_id
+      |> list_transactions(date_from: first, date_to: last)
+      |> Enum.group_by(&{&1.date.year, &1.date.month})
+      |> Map.new(fn {ym, txns} -> {ym, build_summary(txns)} end)
+
+    months = Enum.map((count - 1)..0//-1, &Date.shift(Date.beginning_of_month(last), month: -&1))
+
+    Map.new(goals, fn goal ->
+      {goal.id,
+       Enum.map(months, fn date ->
+         case summaries[{date.year, date.month}] do
+           nil ->
+             %{year: date.year, month: date.month, value: nil, status: :no_data}
+
+           summary ->
+             value = goal_value(goal, summary)
+             %{year: date.year, month: date.month, value: value, status: goal_met(goal, value)}
+         end
+       end)}
+    end)
+  end
+
+  defp goal_met(%{type: type, target_value: target}, value)
+       when type in ["expense_limit", "category_limit"],
+       do: if(Decimal.compare(value, target) == :gt, do: :missed, else: :met)
+
+  defp goal_met(%{target_value: target}, value),
+    do: if(Decimal.compare(value, target) == :lt, do: :missed, else: :met)
 
   defp category_total(summary, category_id) do
     case Enum.find(summary.by_category, fn %{category: c} -> c && c.id == category_id end) do

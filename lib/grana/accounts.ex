@@ -4,6 +4,7 @@ defmodule Grana.Accounts do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias Grana.Repo
 
   alias Grana.Accounts.{User, UserNotifier, UserToken}
@@ -115,9 +116,30 @@ defmodule Grana.Accounts do
 
   def change_owner(attrs \\ %{}, opts \\ []), do: User.owner_changeset(%User{}, attrs, opts)
 
+  @preference_fields [:theme, :visual_style, :hide_values, :hide_names, :analysis_open]
+
+  @doc """
+  Grava tema, estilo visual, privacidade (ocultar valores e nomes) e se a análise do
+  painel fica aberta, e avisa as telas do usuário abertas (outras abas e aparelhos), que aplicam as preferências sem recarregar.
+  """
   def update_user_preferences(%User{} = user, attrs) do
-    user |> User.preferences_changeset(attrs) |> Repo.update()
+    with {:ok, user} <- user |> User.preferences_changeset(attrs) |> Repo.update() do
+      Phoenix.PubSub.broadcast(
+        Grana.PubSub,
+        preferences_topic(user.id),
+        {:preferences_updated, Map.take(user, @preference_fields)}
+      )
+
+      {:ok, user}
+    end
   end
+
+  @doc "Recebe `{:preferences_updated, campos}` quando o usuário muda uma preferência."
+  def subscribe_preferences(user_id) do
+    Phoenix.PubSub.subscribe(Grana.PubSub, preferences_topic(user_id))
+  end
+
+  defp preferences_topic(user_id), do: "user_preferences:#{user_id}"
 
   def complete_onboarding(%User{onboarded_at: nil} = user) do
     user |> User.onboarded_changeset() |> Repo.update()
@@ -144,52 +166,96 @@ defmodule Grana.Accounts do
 
   ## SMTP
 
-  @doc """
-  Configuração efetiva de SMTP: o ambiente (`SMTP_HOST` etc.) tem precedência
-  sobre a salva pela tela. `nil` quando não há SMTP; nesse caso o 2FA fica desligado.
-  """
-  def smtp_config do
-    env_smtp_config() || saved_smtp_config(get_owner())
-  end
+  # Campo do SMTP => coluna em `users`.
+  @smtp_columns [
+    host: :smtp_host,
+    port: :smtp_port,
+    username: :smtp_username,
+    password: :smtp_password,
+    tls: :smtp_tls,
+    from_name: :smtp_from_name,
+    from_address: :smtp_from_address
+  ]
 
-  def smtp_source do
-    cond do
-      env_smtp_config() -> :env
-      saved_smtp_config(get_owner()) -> :database
-      true -> nil
+  @doc """
+  Configuração efetiva de SMTP, campo a campo: cada variável do ambiente (`SMTP_HOST`,
+  `SMTP_PASSWORD`...) vence o campo salvo pela tela, e o que nenhum dos dois define usa o
+  padrão. `nil` sem servidor (`host`); nesse caso o 2FA fica desligado.
+  """
+  def smtp_config, do: smtp_config_for(get_owner())
+
+  @doc "Como `smtp_config/0`, com os campos salvos de `user` (inclusive ainda não gravados)."
+  def smtp_config_for(user) do
+    fields = Map.merge(saved_smtp_fields(user), smtp_env())
+
+    if fields[:host] do
+      username = fields[:username]
+
+      Map.merge(
+        %{
+          port: 587,
+          username: nil,
+          password: nil,
+          tls: :always,
+          from_name: "Grana",
+          from_address:
+            if(username && String.contains?(username, "@"),
+              do: username,
+              else: "noreply@example.com"
+            )
+        },
+        fields
+      )
     end
   end
+
+  @doc """
+  De onde vem o SMTP: `:env` (só do ambiente), `:database` (só da tela), `:mixed` (o
+  ambiente define uma parte e a tela, o resto) ou `nil` (sem servidor).
+  """
+  def smtp_source do
+    owner = get_owner()
+    saved = Map.drop(saved_smtp_fields(owner), smtp_env_fields())
+
+    cond do
+      smtp_config_for(owner) == nil -> nil
+      saved == %{} -> :env
+      smtp_env() == %{} -> :database
+      true -> :mixed
+    end
+  end
+
+  @doc "Campos do SMTP definidos no ambiente (`:host`, `:password`...), que a tela não edita."
+  def smtp_env_fields, do: Map.keys(smtp_env())
+
+  @doc "Se o ambiente define todos os campos do SMTP (não sobra nada para a tela)."
+  def smtp_env_complete?, do: map_size(smtp_env()) == length(@smtp_columns)
 
   def smtp_configured?, do: smtp_config() != nil
 
-  @doc "Configuração de SMTP de um usuário (ainda não persistido), no formato de `smtp_config/0`."
-  def smtp_config_for(%User{} = user), do: saved_smtp_config(user)
+  defp smtp_env, do: Application.get_env(:grana, :smtp_env, %{})
 
-  defp env_smtp_config do
-    case Application.get_env(:grana, :smtp_env) do
-      %{host: host} = config when is_binary(host) and host != "" -> config
-      _ -> nil
-    end
+  defp saved_smtp_fields(nil), do: %{}
+
+  defp saved_smtp_fields(%User{} = user) do
+    @smtp_columns
+    |> Enum.map(fn {field, column} -> {field, Map.fetch!(user, column)} end)
+    |> Enum.reject(fn {_field, value} -> value in [nil, ""] end)
+    |> Map.new(fn
+      {:tls, value} -> {:tls, String.to_existing_atom(value)}
+      pair -> pair
+    end)
   end
 
-  defp saved_smtp_config(%User{smtp_host: host} = user) when is_binary(host) and host != "" do
-    %{
-      host: host,
-      port: user.smtp_port || 587,
-      username: user.smtp_username,
-      password: user.smtp_password,
-      tls: String.to_existing_atom(user.smtp_tls || "always"),
-      from_name: user.smtp_from_name || "Grana",
-      from_address: user.smtp_from_address
-    }
-  end
-
-  defp saved_smtp_config(_), do: nil
-
-  @doc "Changeset do formulário de SMTP. A senha salva nunca volta para a tela."
+  @doc """
+  Changeset do formulário de SMTP. A senha salva nunca volta para a tela, e os campos que
+  vêm do ambiente ficam de fora.
+  """
   def change_smtp_settings(user, attrs \\ %{}) do
-    User.smtp_settings_changeset(%{user | smtp_password: nil}, attrs)
+    User.smtp_settings_changeset(%{user | smtp_password: nil}, attrs, smtp_env_columns())
   end
+
+  defp smtp_env_columns, do: Enum.map(smtp_env_fields(), &Keyword.fetch!(@smtp_columns, &1))
 
   @doc """
   Salva o SMTP depois de enviar um email de teste para o dono: ligar o SMTP liga o
@@ -208,27 +274,27 @@ defmodule Grana.Accounts do
   end
 
   defp smtp_test(user, attrs) do
-    changeset = User.smtp_settings_changeset(user, attrs)
+    changeset = User.smtp_settings_changeset(user, attrs, smtp_env_columns())
 
     with {:ok, candidate} <- Ecto.Changeset.apply_action(changeset, :update),
-         {:ok, _email} <- UserNotifier.deliver_smtp_test(candidate, saved_smtp_config(candidate)) do
+         {:ok, _email} <- UserNotifier.deliver_smtp_test(candidate, smtp_config_for(candidate)) do
       {:ok, changeset}
     else
       {:error, %Ecto.Changeset{}} = error ->
         error
 
       {:error, reason} ->
+        Logger.warning("SMTP test failure: #{inspect(reason)}")
+
         {:error,
          changeset
          |> Ecto.Changeset.add_error(
            :smtp_host,
-           "não foi possível enviar o email de teste (#{smtp_error(reason)}); nada foi salvo"
+           "não foi possível enviar o email de teste; verifique as configurações informadas; nada foi salvo"
          )
          |> Map.put(:action, :update)}
     end
   end
-
-  defp smtp_error(reason), do: reason |> inspect() |> String.slice(0, 160)
 
   def remove_smtp_settings(%User{} = user) do
     user
@@ -457,9 +523,10 @@ defmodule Grana.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_user_password(user, attrs) do
+  def update_user_password(user, current_password, attrs) do
     user
     |> User.password_changeset(attrs)
+    |> User.validate_current_password(current_password)
     |> update_user_and_delete_all_tokens()
   end
 
@@ -536,5 +603,4 @@ defmodule Grana.Accounts do
   end
 
   # Provedor e modelo padrão da IA (ver Grana.AI): ambiente e cadastrados.
-  def get_user_ai_config(user_id), do: Grana.AI.resolve_config(user_id)
 end

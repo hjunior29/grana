@@ -7,16 +7,10 @@ defmodule GranaWeb.UserLive.TwoFactor do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <div class="mx-auto max-w-sm space-y-4">
-        <div class="text-center">
-          <.header>
-            <p>Código de acesso</p>
-            <:subtitle>
-              Enviamos um código de 6 dígitos para <strong>{@masked_email}</strong>. Ele vale por 10 minutos.
-            </:subtitle>
-          </.header>
-        </div>
-
+      <.auth_card id="two-factor-card" title="Código de acesso">
+        <p class="ui-body ui-text-secondary -mt-3 mb-6 text-center">
+          Enviamos um código de 6 dígitos para <strong>{@masked_email}</strong>. Ele vale por 10 minutos.
+        </p>
         <.form for={@form} id="two_factor_form" action={~p"/users/log-in/code"} method="post">
           <.input
             field={@form[:code]}
@@ -29,18 +23,17 @@ defmodule GranaWeb.UserLive.TwoFactor do
             required
             phx-mounted={JS.focus()}
           />
-          <.button class="btn btn-primary w-full">Confirmar</.button>
+          <.button variant="primary" class="w-full" loading="Confirmando…">Confirmar</.button>
         </.form>
-
-        <div class="flex items-center justify-between text-sm">
-          <button id="resend-code" type="button" phx-click="resend" class="link link-hover">
-            Reenviar código
-          </button>
-          <.link navigate={~p"/users/log-in"} class="link link-hover opacity-70">
-            Voltar
-          </.link>
-        </div>
-      </div>
+        <:footer>
+          <div class="flex items-center justify-between">
+            <button id="resend-code" type="button" phx-click="resend" class="link link-hover">
+              Reenviar código
+            </button>
+            <.link navigate={~p"/users/log-in"} class="link link-hover">Voltar</.link>
+          </div>
+        </:footer>
+      </.auth_card>
     </Layouts.app>
     """
   end
@@ -62,15 +55,25 @@ defmodule GranaWeb.UserLive.TwoFactor do
 
   @impl true
   def handle_event("resend", _params, socket) do
-    case Accounts.deliver_two_factor_code(socket.assigns.user) do
-      {:ok, _email} ->
-        {:noreply, put_flash(socket, :info, "Enviamos um novo código.")}
+    user = socket.assigns.user
+    bucket = "resend_2fa:user:#{user.id}"
 
-      {:error, :cooldown} ->
-        {:noreply, put_flash(socket, :error, "Aguarde um minuto antes de pedir outro código.")}
+    case GranaWeb.RateLimit.check_rate(bucket, 60_000, 3) do
+      :allow ->
+        case Accounts.deliver_two_factor_code(user) do
+          {:ok, _email} ->
+            {:noreply, put_flash(socket, :info, "Enviamos um novo código.")}
 
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Não foi possível enviar o código por email.")}
+          {:error, :cooldown} ->
+            {:noreply,
+             put_flash(socket, :error, "Aguarde um minuto antes de pedir outro código.")}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Não foi possível enviar o código por email.")}
+        end
+
+      :deny ->
+        {:noreply, put_flash(socket, :error, "Muitas tentativas. Aguarde um minuto.")}
     end
   end
 

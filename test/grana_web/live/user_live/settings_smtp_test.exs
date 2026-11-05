@@ -21,7 +21,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
   setup %{conn: conn} do
     # O card só deixa salvar com CLOAK_KEY própria (como o da Pluggy).
     original = System.get_env("CLOAK_KEY")
-    System.put_env("CLOAK_KEY", "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
+    System.put_env("CLOAK_KEY", "kAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
 
     on_exit(fn ->
       if original, do: System.put_env("CLOAK_KEY", original), else: System.delete_env("CLOAK_KEY")
@@ -69,7 +69,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     lv |> element("#smtp-replace") |> render_click()
     assert has_element?(lv, "#smtp-form")
 
-    lv |> element("#smtp-remove") |> render_click()
+    lv |> element("#smtp-remove-modal-confirm") |> render_click()
     assert has_element?(lv, "#smtp-none")
     refute Accounts.smtp_configured?()
   end
@@ -79,8 +79,8 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
       host: "env.example.com",
       port: 587,
       tls: :always,
-      username: nil,
-      password: nil,
+      username: "env-user",
+      password: "env-secret",
       from_name: "Grana",
       from_address: "a@b.com"
     })
@@ -90,15 +90,70 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
     assert has_element?(lv, "#smtp-env")
-    assert has_element?(lv, "#smtp-env-host[disabled][value=SMTP_HOST]")
-    assert has_element?(lv, "#smtp-env-password[disabled][value=SMTP_PASSWORD]")
+    assert has_element?(lv, "#smtp-env-host[readonly][value=SMTP_HOST]")
+    assert has_element?(lv, "#smtp-env-password[readonly][value=SMTP_PASSWORD]")
     refute render(lv) =~ "env.example.com"
     assert has_element?(lv, "#smtp-env label span", ".env")
     refute has_element?(lv, "#smtp-form")
     refute has_element?(lv, "#smtp-remove")
 
     html = render_hook(lv, "smtp_save", %{"user" => @form})
-    assert html =~ "já vem do .env"
+    assert html =~ "já vem todo do .env"
+  end
+
+  test "ambiente sem SMTP_HOST: o resto fica travado e só falta o servidor", %{
+    conn: conn,
+    user: user
+  } do
+    Application.put_env(:grana, :smtp_env, %{
+      port: 587,
+      tls: :always,
+      username: "env-user",
+      password: "env-secret",
+      from_name: "Grana",
+      from_address: "env@example.com"
+    })
+
+    on_exit(fn -> Application.delete_env(:grana, :smtp_env) end)
+
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+    assert has_element?(lv, "#smtp-incomplete", "SMTP_HOST")
+    assert has_element?(lv, "#smtp-2fa", "2FA desativado")
+    assert has_element?(lv, "#smtp-form #smtp-env-password[readonly][value=SMTP_PASSWORD]")
+    assert has_element?(lv, ~s|#smtp-form input[name="user[smtp_host]"]|)
+    refute has_element?(lv, ~s|#smtp-form input[name="user[smtp_password]"]|)
+
+    lv |> form("#smtp-form", user: %{smtp_host: "smtp.exemplo.com"}) |> render_submit()
+
+    assert Accounts.get_user!(user.id).smtp_host == "smtp.exemplo.com"
+    assert Accounts.smtp_source() == :mixed
+    assert has_element?(lv, "#smtp-saved", "smtp.exemplo.com:587")
+    assert has_element?(lv, "#smtp-env-caption", "SMTP_USERNAME")
+    assert has_element?(lv, "#smtp-2fa", "2FA ativo")
+
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+    assert has_element?(lv, "#diagnostics-integrations .ui-tag-env")
+    assert has_element?(lv, "#diagnostics-integrations .ui-tag-salvo")
+  end
+
+  test "ambiente com servidor mas incompleto pode ser completado na tela", %{conn: conn} do
+    Application.put_env(:grana, :smtp_env, %{host: "env.example.com", password: "env-secret"})
+    on_exit(fn -> Application.delete_env(:grana, :smtp_env) end)
+
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+    assert has_element?(lv, "#smtp-env #smtp-env-host")
+    refute has_element?(lv, "#smtp-env #smtp-env-port")
+    refute has_element?(lv, "#smtp-form")
+
+    lv |> element("#smtp-complete") |> render_click()
+
+    assert has_element?(lv, "#smtp-form #smtp-env-host[readonly]")
+    assert has_element?(lv, ~s|#smtp-form input[name="user[smtp_from_address]"]|)
+
+    lv |> element("#smtp-complete-cancel") |> render_click()
+    refute has_element?(lv, "#smtp-form")
   end
 
   test "sem CLOAK_KEY própria avisa em vez de mostrar o formulário", %{conn: conn} do
@@ -122,7 +177,7 @@ defmodule GranaWeb.UserLive.SettingsSmtpTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
     assert {:error, {:redirect, %{to: "/users/log-in"}}} =
-             lv |> element("#smtp-remove") |> render_click()
+             lv |> element("#smtp-remove-modal-confirm") |> render_click()
 
     assert Accounts.smtp_configured?()
   end

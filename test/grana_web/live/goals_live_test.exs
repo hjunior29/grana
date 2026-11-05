@@ -8,15 +8,17 @@ defmodule GranaWeb.GoalsLiveTest do
 
   setup :register_and_log_in_user
 
-  test "renders goals page", %{conn: conn} do
+  test "renders goals page", %{conn: conn, user: user} do
+    transaction_fixture(user)
     {:ok, _view, html} = live(conn, ~p"/goals")
     assert html =~ "Metas"
     assert html =~ "Nenhuma meta definida" or html =~ "Sugestões"
   end
 
-  test "shows Nova Meta button", %{conn: conn} do
+  test "shows Nova Meta button", %{conn: conn, user: user} do
+    transaction_fixture(user)
     {:ok, _view, html} = live(conn, ~p"/goals")
-    assert html =~ "Nova Meta"
+    assert html =~ "Nova meta"
   end
 
   test "redirects unauthenticated users" do
@@ -30,7 +32,7 @@ defmodule GranaWeb.GoalsLiveTest do
 
       html = render_click(view, "show_form", %{})
 
-      assert html =~ "Nova Meta"
+      assert html =~ "Nova meta"
     end
 
     test "hide_form closes the modal", %{conn: conn} do
@@ -39,8 +41,8 @@ defmodule GranaWeb.GoalsLiveTest do
       render_click(view, "show_form", %{})
       html = render_click(view, "hide_form", %{})
 
-      # Form modal is closed; "Editar Meta" header won't be present
-      refute html =~ "Editar Meta"
+      # Form modal is closed; "Editar meta" header won't be present
+      refute html =~ "Editar meta"
       assert html =~ "Metas"
     end
 
@@ -106,7 +108,7 @@ defmodule GranaWeb.GoalsLiveTest do
 
       html = render_click(view, "edit_goal", %{"id" => to_string(goal.id)})
 
-      assert html =~ "Editar Meta"
+      assert html =~ "Editar meta"
     end
 
     test "updates existing goal", %{conn: conn, user: user} do
@@ -420,6 +422,101 @@ defmodule GranaWeb.GoalsLiveTest do
       {:ok, _view, html} = live(conn, ~p"/goals")
 
       assert html =~ "Metas"
+    end
+  end
+
+  describe "pace and history" do
+    test "in the current month, the bar marks today and limits show the daily quota", %{
+      conn: conn,
+      user: user
+    } do
+      today = Grana.LocalTime.today()
+      transactions_fixture(user, [%{date: Date.beginning_of_month(today), amount: "-250.00"}])
+      limit = goal_fixture(user, %{type: "expense_limit", target_value: "1000.00"})
+      income = goal_fixture(user, %{type: "income_goal", target_value: "500.00"})
+
+      {:ok, view, _html} = live(conn, ~p"/goals")
+
+      day_pct = Float.round(today.day / Date.days_in_month(today) * 100, 1)
+      assert has_element?(view, ~s|#goal-#{limit.id}-today[style="left: #{day_pct}%"]|)
+      assert has_element?(view, "#goal-#{income.id}-today")
+
+      assert has_element?(view, "#goal-#{limit.id}-quota", "Restam")
+      assert has_element?(view, "#goal-#{limit.id}-quota .ui-private", "R$ 750,00")
+      refute has_element?(view, "#goal-#{income.id}-quota")
+    end
+
+    test "a past reference month has no mark, and each goal shows its last months", %{
+      conn: conn,
+      user: user
+    } do
+      transactions_fixture(user, [
+        %{date: ~D[2026-01-10], amount: "-800.00"},
+        %{date: ~D[2026-02-10], amount: "-1200.00"},
+        %{date: ~D[2026-04-10], amount: "-50.00"}
+      ])
+
+      goal = goal_fixture(user, %{type: "expense_limit", target_value: "1000.00"})
+      {:ok, view, _html} = live(conn, ~p"/goals")
+
+      refute has_element?(view, "#goal-#{goal.id}-today")
+      refute has_element?(view, "#goal-#{goal.id}-quota")
+
+      history = "#goal-#{goal.id}-history"
+      assert has_element?(view, history, "Cumprida em 1 de 2 meses")
+
+      assert has_element?(
+               view,
+               "#{history} .ui-goal-month-met[title='Janeiro/2026: R$ 800,00 (cumprida)']"
+             )
+
+      assert has_element?(view, "#{history} .ui-goal-month-missed", "F")
+
+      assert has_element?(
+               view,
+               "#{history} .ui-goal-month-no_data[title='Março/2026: sem dados']"
+             )
+
+      assert view
+             |> element(history)
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query(".ui-goal-month")
+             |> Enum.count() == 6
+    end
+
+    test "with values hidden, the history tooltip has no amount", %{conn: conn, user: user} do
+      {:ok, _} = Grana.Accounts.update_user_preferences(user, %{hide_values: true})
+
+      transactions_fixture(user, [
+        %{date: ~D[2026-01-10], amount: "-800.00"},
+        %{date: ~D[2026-02-10]}
+      ])
+
+      goal = goal_fixture(user, %{type: "expense_limit", target_value: "1000.00"})
+
+      {:ok, view, _html} = live(conn, ~p"/goals")
+
+      assert has_element?(view, "#goal-#{goal.id}-history [title='Janeiro/2026: cumprida']")
+      refute render(view) =~ "R$ 800,00 (cumprida)"
+    end
+
+    test "with no month before the reference, the history says so", %{conn: conn, user: user} do
+      transactions_fixture(user, [%{date: ~D[2026-01-10]}])
+      goal = goal_fixture(user)
+
+      {:ok, view, _html} = live(conn, ~p"/goals")
+
+      assert has_element?(view, "#goal-#{goal.id}-history", "Sem dados nos últimos 6 meses")
+    end
+
+    test "a single month of history reads in the singular", %{conn: conn, user: user} do
+      transactions_fixture(user, [%{date: ~D[2026-01-10]}, %{date: ~D[2026-02-10]}])
+      goal = goal_fixture(user)
+
+      {:ok, view, _html} = live(conn, ~p"/goals")
+
+      assert has_element?(view, "#goal-#{goal.id}-history", "Cumprida em 1 de 1 mês")
     end
   end
 end

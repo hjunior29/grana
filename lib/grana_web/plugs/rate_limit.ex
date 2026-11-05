@@ -29,15 +29,31 @@ defmodule GranaWeb.RateLimit do
   def call(conn, opts) do
     action = Keyword.fetch!(opts, :action)
 
-    case check(action, client_ip(conn)) do
-      :allow ->
-        conn
+    email =
+      case conn.params do
+        %{"user" => %{"email" => e}} when is_binary(e) ->
+          e |> String.trim() |> String.downcase()
 
-      :deny ->
-        conn
-        |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
-        |> redirect(to: redirect_path(action))
-        |> halt()
+        _ ->
+          nil
+      end
+
+    ip_allowed? = check(action, client_ip(conn)) == :allow
+
+    email_allowed? =
+      if action == :login and email not in [nil, ""] do
+        check_rate("login:email:#{email}", 15 * 60_000, 30) == :allow
+      else
+        true
+      end
+
+    if ip_allowed? and email_allowed? do
+      conn
+    else
+      conn
+      |> put_flash(:error, "Muitas tentativas. Aguarde um momento antes de tentar novamente.")
+      |> redirect(to: redirect_path(action))
+      |> halt()
     end
   end
 
@@ -71,7 +87,23 @@ defmodule GranaWeb.RateLimit do
       case Hammer.check_rate(bucket_key, window_ms, limit) do
         {:allow, _count} -> :allow
         {:deny, _limit} -> :deny
-        {:error, _reason} -> :allow
+        {:error, _reason} -> :deny
+      end
+    end
+  end
+
+  @doc """
+  Direct rate check against an arbitrary bucket key with window in milliseconds and limit.
+  """
+  @spec check_rate(String.t(), pos_integer(), pos_integer()) :: :allow | :deny
+  def check_rate(bucket_key, window_ms, limit) do
+    if @skip_rate_limit do
+      :allow
+    else
+      case Hammer.check_rate(bucket_key, window_ms, limit) do
+        {:allow, _count} -> :allow
+        {:deny, _limit} -> :deny
+        {:error, _reason} -> :deny
       end
     end
   end
@@ -106,8 +138,14 @@ defmodule GranaWeb.RateLimit do
   end
 
   # Último IP de uma lista X-Forwarded-For (o appendado pelo proxy).
-  defp xff_last([value | _]) when is_binary(value) do
-    value |> String.split(",") |> List.last() |> to_string() |> String.trim() |> presence()
+  defp xff_last([_ | _] = values) do
+    values
+    |> List.last()
+    |> String.split(",")
+    |> List.last()
+    |> to_string()
+    |> String.trim()
+    |> presence()
   end
 
   defp xff_last(_), do: nil

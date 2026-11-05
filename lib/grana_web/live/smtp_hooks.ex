@@ -25,6 +25,7 @@ defmodule GranaWeb.SmtpHooks do
     socket
     |> assign(:smtp_source, Accounts.smtp_source())
     |> assign(:smtp_config, Accounts.smtp_config())
+    |> assign(:smtp_env_fields, Accounts.smtp_env_fields())
     |> assign(:smtp_form, to_form(Accounts.change_smtp_settings(user, default_attrs())))
     |> assign(:smtp_show_form, false)
   end
@@ -39,17 +40,17 @@ defmodule GranaWeb.SmtpHooks do
     user = socket.assigns.current_scope.user
 
     cond do
-      all["intent"] == "test" ->
-        {:halt, test_only(socket, user, params)}
-
-      socket.assigns.smtp_source == :env ->
-        {:halt, put_flash(socket, :error, "O SMTP já vem do .env.")}
-
       !Accounts.sudo_mode?(user) ->
         {:halt, GranaWeb.UserAuth.redirect_for_reauth(socket)}
 
+      Accounts.smtp_env_complete?() ->
+        {:halt, put_flash(socket, :error, "O SMTP já vem todo do .env.")}
+
       !socket.assigns.smtp_private_key ->
         {:halt, put_flash(socket, :error, "Defina CLOAK_KEY no .env e reinicie o servidor.")}
+
+      all["intent"] == "test" ->
+        {:halt, test_only(socket, user, params)}
 
       true ->
         case Accounts.save_smtp_settings(user, params) do
@@ -60,7 +61,7 @@ defmodule GranaWeb.SmtpHooks do
              |> assign_smtp()
              |> put_flash(
                :info,
-               "Email de teste enviado e SMTP salvo. O login agora pede um código por email."
+               "SMTP salvo. O login agora pede um código por email."
              )
              |> tap(fn _ -> send(self(), :smtp_saved) end)}
 

@@ -86,8 +86,10 @@ end
 
 # Encryption key for sensitive fields (API keys).
 # Generate with: :crypto.strong_rand_bytes(32) |> Base.encode64()
-if cloak_key = System.get_env("CLOAK_KEY") do
-  config :grana, :cloak_key, cloak_key
+if config_env() != :test do
+  if cloak_key = System.get_env("CLOAK_KEY") do
+    config :grana, :cloak_key, cloak_key
+  end
 end
 
 if System.get_env("PHX_SERVER") do
@@ -96,27 +98,31 @@ end
 
 config :grana, GranaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
-# SMTP do ambiente: tem precedência sobre o salvo pela tela. Em dev só vale com
-# SMTP_IN_DEV=true (senão os emails vão para /dev/mailbox); em test nunca é lido.
+# SMTP do ambiente, campo a campo: cada variável definida vence o campo salvo pela tela,
+# e o que faltar pode ser preenchido lá. Em dev só vale com SMTP_IN_DEV=true (senão os
+# emails vão para /dev/mailbox); em test nunca é lido.
 if config_env() != :test and (config_env() != :dev or System.get_env("SMTP_IN_DEV") == "true") do
-  if smtp_host = System.get_env("SMTP_HOST") do
-    smtp_username = System.get_env("SMTP_USERNAME")
+  smtp_env =
+    [
+      host: "SMTP_HOST",
+      port: "SMTP_PORT",
+      username: "SMTP_USERNAME",
+      password: "SMTP_PASSWORD",
+      tls: "SMTP_TLS",
+      from_name: "MAIL_FROM_NAME",
+      from_address: "MAIL_FROM_ADDRESS"
+    ]
+    |> Enum.flat_map(fn {field, var} ->
+      case System.get_env(var) do
+        value when value in [nil, ""] -> []
+        value when field == :port -> [{field, String.to_integer(value)}]
+        value when field == :tls -> [{field, String.to_existing_atom(value)}]
+        value -> [{field, value}]
+      end
+    end)
+    |> Map.new()
 
-    config :grana, :smtp_env, %{
-      host: smtp_host,
-      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
-      username: smtp_username,
-      password: System.get_env("SMTP_PASSWORD"),
-      tls: String.to_existing_atom(System.get_env("SMTP_TLS") || "always"),
-      from_name: System.get_env("MAIL_FROM_NAME") || "Grana",
-      from_address:
-        System.get_env("MAIL_FROM_ADDRESS") ||
-          if(smtp_username && String.contains?(smtp_username, "@"),
-            do: smtp_username,
-            else: "noreply@example.com"
-          )
-    }
-  end
+  config :grana, :smtp_env, smtp_env
 end
 
 if config_env() == :prod do
@@ -141,12 +147,14 @@ if config_env() == :prod do
     System.get_env("SECRET_KEY_BASE") ||
       Grana.Release.Secrets.load_or_generate(secrets_dir, :secret_key_base)
 
-  # Chave de cifragem das credenciais (Grana.Encrypted.Binary). Guarde-a junto dos
-  # backups para poder levar as credenciais cifradas para outra instância.
-  config :grana,
-         :cloak_key,
-         System.get_env("CLOAK_KEY") ||
-           Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
+  # Chave de cifragem das credenciais (Grana.Encrypted.Binary). Guarde-a num lugar seguro,
+  # separada dos backups: com ela, um backup restaurado em outra instância leva as
+  # credenciais cifradas.
+  cloak_key =
+    System.get_env("CLOAK_KEY") ||
+      Grana.Release.Secrets.load_or_generate(secrets_dir, :cloak_key)
+
+  config :grana, :cloak_key, cloak_key
 
   public_uri = public_url && URI.parse(public_url)
 
@@ -157,15 +165,23 @@ if config_env() == :prod do
       [host: "localhost"]
     end
 
+  listen_ip =
+    case :inet.parse_address(String.to_charlist(System.get_env("LISTEN_IP", "127.0.0.1"))) do
+      {:ok, ip} -> ip
+      _ -> raise "LISTEN_IP inválido"
+    end
+
+  port = String.to_integer(System.get_env("PORT", "4000"))
+
+  # No :force_ssl: the HTTPS of the domain is the proxy's job, the app also answers plain
+  # HTTP on the local network, and Phoenix reads :force_ssl at compile time (set here, the
+  # release refuses to boot).
   config :grana, GranaWeb.Endpoint,
     url: endpoint_url,
     check_origin: :conn,
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0}
+      ip: listen_ip,
+      port: port
     ],
     secret_key_base: secret_key_base
 end

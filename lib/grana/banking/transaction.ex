@@ -13,6 +13,7 @@ defmodule Grana.Banking.Transaction do
     field :installment_total, :integer
     field :installment_group_id, :string
     field :is_internal_transfer, :boolean, default: false
+    field :internal_override, :boolean
     # Id da transação na Pluggy, nas que vêm do Open Finance.
     field :external_id, :string
 
@@ -36,8 +37,8 @@ defmodule Grana.Banking.Transaction do
       :installment_total,
       :installment_group_id,
       :is_internal_transfer,
+      :internal_override,
       :bank_statement_id,
-      :user_id,
       :category_id
     ])
     |> validate_required([:date, :description, :amount, :type, :bank_statement_id, :user_id])

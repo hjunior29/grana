@@ -21,6 +21,26 @@ defmodule Grana.Banking.KeywordCategorizerTest do
     assert KC.categorize("Imposto sobre serviço") == "Impostos e Taxas"
   end
 
+  test "movements to and from the user's own investments are Investimentos" do
+    for description <- [
+          "Aplicação RDB",
+          "Resgate Fundo - Nu Reserva Imediata",
+          "Compra de FII - ABCD11",
+          "Compra de Ações - WXYZ3",
+          "Venda de criptomoedas",
+          "Transferência de saldo NuInvest",
+          "Inv/ op na b3",
+          "Capitalizacao - Capitalizacao 1234 0000000000-0"
+        ] do
+      assert KC.categorize(description) == "Investimentos", description
+    end
+
+    # yields and dividends are income, and the word alone in the middle is not enough
+    assert KC.categorize("Rent.inv.facil") == nil
+    assert KC.categorize("Pgto Rend - b3 - Fii Exemplo") == nil
+    assert KC.categorize("Compra no débito - Resgate Bar") == nil
+  end
+
   test "não classifica descrições comuns (siglas só casam como token inteiro)" do
     # 'iof' está DENTRO de 'biofarma' mas não é um token → não casa
     assert KC.categorize("Compra Biofarma") == nil

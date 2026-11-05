@@ -17,11 +17,32 @@ defmodule GranaWeb.Layouts do
     default: false,
     doc: "mostra tema e estilo visual no header (telas sem login, como o setup)"
 
+  attr :import_queue, :map,
+    default: nil,
+    doc: "andamento da importação (`@import_queue`), mostrado como aviso flutuante"
+
+  attr :import_toast, :atom,
+    default: :bottom,
+    values: [:bottom, :top],
+    doc: "onde ficam os avisos flutuantes (no alto em telas com campo fixo embaixo, como o chat)"
+
+  attr :ai_notice, :map,
+    default: nil,
+    doc:
+      "trabalho de IA concluído em outra tela (`@ai_notice`): resposta do chat ou busca montada"
+
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <div class="grana-app-shell min-h-screen flex flex-col">
+    <div
+      id="app-shell"
+      class={[
+        "grana-app-shell min-h-screen flex flex-col",
+        @current_scope && @current_scope.user.hide_values && "ui-hide-values",
+        @current_scope && @current_scope.user.hide_names && "ui-hide-names"
+      ]}
+    >
       <header class="grana-app-header navbar bg-base-100/20 backdrop-blur-xl sticky top-0 z-50 border-b border-base-content/5 px-3 sm:px-6 lg:px-8 min-h-12">
         <div class="flex-1">
           <.link
@@ -50,14 +71,16 @@ defmodule GranaWeb.Layouts do
             </div>
           </details>
         </div>
+        <GranaWeb.QuickActionComponents.palette :if={@current_scope && !@hide_nav} />
+        <.privacy_toggle :if={@current_scope && !@hide_nav} user={@current_scope.user} />
         <%!-- Desktop nav --%>
         <div :if={@current_scope && !@hide_nav} class="hidden md:flex flex-none">
           <ul class="menu menu-horizontal gap-1 items-center" id="main-nav" phx-hook="ActiveNav">
             <li>
-              <.link navigate={~p"/dashboard"} class="text-sm">Dashboard</.link>
+              <.link navigate={~p"/dashboard"} class="text-sm">Painel</.link>
             </li>
             <li>
-              <.link navigate={~p"/analysis"} class="text-sm">Análise</.link>
+              <.link navigate={~p"/chat"} class="text-sm">Chat</.link>
             </li>
             <li>
               <.link navigate={~p"/transactions"} class="text-sm">Transações</.link>
@@ -69,15 +92,15 @@ defmodule GranaWeb.Layouts do
               <.link navigate={~p"/goals"} class="text-sm">Metas</.link>
             </li>
             <li>
-              <.link navigate={~p"/upload"} class="text-sm">Uploads</.link>
+              <.link navigate={~p"/upload"} class="text-sm">Importar</.link>
             </li>
             <li>
               <details class="dropdown dropdown-end">
-                <summary class="btn btn-md btn-ghost list-none">
+                <summary class="btn btn-md btn-ghost list-none" aria-label="Conta">
                   <.icon name="hero-user-circle" class="size-5" />
                 </summary>
                 <ul class="dropdown-content menu bg-base-200 rounded-box w-56 p-2 shadow-xl z-50 mt-2">
-                  <li class="px-3 py-2 text-xs opacity-50">{@current_scope.user.email}</li>
+                  <li class="ui-help px-3 py-2">{@current_scope.user.email}</li>
                   <li>
                     <.link navigate={~p"/users/settings"}>
                       <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
@@ -96,18 +119,18 @@ defmodule GranaWeb.Layouts do
         <%!-- Mobile hamburger menu --%>
         <div :if={@current_scope && !@hide_nav} class="flex md:hidden flex-none">
           <details class="dropdown dropdown-end">
-            <summary class="btn btn-ghost btn-sm px-2">
+            <summary class="btn btn-ghost btn-sm px-2" aria-label="Menu">
               <.icon name="hero-bars-3" class="size-5" />
             </summary>
             <ul class="dropdown-content menu bg-base-200 rounded-box w-52 p-2 shadow-xl z-50 mt-2">
               <li>
                 <.link navigate={~p"/dashboard"}>
-                  <.icon name="hero-chart-bar" class="size-4" /> Dashboard
+                  <.icon name="hero-chart-bar" class="size-4" /> Painel
                 </.link>
               </li>
               <li>
-                <.link navigate={~p"/analysis"}>
-                  <.icon name="hero-sparkles" class="size-4" /> Análise
+                <.link navigate={~p"/chat"}>
+                  <.icon name="hero-chat-bubble-left-right" class="size-4" /> Chat
                 </.link>
               </li>
               <li>
@@ -127,11 +150,11 @@ defmodule GranaWeb.Layouts do
               </li>
               <li>
                 <.link navigate={~p"/upload"}>
-                  <.icon name="hero-cloud-arrow-up" class="size-4" /> Uploads
+                  <.icon name="hero-cloud-arrow-up" class="size-4" /> Importar
                 </.link>
               </li>
-              <hr class="my-1 opacity-30" />
-              <li class="py-1 text-xs opacity-50">{@current_scope.user.email}</li>
+              <hr class="my-1 border-base-content/10" />
+              <li class="ui-help py-1">{@current_scope.user.email}</li>
               <li>
                 <.link navigate={~p"/users/settings"}>
                   <.icon name="hero-cog-6-tooth" class="size-4" /> Configurações
@@ -152,6 +175,16 @@ defmodule GranaWeb.Layouts do
       </main>
 
       <.flash_group flash={@flash} />
+      <div
+        id="floating-notices"
+        class={[
+          "fixed right-4 left-4 z-40 flex flex-col gap-3 sm:left-auto sm:w-96",
+          if(@import_toast == :top, do: "top-20", else: "bottom-20")
+        ]}
+      >
+        <GranaWeb.ImportComponents.import_toast queue={@import_queue} />
+        <GranaWeb.AiNoticeComponents.ai_toast notice={@ai_notice} />
+      </div>
     </div>
     """
   end
@@ -165,14 +198,14 @@ defmodule GranaWeb.Layouts do
       id={@id}
       phx-hook="NotificationStack"
       aria-live="polite"
-      class="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-3 pointer-events-none"
+      class="fixed right-4 bottom-4 z-50 flex flex-col gap-3 pointer-events-none"
     >
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
       <div
         id="connection-error"
-        class="hidden alert alert-warning shadow-lg pointer-events-auto text-sm"
+        class="ui-notice ui-notice-warning ui-toast pointer-events-auto hidden shadow-lg"
         phx-disconnected={
           JS.show(
             to: "#connection-error",
@@ -188,9 +221,36 @@ defmodule GranaWeb.Layouts do
         }
       >
         <.icon name="hero-arrow-path" class="size-4 motion-safe:animate-spin" />
-        <span>{gettext("Reconectando...")}</span>
+        <span>Reconectando…</span>
       </div>
     </div>
+    """
+  end
+
+  attr :user, :map, required: true
+
+  # Modo privacidade num clique: liga ou desliga "ocultar valores" e "ocultar nomes" juntos
+  # (com só um ligado, liga os dois). Grava pelo `GranaWeb.PreferencesHook`.
+  defp privacy_toggle(assigns) do
+    assigns = assign(assigns, :on, assigns.user.hide_values and assigns.user.hide_names)
+
+    ~H"""
+    <button
+      id="privacy-toggle"
+      type="button"
+      class={["quick-actions-trigger privacy-toggle shrink-0", @on && "is-active"]}
+      phx-click="set_preference"
+      phx-value-hide_values={to_string(!@on)}
+      phx-value-hide_names={to_string(!@on)}
+      aria-pressed={to_string(@on)}
+      aria-label={if @on, do: "Mostrar valores e nomes", else: "Ocultar valores e nomes"}
+      title={if @on, do: "Mostrar valores e nomes", else: "Ocultar valores e nomes"}
+    >
+      <.icon
+        name={if @user.hide_values or @user.hide_names, do: "hero-eye-slash", else: "hero-eye"}
+        class="size-4"
+      />
+    </button>
     """
   end
 
@@ -211,36 +271,52 @@ defmodule GranaWeb.Layouts do
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
+        aria-label="Tema do sistema"
+        title="Tema do sistema"
         phx-click={set_preference("phx:set-theme", "theme", "system", @persist)}
         data-phx-theme="system"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon
+          name="hero-computer-desktop-micro"
+          class="ui-text-secondary size-4 hover:text-base-content"
+        />
       </button>
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
+        aria-label="Tema claro"
+        title="Tema claro"
         phx-click={set_preference("phx:set-theme", "theme", "light", @persist)}
         data-phx-theme="light"
       >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-sun-micro" class="ui-text-secondary size-4 hover:text-base-content" />
       </button>
 
       <button
         class="flex p-2 cursor-pointer w-1/3"
+        aria-label="Tema escuro"
+        title="Tema escuro"
         phx-click={set_preference("phx:set-theme", "theme", "dark", @persist)}
         data-phx-theme="dark"
       >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-moon-micro" class="ui-text-secondary size-4 hover:text-base-content" />
       </button>
     </div>
     """
   end
 
   attr :persist, :boolean, default: false
+  attr :grid, :boolean, default: false, doc: "opções em 2 colunas, com prévia menor"
 
   def visual_style_toggle(assigns) do
     ~H"""
-    <div id="visual-style-toggle" class="visual-style-toggle" role="group" aria-label="Estilo visual">
+    <div
+      id="visual-style-toggle"
+      class="visual-style-toggle"
+      data-grid={@grid && "true"}
+      role="group"
+      aria-label="Estilo visual"
+    >
       <button
         type="button"
         class="visual-style-option"

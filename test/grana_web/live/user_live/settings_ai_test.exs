@@ -70,7 +70,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     assert html =~ "OpenAI cadastrado"
     refute html =~ "sk-segredo"
     assert has_element?(lv, "#ai-provider-list", "OpenAI")
-    assert has_element?(lv, "#ai-provider-list .badge", "chave salva")
+    assert has_element?(lv, "#ai-provider-list .ui-tag", "salvo no Grana")
 
     user = Accounts.get_user!(user.id)
 
@@ -137,6 +137,8 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     html = add_openai(lv)
 
     assert html =~ "OpenAI já está cadastrado"
+    assert has_element?(lv, "#ai-provider-form", "já está cadastrado")
+    refute has_element?(lv, "#flash-error")
   end
 
   test "o padrão mostra os modelos vindos da API e salva a escolha", %{conn: conn, user: user} do
@@ -168,6 +170,10 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
       user: user
     } do
       ai_fixture(user, %{kind: "openai", name: "OpenAI", api_key: "sk-cache", model: "gpt-5"})
+
+      stub(Req, :get, fn "https://models.dev/api.json", _opts ->
+        {:ok, %Req.Response{status: 200, body: %{}}}
+      end)
 
       # Primeira visita: busca na API e guarda no cache.
       expect(Req, :get, 1, fn _url, _opts ->
@@ -239,6 +245,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
 
     render_async(lv)
     assert has_element?(lv, "#ai-default-model option", "Claude Sonnet X")
+    refute has_element?(lv, "#ai-default-model option", "gemini-test-model")
   end
 
   defp anthropic_id, do: Grana.Repo.get_by!(ProviderConfig, kind: "anthropic").id
@@ -250,7 +257,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
     {:ok, lv, _html} = live(conn, ~p"/users/settings")
     [provider] = Grana.Repo.all(ProviderConfig)
 
-    lv |> element("#ai-remove-#{provider.id}") |> render_click()
+    lv |> element("#ai-remove-modal-#{provider.id}-confirm") |> render_click()
 
     assert has_element?(lv, "#ai-no-providers")
     assert Grana.Repo.all(ProviderConfig) == []
@@ -272,7 +279,7 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
       html = html <> render_async(lv)
 
       refute html =~ "AIza-do-env"
-      assert has_element?(lv, "#ai-provider-env\\:gemini .badge", ".env")
+      assert has_element?(lv, "#ai-provider-env\\:gemini .ui-tag", ".env")
       refute has_element?(lv, "#ai-provider-env\\:gemini button")
 
       user = Accounts.get_user!(user.id)
@@ -286,5 +293,63 @@ defmodule GranaWeb.UserLive.SettingsAiTest do
       assert [{"gemini", :env}, {"openai", :env}, {"anthropic", :env}] =
                user |> AI.list_providers() |> Enum.map(&{&1.kind, &1.source})
     end
+  end
+end
+
+defmodule GranaWeb.UserLive.SettingsAiDefaultTest do
+  use GranaWeb.ConnCase, async: false
+  use Mimic
+
+  import Phoenix.LiveViewTest
+  import Grana.AccountsFixtures
+
+  alias Grana.AI
+
+  setup :set_mimic_global
+
+  setup %{conn: conn} do
+    user = user_fixture()
+    stub(AI.Models, :list, fn _config -> {:ok, [%{id: "claude-x", name: "Claude X"}]} end)
+    %{conn: log_in_user(conn, user), user: ai_fixture(user)}
+  end
+
+  test "trocar o provedor no select não grava o padrão: só o botão grava", %{
+    conn: conn,
+    user: user
+  } do
+    other =
+      Grana.Repo.insert!(%Grana.AI.ProviderConfig{
+        user_id: user.id,
+        kind: "anthropic",
+        name: "Anthropic (Claude)",
+        api_key: "sk-ant"
+      })
+
+    ref = Grana.AI.ProviderConfig.ref(other)
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+    lv |> form("#ai-default-form", default: %{provider: ref}) |> render_change()
+    render_async(lv)
+
+    assert has_element?(lv, "#ai-default-model option", "Claude X")
+
+    assert %{ai_provider: "db:" <> _ = saved, ai_model: "gemini-test-model"} =
+             Grana.Repo.reload!(user)
+
+    assert saved == user.ai_provider
+
+    lv
+    |> form("#ai-default-form", default: %{provider: ref, model: "claude-x"})
+    |> render_submit()
+
+    assert %{ai_provider: ^ref, ai_model: "claude-x"} = Grana.Repo.reload!(user)
+  end
+
+  test "sem padrão salvo, o primeiro modelo carregado vira o padrão", %{conn: conn, user: user} do
+    {:ok, user} = AI.set_default(user, nil, nil)
+    {:ok, lv, _html} = live(conn, ~p"/users/settings")
+    render_async(lv)
+
+    assert %{ai_provider: "db:" <> _, ai_model: "claude-x"} = Grana.Repo.reload!(user)
   end
 end

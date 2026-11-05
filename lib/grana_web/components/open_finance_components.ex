@@ -22,21 +22,17 @@ defmodule GranaWeb.OpenFinanceComponents do
 
   def settings_card(assigns) do
     ~H"""
-    <div id="open-finance-settings" class="card bg-base-200 p-6 mb-6">
-      <div class="flex items-center gap-3 mb-1">
-        <.open_finance_logo class="size-5 shrink-0" />
-        <div class="flex items-center gap-1.5">
-          <h3 class="text-lg font-semibold">Open Finance</h3>
-          <span class="badge badge-ghost badge-sm gap-1.5">
-            via <img src={~p"/images/pluggy-logo.png"} alt="Pluggy" class="h-3 w-auto" />
-          </span>
-        </div>
-      </div>
-      <p class="text-sm opacity-50 mb-5 ml-8">
-        Saldos, cartões e transações lidos direto dos seus bancos, com o consentimento do
-        Open Finance Brasil. As faturas e extratos que você importa continuam valendo; o Open
-        Finance só preenche os meses ainda sem upload.
-      </p>
+    <.card
+      id="open-finance-settings"
+      title="Open Finance"
+      description="Saldos, cartões e transações lidos direto dos seus bancos, com o consentimento do Open Finance Brasil. As faturas e extratos que você importa continuam valendo; o Open Finance só preenche os meses ainda sem upload."
+    >
+      <:logo><.open_finance_logo class="size-5 shrink-0" /></:logo>
+      <:title_extra>
+        <.tag kind="neutro">
+          via <img src={~p"/images/pluggy-logo.png"} alt="Pluggy" class="h-3 w-auto" />
+        </.tag>
+      </:title_extra>
 
       <.credentials
         source={@credentials_source}
@@ -55,39 +51,49 @@ defmodule GranaWeb.OpenFinanceComponents do
         >
         </div>
 
-        <div id="open-finance-connections" class="flex flex-col gap-2 mb-5">
-          <p :if={@connections == []} id="open-finance-empty" class="text-sm opacity-60">
-            Nenhum banco conectado ainda. Conecte pelo Meu Pluggy abaixo — cada banco autorizado
-            lá vira uma conexão aqui.
-          </p>
-
-          <.connection_row
-            :for={connection <- @connections}
-            connection={connection}
-            syncing={MapSet.member?(@syncing, connection.id)}
+        <div>
+          <.empty_state
+            :if={@connections == []}
+            id="open-finance-empty"
+            icon="hero-building-library"
+            title="Nenhum banco conectado ainda"
+            text="Conecte pelo Meu Pluggy abaixo. Cada banco autorizado lá vira uma conexão aqui."
           />
+          <ul
+            :if={@connections != []}
+            id="open-finance-connections"
+            class="divide-y divide-base-content/10"
+          >
+            <.connection_row
+              :for={connection <- @connections}
+              connection={connection}
+              syncing={MapSet.member?(@syncing, connection.id)}
+            />
+          </ul>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <button
+          <.button
             id="connect-meu-pluggy"
             type="button"
-            phx-click="open_finance_connect"
+            variant="primary"
+            size="sm"
+            icon={if !@connecting, do: "hero-plus"}
             disabled={@connecting}
-            class="btn btn-primary btn-sm gap-2 transition-transform active:scale-[0.98]"
+            phx-click="open_finance_connect"
           >
             <span :if={@connecting} class="loading loading-spinner loading-xs"></span>
-            <.icon :if={!@connecting} name="hero-plus" class="size-4" />
-            {if @connecting, do: "Abrindo widget...", else: "Conectar via Meu Pluggy"}
-          </button>
-          <button
+            {if @connecting, do: "Abrindo widget…", else: "Conectar via Meu Pluggy"}
+          </.button>
+          <.button
             id="toggle-item-form"
             type="button"
+            variant="ghost"
+            size="sm"
             phx-click="open_finance_toggle_item_form"
-            class="btn btn-ghost btn-sm"
           >
             Tenho o itemId
-          </button>
+          </.button>
         </div>
 
         <.form
@@ -95,7 +101,6 @@ defmodule GranaWeb.OpenFinanceComponents do
           for={@item_form}
           id="open-finance-item-form"
           phx-submit="open_finance_add_item"
-          class="mt-4"
         >
           <div class="flex flex-col sm:flex-row gap-2 sm:items-start">
             <div class="flex-1 min-w-0 sm:max-w-sm">
@@ -103,38 +108,37 @@ defmodule GranaWeb.OpenFinanceComponents do
                 field={@item_form[:item_id]}
                 type="text"
                 placeholder="itemId (UUID)"
-                class="input input-sm w-full font-mono"
+                class="input w-full font-mono"
                 autocomplete="off"
                 spellcheck="false"
               />
             </div>
-            <%!-- pt-1 compensa o respiro do fieldset do <.input>, alinhando os botões ao campo. --%>
-            <div class="flex gap-2 sm:pt-1">
-              <.button class="btn btn-primary btn-sm" phx-disable-with="Verificando...">
+            <div class="flex gap-2">
+              <.button variant="primary" class="flex-1 sm:flex-none" loading="Verificando…">
                 Adicionar
               </.button>
-              <button
+              <.button
                 id="cancel-item-form"
                 type="button"
+                variant="ghost"
                 phx-click="open_finance_toggle_item_form"
-                class="btn btn-ghost btn-sm"
               >
                 Cancelar
-              </button>
+              </.button>
             </div>
           </div>
-          <p class="text-xs opacity-50">
+          <p class="ui-help">
             No dashboard da Pluggy: Aplicações → sua aplicação → Demo → Itens Conectados.
           </p>
         </.form>
 
-        <p class="text-xs opacity-50 mt-4 leading-relaxed">
+        <p class="ui-help leading-relaxed">
           No widget, entre com a sua conta do Meu Pluggy e escolha um banco. Para outro banco,
           conecte de novo. Os dados são atualizados sozinhos (no máximo uma vez por hora) e
-          aparecem no Resumo do Dashboard.
+          aparecem no Resumo do Painel.
         </p>
       <% end %>
-    </div>
+    </.card>
     """
   end
 
@@ -146,48 +150,57 @@ defmodule GranaWeb.OpenFinanceComponents do
 
   defp credentials(assigns) do
     ~H"""
-    <div id="open-finance-credentials" class="mb-5">
+    <div id="open-finance-credentials" class="flex flex-col gap-6">
       <%= case @source do %>
         <% :database -> %>
-          <div
-            id="credentials-saved"
-            class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-base-100/60 px-3 py-2 text-xs"
+          <ul class="divide-y divide-base-content/10">
+            <.item_row
+              id="credentials-saved"
+              title="Credenciais da Pluggy"
+              subtitle={"Client ID #{@client_id}"}
+            >
+              <:leading><.icon name="hero-key" class="size-5 shrink-0" /></:leading>
+              <:tags>
+                <.tag kind="salvo" />
+                <.tag kind="criptografado" />
+              </:tags>
+              <:actions>
+                <.button
+                  id="replace-credentials"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  phx-click="open_finance_toggle_credentials_form"
+                >
+                  Substituir
+                </.button>
+                <.button
+                  id="remove-credentials"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="text-error"
+                  phx-click={show_modal("remove-credentials-modal")}
+                >
+                  Remover
+                </.button>
+              </:actions>
+            </.item_row>
+          </ul>
+          <.confirm_modal
+            id="remove-credentials-modal"
+            title="Apagar as credenciais da Pluggy?"
+            confirm="Apagar credenciais"
+            loading="Apagando…"
+            on_confirm={JS.push("open_finance_remove_credentials")}
           >
-            <.icon name="hero-key" class="size-4 opacity-60" />
-            <span class="opacity-60">Client ID</span>
-            <code class="truncate max-w-[14rem]">{@client_id}</code>
-            <span class="opacity-60">· Secret</span>
-            <code>••••••••</code>
-            <span class="badge badge-success badge-soft badge-xs">cifrado</span>
-            <div class="ml-auto flex gap-1">
-              <button
-                id="replace-credentials"
-                type="button"
-                phx-click="open_finance_toggle_credentials_form"
-                class="btn btn-ghost btn-xs"
-              >
-                Substituir
-              </button>
-              <button
-                id="remove-credentials"
-                type="button"
-                phx-click="open_finance_remove_credentials"
-                data-confirm="Apagar as credenciais da Pluggy salvas no Grana? As conexões ficam, mas param de sincronizar até você informar credenciais de novo."
-                class="btn btn-ghost btn-xs text-error/80"
-              >
-                Remover
-              </button>
-            </div>
-          </div>
+            As conexões ficam, mas param de sincronizar até você informar credenciais de novo.
+          </.confirm_modal>
         <% :env -> %>
-          <div id="credentials-env" class="mt-1">
+          <div id="credentials-env">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-              <GranaWeb.AccountComponents.env_field
-                id="credentials-env-client-id"
-                label="Client ID"
-                var="PLUGGY_CLIENT_ID"
-              />
-              <GranaWeb.AccountComponents.env_field
+              <.env_field id="credentials-env-client-id" label="Client ID" var="PLUGGY_CLIENT_ID" />
+              <.env_field
                 id="credentials-env-client-secret"
                 label="Client Secret"
                 secret
@@ -199,58 +212,57 @@ defmodule GranaWeb.OpenFinanceComponents do
           <.setup_steps />
       <% end %>
 
-      <div :if={is_nil(@source) or (@source == :database and @show_form)} class="mt-3">
-        <div
-          :if={!@private_key}
-          id="cloak-key-warning"
-          class="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-relaxed"
-        >
-          <p class="font-medium flex items-center gap-1">
-            <.icon name="hero-exclamation-triangle" class="size-4" /> Defina uma CLOAK_KEY antes
-          </p>
-          <p class="opacity-80 mt-1">
-            Sem ela o Grana cifra com a chave de desenvolvimento, que é pública no repositório. Gere
-            com <code>openssl rand -base64 32</code>, coloque <code>CLOAK_KEY=...</code>
-            no <code>.env</code>
-            e reinicie o servidor.
+      <.notice
+        :if={(is_nil(@source) or (@source == :database and @show_form)) and !@private_key}
+        id="cloak-key-warning"
+        tone={:warning}
+        title="Defina uma CLOAK_KEY antes"
+      >
+        Sem ela o Grana criptografa com a chave de desenvolvimento, que é pública no repositório. Gere
+        com <code>openssl rand -base64 32</code>, coloque <code>CLOAK_KEY=...</code>
+        no <code>.env</code>
+        e reinicie o servidor.
+      </.notice>
+
+      <.form
+        :if={(is_nil(@source) or (@source == :database and @show_form)) and @private_key}
+        for={@form}
+        id="pluggy-credentials-form"
+        phx-submit="open_finance_save_credentials"
+        autocomplete="off"
+        data-form-type="other"
+        class="grid grid-cols-1 sm:grid-cols-2 gap-x-3"
+      >
+        <.input
+          field={@form[:pluggy_client_id]}
+          type="text"
+          label="Client ID"
+          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <.input
+          field={@form[:pluggy_client_secret]}
+          type="password"
+          label="Client Secret"
+          autocomplete="new-password"
+          data-1p-ignore="true"
+          data-lpignore="true"
+        />
+        <div class="sm:col-span-2 mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <.button
+            variant="primary"
+            size="sm"
+            class="w-full sm:w-auto"
+            loading="Verificando na Pluggy…"
+          >
+            Salvar e verificar
+          </.button>
+          <p class="ui-help">
+            Conferido na Pluggy e guardado criptografado. O secret nunca volta para esta tela.
           </p>
         </div>
-
-        <.form
-          :if={@private_key}
-          for={@form}
-          id="pluggy-credentials-form"
-          phx-submit="open_finance_save_credentials"
-          autocomplete="off"
-          data-form-type="other"
-          class="grid grid-cols-1 sm:grid-cols-2 gap-x-3"
-        >
-          <.input
-            field={@form[:pluggy_client_id]}
-            type="text"
-            label="Client ID"
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <.input
-            field={@form[:pluggy_client_secret]}
-            type="password"
-            label="Client Secret"
-            autocomplete="new-password"
-            data-1p-ignore="true"
-            data-lpignore="true"
-          />
-          <div class="sm:col-span-2 flex flex-wrap items-center gap-3">
-            <.button class="btn btn-primary btn-sm" phx-disable-with="Verificando na Pluggy...">
-              Salvar e verificar
-            </.button>
-            <p class="text-xs opacity-50">
-              Conferido na Pluggy e guardado cifrado — o secret nunca volta para esta tela.
-            </p>
-          </div>
-        </.form>
-      </div>
+      </.form>
     </div>
     """
   end
@@ -260,64 +272,70 @@ defmodule GranaWeb.OpenFinanceComponents do
 
   defp connection_row(assigns) do
     ~H"""
-    <div
+    <.item_row
       id={"connection-#{@connection.id}"}
-      class="flex items-center gap-3 rounded-xl bg-base-100/60 px-3 py-2.5 transition-colors hover:bg-base-100"
+      title={@connection.connector_name || "Conexão"}
+      subtitle={accounts_summary(@connection.accounts)}
     >
-      <img
-        :if={@connection.connector_image_url}
-        src={@connection.connector_image_url}
-        alt=""
-        class="size-9 rounded-lg bg-base-100 object-contain p-1 shrink-0"
-      />
-      <div
-        :if={!@connection.connector_image_url}
-        class="size-9 rounded-lg bg-base-100 grid place-items-center shrink-0"
-      >
-        <.icon name="hero-building-library" class="size-5 opacity-50" />
-      </div>
-
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-sm font-medium truncate">
-            {@connection.connector_name || "Conexão"}
-          </span>
-          <.status_badge
-            status={@connection.status}
-            execution_status={@connection.execution_status}
-          />
+      <:leading>
+        <img
+          :if={@connection.connector_image_url}
+          src={@connection.connector_image_url}
+          alt=""
+          class="ui-rounded-field size-9 shrink-0 bg-base-100 object-contain p-1"
+        />
+        <div
+          :if={!@connection.connector_image_url}
+          class="ui-rounded-field grid size-9 shrink-0 place-items-center bg-base-100"
+        >
+          <.icon name="hero-building-library" class="size-5" />
         </div>
-        <p class="text-xs opacity-60 truncate">{accounts_summary(@connection.accounts)}</p>
-        <p :if={@connection.sync_error} class="text-xs text-error mt-0.5">
-          {@connection.sync_error}
-        </p>
-        <p :if={!@connection.sync_error} class="text-xs opacity-40 mt-0.5">
-          {sync_label(@syncing, @connection.last_synced_at)}
-        </p>
-      </div>
-
-      <div class="flex items-center gap-1 shrink-0">
-        <button
+      </:leading>
+      <:tags>
+        <.tag :if={@syncing} kind="pendente">Importando…</.tag>
+        <.status_badge
+          :if={!@syncing}
+          status={@connection.status}
+          execution_status={@connection.execution_status}
+        />
+      </:tags>
+      <:actions>
+        <.button
           id={"remove-connection-#{@connection.id}"}
           type="button"
-          phx-click="open_finance_remove"
-          phx-value-id={@connection.id}
-          data-confirm="Remover esta conexão? O acesso do Grana a ela é revogado na Pluggy e os dados importados dela são apagados. Sua conexão no Meu Pluggy continua intacta."
-          class="btn btn-ghost btn-sm btn-square text-error/70 hover:text-error"
-          title="Remover conexão"
+          variant="ghost"
+          size="sm"
+          icon="hero-trash"
+          class="btn-square text-error"
+          title={"Remover conexão #{@connection.connector_name}"}
+          phx-click={show_modal("remove-connection-modal-#{@connection.id}")}
         >
-          <.icon name="hero-trash" class="size-4" />
-        </button>
-      </div>
-    </div>
+          <span class="sr-only">Remover conexão {@connection.connector_name}</span>
+        </.button>
+      </:actions>
+      <.notice :if={@connection.sync_error} tone={:error}>{@connection.sync_error}</.notice>
+      <p :if={!@connection.sync_error and !@syncing} class="ui-caption">
+        {sync_label(@connection.last_synced_at)}
+      </p>
+      <.confirm_modal
+        id={"remove-connection-modal-#{@connection.id}"}
+        title="Remover esta conexão?"
+        confirm="Remover conexão"
+        loading="Removendo…"
+        on_confirm={JS.push("open_finance_remove", value: %{id: to_string(@connection.id)})}
+      >
+        O acesso do Grana a ela é revogado na Pluggy e os dados importados dela são apagados. Sua
+        conexão no Meu Pluggy continua intacta.
+      </.confirm_modal>
+    </.item_row>
     """
   end
 
   defp setup_steps(assigns) do
     ~H"""
     <div id="open-finance-setup">
-      <p class="text-sm mb-3">Para ativar (uso pessoal, gratuito, até 5 conexões):</p>
-      <ol class="list-decimal ml-5 space-y-2 text-sm opacity-80">
+      <p class="ui-body mb-3">Para ativar (uso pessoal, gratuito, até 5 conexões):</p>
+      <ol class="ui-body ui-text-secondary ml-5 list-decimal space-y-2">
         <li>
           Crie sua conta no
           <a href="https://meu.pluggy.ai" target="_blank" rel="noopener" class="link">
@@ -365,14 +383,11 @@ defmodule GranaWeb.OpenFinanceComponents do
       )
 
     ~H"""
-    <section
-      id="open-finance-today"
-      class="card bg-base-200 border border-base-content/5 p-4 sm:p-5 mb-6"
-    >
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4">
-        <h2 class="text-sm font-semibold uppercase tracking-wide">Hoje</h2>
-        <span class="text-xs opacity-50 flex items-center gap-1">
-          <.open_finance_logo class="size-3.5" /> Open Finance
+    <.card id="open-finance-today" title="Hoje" spaced={false} class="mb-6">
+      <:logo><.open_finance_logo class="size-5 shrink-0" /></:logo>
+      <:aside>
+        <span class="ui-help flex flex-wrap items-center justify-end gap-x-1">
+          Open Finance
           <span
             :if={@collected_at}
             id="open-finance-today-collected-at"
@@ -381,36 +396,37 @@ defmodule GranaWeb.OpenFinanceComponents do
             · atualizado {time_ago(@collected_at)}
           </span>
         </span>
+      </:aside>
+
+      <div id="open-finance-today-totals" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <.stat_tile
+          id="today-total-bank"
+          label="Em conta"
+          value={format_money(@totals.bank)}
+          caption={"saldo somado de #{@totals.bank_count} conta(s)"}
+        />
+        <.stat_tile
+          id="today-total-card-used"
+          label="Faturas abertas"
+          value={format_money(@totals.card_used)}
+          tone={:despesa}
+          caption={"somando #{@totals.card_count} cartão(ões)"}
+        />
+        <.stat_tile
+          id="today-total-card-available"
+          label="Limite disponível"
+          value={format_money(@totals.card_available)}
+          tone={:receita}
+          caption={"de #{format_money(@totals.card_limit)} de limite total"}
+        />
       </div>
 
-      <div id="open-finance-today-totals" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <div>
-          <p class="text-xs opacity-60">Em conta</p>
-          <p class="text-xl font-semibold tabular-nums">{format_money(@totals.bank)}</p>
-          <p class="text-[11px] opacity-50">saldo somado de {@totals.bank_count} conta(s)</p>
-        </div>
-        <div>
-          <p class="text-xs opacity-60">Faturas abertas</p>
-          <p class="text-xl font-semibold tabular-nums text-warning">
-            {format_money(@totals.card_used)}
-          </p>
-          <p class="text-[11px] opacity-50">somando {@totals.card_count} cartão(ões)</p>
-        </div>
-        <div>
-          <p class="text-xs opacity-60">Limite disponível</p>
-          <p class="text-xl font-semibold tabular-nums text-success">
-            {format_money(@totals.card_available)}
-          </p>
-          <p class="text-[11px] opacity-50">de {format_money(@totals.card_limit)} de limite total</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         <.bank_group :for={accounts <- @groups} accounts={accounts} />
       </div>
 
-      <details :if={@of_month_count > 0} id="open-finance-today-sources" class="group mt-4">
-        <summary class="flex items-center gap-1.5 text-xs opacity-60 cursor-pointer select-none list-none hover:opacity-90 transition-opacity">
+      <details :if={@of_month_count > 0} id="open-finance-today-sources" class="group">
+        <summary class="ui-help flex cursor-pointer select-none list-none items-center gap-1.5 transition-colors hover:text-base-content">
           <.icon
             name="hero-chevron-right"
             class="size-3.5 transition-transform group-open:rotate-90"
@@ -418,7 +434,7 @@ defmodule GranaWeb.OpenFinanceComponents do
         </summary>
         <div class="mt-3 ml-5 flex flex-col md:flex-row md:items-end gap-4">
           <.mini_calendar rows={@calendar} />
-          <div class="flex flex-col gap-2 text-[11px] opacity-80">
+          <div class="ui-caption flex flex-col gap-2">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span class="flex items-center gap-1">
                 <span class="grana-calendar-legend-swatch calendar-count-0 !size-3"></span> sem upload
@@ -438,21 +454,20 @@ defmodule GranaWeb.OpenFinanceComponents do
                 veio do Open Finance
               </span>
             </div>
-            <.link
+            <.button
               id="open-finance-calendar-link"
               navigate={~p"/upload?tab=calendario"}
-              class="btn btn-ghost btn-xs gap-1 self-start group/link"
+              variant="ghost"
+              size="sm"
+              icon="hero-calendar-days"
+              class="self-start"
             >
-              <.icon name="hero-calendar-days" class="size-3.5" /> Ver calendário completo
-              <.icon
-                name="hero-arrow-right"
-                class="size-3 transition-transform group-hover/link:translate-x-0.5"
-              />
-            </.link>
+              Ver calendário completo
+            </.button>
           </div>
         </div>
       </details>
-    </section>
+    </.card>
     """
   end
 
@@ -465,12 +480,12 @@ defmodule GranaWeb.OpenFinanceComponents do
     <div id="open-finance-mini-calendar" class="inline-block">
       <div class="flex gap-1 mb-1">
         <div class="w-8 shrink-0"></div>
-        <div :for={m <- 1..12} class="w-[18px] text-center text-[9px] opacity-50">
+        <div :for={m <- 1..12} class="ui-caption w-[18px] text-center">
           {month_initial(m)}
         </div>
       </div>
       <div :for={row <- @rows} class="flex gap-1 items-center mb-1">
-        <div class="w-8 shrink-0 text-right pr-1 text-[10px] opacity-60 tabular-nums">
+        <div class="ui-caption w-8 shrink-0 pr-1 text-right tabular-nums">
           {row.year}
         </div>
         <div
@@ -494,7 +509,7 @@ defmodule GranaWeb.OpenFinanceComponents do
     """
   end
 
-  defp mini_cell_class(%{future?: true}), do: "calendar-count-future opacity-60"
+  defp mini_cell_class(%{future?: true}), do: "calendar-count-future"
   defp mini_cell_class(%{upload_types: []}), do: "calendar-count-0"
   defp mini_cell_class(%{upload_types: [_]}), do: "calendar-count-1"
   defp mini_cell_class(%{upload_types: _both}), do: "calendar-count-3"
@@ -534,29 +549,29 @@ defmodule GranaWeb.OpenFinanceComponents do
       )
 
     ~H"""
-    <div id={"today-bank-#{@connection.id}"} class="rounded-xl bg-base-100/60 p-3 flex flex-col">
+    <div id={"today-bank-#{@connection.id}"} class="ui-rounded-box flex flex-col bg-base-100/60 p-3">
       <div class="flex items-center gap-2 mb-2">
         <img src={bank_logo(@connection.bank)} alt="" class="size-6 rounded-full shrink-0" />
         <span class="font-medium">{bank_name(@connection.bank)}</span>
-        <span :if={@connection.holder_type == "PJ"} class="badge badge-ghost badge-xs">PJ</span>
+        <.tag :if={@connection.holder_type == "PJ"} kind="neutro">PJ</.tag>
       </div>
 
       <div :if={@banks != []} class="mb-2">
-        <p class="text-[10px] font-semibold uppercase tracking-wide opacity-40 mb-1">Contas</p>
+        <p class="ui-caption mb-1 font-semibold uppercase tracking-wide">Contas</p>
         <div
           :for={account <- @banks}
           id={"today-account-#{account.id}"}
           class={[
             "flex items-baseline justify-between gap-2 py-0.5 text-sm",
-            zero?(account.balance) && "opacity-40"
+            zero?(account.balance) && "ui-text-tertiary"
           ]}
         >
           <span class="truncate">
-            {account_kind(account)}<span :if={account.number} class="opacity-50"> ••{last4(account.number)}</span>
+            {account_kind(account)}<span :if={account.number} class="ui-text-tertiary"> ••{last4(account.number)}</span>
           </span>
           <span class={[
-            "font-medium tabular-nums whitespace-nowrap",
-            account.balance && Decimal.negative?(account.balance) && "text-error"
+            "ui-private font-medium tabular-nums whitespace-nowrap",
+            account.balance && Decimal.negative?(account.balance) && "ui-money-despesa"
           ]}>
             {format_money(account.balance, account.currency_code)}
           </span>
@@ -564,17 +579,17 @@ defmodule GranaWeb.OpenFinanceComponents do
       </div>
 
       <div :if={@cards != []}>
-        <p class="text-[10px] font-semibold uppercase tracking-wide opacity-40 mb-1">
+        <p class="ui-caption mb-1 font-semibold uppercase tracking-wide">
           Cartão de crédito
         </p>
         <div :for={card <- @cards} id={"today-card-#{card.id}"} class="py-0.5 mb-1.5 last:mb-0">
           <div class="flex items-baseline justify-between gap-2 text-sm">
             <span class="truncate">
-              {card_name(card)}<span :if={card.number} class="opacity-50"> ••{last4(card.number)}</span>
+              {card_name(card)}<span :if={card.number} class="ui-text-tertiary"> ••{last4(card.number)}</span>
             </span>
             <span class="text-right whitespace-nowrap">
-              <span class="block text-[10px] opacity-50 leading-none">fatura atual</span>
-              <span class="font-medium tabular-nums">
+              <span class="ui-caption block leading-none">fatura atual</span>
+              <span class="ui-private font-medium tabular-nums">
                 {format_money(card.balance, card.currency_code)}
               </span>
             </span>
@@ -586,24 +601,21 @@ defmodule GranaWeb.OpenFinanceComponents do
               max="100"
             >
             </progress>
-            <p class="text-[11px] opacity-60 mt-0.5">
-              {round(limit_usage(card))}% do limite usado · disponível {format_money(
-                card.available_credit_limit,
-                card.currency_code
-              )} de {format_money(Account.effective_credit_limit(card), card.currency_code)}
+            <p class="ui-caption mt-0.5">
+              {round(limit_usage(card))}% do limite usado · disponível
+              <.money value={card.available_credit_limit} currency={card.currency_code} /> de
+              <.money value={Account.effective_credit_limit(card)} currency={card.currency_code} />
             </p>
             <p
               :if={custom_limit?(card)}
               id={"today-card-#{card.id}-custom-limit"}
-              class="text-[11px] opacity-50"
+              class="ui-caption"
             >
-              limite ajustado por você no app · aprovado {format_money(
-                card.credit_limit,
-                card.currency_code
-              )}
+              limite ajustado por você no app · aprovado
+              <.money value={card.credit_limit} currency={card.currency_code} />
             </p>
           </div>
-          <p :if={card.balance_due_date} class="text-[11px] opacity-60">
+          <p :if={card.balance_due_date} class="ui-caption">
             {due_dates(card)}
           </p>
         </div>
@@ -615,7 +627,8 @@ defmodule GranaWeb.OpenFinanceComponents do
         class="mt-auto pt-2 border-t border-base-content/5 space-y-1 text-xs"
       >
         <li :for={alert <- @alerts} class="flex items-start gap-1.5 text-warning">
-          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" /> {alert.message}
+          <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
+          <span><.private_text text={alert.message} /></span>
         </li>
       </ul>
     </div>
@@ -703,30 +716,29 @@ defmodule GranaWeb.OpenFinanceComponents do
     """
   end
 
-  @doc "Badge com o status do Item na Pluggy."
+  @doc "Tag com o status do Item na Pluggy."
   attr :status, :string, required: true
   attr :execution_status, :string, default: nil
 
   def status_badge(assigns) do
-    {label, class} = status_info(assigns.status, assigns.execution_status)
-    assigns = assign(assigns, label: label, class: class)
+    {label, kind} = status_info(assigns.status, assigns.execution_status)
+    assigns = assign(assigns, label: label, kind: kind)
 
     ~H"""
-    <span class={["badge badge-sm whitespace-nowrap", @class]}>{@label}</span>
+    <.tag kind={@kind}>{@label}</.tag>
     """
   end
 
-  defp status_info("UPDATED", "PARTIAL_SUCCESS"), do: {"Atualizado em parte", "badge-warning"}
-  defp status_info("UPDATED", _), do: {"Atualizado", "badge-success badge-soft"}
-  defp status_info("UPDATING", _), do: {"Atualizando", "badge-info badge-soft"}
-  defp status_info("LOGIN_ERROR", _), do: {"Reautorizar", "badge-error"}
-  defp status_info("OUTDATED", _), do: {"Desatualizado", "badge-warning"}
-  defp status_info("WAITING_USER_INPUT", _), do: {"Aguardando você", "badge-warning"}
-  defp status_info(status, _), do: {status || "—", "badge-ghost"}
+  defp status_info("UPDATED", "PARTIAL_SUCCESS"), do: {"Atualizado em parte", "pendente"}
+  defp status_info("UPDATED", _), do: {"Atualizado", "ativo"}
+  defp status_info("UPDATING", _), do: {"Atualizando", "pendente"}
+  defp status_info("LOGIN_ERROR", _), do: {"Reautorizar", "erro"}
+  defp status_info("OUTDATED", _), do: {"Desatualizado", "pendente"}
+  defp status_info("WAITING_USER_INPUT", _), do: {"Aguardando você", "pendente"}
+  defp status_info(status, _), do: {status || "—", "neutro"}
 
-  defp sync_label(true, _last_synced_at), do: "Importando contas e transações..."
-  defp sync_label(false, nil), do: "Aguardando a primeira leitura"
-  defp sync_label(false, last_synced_at), do: "Atualizado #{time_ago(last_synced_at)}"
+  defp sync_label(nil), do: "Aguardando a primeira leitura"
+  defp sync_label(last_synced_at), do: "Atualizado #{time_ago(last_synced_at)}"
 
   defp accounts_summary([]), do: "Nenhuma conta sincronizada ainda"
 

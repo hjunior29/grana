@@ -8,7 +8,7 @@ defmodule Grana.Banking.TransferIdentity do
       "Transferência enviada pelo Pix - <NOME> - •••.555.444-•• - <BANCO> (0260) Agência: 1 Conta: ..."
       "Transferência Recebida - <NOME> - •••.555.444-•• - ..."
       "TRANSFERENCIA PIX - <NOME>"            (Bradesco, sem CPF)
-      "Transferência enviada pelo Pix - ICATU SEGUROS"   (empresa, sem CPF)
+      "Transferência enviada pelo Pix - SEGURADORA EXEMPLO"   (empresa, sem CPF)
 
   O CPF vem **mascarado**: só os 6 dígitos do meio aparecem (`•••.555.444-••`),
   que correspondem às posições 4–9 do CPF completo.
@@ -59,8 +59,9 @@ defmodule Grana.Banking.TransferIdentity do
   end
 
   @doc """
-  A descrição se refere ao próprio titular? Verdadeiro se o CPF do meio bate ou
-  se o nome completo do titular (≥ 2 tokens) aparece como sequência na descrição.
+  A descrição se refere ao próprio titular? Verdadeiro se o CPF do meio bate, se o
+  nome completo do titular (≥ 2 tokens) aparece como sequência na descrição ou se a
+  contraparte é o começo do nome, cortado pelo banco (ver `truncated_name?/2`).
   """
   def own_identity?(description, user_name, user_cpf) do
     cpf_match?(description, user_cpf) or name_match?(description, user_name)
@@ -116,7 +117,22 @@ defmodule Grana.Banking.TransferIdentity do
 
   defp name_match?(description, name) do
     name_tokens = name |> normalize() |> String.split(" ", trim: true)
-    length(name_tokens) >= 2 and sublist?(tokens(description), name_tokens)
+
+    length(name_tokens) >= 2 and
+      (sublist?(tokens(description), name_tokens) or truncated_name?(description, name_tokens))
+  end
+
+  # O Bradesco corta a contraparte em ~20 caracteres ("Rem: Ana Costa Ramos Di"): o
+  # começo do nome do titular, com 3 palavras ou mais, também é ele.
+  defp truncated_name?(description, name_tokens) do
+    case counterparty_name(description) do
+      nil ->
+        false
+
+      counterparty ->
+        length(String.split(counterparty, " ")) >= 3 and String.length(counterparty) >= 15 and
+          String.starts_with?(Enum.join(name_tokens, " "), counterparty)
+    end
   end
 
   defp tokens(description), do: description |> normalize() |> String.split(" ", trim: true)

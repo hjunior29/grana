@@ -1,9 +1,19 @@
 defmodule GranaWeb.UploadLive do
   use GranaWeb, :live_view
 
+  alias Grana.AI
   alias Grana.Banking
+  alias Grana.Imports
+  alias Grana.Workers.PlatformImportWorker
+  alias Grana.Workers.StatementUploadWorker
+  alias GranaWeb.AiComponents
 
   @per_page 20
+  # Sem limite prático de arquivos: cada um vira um job do Oban e a fila cuida do resto.
+  @max_files 1_000
+  @max_file_size 5_000_000
+
+  on_mount GranaWeb.ModelChoicesHook
 
   @impl true
   def mount(_params, _session, socket) do
@@ -14,50 +24,48 @@ defmodule GranaWeb.UploadLive do
       |> assign(:upload_category, nil)
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
-      |> assign(:processing, false)
-      |> assign(:results, [])
-      |> assign(:progress_current, 0)
-      |> assign(:progress_total, 0)
-      |> assign(:progress_filename, "")
-      |> assign(:progress_ai, false)
       |> assign(:delete_target, nil)
       |> assign(:selected_ids, MapSet.new())
       |> assign(:cal_rows, [])
       |> assign(:cal_has_data, false)
       |> assign(:cal_score, nil)
       |> assign(:show_api_key_alert, false)
-      |> allow_upload(:statements,
-        accept: ~w(.csv .pdf),
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> assign(:model_choice, "")
+      |> allow_statements(~w(.csv .pdf))
+      # Esta tela mostra a fila inteira e trata `:imports_changed` por conta própria,
+      # para também atualizar o histórico e o calendário a cada arquivo processado.
+      |> detach_hook(:imports, :handle_info)
 
     {:ok, socket}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
-    tab = params["tab"] || socket.assigns.tab
-    page = parse_int(params["page"], 1)
+    socket =
+      socket
+      |> assign(:tab, params["tab"] || socket.assigns.tab)
+      |> assign(:page, parse_int(params["page"], 1))
+      |> assign(:selected_ids, MapSet.new())
+      |> load_statements()
+
+    {:noreply, socket}
+  end
+
+  defp load_statements(socket) do
+    %{tab: tab, page: page} = socket.assigns
     user_id = socket.assigns.current_scope.user.id
 
     {statements, total} =
       Banking.list_statements_paginated(user_id, page: page, per_page: @per_page)
 
-    page_stmts = Enum.map(statements, &normalize_banking_stmt/1)
-    total_pages = max(1, ceil(total / @per_page))
-
-    socket =
-      socket
-      |> assign(:tab, tab)
-      |> assign(:page, page)
-      |> assign(:total_pages, total_pages)
-      |> assign(:total, total)
-      |> assign(:stmt_list, page_stmts)
-      |> assign(:selected_ids, MapSet.new())
-      |> maybe_load_calendar(tab, user_id)
-
-    {:noreply, socket}
+    # The import screen never reloads (an upload may be on its way): history and calendar
+    # appear here as soon as the first file brings transactions.
+    socket
+    |> assign(:has_data, Banking.has_transactions?(user_id))
+    |> assign(:total_pages, max(1, ceil(total / @per_page)))
+    |> assign(:total, total)
+    |> assign(:stmt_list, Enum.map(statements, &normalize_banking_stmt/1))
+    |> maybe_load_calendar(tab, user_id)
   end
 
   # Calendário de importações: só carrega os dados quando a sub-aba está ativa.
@@ -78,32 +86,25 @@ defmodule GranaWeb.UploadLive do
       name: String.capitalize(stmt.bank),
       logo: bank_logo(stmt.bank),
       type_label: type_label(stmt.statement_type),
-      type_badge: type_badge_class(stmt.statement_type),
       filename: stmt.filename,
       period_start: stmt.period_start,
       period_end: stmt.period_end,
       total_transactions: stmt.total_transactions,
       inserted_at: stmt.inserted_at,
       status: stmt.status,
+      ai_provider: stmt.ai_provider,
+      ai_model: stmt.ai_model,
       link: ~p"/transactions?statement_id=#{stmt.id}"
     }
   end
 
   @impl true
-  def handle_event("validate", _params, socket) do
-    {:noreply, socket}
-  end
-
-  def handle_event("switch_tab", _params, %{assigns: %{processing: true}} = socket) do
-    {:noreply, socket}
+  def handle_event("validate", params, socket) do
+    {:noreply, assign(socket, :model_choice, params["model"] || socket.assigns.model_choice)}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, push_patch(socket, to: ~p"/upload?tab=#{tab}")}
-  end
-
-  def handle_event("select-bank", _params, %{assigns: %{processing: true}} = socket) do
-    {:noreply, socket}
   end
 
   def handle_event("select-bank", %{"bank" => bank}, socket) do
@@ -118,16 +119,8 @@ defmodule GranaWeb.UploadLive do
     socket =
       socket
       |> assign(bank: bank, statement_type: nil)
-      |> allow_upload(:statements,
-        accept: accept,
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> allow_statements(accept)
 
-    {:noreply, socket}
-  end
-
-  def handle_event("select-type", _params, %{assigns: %{processing: true}} = socket) do
     {:noreply, socket}
   end
 
@@ -137,10 +130,6 @@ defmodule GranaWeb.UploadLive do
 
   # Upload category selection (banking vs platform)
 
-  def handle_event("select_upload_category", _params, %{assigns: %{processing: true}} = socket) do
-    {:noreply, socket}
-  end
-
   def handle_event("select_upload_category", %{"category" => "banking"}, socket) do
     socket =
       socket
@@ -148,11 +137,7 @@ defmodule GranaWeb.UploadLive do
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> cancel_all_uploads()
-      |> allow_upload(:statements,
-        accept: ~w(.csv .pdf),
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> allow_statements(~w(.csv .pdf))
 
     {:noreply, socket}
   end
@@ -164,19 +149,21 @@ defmodule GranaWeb.UploadLive do
       |> assign(:bank, nil)
       |> assign(:statement_type, nil)
       |> cancel_all_uploads()
-      |> allow_upload(:statements,
-        accept: ~w(.csv),
-        max_entries: 12,
-        max_file_size: 5_000_000
-      )
+      |> allow_statements(~w(.csv))
 
     {:noreply, socket}
   end
 
-  def handle_event("upload", _params, socket) do
+  def handle_event("upload", params, socket) do
     case socket.assigns.upload_category do
-      "platform" -> handle_platform_upload(socket)
-      _ -> handle_banking_upload(socket)
+      "platform" ->
+        handle_platform_upload(socket)
+
+      _ ->
+        handle_banking_upload(
+          socket,
+          if(params["model"] in [nil, ""], do: nil, else: params["model"])
+        )
     end
   end
 
@@ -237,6 +224,7 @@ defmodule GranaWeb.UploadLive do
       {:single, stmt} ->
         bank_stmt = Banking.get_statement!(stmt.raw_id, user_id)
         Banking.delete_statement(bank_stmt)
+        Banking.detect_internal_transfers(user_id)
         # Sem esse upload, o Open Finance volta a cobrir o período.
         Grana.OpenFinance.uploads_changed(user_id)
 
@@ -262,13 +250,17 @@ defmodule GranaWeb.UploadLive do
 
         if ids != [] do
           Banking.delete_statements(ids, user_id)
+          Banking.detect_internal_transfers(user_id)
           Grana.OpenFinance.uploads_changed(user_id)
         end
 
         socket
         |> assign(:delete_target, nil)
         |> assign(:selected_ids, MapSet.new())
-        |> put_flash(:info, "#{length(ids)} extrato(s) removido(s)")
+        |> put_flash(
+          :info,
+          "#{count_label(length(ids), "extrato removido", "extratos removidos")}"
+        )
         |> reload_statements()
 
       _ ->
@@ -276,7 +268,7 @@ defmodule GranaWeb.UploadLive do
     end
   end
 
-  defp handle_banking_upload(socket) do
+  defp handle_banking_upload(socket, choice) do
     %{current_scope: scope} = socket.assigns
     bank = socket.assigns.bank
     statement_type = socket.assigns.statement_type
@@ -296,21 +288,39 @@ defmodule GranaWeb.UploadLive do
         {:noreply, put_flash(socket, :error, "Selecione o tipo (extrato ou fatura)")}
 
       needs_api_key ->
-        case Grana.Accounts.get_user_ai_config(scope.user.id) do
+        case AI.resolve(scope.user, "processing", choice) do
           {:error, :no_api_key} ->
             {:noreply, assign(socket, :show_api_key_alert, true)}
 
           {:ok, _config} ->
-            socket = assign(socket, :processing, true)
-            send(self(), {:process_uploads, bank, statement_type, scope.user.id})
-            {:noreply, socket}
+            {:noreply, enqueue_statements(socket, bank, statement_type, choice)}
         end
 
       true ->
-        socket = assign(socket, :processing, true)
-        send(self(), {:process_uploads, bank, statement_type, scope.user.id})
-        {:noreply, socket}
+        {:noreply, enqueue_statements(socket, bank, statement_type, choice)}
     end
+  end
+
+  defp enqueue_statements(socket, bank, statement_type, choice) do
+    enqueue(socket, StatementUploadWorker, %{
+      "bank" => bank,
+      "statement_type" => statement_type,
+      "model" => choice
+    })
+  end
+
+  # Os arquivos saem do upload para o diretório de importações e cada um vira um job;
+  # o processamento segue em segundo plano, mesmo fora desta tela.
+  defp enqueue(socket, worker, args) do
+    user_id = socket.assigns.current_scope.user.id
+
+    files =
+      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
+        {:ok, %{filename: entry.client_name, path: Imports.store!(path)}}
+      end)
+
+    Imports.enqueue(user_id, worker, args, files)
+    assign(socket, :import_queue, Imports.queue(user_id))
   end
 
   # PDFs que conseguimos extrair de forma determinística (pdftotext) não exigem
@@ -318,644 +328,267 @@ defmodule GranaWeb.UploadLive do
   defp deterministic_pdf?("bradesco", "extrato"), do: true
   defp deterministic_pdf?(_bank, _statement_type), do: false
 
-  defp handle_platform_upload(socket) do
-    scope = socket.assigns.current_scope
-    socket = assign(socket, :processing, true)
-    send(self(), {:process_platform_uploads, scope.user.id})
-    {:noreply, socket}
-  end
+  defp handle_platform_upload(socket),
+    do: {:noreply, enqueue(socket, PlatformImportWorker, %{})}
 
   defp reload_statements(socket) do
     {:noreply, push_patch(socket, to: ~p"/upload?tab=historico&page=#{socket.assigns.page}")}
   end
 
   @impl true
-  def handle_info({:process_uploads, bank, statement_type, user_id}, socket) do
-    file_data =
-      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
-        {:ok, {entry.client_name, File.read!(path)}}
-      end)
+  def handle_info(:imports_changed, socket) do
+    finished = socket.assigns.import_queue.finished
+    queue = Imports.queue(socket.assigns.current_scope.user.id)
+    socket = assign(socket, :import_queue, queue)
 
-    total = length(file_data)
-    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
-    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
-
-    files =
-      Enum.map(file_data, fn {filename, content} ->
-        %{"filename" => filename, "content_b64" => Base.encode64(content)}
-      end)
-
-    %{
-      files: files,
-      bank: bank,
-      statement_type: statement_type,
-      user_id: user_id,
-      topic: topic
-    }
-    |> Grana.Workers.StatementUploadWorker.new()
-    |> Oban.insert()
-
-    {:noreply,
-     assign(socket,
-       upload_bank: bank,
-       progress_current: 0,
-       progress_total: total,
-       progress_filename: ""
-     )}
+    # Cada arquivo que termina pode criar um extrato: histórico e calendário acompanham.
+    socket = if queue.finished != finished, do: load_statements(socket), else: socket
+    {:noreply, socket}
   end
-
-  def handle_info({:process_platform_uploads, user_id}, socket) do
-    file_data =
-      consume_uploaded_entries(socket, :statements, fn %{path: path}, entry ->
-        {:ok, {entry.client_name, File.read!(path)}}
-      end)
-
-    total = length(file_data)
-    topic = "upload:#{user_id}:#{System.unique_integer([:positive])}"
-    Phoenix.PubSub.subscribe(Grana.PubSub, topic)
-
-    files =
-      Enum.map(file_data, fn {filename, content} ->
-        %{"filename" => filename, "content_b64" => Base.encode64(content)}
-      end)
-
-    %{files: files, user_id: user_id, topic: topic}
-    |> Grana.Workers.PlatformImportWorker.new()
-    |> Oban.insert()
-
-    {:noreply,
-     assign(socket,
-       upload_bank: "grana",
-       progress_current: 0,
-       progress_total: total,
-       progress_filename: ""
-     )}
-  end
-
-  def handle_info({:processing_file, _index, total, filename}, socket) do
-    is_ai = String.ends_with?(String.downcase(filename), ".pdf")
-
-    {:noreply,
-     assign(socket, progress_total: total, progress_filename: filename, progress_ai: is_ai)}
-  end
-
-  def handle_info({:file_done, index, total}, socket) do
-    {:noreply, assign(socket, progress_current: index, progress_total: total)}
-  end
-
-  def handle_info({:upload_complete, results}, socket) do
-    bank = socket.assigns[:upload_bank] || ""
-
-    {successes, errors} =
-      Enum.split_with(results, fn
-        {:ok, _, _, _} -> true
-        {:ok, _, _} -> true
-        _ -> false
-      end)
-
-    socket =
-      socket
-      |> assign(:processing, false)
-      |> assign(:results, successes)
-      |> assign(:progress_current, 0)
-      |> assign(:progress_total, 0)
-      |> assign(:progress_filename, "")
-      |> assign(:progress_ai, false)
-
-    # Collect parser warnings from successful results
-    all_warnings =
-      successes
-      |> Enum.flat_map(fn
-        {:ok, filename, _count, warnings} when warnings != [] ->
-          Enum.map(warnings, &"#{filename}: #{&1}")
-
-        _ ->
-          []
-      end)
-
-    socket =
-      case {successes, errors} do
-        {[], errors} ->
-          put_flash(socket, :error, build_error_message(errors, bank))
-
-        {_, []} ->
-          put_flash(socket, :info, "#{length(successes)} arquivo(s) processado(s) com sucesso!")
-
-        {_, errors} ->
-          socket
-          |> put_flash(:info, "#{length(successes)} processado(s) com sucesso")
-          |> put_flash(:error, build_error_message(errors, bank))
-      end
-
-    socket =
-      if all_warnings != [] do
-        warning_count = length(all_warnings)
-        summary = Enum.take(all_warnings, 5) |> Enum.join(" | ")
-        extra = if warning_count > 5, do: " (+#{warning_count - 5} mais)", else: ""
-        put_flash(socket, :warning, "#{warning_count} linha(s) ignorada(s): #{summary}#{extra}")
-      else
-        socket
-      end
-
-    {:noreply, push_patch(socket, to: ~p"/upload?tab=#{socket.assigns.tab}&page=1")}
-  end
-
-  # Limita a 5 erros exibidos (+N mais) para a flash não crescer sem limite.
-  defp build_error_message(errors, bank) do
-    shown = Enum.take(errors, 5)
-
-    msgs =
-      Enum.map(shown, fn {:error, name, reason} -> "#{name}: #{format_error(reason, bank)}" end)
-
-    extra = length(errors) - length(shown)
-    base = Enum.join(msgs, " | ")
-    if extra > 0, do: base <> " (+#{extra} mais)", else: base
-  end
-
-  defp format_error("No transactions found in file", "outro") do
-    "Nenhuma transação encontrada no arquivo."
-  end
-
-  defp format_error("No transactions found in file", bank) do
-    "Nenhuma transação encontrada. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
-  end
-
-  defp format_error("No transactions found in PDF", "outro") do
-    "Nenhuma transação encontrada no PDF."
-  end
-
-  defp format_error("No transactions found in PDF", bank) do
-    "Nenhuma transação encontrada no PDF. Verifique se o arquivo é realmente do #{String.capitalize(bank)}."
-  end
-
-  defp format_error(:no_api_key, _bank) do
-    "Não foi possível extrair o PDF automaticamente (pode ser digitalizado). " <>
-      "Cadastre um provedor de IA nas Configurações para processá-lo."
-  end
-
-  defp format_error(reason, _bank) when is_binary(reason), do: reason
-  # Nunca expõe termos internos crus (tuplas/atoms) ao usuário.
-  defp format_error(_reason, _bank), do: "Não foi possível processar o arquivo."
 
   @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="max-w-6xl mx-auto scrollbar-gutter">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Upload</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">
-            Importe e gerencie seus extratos e faturas
-          </p>
-        </div>
+        <.page_header title="Importar" subtitle="Importe e gerencie seus extratos e faturas" />
 
-        <div role="tablist" class="tabs tabs-border mb-8">
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="upload"
-            disabled={@processing}
-            class={[
-              "tab",
-              @tab == "upload" && "tab-active",
-              @processing && "opacity-50 cursor-not-allowed"
-            ]}
-          >
-            <.icon name="hero-cloud-arrow-up" class="size-4 mr-1" /> Upload
-          </button>
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="historico"
-            disabled={@processing}
-            class={[
-              "tab",
-              @tab == "historico" && "tab-active",
-              @processing && "opacity-50 cursor-not-allowed"
-            ]}
-          >
-            <.icon name="hero-document-text" class="size-4 mr-1" /> Histórico
-            <span :if={@total > 0} class="badge badge-sm badge-ghost ml-1">{@total}</span>
-          </button>
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="calendario"
-            disabled={@processing}
-            class={[
-              "tab",
-              @tab == "calendario" && "tab-active",
-              @processing && "opacity-50 cursor-not-allowed"
-            ]}
-          >
-            <.icon name="hero-calendar-days" class="size-4 mr-1" /> Calendário
-          </button>
-        </div>
+        <.tabs :if={@has_data}>
+          <:tab
+            label="Importar"
+            icon="hero-cloud-arrow-up"
+            active={@tab == "upload"}
+            event="switch_tab"
+            value="upload"
+          />
+          <:tab
+            label="Histórico"
+            icon="hero-document-text"
+            count={if @total > 0, do: @total}
+            active={@tab == "historico"}
+            event="switch_tab"
+            value="historico"
+          />
+          <:tab
+            label="Calendário"
+            icon="hero-calendar-days"
+            active={@tab == "calendario"}
+            event="switch_tab"
+            value="calendario"
+          />
+        </.tabs>
 
-        <div :if={@tab == "upload"}>
+        <div :if={@tab == "upload" or !@has_data}>
+          <GranaWeb.ImportComponents.import_panel
+            :if={@import_queue.total > 0}
+            queue={@import_queue}
+          />
+
           <%!-- Upload Category Selection --%>
-          <div class={[
-            "grid grid-cols-1 md:grid-cols-2 gap-4 mb-8",
-            @processing && "opacity-50 pointer-events-none"
-          ]}>
-            <button
+          <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <.option_card
+              title="Fatura / Extrato"
+              description="Conta corrente e cartão de crédito"
+              selected={@upload_category == "banking"}
               phx-click="select_upload_category"
               phx-value-category="banking"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@upload_category == "banking" && "border-primary") || "border-transparent"
-              ]}
             >
-              <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+              <:leading>
+                <span class="grid size-12 shrink-0 place-items-center rounded-full bg-base-300">
                   <.icon name="hero-banknotes" class="size-6 text-info" />
-                </div>
-                <div class="text-left">
-                  <h3 class="font-semibold text-lg">Fatura / Extrato</h3>
-                  <p class="text-sm opacity-70">Conta corrente e cartão de crédito</p>
-                </div>
-              </div>
-            </button>
+                </span>
+              </:leading>
+            </.option_card>
 
-            <button
+            <.option_card
+              title="Grana (exportação)"
+              description="Reimporte um CSV exportado da plataforma"
+              selected={@upload_category == "platform"}
               phx-click="select_upload_category"
               phx-value-category="platform"
-              disabled={@processing}
-              class={[
-                "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                (@upload_category == "platform" && "border-primary") || "border-transparent"
-              ]}
             >
-              <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
+              <:leading>
+                <span class="grid size-12 shrink-0 place-items-center rounded-full bg-base-300">
                   <.icon name="hero-arrow-up-tray" class="size-6 text-secondary" />
-                </div>
-                <div class="text-left">
-                  <h3 class="font-semibold text-lg">Grana (exportação)</h3>
-                  <p class="text-sm opacity-70">Reimporte um CSV exportado da plataforma</p>
-                </div>
-              </div>
-            </button>
+                </span>
+              </:leading>
+            </.option_card>
           </div>
 
           <div :if={@upload_category == "banking"}>
-            <div class={[
-              "grid grid-cols-1 md:grid-cols-3 gap-6 mb-8",
-              @processing && "opacity-50 pointer-events-none"
-            ]}>
-              <button
+            <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <.option_card
+                title="Nubank"
+                description="Extrato ou fatura CSV/PDF"
+                selected={@bank == "nubank"}
                 phx-click="select-bank"
                 phx-value-bank="nubank"
-                disabled={@processing}
-                class={[
-                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                  (@bank == "nubank" && "border-primary") || "border-transparent"
-                ]}
               >
-                <div class="flex items-center gap-4">
+                <:leading>
                   <img
                     src={~p"/images/nubank-logo.png"}
                     alt="Nubank"
-                    class="w-12 h-12 rounded-full"
+                    class="size-12 shrink-0 rounded-full"
                   />
-                  <div class="text-left">
-                    <h3 class="font-semibold text-lg">Nubank</h3>
-                    <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
-                  </div>
-                </div>
-              </button>
+                </:leading>
+              </.option_card>
 
-              <button
+              <.option_card
+                title="Bradesco"
+                description="Extrato ou fatura CSV/PDF"
+                selected={@bank == "bradesco"}
                 phx-click="select-bank"
                 phx-value-bank="bradesco"
-                disabled={@processing}
-                class={[
-                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                  (@bank == "bradesco" && "border-primary") || "border-transparent"
-                ]}
               >
-                <div class="flex items-center gap-4">
+                <:leading>
                   <img
                     src={~p"/images/bradesco-logo.png"}
                     alt="Bradesco"
-                    class="w-12 h-12 rounded-full"
+                    class="size-12 shrink-0 rounded-full"
                   />
-                  <div class="text-left">
-                    <h3 class="font-semibold text-lg">Bradesco</h3>
-                    <p class="text-sm opacity-70">Extrato ou fatura CSV/PDF</p>
-                  </div>
-                </div>
-              </button>
+                </:leading>
+              </.option_card>
 
-              <button
+              <.option_card
+                title="Outro banco"
+                description="Qualquer banco via PDF + IA"
+                selected={@bank == "outro"}
                 phx-click="select-bank"
                 phx-value-bank="outro"
-                disabled={@processing}
-                class={[
-                  "card bg-base-200 p-6 cursor-pointer transition-all hover:shadow-lg border-2",
-                  (@bank == "outro" && "border-primary") || "border-transparent"
-                ]}
               >
-                <div class="flex items-center gap-4">
-                  <div class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center">
-                    <.icon name="hero-building-library" class="size-6 opacity-60" />
-                  </div>
-                  <div class="text-left">
-                    <h3 class="font-semibold text-lg">Outro banco</h3>
-                    <p class="text-sm opacity-70">Qualquer banco via PDF + IA</p>
-                  </div>
-                </div>
-              </button>
+                <:leading>
+                  <span class="grid size-12 shrink-0 place-items-center rounded-full bg-base-300">
+                    <.icon name="hero-building-library" class="size-6" />
+                  </span>
+                </:leading>
+              </.option_card>
             </div>
 
-            <div
-              :if={@bank}
-              class={[
-                "grid grid-cols-1 md:grid-cols-2 gap-4 mb-8",
-                @processing && "opacity-50 pointer-events-none"
-              ]}
-            >
-              <button
+            <div :if={@bank} class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <.option_card
+                title="Extrato"
+                description="Conta corrente: entradas e saídas"
+                hint={extrato_tip(@bank)}
+                selected={@statement_type == "extrato"}
                 phx-click="select-type"
                 phx-value-type="extrato"
-                disabled={@processing}
-                class={[
-                  "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
-                  (@statement_type == "extrato" && "border-info") || "border-transparent"
-                ]}
               >
-                <div class="flex items-center gap-3">
-                  <.icon name="hero-banknotes" class="size-8 text-info" />
-                  <div class="text-left">
-                    <h3 class="font-semibold">Extrato</h3>
-                    <p class="text-sm opacity-70">Conta corrente — entradas e saídas</p>
-                    <p class="text-xs opacity-50 mt-1">
-                      {extrato_tip(@bank)}
-                    </p>
-                  </div>
-                </div>
-              </button>
+                <:leading><.icon name="hero-banknotes" class="size-8 shrink-0 text-info" /></:leading>
+              </.option_card>
 
-              <button
+              <.option_card
+                title="Fatura"
+                description="Cartão de crédito: gastos e parcelas"
+                hint={fatura_tip(@bank)}
+                selected={@statement_type == "fatura"}
                 phx-click="select-type"
                 phx-value-type="fatura"
-                disabled={@processing}
-                class={[
-                  "card bg-base-200 p-5 cursor-pointer transition-all hover:shadow-lg border-2",
-                  (@statement_type == "fatura" && "border-warning") || "border-transparent"
-                ]}
               >
-                <div class="flex items-center gap-3">
-                  <.icon name="hero-credit-card" class="size-8 text-warning" />
-                  <div class="text-left">
-                    <h3 class="font-semibold">Fatura</h3>
-                    <p class="text-sm opacity-70">Cartão de crédito — gastos e parcelas</p>
-                    <p class="text-xs opacity-50 mt-1">
-                      {fatura_tip(@bank)}
-                    </p>
-                  </div>
-                </div>
-              </button>
+                <:leading>
+                  <.icon name="hero-credit-card" class="size-8 shrink-0 text-warning" />
+                </:leading>
+              </.option_card>
             </div>
 
-            <div :if={@bank && @statement_type} class="card bg-base-200 p-8 mb-8">
-              <form id="upload-form" phx-submit="upload" phx-change="validate">
-                <div class="flex flex-col items-center gap-4">
-                  <div
-                    id="drop-zone"
-                    class={[
-                      "w-full border-2 border-dashed rounded-xl transition-all duration-200",
-                      (!@processing && "border-base-content/20 hover:border-primary/50") ||
-                        "border-base-content/10 opacity-50 pointer-events-none"
-                    ]}
-                    phx-drop-target={!@processing && @uploads.statements.ref}
-                    phx-hook="DropZone"
-                  >
-                    <.live_file_input
-                      upload={@uploads.statements}
-                      class="hidden"
-                      disabled={@processing}
-                    />
-                    <label
-                      for={!@processing && @uploads.statements.ref}
-                      class={[
-                        "block p-8 text-center",
-                        (!@processing && "cursor-pointer") || "cursor-not-allowed"
-                      ]}
-                    >
-                      <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
-                      <p class="font-medium">
-                        <%= if @bank == "outro" do %>
-                          Arraste arquivos PDF, ou clique para selecionar
-                        <% else %>
-                          Arraste arquivos CSV ou PDF, ou clique para selecionar
-                        <% end %>
-                      </p>
-                      <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
-                    </label>
-                  </div>
-
-                  <div :if={@uploads.statements.entries != []} class="w-full space-y-3">
-                    <div
-                      :for={entry <- @uploads.statements.entries}
-                      class="flex items-center justify-between bg-base-100 rounded-lg p-3"
-                    >
-                      <div class="flex items-center gap-3">
-                        <.icon name="hero-document-text" class="size-5 opacity-60" />
-                        <span class="text-sm font-medium">{entry.client_name}</span>
-                        <span class="badge badge-sm">{format_bytes(entry.client_size)}</span>
-                      </div>
-                      <button
-                        type="button"
-                        phx-click="cancel-upload"
-                        phx-value-ref={entry.ref}
-                        class="btn btn-ghost btn-xs btn-circle"
-                      >
-                        <.icon name="hero-x-mark" class="size-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div :for={err <- upload_errors(@uploads.statements)} class="text-error text-sm">
-                    {upload_error_to_string(err)}
-                  </div>
-
-                  <button
-                    :if={!@processing}
-                    type="submit"
-                    class="btn btn-primary btn-wide"
-                    disabled={@uploads.statements.entries == []}
-                  >
-                    Processar
-                  </button>
-
-                  <div
-                    :if={@processing}
-                    id="upload-progress"
-                    phx-hook="ProgressBar"
-                    data-progress={progress_percent(@progress_current, @progress_total)}
-                    data-total={@progress_total}
-                    data-ai={to_string(@progress_ai)}
-                    class="w-full"
-                  >
-                    <div class="flex items-center justify-between mb-2">
-                      <div class="flex items-center gap-2">
-                        <span class="loading loading-spinner loading-xs"></span>
-                        <span class="text-sm">
-                          <span :if={@progress_filename != ""} class="font-medium">
-                            {@progress_filename}
-                          </span>
-                          <span :if={@progress_total > 1} class="opacity-60">
-                            — {@progress_current}/{@progress_total}
-                          </span>
-                        </span>
-                      </div>
-                      <span data-pct class="text-sm font-mono opacity-60">0%</span>
-                    </div>
-                    <progress class="progress progress-primary w-full" value="0" max="100"></progress>
-                  </div>
-                </div>
-              </form>
+            <div :if={@bank && @statement_type} class="card bg-base-200 mb-8 p-6 sm:p-8">
+              <.statements_form
+                form_id="upload-form"
+                drop_id="drop-zone"
+                prompt={
+                  if @bank == "outro",
+                    do: "Arraste arquivos PDF, ou clique para selecionar",
+                    else: "Arraste arquivos CSV ou PDF, ou clique para selecionar"
+                }
+                submit="Processar"
+                uploads={@uploads}
+              >
+                <:extra>
+                  <AiComponents.model_picker
+                    id="upload-model"
+                    choices={@model_choices}
+                    default={@model_defaults["processing"]}
+                    value={@model_choice}
+                    pdf
+                  />
+                </:extra>
+              </.statements_form>
             </div>
           </div>
 
           <%!-- Platform export re-import --%>
           <div :if={@upload_category == "platform"}>
-            <div class="card bg-base-200 p-8 mb-8">
-              <p class="text-sm opacity-70 mb-4">
+            <div class="card bg-base-200 mb-8 p-6 sm:p-8">
+              <p class="ui-body ui-text-secondary mb-4">
                 Envie um ou mais CSVs exportados pelo próprio Grana (de transações bancárias).
                 O banco/origem e as categorias são detectados e recriados automaticamente; reimportar não duplica.
               </p>
-              <form id="upload-form-platform" phx-submit="upload" phx-change="validate">
-                <div class="flex flex-col items-center gap-4">
-                  <div
-                    id="drop-zone-platform"
-                    class={[
-                      "w-full border-2 border-dashed rounded-xl transition-all duration-200",
-                      (!@processing && "border-base-content/20 hover:border-primary/50") ||
-                        "border-base-content/10 opacity-50 pointer-events-none"
-                    ]}
-                    phx-drop-target={!@processing && @uploads.statements.ref}
-                    phx-hook="DropZone"
-                  >
-                    <.live_file_input
-                      upload={@uploads.statements}
-                      class="hidden"
-                      disabled={@processing}
-                    />
-                    <label
-                      for={!@processing && @uploads.statements.ref}
-                      class={[
-                        "block p-8 text-center",
-                        (!@processing && "cursor-pointer") || "cursor-not-allowed"
-                      ]}
-                    >
-                      <.icon name="hero-cloud-arrow-up" class="size-12 mx-auto mb-4 opacity-40" />
-                      <p class="font-medium">
-                        Arraste CSVs exportados do Grana, ou clique para selecionar
-                      </p>
-                      <p class="text-sm opacity-60 mt-1">Até 12 arquivos, máximo 5MB cada</p>
-                    </label>
-                  </div>
-
-                  <div :if={@uploads.statements.entries != []} class="w-full space-y-3">
-                    <div
-                      :for={entry <- @uploads.statements.entries}
-                      class="flex items-center justify-between bg-base-100 rounded-lg p-3"
-                    >
-                      <div class="flex items-center gap-3">
-                        <.icon name="hero-document-text" class="size-5 opacity-60" />
-                        <span class="text-sm font-medium">{entry.client_name}</span>
-                        <span class="badge badge-sm">{format_bytes(entry.client_size)}</span>
-                      </div>
-                      <button
-                        type="button"
-                        phx-click="cancel-upload"
-                        phx-value-ref={entry.ref}
-                        class="btn btn-ghost btn-xs btn-circle"
-                      >
-                        <.icon name="hero-x-mark" class="size-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div :for={err <- upload_errors(@uploads.statements)} class="text-error text-sm">
-                    {upload_error_to_string(err)}
-                  </div>
-
-                  <button
-                    :if={!@processing}
-                    type="submit"
-                    class="btn btn-primary btn-wide"
-                    disabled={@uploads.statements.entries == []}
-                  >
-                    Importar
-                  </button>
-
-                  <div
-                    :if={@processing}
-                    id="upload-progress-platform"
-                    phx-hook="ProgressBar"
-                    data-progress={progress_percent(@progress_current, @progress_total)}
-                    data-total={@progress_total}
-                    data-ai={to_string(@progress_ai)}
-                    class="w-full"
-                  >
-                    <div class="flex items-center justify-between mb-2">
-                      <div class="flex items-center gap-2">
-                        <span class="loading loading-spinner loading-xs"></span>
-                        <span class="text-sm">
-                          <span :if={@progress_filename != ""} class="font-medium">
-                            {@progress_filename}
-                          </span>
-                          <span :if={@progress_total > 1} class="opacity-60">
-                            — {@progress_current}/{@progress_total}
-                          </span>
-                        </span>
-                      </div>
-                      <span data-pct class="text-sm font-mono opacity-60">0%</span>
-                    </div>
-                    <progress class="progress progress-primary w-full" value="0" max="100"></progress>
-                  </div>
-                </div>
-              </form>
+              <.statements_form
+                form_id="upload-form-platform"
+                drop_id="drop-zone-platform"
+                prompt="Arraste CSVs exportados do Grana, ou clique para selecionar"
+                submit="Importar"
+                uploads={@uploads}
+              />
             </div>
           </div>
         </div>
 
-        <div :if={@tab == "historico"}>
-          <div class="flex items-center justify-between mb-4">
-            <span class="text-sm opacity-50">{@total} extrato(s)</span>
+        <div :if={@has_data and @tab == "historico"}>
+          <div class="mb-4 flex items-center justify-between">
+            <span class="ui-body ui-text-secondary">
+              {count_label(@total, "extrato", "extratos")}
+            </span>
           </div>
 
-          <div :if={@stmt_list == []} class="text-center py-16">
-            <.icon name="hero-document-text" class="size-16 mx-auto mb-4 opacity-20" />
-            <h2 class="text-xl font-semibold mb-2">Nenhum extrato encontrado</h2>
-            <p class="opacity-60 mb-6">Faça upload de um extrato para começar</p>
-            <button phx-click="switch_tab" phx-value-tab="upload" class="btn btn-primary">
-              <.icon name="hero-cloud-arrow-up" class="size-5" /> Upload
-            </button>
-          </div>
+          <.empty_state
+            :if={@stmt_list == []}
+            id="statements-empty"
+            icon="hero-document-text"
+            title="Nenhum extrato encontrado"
+            text="Importe um extrato para começar."
+          >
+            <:action>
+              <.button
+                type="button"
+                variant="primary"
+                icon="hero-cloud-arrow-up"
+                phx-click="switch_tab"
+                phx-value-tab="upload"
+              >
+                Importar extrato
+              </.button>
+            </:action>
+          </.empty_state>
 
           <div :if={@stmt_list != []}>
-            <div :if={MapSet.size(@selected_ids) > 0} class="flex items-center gap-3 mb-4">
-              <span class="text-sm opacity-60">
-                {MapSet.size(@selected_ids)} selecionado(s)
+            <div class={[
+              "mb-4 flex h-8 items-center gap-3",
+              MapSet.size(@selected_ids) == 0 && "invisible"
+            ]}>
+              <span class="ui-body ui-text-secondary">
+                {count_label(MapSet.size(@selected_ids), "selecionado", "selecionados")}
               </span>
-              <button phx-click="confirm_bulk_delete" class="btn btn-error btn-sm gap-1">
-                <.icon name="hero-trash" class="size-4" /> Remover Selecionados
-              </button>
+              <.button
+                id="bulk-delete"
+                type="button"
+                variant="danger"
+                size="sm"
+                icon="hero-trash"
+                phx-click="confirm_bulk_delete"
+              >
+                Remover selecionados
+              </.button>
             </div>
 
-            <div class="overflow-x-auto">
-              <table class="table">
+            <div class="transactions-table-shell card bg-base-200 overflow-x-auto">
+              <table id="statements-table" class="table">
                 <thead>
                   <tr>
                     <th class="w-10">
                       <input
                         type="checkbox"
                         class="checkbox checkbox-sm"
+                        aria-label="Selecionar todos"
                         checked={
                           MapSet.size(@selected_ids) == length(@stmt_list) and
                             length(@stmt_list) > 0
@@ -973,69 +606,87 @@ defmodule GranaWeb.UploadLive do
                   </tr>
                 </thead>
                 <tbody>
-                  <tr :for={stmt <- @stmt_list} class="hover">
-                    <td>
+                  <tr :for={stmt <- @stmt_list} id={"statement-#{stmt.composite_id}"} class="hover">
+                    <td class="ui-st-check">
                       <input
                         type="checkbox"
                         class="checkbox checkbox-sm"
+                        aria-label="Selecionar extrato"
                         checked={MapSet.member?(@selected_ids, stmt.composite_id)}
                         phx-click="toggle_select"
                         phx-value-id={stmt.composite_id}
                       />
                     </td>
-                    <td>
+                    <td class="ui-st-origin">
                       <.link navigate={stmt.link} class="flex items-center gap-3">
                         <div
                           :if={stmt.logo}
-                          class="w-8 h-8 rounded-full overflow-hidden bg-base-300 shrink-0"
+                          class="size-8 shrink-0 overflow-hidden rounded-full bg-base-300"
                         >
                           <img src={stmt.logo} alt={stmt.name} />
                         </div>
                         <div
                           :if={!stmt.logo}
-                          class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center"
+                          class="grid size-8 shrink-0 place-items-center rounded-full bg-base-300"
                         >
-                          <.icon name="hero-building-library" class="size-4 opacity-60" />
+                          <.icon name="hero-building-library" class="size-4" />
                         </div>
-                        <span class="font-medium">{stmt.name}</span>
+                        <span class="ui-body truncate font-medium">{stmt.name}</span>
                       </.link>
                     </td>
-                    <td>
-                      <span class={["badge badge-sm", stmt.type_badge]}>
-                        {stmt.type_label}
-                      </span>
+                    <td
+                      class="ui-st-type"
+                      phx-click={
+                        JS.toggle_class("ui-row-open", to: "#statement-#{stmt.composite_id}")
+                      }
+                    >
+                      <.tag kind="neutro">{stmt.type_label}</.tag>
+                      <.icon
+                        name="hero-chevron-down"
+                        class="ui-txn-chevron ui-text-tertiary ml-1 size-3 sm:hidden"
+                      />
                     </td>
-                    <td>
-                      <.link navigate={stmt.link} class="hover:underline">
+                    <td class="ui-st-detail">
+                      <.link navigate={stmt.link} class="ui-private-name ui-body hover:underline">
                         {stmt.filename}
                       </.link>
+                      <span
+                        :if={stmt.ai_model}
+                        id={"statement-model-#{stmt.raw_id}"}
+                        class="ui-caption mt-0.5 flex items-center gap-1"
+                        title={"Processado por IA: #{stmt.ai_provider} · #{stmt.ai_model}"}
+                      >
+                        <.icon name="hero-cpu-chip" class="size-3.5 shrink-0" /> {stmt.ai_model}
+                      </span>
                     </td>
-                    <td class="text-sm opacity-70">
+                    <td class="ui-st-detail ui-body ui-text-secondary">
                       {if stmt.period_start,
                         do: Calendar.strftime(stmt.period_start, "%d/%m/%Y"),
                         else: "—"} a {if stmt.period_end,
                         do: Calendar.strftime(stmt.period_end, "%d/%m/%Y"),
                         else: "—"}
                     </td>
-                    <td>
-                      <span class={[
-                        "badge badge-sm whitespace-nowrap",
-                        (stmt.status == "completed" && "badge-success") || "badge-warning"
-                      ]}>
+                    <td class="ui-st-detail">
+                      <.tag kind={if stmt.status == "completed", do: "ativo", else: "pendente"}>
                         {stmt.total_transactions} transações
-                      </span>
+                      </.tag>
                     </td>
-                    <td class="text-sm opacity-60">
+                    <td class="ui-st-detail ui-body ui-text-secondary">
                       {format_datetime_br(stmt.inserted_at)}
                     </td>
-                    <td>
-                      <button
+                    <td class="ui-st-actions">
+                      <.button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon="hero-trash"
+                        class="btn-square text-error"
+                        aria-label="Remover extrato"
                         phx-click="confirm_delete"
                         phx-value-id={stmt.composite_id}
-                        class="btn btn-ghost btn-xs text-error"
                       >
-                        <.icon name="hero-trash" class="size-4" />
-                      </button>
+                        <span class="sr-only">Remover extrato</span>
+                      </.button>
                     </td>
                   </tr>
                 </tbody>
@@ -1058,7 +709,7 @@ defmodule GranaWeb.UploadLive do
                 >
                   {p}
                 </.link>
-                <span :if={p == :dots} class="px-2 opacity-40">...</span>
+                <span :if={p == :dots} class="ui-text-tertiary px-2">…</span>
               </span>
               <.link
                 :if={@page < @total_pages}
@@ -1070,58 +721,58 @@ defmodule GranaWeb.UploadLive do
             </div>
           </div>
 
-          <dialog
+          <.confirm_modal
             :if={@delete_target}
             id="delete_modal"
-            class="modal modal-open"
-            phx-window-keydown="cancel_delete"
-            phx-key="Escape"
+            open
+            title="Remover extrato"
+            confirm="Remover"
+            loading="Removendo…"
+            on_confirm={JS.push("delete")}
+            on_cancel={JS.push("cancel_delete")}
           >
-            <div class="modal-box">
-              <h3 class="text-lg font-bold">Remover extrato</h3>
-              <p :if={match?({:single, _}, @delete_target)} class="py-4 opacity-70">
-                Tem certeza que deseja remover o extrato <span class="font-semibold">{elem(@delete_target, 1).filename}</span>?
-                Todas as {elem(@delete_target, 1).total_transactions} transações associadas serão removidas permanentemente.
-              </p>
-              <p :if={match?({:bulk, _}, @delete_target)} class="py-4 opacity-70">
-                Tem certeza que deseja remover
-                <span class="font-semibold">{elem(@delete_target, 1)} extrato(s)</span>
-                e todas as transações associadas? Esta ação é permanente.
-              </p>
-              <div class="modal-action">
-                <button phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
-                <button phx-click="delete" class="btn btn-error">Remover</button>
-              </div>
-            </div>
-            <form method="dialog" class="modal-backdrop">
-              <button phx-click="cancel_delete">close</button>
-            </form>
-          </dialog>
+            <p :if={match?({:single, _}, @delete_target)}>
+              Tem certeza que deseja remover o extrato <span class="ui-private-name font-semibold">{elem(@delete_target, 1).filename}</span>?
+              Todas as {elem(@delete_target, 1).total_transactions} transações associadas serão removidas permanentemente.
+            </p>
+            <p :if={match?({:bulk, _}, @delete_target)}>
+              Tem certeza que deseja remover
+              <span class="font-semibold">
+                {count_label(elem(@delete_target, 1), "extrato", "extratos")}
+              </span>
+              e todas as transações associadas? Esta ação é permanente.
+            </p>
+          </.confirm_modal>
         </div>
 
-        <div :if={@tab == "calendario"}>
+        <div :if={@has_data and @tab == "calendario"}>
           <div class="mb-6">
-            <h2 class="text-lg font-semibold">Calendário de Importações</h2>
-            <p class="text-xs sm:text-sm opacity-60 mt-1">
+            <h2 class="ui-card-title">Calendário de importações</h2>
+            <p class="ui-help mt-1 sm:text-sm">
               Cada quadrado é um mês. Quanto mais intenso, mais tipos de documento (extrato ou
               fatura) você importou naquele mês. Passe o mouse para ver os detalhes.
             </p>
           </div>
 
-          <div :if={!@cal_has_data} class="text-center py-16 opacity-60">
-            <.icon name="hero-calendar-days" class="size-10 mx-auto mb-3 opacity-40" />
-            <p>Ainda não há dados importados.</p>
-            <p class="text-sm mt-1">
-              Importe extratos ou faturas na aba <button
+          <.empty_state
+            :if={!@cal_has_data}
+            id="calendar-empty"
+            icon="hero-calendar-days"
+            title="Ainda não há dados importados"
+            text="Importe extratos ou faturas na aba Importar."
+          >
+            <:action>
+              <.button
                 type="button"
+                variant="secondary"
+                size="sm"
                 phx-click="switch_tab"
                 phx-value-tab="upload"
-                class="link"
               >
-                Upload
-              </button>.
-            </p>
-          </div>
+                Ir para Importar
+              </.button>
+            </:action>
+          </.empty_state>
 
           <div :if={@cal_has_data} class="grana-calendar-card card bg-base-200 w-full">
             <div class="card-body p-5 sm:p-8">
@@ -1138,7 +789,7 @@ defmodule GranaWeb.UploadLive do
                       <div class="w-8 sm:w-12 shrink-0"></div>
                       <div
                         :for={m <- 1..12}
-                        class="grana-calendar-month-label flex-1 min-w-0 text-center text-[10px] sm:text-sm font-medium"
+                        class="grana-calendar-month-label ui-caption flex-1 min-w-0 text-center font-medium sm:text-sm"
                       >
                         {month_label(m)}
                       </div>
@@ -1189,7 +840,7 @@ defmodule GranaWeb.UploadLive do
                     >
                     </div>
                     <span class="ml-1">Mais</span>
-                    <span class="ml-3 opacity-70">
+                    <span class="ui-text-secondary ml-3">
                       Tom cheio = extrato + fatura no mês.
                     </span>
                   </div>
@@ -1197,7 +848,7 @@ defmodule GranaWeb.UploadLive do
 
                 <%!-- Pontuação de cobertura (donut), no mesmo card --%>
                 <div class="grana-calendar-score flex flex-col items-center text-center gap-1 shrink-0 lg:w-64 lg:border-l lg:border-base-content/10 lg:pl-8">
-                  <h3 class="text-sm font-semibold opacity-70">Cobertura de importações</h3>
+                  <h3 class="ui-section-title">Cobertura de importações</h3>
                   <div class="relative">
                     <svg
                       viewBox="0 0 120 120"
@@ -1233,7 +884,7 @@ defmodule GranaWeb.UploadLive do
                     </div>
                   </div>
                   <p class="text-base font-medium mt-1">{@cal_score.label}</p>
-                  <p class="text-xs opacity-50">
+                  <p class="ui-help">
                     {@cal_score.imports} de {@cal_score.ideal} importações
                   </p>
                 </div>
@@ -1241,57 +892,111 @@ defmodule GranaWeb.UploadLive do
             </div>
           </div>
         </div>
-        <dialog
+
+        <.ai_required_modal
           :if={@show_api_key_alert}
-          class="modal modal-open"
-          phx-window-keydown="dismiss_api_alert"
-          phx-key="Escape"
-        >
-          <div class="modal-box">
-            <h3 class="text-lg font-bold">Provedor de IA não configurado</h3>
-            <p class="py-4 opacity-70">
-              Para processar arquivos PDF, é necessário cadastrar um provedor de IA (Gemini, OpenAI, Claude ou compatível). A IA é usada para extrair as transações do PDF.
-            </p>
-            <ol class="list-decimal list-inside text-sm opacity-70 space-y-1 mb-4">
-              <li>
-                Crie uma chave no provedor que preferir:
-                <a href="https://aistudio.google.com/apikey" target="_blank" class="link link-primary">
-                  Google Gemini
-                </a>
-                ·
-                <a
-                  href="https://platform.openai.com/api-keys"
-                  target="_blank"
-                  class="link link-primary"
-                >
-                  OpenAI
-                </a>
-                ·
-                <a
-                  href="https://console.anthropic.com/settings/keys"
-                  target="_blank"
-                  class="link link-primary"
-                >
-                  Claude
-                </a>
-              </li>
-              <li>Cadastre o provedor em Configurações → LLM</li>
-            </ol>
-            <div class="modal-action">
-              <button phx-click="dismiss_api_alert" class="btn btn-ghost">Fechar</button>
-              <.link navigate={~p"/users/settings"} class="btn btn-primary">
-                Ir para Configurações
-              </.link>
-            </div>
-          </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="dismiss_api_alert">close</button>
-          </form>
-        </dialog>
+          reason="Ler PDFs usa IA para extrair as transações do arquivo."
+        />
       </div>
     </Layouts.app>
     """
   end
+
+  attr :form_id, :string, required: true
+  attr :drop_id, :string, required: true
+  attr :prompt, :string, required: true
+  attr :submit, :string, required: true
+  attr :uploads, :any, required: true
+  slot :extra, doc: "next to the submit button (e.g. the AI model picker)"
+
+  defp statements_form(assigns) do
+    ~H"""
+    <form id={@form_id} phx-submit="upload" phx-change="validate">
+      <div class="flex flex-col items-center gap-4">
+        <div
+          id={@drop_id}
+          class="ui-dropzone w-full"
+          phx-drop-target={@uploads.statements.ref}
+          phx-hook="DropZone"
+        >
+          <.live_file_input upload={@uploads.statements} class="hidden" />
+          <label for={@uploads.statements.ref} class="block cursor-pointer p-8 text-center">
+            <.icon name="hero-cloud-arrow-up" class="ui-text-tertiary mx-auto mb-4 size-12" />
+            <p class="ui-body font-medium">{@prompt}</p>
+            <p class="ui-help mt-1">Quantos arquivos quiser, até 5MB cada</p>
+          </label>
+        </div>
+
+        <ul
+          :if={@uploads.statements.entries != []}
+          id={"#{@form_id}-entries"}
+          class="w-full divide-y divide-base-content/10"
+        >
+          <.item_row
+            :for={entry <- @uploads.statements.entries}
+            :key={entry.ref}
+            title={entry.client_name}
+            title_class="ui-private-name"
+            subtitle={entry_subtitle(entry)}
+          >
+            <p
+              :for={err <- upload_errors(@uploads.statements, entry)}
+              class="ui-help text-error"
+            >
+              {upload_error_to_string(err)}
+            </p>
+            <:leading><.icon name="hero-document-text" class="size-5 shrink-0" /></:leading>
+            <:actions>
+              <.button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="hero-x-mark"
+                class="btn-square"
+                aria-label="Remover arquivo"
+                phx-click="cancel-upload"
+                phx-value-ref={entry.ref}
+              >
+                <span class="sr-only">Remover arquivo</span>
+              </.button>
+            </:actions>
+          </.item_row>
+        </ul>
+
+        <p :for={err <- upload_errors(@uploads.statements)} class="ui-body text-error">
+          {upload_error_to_string(err)}
+        </p>
+
+        <div class="flex w-full flex-col items-center gap-2 sm:w-auto sm:flex-row">
+          <.button
+            variant="primary"
+            class="w-full sm:w-auto"
+            phx-disable-with="Enviando…"
+            disabled={
+              @uploads.statements.entries == [] or
+                Enum.any?(@uploads.statements.entries, &(!&1.valid?))
+            }
+          >
+            {submit_label(@submit, length(@uploads.statements.entries))}
+          </.button>
+          {render_slot(@extra)}
+        </div>
+        <p :if={@uploads.statements.entries == []} class="ui-help">
+          Escolha um arquivo para continuar.
+        </p>
+      </div>
+    </form>
+    """
+  end
+
+  defp submit_label(label, count) when count > 1, do: "#{label} #{count} arquivos"
+  defp submit_label(label, _count), do: label
+
+  # Enquanto o navegador envia (depois de clicar em Processar), mostra quanto já subiu.
+  defp entry_subtitle(%{progress: progress} = entry) when progress in 1..99,
+    do: "#{format_bytes(entry.client_size)} · enviando #{progress}%"
+
+  defp entry_subtitle(entry), do: format_bytes(entry.client_size)
 
   # ── Calendário de importações (heatmap ano × mês) ──
 
@@ -1375,7 +1080,7 @@ defmodule GranaWeb.UploadLive do
   defp pluralize_uploads(1), do: "1 upload"
   defp pluralize_uploads(count), do: "#{count} uploads"
 
-  defp cell_class(%{future?: true}), do: "calendar-count-future opacity-60"
+  defp cell_class(%{future?: true}), do: "calendar-count-future"
   defp cell_class(%{count: 0}), do: "calendar-count-0 cursor-pointer"
   defp cell_class(%{count: 1}), do: "calendar-count-1 cursor-pointer"
   defp cell_class(%{count: 2}), do: "calendar-count-3 cursor-pointer"
@@ -1409,21 +1114,29 @@ defmodule GranaWeb.UploadLive do
   @month_abbr {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"}
   defp month_label(month), do: elem(@month_abbr, month - 1)
 
+  defp allow_statements(socket, accept) do
+    allow_upload(socket, :statements,
+      accept: accept,
+      max_entries: @max_files,
+      max_file_size: @max_file_size
+    )
+  end
+
   defp cancel_all_uploads(socket) do
     Enum.reduce(socket.assigns.uploads.statements.entries, socket, fn entry, acc ->
       cancel_upload(acc, :statements, entry.ref)
     end)
   end
 
-  defp progress_percent(_current, 0), do: 0
-  defp progress_percent(current, total), do: round(current / total * 100)
-
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_bytes(bytes), do: "#{Float.round(bytes / 1024, 1)} KB"
 
   defp upload_error_to_string(:too_large), do: "Arquivo muito grande (máximo 5MB)"
   defp upload_error_to_string(:not_accepted), do: "Tipo de arquivo não aceito (use CSV ou PDF)"
-  defp upload_error_to_string(:too_many_files), do: "Muitos arquivos (máximo 12)"
+
+  defp upload_error_to_string(:too_many_files),
+    do: "Muitos arquivos de uma vez (máximo #{@max_files})"
+
   defp upload_error_to_string(err), do: "Erro: #{inspect(err)}"
 
   defp format_datetime_br(dt) do
@@ -1464,9 +1177,6 @@ defmodule GranaWeb.UploadLive do
   defp fatura_tip("bradesco"), do: "Recomendado: CSV"
   defp fatura_tip("outro"), do: "Apenas PDF"
   defp fatura_tip(_), do: ""
-
-  defp type_badge_class("fatura"), do: "badge-warning"
-  defp type_badge_class(_), do: "badge-info"
 
   defp type_label("fatura"), do: "Fatura"
   defp type_label(_), do: "Extrato"

@@ -27,7 +27,7 @@ defmodule Grana.Banking.RecurringExpensesTest do
     end
 
     test "remove sufixos de empresa e números soltos" do
-      assert RecurringExpenses.normalize("FLAMBRA LTDA") == "flambra"
+      assert RecurringExpenses.normalize("EMPRESA EXEMPLO LTDA") == "empresa exemplo"
       assert RecurringExpenses.normalize("NETFLIX.COM 12345") == "netflix com"
     end
   end
@@ -257,6 +257,31 @@ defmodule Grana.Banking.RecurringExpensesTest do
       # a classificação não "vaza" entre fontes
       assert Enum.any?(ext.fixed, &(&1.name == "NETFLIX.COM"))
       refute Enum.any?(fat.fixed, &(&1.name == "NETFLIX.COM"))
+    end
+  end
+
+  describe "pending/2" do
+    test "keeps the fixed expenses charged last month and not yet in this one, by day" do
+      expenses =
+        for {year, month} <- six_months(), day = 3 do
+          [
+            txn(Date.new!(year, month, day + 17), "ALUGUEL APTO", "-1500.00"),
+            txn(Date.new!(year, month, day), "ACADEMIA", "-100.00")
+          ]
+        end
+        |> List.flatten()
+        |> Enum.reject(&(&1.description == "ALUGUEL APTO" and &1.date.month == 5))
+
+      %{fixed: fixed} = RecurringExpenses.analyze(expenses)
+
+      assert %{last_date: ~D[2026-05-03]} = Enum.find(fixed, &(&1.name == "ACADEMIA"))
+
+      # In May: rent did not fall yet (it did in April); the gym already did.
+      assert [%{name: "ALUGUEL APTO", typical_day: 20}] =
+               RecurringExpenses.pending(fixed, ~D[2026-05-15])
+
+      # In July: both were last seen in May, two months before, so none is expected.
+      assert RecurringExpenses.pending(fixed, ~D[2026-07-10]) == []
     end
   end
 end

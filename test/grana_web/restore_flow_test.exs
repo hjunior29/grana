@@ -167,6 +167,8 @@ defmodule GranaWeb.RestoreFlowTest do
 
       html = lv |> form("#restore-upload-form") |> render_submit()
       assert html =~ "Escolha o arquivo"
+      assert has_element?(lv, "#restore-upload-error")
+      refute has_element?(lv, "#flash-error")
     end
 
     test "cancelar volta ao envio e apaga o temporário", %{conn: conn, binary: binary} do
@@ -186,10 +188,9 @@ defmodule GranaWeb.RestoreFlowTest do
       conn = log_in_user(build_conn(), user, token_authenticated_at: stale)
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
-      upload_backup(lv, binary)
 
       assert {:error, {:redirect, %{to: "/users/log-in"}}} =
-               lv |> form("#restore-options-form") |> render_submit()
+               upload_backup(lv, binary)
 
       assert Repo.get_by(User, email: "vivo@example.com")
     end

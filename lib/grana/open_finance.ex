@@ -273,6 +273,68 @@ defmodule Grana.OpenFinance do
   end
 
   @doc """
+  Transações do Open Finance de um banco/tipo em `inicio..fim`, alargado pela margem da
+  conciliação: as que um upload vai substituir, lidas antes do `release_period/5` para
+  `carry_over_edits/3` levar o que o usuário ajustou nelas.
+  """
+  def provisional_transactions(user_id, bank, statement_type, period_start, period_end) do
+    from(t in BankingTransaction,
+      join: s in assoc(t, :bank_statement),
+      where:
+        t.user_id == ^user_id and s.source == "open_finance" and s.bank == ^bank and
+          s.statement_type == ^statement_type and
+          t.date >= ^Date.add(period_start, -@boundary_days) and
+          t.date <= ^Date.add(period_end, @boundary_days)
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Leva para as transações do upload (`entries`, mapas prontos para inserir) o que foi
+  ajustado à mão nas do Open Finance que elas substituem, casadas pelo mesmo valor em
+  centavos e até #{@boundary_days} dias de diferença: a categoria, quando a do upload seria
+  "Sem Categoria", e a marcação manual de transferência interna. Sem aviso na tela.
+  """
+  def carry_over_edits(entries, [], _uncategorized_id), do: entries
+
+  def carry_over_edits(entries, provisional, uncategorized_id) do
+    {carried, _left} =
+      Enum.map_reduce(entries, provisional, fn entry, left ->
+        case closest_match(left, entry) do
+          nil -> {entry, left}
+          match -> {apply_edits(entry, match, uncategorized_id), List.delete(left, match)}
+        end
+      end)
+
+    carried
+  end
+
+  defp closest_match(provisional, entry) do
+    provisional
+    |> Enum.filter(fn t ->
+      t.type == entry.type and cents(t.amount) == cents(entry.amount) and
+        abs(Date.diff(t.date, entry.date)) <= @boundary_days
+    end)
+    |> Enum.min_by(&abs(Date.diff(&1.date, entry.date)), fn -> nil end)
+  end
+
+  defp apply_edits(entry, match, uncategorized_id) do
+    entry =
+      if entry.category_id in [nil, uncategorized_id] and
+           match.category_id not in [nil, uncategorized_id],
+         do: %{entry | category_id: match.category_id},
+         else: entry
+
+    case match.internal_override do
+      nil ->
+        entry
+
+      override ->
+        Map.merge(entry, %{internal_override: override, is_internal_transfer: override})
+    end
+  end
+
+  @doc """
   Sincroniza pelo id da conexão (usado pelo worker) e, de carona, garante o webhook
   do usuário. Conexão já removida é ignorada.
   """
@@ -450,6 +512,7 @@ defmodule Grana.OpenFinance do
           store_statement(connection, local, type, key, rows, categorize, now)
         end)
       end)
+      |> Enum.reject(&is_nil/1)
 
     from(s in BankStatement,
       where:
@@ -500,7 +563,7 @@ defmodule Grana.OpenFinance do
         Date.add(min_date, -@boundary_days),
         Date.add(max_date, @boundary_days)
       )
-      |> Enum.group_by(fn {_date, amount} -> Decimal.abs(amount) end, &elem(&1, 0))
+      |> Enum.group_by(fn {_date, amount} -> cents(amount) end, &elem(&1, 0))
 
     {kept, _uploaded} =
       rows
@@ -525,7 +588,7 @@ defmodule Grana.OpenFinance do
 
   # Devolve as transações de upload sem a que casou com `row`, ou nil se nenhuma casar.
   defp find_upload_match(uploaded, row) do
-    key = Decimal.abs(row.amount)
+    key = cents(row.amount)
     dates = Map.get(uploaded, key, [])
 
     case Enum.find_index(dates, &(abs(Date.diff(&1, row.date)) <= @boundary_days)) do
@@ -534,54 +597,86 @@ defmodule Grana.OpenFinance do
     end
   end
 
+  defp cents(%Decimal{} = amount) do
+    amount |> Decimal.abs() |> Decimal.mult(100) |> Decimal.round() |> Decimal.to_integer()
+  end
+
+  defp cents(nil), do: 0
+
   # Extrato: um por conta. Fatura: uma por fatura da Pluggy (id da fatura), para
   # o Grana atribuir o mês da fatura como faz com os uploads.
   defp statement_key(_row, "extrato"), do: "extrato"
   defp statement_key(row, "fatura"), do: row.bill_id || "aberta"
 
   defp store_statement(connection, account, type, key, rows, categorize, now) do
-    {period_start, period_end} = rows |> Enum.map(& &1.date) |> Enum.min_max_by(& &1, Date)
-    external_id = "#{account.pluggy_id}:#{key}"
+    fresh_periods = Banking.upload_periods(connection.user_id, connection.bank)
+    rows = reject_covered(rows, connection, type, fresh_periods)
 
-    attrs = %{
-      bank: connection.bank,
-      filename: "Open Finance · #{account_label(account)} · #{key}",
-      statement_type: type,
-      status: "completed",
-      period_start: period_start,
-      period_end: period_end,
-      total_transactions: length(rows)
-    }
+    if rows == [] do
+      nil
+    else
+      {period_start, period_end} = rows |> Enum.map(& &1.date) |> Enum.min_max_by(& &1, Date)
+      external_id = "#{account.pluggy_id}:#{key}"
 
-    statement =
-      case Repo.get_by(BankStatement,
-             open_finance_account_id: account.id,
-             external_id: external_id
-           ) do
-        nil ->
-          %BankStatement{
-            source: "open_finance",
-            external_id: external_id,
-            open_finance_account_id: account.id,
-            user_id: connection.user_id
-          }
+      attrs = %{
+        bank: connection.bank,
+        filename: "Open Finance · #{account_label(account)} · #{key}",
+        statement_type: type,
+        status: "completed",
+        period_start: period_start,
+        period_end: period_end,
+        total_transactions: length(rows)
+      }
 
-        statement ->
-          statement
-      end
-      |> Ecto.Changeset.change(attrs)
-      |> Repo.insert_or_update!()
+      statement =
+        case Repo.get_by(BankStatement,
+               open_finance_account_id: account.id,
+               external_id: external_id
+             ) do
+          nil ->
+            %BankStatement{
+              source: "open_finance",
+              external_id: external_id,
+              open_finance_account_id: account.id,
+              user_id: connection.user_id
+            }
 
-    upsert_transactions(rows, statement, connection.user_id, categorize, now)
+          statement ->
+            statement
+        end
+        |> Ecto.Changeset.change(attrs)
+        |> Repo.insert_or_update!()
 
-    external_ids = Enum.map(rows, & &1.external_id)
+      upsert_transactions(rows, statement, connection.user_id, categorize, now)
 
-    from(t in BankingTransaction,
-      where: t.bank_statement_id == ^statement.id and t.external_id not in ^external_ids
-    )
-    |> Repo.delete_all()
+      external_ids = Enum.map(rows, & &1.external_id)
 
-    statement.id
+      from(t in BankingTransaction,
+        where:
+          t.bank_statement_id == ^statement.id and
+            t.date >= ^period_start and
+            t.external_id not in ^external_ids
+      )
+      |> Repo.delete_all()
+
+      query =
+        from(t in BankingTransaction,
+          where: t.bank_statement_id == ^statement.id,
+          select: {min(t.date), max(t.date), count(t.id)}
+        )
+
+      {actual_start, actual_end, count} = Repo.one(query)
+
+      statement
+      |> Ecto.Changeset.change(%{
+        period_start: actual_start || period_start,
+        period_end: actual_end || period_end,
+        total_transactions: count
+      })
+      |> Repo.update!()
+
+      statement.id
+    end
   end
 
   defp account_label(account) do

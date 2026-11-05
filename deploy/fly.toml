@@ -1,0 +1,47 @@
+# Grana no Fly.io: uma máquina, com o banco SQLite num volume.
+#
+#   fly apps create meu-grana                                  # nome único: meu-grana.fly.dev
+#   fly volumes create grana_data -a meu-grana -r gru -s 1 -y
+#   fly deploy -a meu-grana --ha=false                         # uma máquina só (SQLite)
+#   fly logs -a meu-grana --no-tail                            # o código do setup
+#
+# Troque meu-grana pelo nome do seu app em todos os comandos. A região (gru, São Paulo)
+# precisa ser a mesma do volume e do primary_region abaixo.
+
+primary_region = "gru"
+
+[build]
+  image = "ghcr.io/hjunior29/grana:latest"
+
+[env]
+  # O proxy do Fly termina o HTTPS: sem confiar no X-Forwarded-Proto, os cookies não
+  # saem seguros e o LiveView recusa a origem https.
+  TRUST_PROXY_HEADERS = "true"
+
+[mounts]
+  source = "grana_data"
+  destination = "/data"
+  # Snapshots diários do volume, guardados por esta quantidade de dias (1 a 60).
+  snapshot_retention = 5
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # Sem acesso por alguns minutos, a máquina para e só o volume é cobrado; o próximo
+  # acesso a liga de novo em alguns segundos. "suspend" volta mais rápido, e
+  # min_machines_running = 1 a deixa sempre ligada.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -18,7 +18,14 @@ defmodule Grana.Application do
         List.wrap(Grana.Cache.child_spec_or_nil()) ++
         [
           {Phoenix.PubSub, name: Grana.PubSub},
+          {Task.Supervisor, name: Grana.TaskSupervisor},
           {Oban, Application.fetch_env!(:grana, Oban)},
+          {Registry, keys: :unique, name: Grana.Chat.ReplyRegistry},
+          {Task.Supervisor, name: Grana.Chat.TaskSupervisor},
+          {DynamicSupervisor, name: Grana.Chat.ReplySupervisor, strategy: :one_for_one},
+          {Registry, keys: :unique, name: Grana.Agents.RunRegistry},
+          {Task.Supervisor, name: Grana.Agents.TaskSupervisor},
+          {DynamicSupervisor, name: Grana.Agents.RunSupervisor, strategy: :one_for_one},
           Grana.Setup,
           GranaWeb.Endpoint
         ] ++ announce_setup()

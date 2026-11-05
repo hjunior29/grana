@@ -17,12 +17,12 @@ defmodule Grana.Banking.Parsers.BradescoPdfTest do
     test "captura o Docto como identifier", %{txns: txns} do
       assert Enum.all?(txns, &(&1.identifier != nil))
 
-      pix = Enum.find(txns, &(&1.description == "PIX QR CODE DINAMICO - Fulano Moreira Basto"))
-      assert pix.identifier == "1332274"
+      pix = Enum.find(txns, &(&1.description == "PIX QR CODE DINAMICO - Fulano Moreira Bastos"))
+      assert pix.identifier == "2000111"
     end
 
     test "remove transação re-listada na folha 'Últimos Lançamentos'", %{txns: txns} do
-      # A folha 2 e a folha 3 listam o mesmo RENTAB (Docto 8606144, 0,01) em
+      # A folha 2 e a folha 3 listam o mesmo RENTAB (Docto 2000259, 0,01) em
       # 12/02; só uma deve sobrar.
       rentab_12 =
         Enum.filter(
@@ -39,7 +39,7 @@ defmodule Grana.Banking.Parsers.BradescoPdfTest do
 
     test "reconcile detecta um saldo/valor lido errado (rede de segurança)" do
       # Corrompe um saldo impresso mantendo o alinhamento das colunas.
-      corrupted = String.replace(@layout, "15.890,37", "15.890,99")
+      corrupted = String.replace(@layout, "14.301,23", "14.301,99")
       assert {:error, issues} = BradescoPdf.reconcile(corrupted)
       assert issues != []
     end
@@ -78,24 +78,24 @@ defmodule Grana.Banking.Parsers.BradescoPdfTest do
       assert pix =
                Enum.find(
                  txns,
-                 &(&1.description == "PIX QR CODE DINAMICO - Fulano Moreira Basto")
+                 &(&1.description == "PIX QR CODE DINAMICO - Fulano Moreira Bastos")
                )
 
       assert pix.type == "debit"
-      assert Decimal.equal?(pix.amount, Decimal.new("-60.00"))
+      assert Decimal.equal?(pix.amount, Decimal.new("-50.00"))
       assert pix.date == ~D[2026-02-06]
 
       assert cobranca =
                Enum.find(txns, &(&1.description == "PAGTO ELETRON COBRANCA - NU PAGAMENTOS SA"))
 
       assert cobranca.type == "debit"
-      assert Decimal.equal?(cobranca.amount, Decimal.new("-4612.79"))
+      assert Decimal.equal?(cobranca.amount, Decimal.new("-4105.38"))
     end
 
     test "valor na coluna Crédito vira crédito positivo", %{txns: txns} do
       assert b3 = Enum.find(txns, &String.starts_with?(&1.description, "PGTO DE RENDIMENTO - B3"))
       assert b3.type == "credit"
-      assert Decimal.equal?(b3.amount, Decimal.new("19.00"))
+      assert Decimal.equal?(b3.amount, Decimal.new("17.00"))
       assert b3.date == ~D[2026-02-06]
     end
 
@@ -104,10 +104,83 @@ defmodule Grana.Banking.Parsers.BradescoPdfTest do
       dates = txns |> Enum.map(& &1.date) |> Enum.uniq()
       assert ~D[2026-02-13] in dates
 
-      kinea = Enum.find(txns, &(&1.description == "PGTO DE RENDIMENTO - B3 - FII KINEA"))
-      assert kinea.date == ~D[2026-02-13]
-      assert kinea.type == "credit"
+      fii = Enum.find(txns, &(&1.description == "PGTO DE RENDIMENTO - B3 - FII MODELO"))
+      assert fii.date == ~D[2026-02-13]
+      assert fii.type == "credit"
     end
+  end
+
+  describe "parse/1 with the Internet Banking export" do
+    @internet_banking File.read!(
+                        "test/support/fixtures/pdf/extrato-bradesco-internet-banking-layout.txt"
+                      )
+
+    setup do
+      {:ok, txns: BradescoPdf.parse(@internet_banking)}
+    end
+
+    defp find(txns, description), do: Enum.find(txns, &(&1.description == description))
+
+    test "reads every movement, whose totals match the Total row", %{txns: txns} do
+      assert length(txns) == 12
+      assert BradescoPdf.reconcile(@internet_banking) == :ok
+
+      {credits, debits} = Enum.split_with(txns, &(&1.type == "credit"))
+      assert Decimal.equal?(sum(credits), Decimal.new("208.26"))
+      assert Decimal.equal?(sum(debits), Decimal.new("-4717.42"))
+    end
+
+    test "a signed amount is a debit, an unsigned one a credit; years have two digits", %{
+      txns: txns
+    } do
+      card = find(txns, "Gasto c Credito")
+      assert card.type == "debit"
+      assert Decimal.equal?(card.amount, Decimal.new("-3921.15"))
+      assert card.date == ~D[2026-06-01]
+      assert card.identifier == "1000003"
+
+      received = find(txns, "Pix Recebido - Fulano de Tal Souza")
+      assert received.type == "credit"
+      assert Decimal.equal?(received.amount, Decimal.new("190.00"))
+      assert received.date == ~D[2026-06-05]
+
+      assert find(txns, "Enc Lim Credito - Encargo - 06,15%").amount == Decimal.new("-0.52")
+      assert find(txns, "Pix Enviado - Beltrano Dias Camp Fe").identifier == "1000007"
+    end
+
+    test "page breaks split glued movements and join a movement cut in two", %{txns: txns} do
+      assert Decimal.equal?(find(txns, "Pix Qrcode Din - Padaria Central").amount, -50)
+      assert Decimal.equal?(find(txns, "Pix Enviado - Outra Pessoa Silva").amount, -10)
+
+      cut = find(txns, "Pix Qrcode Est - Cinema Centro")
+      assert Decimal.equal?(cut.amount, -45)
+      assert cut.date == ~D[2026-06-08]
+    end
+
+    test "leaves out the opening balance, the Total row and the Invest Fácil balances", %{
+      txns: txns
+    } do
+      descriptions = Enum.map(txns, & &1.description)
+      refute Enum.any?(descriptions, &String.contains?(&1, "SALDO ANTERIOR"))
+      refute Enum.any?(descriptions, &String.starts_with?(&1, "Total"))
+      refute Enum.any?(descriptions, &String.contains?(&1, "Invest Fácil"))
+    end
+
+    test "the Bradesco Celular layout reads the same with page breaks" do
+      paged =
+        String.replace(
+          @layout,
+          "\n                                             Bradesco Celular",
+          "\n\f                                             Bradesco Celular"
+        )
+
+      assert paged != @layout
+      assert BradescoPdf.parse(paged) == BradescoPdf.parse(@layout)
+      assert BradescoPdf.reconcile(paged) == :ok
+    end
+
+    defp sum(txns),
+      do: txns |> Enum.map(& &1.amount) |> Enum.reduce(Decimal.new(0), &Decimal.add/2)
   end
 
   describe "parse/1 com entradas degeneradas" do

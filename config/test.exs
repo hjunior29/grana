@@ -37,6 +37,7 @@ config :grana, Oban, testing: :manual
 
 # Skip rate limiting in tests
 config :grana, :skip_rate_limit, true
+config :grana, :async_password_reset, false
 
 # Cache desligado nos testes: Grana.Cache cai no fallback (executa a query direto),
 # evitando vazamento de estado de cache entre testes.

@@ -4,6 +4,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/grana"
 import topbar from "../vendor/topbar"
 import {PluggyConnect} from "../vendor/pluggy-connect"
+import QuickActions from "./quick_actions"
 
 // --- Theme ---
 const visualStyles = new Set(["default", "signal", "bossa", "papel", "caderneta", "planetario", "cyber"])
@@ -266,6 +267,11 @@ function fmtBRL(val) {
   return "R$ " + val.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})
 }
 
+// Valor do app (não da landing): fica coberto quando "Ocultar valores" está ligado.
+function privateBRL(val) {
+  return `<span class="ui-private">${fmtBRL(val)}</span>`
+}
+
 function pct(val, total) {
   return total > 0 ? ((val / total) * 100).toFixed(1) : "0"
 }
@@ -299,7 +305,7 @@ const CategoryChart = {
       const name = target.dataset.catName
       const value = parseFloat(target.dataset.catValue)
       const total = parseFloat(target.dataset.catTotal)
-      showTooltip(this.el, e, `<strong>${escapeHtml(name)}</strong><br>${fmtBRL(value)} · ${pct(value, total)}%`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(name)}</strong><br>${privateBRL(value)} · ${pct(value, total)}%`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -345,7 +351,7 @@ const CategoryChart = {
 
     const formattedTotal = fmtBRL(total)
     svg += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" class="fill-base-content text-xs opacity-50">Total</text>`
-    svg += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" class="fill-base-content text-sm font-semibold">${formattedTotal}</text>`
+    svg += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" class="ui-private fill-base-content text-sm font-semibold">${formattedTotal}</text>`
     svg += `</svg>`
 
     const existing = this.el.querySelector(".chart-svg")
@@ -366,7 +372,7 @@ const DailyChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-day-date]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${fmtBRL(parseFloat(target.dataset.dayValue))}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${privateBRL(parseFloat(target.dataset.dayValue))}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -379,7 +385,7 @@ const DailyChart = {
     const data = JSON.parse(this.el.dataset.daily || "[]")
     if (!data.length) return
 
-    const maxVal = Math.max(...data.map(d => d.value))
+    const maxVal = Math.max(...data.map(d => d.value + (d.sim || 0)))
     if (maxVal === 0) return
 
     const width = 500
@@ -387,18 +393,19 @@ const DailyChart = {
     const padding = {top: 20, right: 10, bottom: 30, left: 10}
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
-    const barWidth = Math.max(4, (chartWidth / data.length) - 2)
+    const slot = chartWidth / data.length
+    const barWidth = Math.min(40, Math.max(4, slot - 2))
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-48 mb-4">`
 
     data.forEach((item, i) => {
       const barHeight = (item.value / maxVal) * chartHeight
-      const x = padding.left + (i * (chartWidth / data.length)) + 1
+      const x = padding.left + i * slot + (slot - barWidth) / 2
       const y = padding.top + chartHeight - barHeight
 
       const urlAttr = item.url ? ` data-day-url="${escapeHtml(item.url)}"` : ""
-      const barFill = this.el.dataset.barFill || "fill-primary"
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-day-date="${escapeHtml(item.date)}" data-day-value="${item.value}"${urlAttr}></rect>`
+      const barFill = this.el.dataset.barFill || "fill-(--ui-despesa)"
+      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="${barFill} hover:brightness-110 transition-opacity cursor-pointer" data-day-date="${escapeHtml(item.date)}" data-day-value="${item.value}"${urlAttr}></rect>`
 
       if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
         svg += `<text x="${x + barWidth / 2}" y="${height - 5}" text-anchor="middle" class="fill-base-content text-[8px] opacity-40">${escapeHtml(item.date)}</text>`
@@ -416,6 +423,24 @@ const DailyChart = {
       div.innerHTML = svg
       this.el.insertBefore(div, this.el.firstChild)
     }
+  }
+}
+
+// Calendário de gastos do painel: só o tooltip e o clique; a grade vem do servidor.
+const SpendingCalendar = {
+  mounted() {
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-day-date]")
+      if (!target) return hideTooltip(this.el)
+      const value = target.dataset.dayValue
+      const amount = value ? privateBRL(parseFloat(value)) : "Sem gastos"
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.dayDate)}</strong><br>${amount}`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-day-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.dayUrl})
+    })
   }
 }
 
@@ -449,6 +474,13 @@ const CalendarHeatmap = {
 
 const AutoDismiss = {
   mounted() {
+    this.el.style.opacity = "0"
+    this.el.style.transform = "translateX(100%)"
+    requestAnimationFrame(() => {
+      this.el.style.opacity = "1"
+      this.el.style.transform = "translateX(0)"
+    })
+
     this.timer = setTimeout(() => {
       const kind = this.el.id.replace("flash-", "")
       this.pushEvent("lv:clear-flash", { key: kind })
@@ -526,7 +558,7 @@ const IncomeExpensesChart = {
       const incomeLabel = this.el.dataset.incomeLabel || "Receitas"
       const expensesLabel = this.el.dataset.expensesLabel || "Despesas"
       const typeLabel = type === "income" ? incomeLabel : expensesLabel
-      showTooltip(this.el, e, `<strong>${escapeHtml(label)}</strong><br>${escapeHtml(typeLabel)}: ${fmtBRL(value)}`)
+      showTooltip(this.el, e, `<strong>${escapeHtml(label)}</strong><br>${escapeHtml(typeLabel)}: ${privateBRL(value)}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
     this.el.addEventListener("click", (e) => {
@@ -549,7 +581,7 @@ const IncomeExpensesChart = {
     const chartHeight = height - padding.top - padding.bottom
     const groupWidth = chartWidth / data.length
     const barGap = 3
-    const barWidth = Math.max(8, (groupWidth - barGap) * 0.42)
+    const barWidth = Math.min(56, Math.max(8, (groupWidth - barGap) * 0.42))
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-80 sm:h-96">`
 
@@ -563,21 +595,140 @@ const IncomeExpensesChart = {
       const incUrl = item.income_url ? ` data-ie-url="${escapeHtml(item.income_url)}"` : ""
       const expUrl = item.expenses_url ? ` data-ie-url="${escapeHtml(item.expenses_url)}"` : ""
 
-      const incFill = this.el.dataset.incomeFill || "fill-success"
-      const expFill = this.el.dataset.expensesFill || "fill-error"
+      const incFill = this.el.dataset.incomeFill || "fill-(--ui-receita)"
+      const expFill = this.el.dataset.expensesFill || "fill-(--ui-despesa)"
       const safeLabel = escapeHtml(item.label)
-      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
-      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
+      svg += `<rect x="${x}" y="${padding.top + chartHeight - incomeH}" width="${barWidth}" height="${incomeH}" rx="2" class="${incFill} hover:brightness-110 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="income" data-ie-value="${item.income}"${incUrl}></rect>`
+      svg += `<rect x="${x + barWidth + barGap}" y="${padding.top + chartHeight - expenseH}" width="${barWidth}" height="${expenseH}" rx="2" class="${expFill} hover:brightness-110 transition-opacity cursor-pointer" data-ie-label="${safeLabel}" data-ie-type="expenses" data-ie-value="${item.expenses}"${expUrl}></rect>`
       svg += `<text x="${groupX + groupWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[10px] opacity-50">${safeLabel}</text>`
     })
 
     svg += `</svg>`
     const incLabel = this.el.dataset.incomeLabel || "Receitas"
     const expLabel = this.el.dataset.expensesLabel || "Despesas"
-    const incColor = this.el.dataset.incomeColor || "bg-success/70"
-    const expColor = this.el.dataset.expensesColor || "bg-error/70"
+    const incColor = this.el.dataset.incomeColor || "bg-(--ui-receita)"
+    const expColor = this.el.dataset.expensesColor || "bg-(--ui-despesa)"
     svg += `<div class="flex justify-center gap-6 text-xs opacity-60 mt-1"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm ${incColor}"></span> ${incLabel}</span><span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm ${expColor}"></span> ${expLabel}</span></div>`
 
+    const existing = this.el.querySelector(".chart-svg")
+    if (existing) {
+      existing.innerHTML = svg
+    } else {
+      const div = document.createElement("div")
+      div.className = "chart-svg"
+      div.innerHTML = svg
+      this.el.insertBefore(div, this.el.firstChild)
+    }
+  }
+}
+
+// Sankey do fluxo de caixa: fontes de receita à esquerda, o caixa do período no meio e,
+// à direita, as categorias de despesa, os investimentos e a sobra.
+const CashFlowChart = {
+  mounted() {
+    this.renderChart()
+    this.el.addEventListener("mousemove", (e) => {
+      const target = e.target.closest("[data-flow-name]")
+      if (!target) return hideTooltip(this.el)
+      const value = parseFloat(target.dataset.flowValue)
+      const total = parseFloat(target.dataset.flowTotal)
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.flowName)}</strong><br>${privateBRL(value)} · ${pct(value, total)}%`)
+    })
+    this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
+    this.el.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-flow-url]")
+      if (target) this.pushEvent("chart-navigate", {url: target.dataset.flowUrl})
+    })
+  },
+  updated() { this.renderChart() },
+  renderChart() {
+    const data = JSON.parse(this.el.dataset.flow || "{}")
+    const sources = data.sources || []
+    const targets = data.targets || []
+    const total = sources.reduce((sum, n) => sum + n.value, 0)
+    if (!total || !targets.length) return
+
+    const width = 1000
+    const rows = Math.max(sources.length, targets.length)
+    const height = Math.max(280, Math.min(560, rows * 44 + 40))
+    const pad = {top: 16, bottom: 16}
+    const nodeW = 12
+    const gap = 10
+    const leftX = 0
+    const centerX = width / 2 - nodeW / 2
+    const rightX = width - nodeW
+    const usable = height - pad.top - pad.bottom
+
+    const layout = (nodes) => {
+      const free = usable - gap * Math.max(0, nodes.length - 1)
+      let y = pad.top
+      return nodes.map((n) => {
+        const h = Math.max(2, (n.value / total) * free)
+        const node = {...n, y, h}
+        y += h + gap
+        return node
+      })
+    }
+    const left = layout(sources)
+    const right = layout(targets)
+    const center = {y: pad.top, h: usable}
+
+    const uid = `cf${Math.random().toString(36).slice(2, 8)}`
+    let defs = ""
+    let links = ""
+    let nodes = ""
+    let labels = ""
+    const ribbon = (x0, y0, h0, x1, y1, h1, id) => {
+      const mid = (x0 + x1) / 2
+      return `M ${x0} ${y0} C ${mid} ${y0}, ${mid} ${y1}, ${x1} ${y1} L ${x1} ${y1 + h1} C ${mid} ${y1 + h1}, ${mid} ${y0 + h0}, ${x0} ${y0 + h0} Z`
+    }
+    const attrs = (n) =>
+      `data-flow-name="${escapeHtml(n.name)}" data-flow-value="${n.value}" data-flow-total="${total}"` +
+      (n.url ? ` data-flow-url="${escapeHtml(n.url)}"` : "")
+
+    // Ribbons keep the order of the nodes on each side of the cash node.
+    let inY = center.y
+    left.forEach((n, i) => {
+      const h = (n.value / total) * center.h
+      const id = `${uid}-in-${i}`
+      defs += `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${escapeHtml(n.color)}"/><stop offset="1" stop-color="var(--color-primary)"/></linearGradient>`
+      links += `<path d="${ribbon(leftX + nodeW, n.y, n.h, centerX, inY, h, id)}" fill="url(#${id})" class="cf-link${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></path>`
+      inY += h
+    })
+    let outY = center.y
+    right.forEach((n, i) => {
+      const h = (n.value / total) * center.h
+      const id = `${uid}-out-${i}`
+      defs += `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="var(--color-primary)"/><stop offset="1" stop-color="${escapeHtml(n.color)}"/></linearGradient>`
+      links += `<path d="${ribbon(centerX + nodeW, outY, h, rightX, n.y, n.h, id)}" fill="url(#${id})" class="cf-link${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></path>`
+      outY += h
+    })
+
+    // Labels follow their node but never overlap the previous one.
+    let bottom = height
+    const place = (list, x, anchor) => {
+      let last = -Infinity
+      list.forEach((n) => {
+        const y = Math.max(n.y + n.h / 2, last + 30)
+        last = y
+        bottom = Math.max(bottom, y + 20)
+        labels += `<text x="${x}" y="${y - 2}" text-anchor="${anchor}" class="cf-label">${escapeHtml(n.name)}</text>`
+        labels += `<text x="${x}" y="${y + 12}" text-anchor="${anchor}" class="cf-value ui-private">${fmtBRL(n.value)}</text>`
+      })
+    }
+    left.forEach((n) => {
+      nodes += `<rect x="${leftX}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="3" fill="${escapeHtml(n.color)}" class="cf-node${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></rect>`
+    })
+    right.forEach((n) => {
+      nodes += `<rect x="${rightX}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="3" fill="${escapeHtml(n.color)}" class="cf-node${n.url ? " cursor-pointer" : ""}" ${attrs(n)}></rect>`
+    })
+    nodes += `<rect x="${centerX}" y="${center.y}" width="${nodeW}" height="${center.h}" rx="3" fill="var(--color-primary)" class="cf-node" data-flow-name="Caixa do período" data-flow-value="${total}" data-flow-total="${total}"></rect>`
+    place(left, leftX + nodeW + 10, "start")
+    place(right, rightX - 10, "end")
+    labels += `<text x="${centerX + nodeW + 10}" y="${center.y + center.h / 2 - 2}" class="cf-label">Caixa do período</text>`
+    labels += `<text x="${centerX + nodeW + 10}" y="${center.y + center.h / 2 + 12}" class="cf-value ui-private">${fmtBRL(total)}</text>`
+
+    const svg = `<svg viewBox="0 0 ${width} ${bottom}" class="cf-chart w-full" preserveAspectRatio="xMidYMid meet"><defs>${defs}</defs>${links}${nodes}${labels}</svg>`
     const existing = this.el.querySelector(".chart-svg")
     if (existing) {
       existing.innerHTML = svg
@@ -596,7 +747,11 @@ const ProjectionChart = {
     this.el.addEventListener("mousemove", (e) => {
       const target = e.target.closest("[data-proj-label]")
       if (!target) return hideTooltip(this.el)
-      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${fmtBRL(parseFloat(target.dataset.projValue))}`)
+      const sim = parseFloat(target.dataset.projSim || "0")
+      const detail = sim > 0
+        ? `Parcelas: ${privateBRL(parseFloat(target.dataset.projValue))}<br>Simulada: ${privateBRL(sim)}`
+        : privateBRL(parseFloat(target.dataset.projValue))
+      showTooltip(this.el, e, `<strong>${escapeHtml(target.dataset.projLabel)}</strong><br>${detail}`)
     })
     this.el.addEventListener("mouseleave", () => hideTooltip(this.el))
   },
@@ -605,7 +760,7 @@ const ProjectionChart = {
     const data = JSON.parse(this.el.dataset.projections || "[]")
     if (!data.length) return
 
-    const maxVal = Math.max(...data.map(d => d.value))
+    const maxVal = Math.max(...data.map(d => d.value + (d.sim || 0)))
     if (maxVal === 0) return
 
     const width = 700
@@ -613,17 +768,23 @@ const ProjectionChart = {
     const padding = {top: 20, right: 10, bottom: 35, left: 10}
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
-    const barWidth = Math.max(8, (chartWidth / data.length) - 4)
+    const slot = chartWidth / data.length
+    const barWidth = Math.min(48, Math.max(8, slot - 4))
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" class="w-full h-56">`
 
     data.forEach((item, i) => {
+      const sim = item.sim || 0
       const barHeight = (item.value / maxVal) * chartHeight
-      const x = padding.left + (i * (chartWidth / data.length)) + 2
+      const simHeight = (sim / maxVal) * chartHeight
+      const x = padding.left + i * slot + (slot - barWidth) / 2
       const y = padding.top + chartHeight - barHeight
 
       const safeLabel = escapeHtml(item.label)
-      svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-warning opacity-70 hover:opacity-100 transition-opacity cursor-pointer" data-proj-label="${safeLabel}" data-proj-value="${item.value}"></rect>`
+      const attrs = `data-proj-label="${safeLabel}" data-proj-value="${item.value}" data-proj-sim="${sim}"`
+      if (barHeight > 0) svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2" class="fill-(--ui-despesa) hover:brightness-110 transition-opacity cursor-pointer" ${attrs}></rect>`
+      // A simulated purchase stacks on top, in the primary color, so it reads as "what if".
+      if (simHeight > 0) svg += `<rect x="${x}" y="${y - simHeight}" width="${barWidth}" height="${simHeight}" rx="2" class="ui-projection-sim cursor-pointer" ${attrs}></rect>`
       svg += `<text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" class="fill-base-content text-[9px] opacity-50">${safeLabel}</text>`
     })
 
@@ -641,80 +802,24 @@ const ProjectionChart = {
   }
 }
 
-const ProgressBar = {
-  mounted() {
-    this.realProgress = parseFloat(this.el.dataset.progress) || 0
-    this.displayed = 0
-    this.isAI = this.el.dataset.ai === "true"
-    this.bar = this.el.querySelector("progress")
-    this.pctEl = this.el.querySelector("[data-pct]")
-    this.tick()
-  },
-  updated() {
-    const newTarget = parseFloat(this.el.dataset.progress) || 0
-    const newAI = this.el.dataset.ai === "true"
-    if (newTarget !== this.realProgress || newAI !== this.isAI) {
-      this.realProgress = newTarget
-      this.isAI = newAI
-      this.tick()
-    }
-  },
-  tick() {
-    if (this.raf) cancelAnimationFrame(this.raf)
-    const step = () => {
-      const target = this.realProgress
-      if (this.displayed < target) {
-        const diff = target - this.displayed
-        this.displayed += Math.max(0.5, diff * 0.15)
-        if (this.displayed > target) this.displayed = target
-        this.update()
-        this.raf = requestAnimationFrame(step)
-      } else if (this.isAI && target < 100) {
-        const total = parseInt(this.el.dataset.total) || 1
-        const slotSize = 100 / total
-        const ceiling = target + slotSize * 0.92
-        const remaining = ceiling - this.displayed
-        if (remaining > 0.01) {
-          this.displayed += Math.max(0.01, remaining * 0.007)
-          this.update()
-        }
-        this.raf = requestAnimationFrame(step)
-      } else if (this.displayed < 100) {
-        this.raf = requestAnimationFrame(step)
-      }
-    }
-    this.raf = requestAnimationFrame(step)
-  },
-  update() {
-    this.bar.value = this.displayed
-    if (this.pctEl) this.pctEl.textContent = Math.round(this.displayed) + "%"
-  },
-  destroyed() {
-    if (this.raf) cancelAnimationFrame(this.raf)
-  }
-}
-
 const DropZone = {
   mounted() {
     let counter = 0
     this.el.addEventListener("dragenter", (e) => {
       e.preventDefault()
       counter++
-      this.el.classList.add("border-success", "bg-success/5", "scale-[1.01]")
-      this.el.classList.remove("border-base-content/20")
+      this.el.classList.add("ui-dropzone-active")
     })
     this.el.addEventListener("dragover", (e) => e.preventDefault())
     this.el.addEventListener("dragleave", () => {
       counter--
       if (counter === 0) {
-        this.el.classList.remove("border-success", "bg-success/5", "scale-[1.01]")
-        this.el.classList.add("border-base-content/20")
+        this.el.classList.remove("ui-dropzone-active")
       }
     })
     this.el.addEventListener("drop", () => {
       counter = 0
-      this.el.classList.remove("border-success", "bg-success/5", "scale-[1.01]")
-      this.el.classList.add("border-base-content/20")
+      this.el.classList.remove("ui-dropzone-active")
     })
   }
 }
@@ -738,158 +843,51 @@ const ActiveNav = {
   }
 }
 
-const LandingAIDemo = {
-  mounted() {
-    this.textarea = this.el.querySelector("[data-ai-textarea]")
-    this.button = this.el.querySelector("[data-ai-button]")
-    this.inputPhase = this.el.querySelector("[data-ai-input]")
-    this.loadingPhase = this.el.querySelector("[data-ai-loading]")
-    this.resultPhase = this.el.querySelector("[data-ai-result]")
-    this._destroyed = false
-    this._running = false
-
-    this.observer = new IntersectionObserver(([entry]) => {
-      if (this._destroyed) return
-      if (entry.isIntersecting && !this._running) {
-        this._running = true
-        this.runLoop()
-      } else if (!entry.isIntersecting) {
-        this._running = false
-        this.reset()
-      }
-    }, { threshold: 0.2 })
-    this.observer.observe(this.el)
-  },
-
-  destroyed() {
-    this._destroyed = true
-    this._running = false
-    if (this.observer) this.observer.disconnect()
-  },
-
-  reset() {
-    this.textarea.value = ""
-    this.inputPhase.style.opacity = "1"
-    this.inputPhase.style.transform = "translateY(0)"
-    this.loadingPhase.style.opacity = "0"
-    this.loadingPhase.style.transform = "translateY(6px)"
-    this.resultPhase.style.opacity = "0"
-    this.resultPhase.style.transform = "translateY(6px)"
-  },
-
-  async runLoop() {
-    while (this._running && !this._destroyed) {
-      await this.runSequence()
-      if (!this._running || this._destroyed) break
-      await this.sleep(1500)
-    }
-  },
-
-  async runSequence() {
-    const text = "Onde posso economizar nesse mês?"
-
-    // Reset all phases
-    this.reset()
-
-    // Initial pause
-    await this.sleep(800)
-    if (!this._running) return
-
-    // 1. Typing animation — character by character
-    for (let i = 0; i < text.length; i++) {
-      if (!this._running) return
-      this.textarea.value = text.substring(0, i + 1)
-      await this.sleep(50 + Math.random() * 50)
-    }
-
-    // Pause after typing
-    await this.sleep(600)
-    if (!this._running) return
-
-    // 2. Button click simulation — press/release
-    this.button.classList.add("btn-active")
-    this.button.style.transform = "scale(0.95)"
-    await this.sleep(150)
-    this.button.classList.remove("btn-active")
-    this.button.style.transform = ""
-
-    // Short pause before fade
-    await this.sleep(400)
-    if (!this._running) return
-
-    // 3. Fade out input card
-    this.inputPhase.style.opacity = "0"
-    this.inputPhase.style.transform = "translateY(-6px)"
-    await this.sleep(500)
-    if (!this._running) return
-
-    // 4. Fade in loading skeleton
-    this.loadingPhase.style.opacity = "1"
-    this.loadingPhase.style.transform = "translateY(0)"
-    await this.sleep(3000)
-    if (!this._running) return
-
-    // 5. Fade out loading
-    this.loadingPhase.style.opacity = "0"
-    this.loadingPhase.style.transform = "translateY(-6px)"
-    await this.sleep(500)
-    if (!this._running) return
-
-    // 6. Fade in result
-    this.resultPhase.style.opacity = "1"
-    this.resultPhase.style.transform = "translateY(0)"
-    await this.sleep(4000)
-    if (!this._running) return
-
-    // 7. Fade out result
-    this.resultPhase.style.opacity = "0"
-    this.resultPhase.style.transform = "translateY(-3px)"
-    await this.sleep(600)
-  },
-
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
-}
-
 const CurrencyInput = {
   mounted() {
     this.hiddenInput = this.el.querySelector("input[type=hidden]")
     this.display = this.el.querySelector("input[data-currency-display]")
 
-    // Initialize from existing value
     if (this.hiddenInput.value) {
-      const cents = Math.round(parseFloat(this.hiddenInput.value) * 100)
-      if (cents > 0) this.display.value = this.formatCents(cents)
+      const [reais, centavos = ""] = parseFloat(this.hiddenInput.value).toFixed(2).split(".")
+      if (parseFloat(this.hiddenInput.value) > 0) this.display.value = this.format(reais, centavos)
     }
 
     this.display.addEventListener("input", (e) => {
-      const digits = e.target.value.replace(/\D/g, "")
-      const cents = parseInt(digits || "0", 10)
-      if (cents === 0) {
+      const raw = e.target.value.replace(/[^\d,]/g, "")
+      const [reais, ...rest] = raw.split(",")
+      const hasComma = rest.length > 0
+      const centavos = rest.join("").slice(0, 2)
+      const intPart = reais.replace(/^0+(?=\d)/g, "")
+
+      if (intPart === "" && !hasComma) {
         this.display.value = ""
         this.hiddenInput.value = ""
-      } else {
-        this.display.value = this.formatCents(cents)
-        this.hiddenInput.value = (cents / 100).toFixed(2)
+        return
       }
+
+      this.display.value = this.format(intPart || "0", hasComma ? centavos : null)
+      this.hiddenInput.value = `${intPart || "0"}.${centavos.padEnd(2, "0")}`
     })
 
     this.display.addEventListener("keydown", (e) => {
-      // Allow: backspace, delete, tab, escape, enter, arrows
-      if ([8, 9, 13, 27, 46, 37, 39].includes(e.keyCode)) return
-      // Block non-digit keys (allow numpad too)
-      if ((e.keyCode < 48 || e.keyCode > 57) && (e.keyCode < 96 || e.keyCode > 105)) {
+      if (e.ctrlKey || e.metaKey) return
+      if (e.key.length > 1) return
+      if (e.key === "." || e.key === ",") {
         e.preventDefault()
+        if (!this.display.value.includes(",")) {
+          this.display.value += ","
+          this.display.dispatchEvent(new Event("input", {bubbles: true}))
+        }
+        return
       }
+      if (!/\d/.test(e.key)) e.preventDefault()
     })
   },
 
-  formatCents(cents) {
-    const reais = Math.floor(cents / 100)
-    const centavos = (cents % 100).toString().padStart(2, "0")
-    const formatted = reais.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-    return formatted + "," + centavos
+  format(reais, centavos) {
+    const formatted = reais.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+    return centavos === null ? formatted : `${formatted},${centavos}`
   }
 }
 
@@ -933,17 +931,18 @@ const PluggyConnectWidget = {
 
 const Hooks = {
   ...colocatedHooks,
+  QuickActions,
   CategoryChart,
   DailyChart,
   CalendarHeatmap,
+  SpendingCalendar,
   IncomeExpensesChart,
+  CashFlowChart,
   ProjectionChart,
   AutoDismiss,
   NotificationStack,
   DropZone,
-  ProgressBar,
   ActiveNav,
-  LandingAIDemo,
   CurrencyInput,
   PluggyConnectWidget,
 }

@@ -1,25 +1,24 @@
 defmodule Grana.AI.HTTP do
   @moduledoc """
-  Pedidos HTTP aos provedores de IA e tradução dos erros em mensagens amigáveis.
-  Sempre com timeout, para uma chamada travada não segurar o worker ou a tela.
+  Model listing requests to the AI providers and friendly messages for their errors.
+  Always bounded by a timeout, so a stuck call never holds the screen.
   """
 
-  @default_receive_timeout 30_000
+  @receive_timeout 30_000
 
   @type result :: {:ok, term()} | {:http_error, pos_integer(), term()} | {:error, String.t()}
 
-  @doc "POST JSON. `config[:receive_timeout]` limita a espera."
-  @spec post(String.t(), list(), map(), map()) :: result()
-  def post(url, headers, body, config) do
-    url |> Req.post([json: body, headers: headers] ++ opts(config)) |> handle()
-  end
-
   @spec get(String.t(), list(), keyword()) :: result()
   def get(url, headers, params \\ []) do
-    url |> Req.get([headers: headers, params: params] ++ opts(%{})) |> handle()
+    url
+    |> Req.get(
+      headers: headers,
+      params: params,
+      receive_timeout: @receive_timeout,
+      redirect: false
+    )
+    |> handle()
   end
-
-  defp opts(config), do: [receive_timeout: config[:receive_timeout] || @default_receive_timeout]
 
   defp handle({:ok, %{status: 200, body: body}}), do: {:ok, body}
   defp handle({:ok, %{status: status, body: body}}), do: {:http_error, status, body}

@@ -11,11 +11,11 @@ defmodule GranaWeb.Router do
   @content_security_policy Enum.join(
                              [
                                "default-src 'self'",
-                               "script-src 'self'",
+                               "script-src 'self' https://connect.pluggy.ai",
                                "style-src 'self' 'unsafe-inline'",
-                               "img-src 'self' data: https:",
+                               "img-src 'self' data: https://cdn.pluggy.ai",
                                "font-src 'self' data:",
-                               "connect-src 'self' ws: wss:",
+                               "connect-src 'self' https://connect.pluggy.ai https://api.pluggy.ai",
                                "frame-src https://connect.pluggy.ai",
                                "frame-ancestors 'none'",
                                "base-uri 'self'",
@@ -31,7 +31,11 @@ defmodule GranaWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {GranaWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    plug :put_secure_browser_headers, %{
+      "permissions-policy" => "camera=(), microphone=(), geolocation=(), payment=()"
+    }
+
     plug :fetch_current_scope_for_user
   end
 
@@ -85,8 +89,19 @@ defmodule GranaWeb.Router do
   scope "/admin" do
     pipe_through [:browser, :setup_complete, :require_authenticated_user]
 
-    error_tracker_dashboard("/errors")
-    oban_dashboard("/oban")
+    error_tracker_dashboard("/errors",
+      on_mount: [
+        {GranaWeb.SetupGate, :setup_complete},
+        {GranaWeb.UserAuth, :require_authenticated}
+      ]
+    )
+
+    oban_dashboard("/oban",
+      on_mount: [
+        {GranaWeb.SetupGate, :setup_complete},
+        {GranaWeb.UserAuth, :require_authenticated}
+      ]
+    )
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
@@ -110,13 +125,19 @@ defmodule GranaWeb.Router do
       on_mount: [
         {GranaWeb.SetupGate, :setup_complete},
         {GranaWeb.UserAuth, :require_authenticated},
-        GranaWeb.PreferencesHook
+        GranaWeb.PreferencesHook,
+        GranaWeb.QuickActionsHook,
+        GranaWeb.DataHook,
+        GranaWeb.ImportsHook,
+        GranaWeb.AiNoticesHook
       ] do
       live "/onboarding", OnboardingLive, :index
       live "/dashboard", DashboardLive, :index
       live "/upload", UploadLive, :index
       live "/transactions", TransactionsLive, :index
-      live "/analysis", AnalysisLive, :index
+      live "/chat", ChatLive, :index
+      live "/chat/new", ChatLive, :new
+      live "/chat/:id", ChatLive, :show
       live "/categories", CategoriesLive, :index
       live "/goals", GoalsLive, :index
       live "/users/settings", UserLive.Settings, :edit

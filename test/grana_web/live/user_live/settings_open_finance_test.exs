@@ -124,7 +124,7 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
       assert {:error, {:redirect, %{to: "/users/log-in"}}} =
-               lv |> element("#remove-credentials") |> render_click()
+               lv |> element("#remove-credentials-modal-confirm") |> render_click()
 
       assert Repo.get!(User, user.id).pluggy_client_secret == "test-secret"
     end
@@ -134,7 +134,7 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      assert lv |> element("#remove-credentials") |> render_click() =~ "removidas"
+      assert lv |> element("#remove-credentials-modal-confirm") |> render_click() =~ "removidas"
       assert has_element?(lv, "#open-finance-setup")
       assert %User{pluggy_client_secret: nil} = Repo.get!(User, user.id)
     end
@@ -150,8 +150,8 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
       {:ok, lv, html} = live(conn, ~p"/users/settings")
 
       assert has_element?(lv, "#credentials-env")
-      assert has_element?(lv, "#credentials-env-client-id[disabled][value=PLUGGY_CLIENT_ID]")
-      assert has_element?(lv, "#credentials-env-client-secret[disabled]")
+      assert has_element?(lv, "#credentials-env-client-id[readonly][value=PLUGGY_CLIENT_ID]")
+      assert has_element?(lv, "#credentials-env-client-secret[readonly]")
       assert has_element?(lv, "#connect-meu-pluggy")
       refute html =~ "env-secret"
       refute html =~ "Usando"
@@ -274,7 +274,7 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
       assert has_element?(lv, "#open-finance-settings svg[aria-label='Open Finance Brasil']")
-      assert has_element?(lv, "#open-finance-settings .badge img[alt='Pluggy']")
+      assert has_element?(lv, "#open-finance-settings .ui-tag img[alt='Pluggy']")
     end
   end
 
@@ -315,7 +315,7 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      assert lv |> element("#remove-connection-#{connection.id}") |> render_click() =~
+      assert lv |> element("#remove-connection-modal-#{connection.id}-confirm") |> render_click() =~
                "Conexão removida"
 
       refute has_element?(lv, "#connection-#{connection.id}")
@@ -330,7 +330,7 @@ defmodule GranaWeb.UserLive.SettingsOpenFinanceTest do
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      assert lv |> element("#remove-connection-#{connection.id}") |> render_click() =~
+      assert lv |> element("#remove-connection-modal-#{connection.id}-confirm") |> render_click() =~
                "Limite de requisições"
 
       assert has_element?(lv, "#connection-#{connection.id}")

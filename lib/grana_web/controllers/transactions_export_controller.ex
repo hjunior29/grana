@@ -3,6 +3,26 @@ defmodule GranaWeb.TransactionsExportController do
 
   alias Grana.Banking
   alias Grana.Banking.CsvExporter
+  alias Grana.Banking.Search
+
+  def export(conn, %{"q" => q} = params) when is_binary(q) and q != "" do
+    user_id = conn.assigns.current_scope.user.id
+
+    case Search.parse(q) do
+      {:ok, search} ->
+        opts =
+          []
+          |> maybe_add(:sort_by, params["sort_by"])
+          |> maybe_add(:sort_dir, params["sort_dir"])
+
+        send_csv(conn, Banking.search_transactions(user_id, search, opts))
+
+      {:error, message} ->
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(400, message)
+    end
+  end
 
   def export(conn, params) do
     user_id = conn.assigns.current_scope.user.id
@@ -29,8 +49,10 @@ defmodule GranaWeb.TransactionsExportController do
         _ -> opts
       end
 
-    transactions = Banking.list_transactions(user_id, opts)
+    send_csv(conn, Banking.list_transactions(user_id, opts))
+  end
 
+  defp send_csv(conn, transactions) do
     csv = CsvExporter.generate(transactions)
     rand = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
     filename = "transacoes_#{Date.to_iso8601(Date.utc_today())}_#{rand}.csv"
@@ -61,8 +83,11 @@ defmodule GranaWeb.TransactionsExportController do
 
   defp parse_decimal(str) do
     case Decimal.parse(str) do
-      {d, _} -> d
-      :error -> nil
+      {d, _} ->
+        if Decimal.nan?(d) or Decimal.inf?(d), do: nil, else: d
+
+      :error ->
+        nil
     end
   end
 

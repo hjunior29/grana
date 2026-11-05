@@ -7,7 +7,7 @@ defmodule GranaWeb.UploadLiveTest do
 
   test "renders upload page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/upload")
-    assert html =~ "Upload"
+    assert html =~ "Importar"
     assert html =~ "Fatura / Extrato"
     assert html =~ "Grana (exportação)"
   end

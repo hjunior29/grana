@@ -95,7 +95,7 @@ defmodule GranaWeb.OpenFinanceHooks do
             {:halt,
              socket
              |> update_scope_user(user)
-             |> put_flash(:info, "Credenciais da Pluggy verificadas e salvas (cifradas).")}
+             |> put_flash(:info, "Credenciais da Pluggy verificadas e salvas.")}
 
           {:error, changeset} ->
             # O changeset do erro carrega o usuário real (com o secret salvo); os erros
@@ -229,7 +229,7 @@ defmodule GranaWeb.OpenFinanceHooks do
           :open_finance_syncing,
           MapSet.put(socket.assigns.open_finance_syncing, connection.id)
         )
-        |> put_flash(:info, "Conexão adicionada! Importando contas e transações...")
+        |> put_flash(:info, "Conexão adicionada. Importando contas e transações…")
 
       {:error, reason} ->
         put_flash(socket, :error, OpenFinance.error_message(reason))

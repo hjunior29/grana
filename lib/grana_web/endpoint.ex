@@ -9,6 +9,7 @@ defmodule GranaWeb.Endpoint do
     store: :cookie,
     key: "_grana_key",
     signing_salt: "sxKxVNPA",
+    encryption_salt: "grana_session_enc_salt",
     same_site: "Lax"
   ]
 
@@ -37,9 +38,11 @@ defmodule GranaWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :grana
   end
 
-  plug Phoenix.LiveDashboard.RequestLogger,
-    param_key: "request_logger",
-    cookie_key: "request_logger"
+  if code_reloading? do
+    plug Phoenix.LiveDashboard.RequestLogger,
+      param_key: "request_logger",
+      cookie_key: "request_logger"
+  end
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
@@ -51,6 +54,27 @@ defmodule GranaWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug Plug.Session, @session_options
+  plug :session
   plug GranaWeb.Router
+
+  # Phoenix dispatches the LiveView socket before any plug above, and `check_origin: :conn`
+  # compares the browser's origin with the scheme of the connection: behind an HTTPS proxy
+  # the scheme has to be rewritten first, or LiveView never connects.
+  def call(conn, opts), do: conn |> rewrite_scheme_from_proxy() |> super(opts)
+
+  defp rewrite_scheme_from_proxy(conn) do
+    if Application.get_env(:grana, :trust_proxy_headers, false) do
+      Plug.RewriteOn.call(
+        conn,
+        Plug.RewriteOn.init([:x_forwarded_proto, :x_forwarded_host, :x_forwarded_port])
+      )
+    else
+      conn
+    end
+  end
+
+  defp session(conn, _) do
+    opts = Keyword.put(@session_options, :secure, conn.scheme == :https)
+    Plug.Session.call(conn, Plug.Session.init(opts))
+  end
 end

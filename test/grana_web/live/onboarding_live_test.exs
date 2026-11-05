@@ -58,7 +58,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       {:ok, lv, _html} = live(conn, ~p"/onboarding")
       advance(lv, 2)
 
-      assert has_element?(lv, "#onboarding h1", "LLM")
+      assert has_element?(lv, "#onboarding h1", "Inteligência artificial")
       assert has_element?(lv, "#ai-no-providers")
       assert has_element?(lv, "button#onboarding-next[disabled]")
 
@@ -94,7 +94,7 @@ defmodule GranaWeb.OnboardingLiveTest do
       html = render_async(lv)
 
       refute html =~ "sk-do-env"
-      assert has_element?(lv, "#ai-provider-env\\:openai .badge", ".env")
+      assert has_element?(lv, "#ai-provider-env\\:openai .ui-tag", ".env")
       refute has_element?(lv, "button#onboarding-next[disabled]")
     end
   end
@@ -123,7 +123,7 @@ defmodule GranaWeb.OnboardingLiveTest do
   end
 
   test "login de quem não concluiu o onboarding leva a /onboarding", %{user: user} do
-    {:ok, _} = Accounts.update_user_password(user, %{password: valid_user_password()})
+    {:ok, _} = Accounts.reset_user_password(user, %{password: valid_user_password()})
 
     conn =
       post(build_conn(), ~p"/users/log-in", %{
@@ -148,7 +148,7 @@ defmodule GranaWeb.OnboardingLiveTest do
 
     setup do
       original = System.get_env("CLOAK_KEY")
-      System.put_env("CLOAK_KEY", "uAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
+      System.put_env("CLOAK_KEY", "kAsvYu1DjJFziFfKP1ZJyiinCOYCZD1CFb4QMGMzpZU=")
 
       on_exit(fn ->
         if original,

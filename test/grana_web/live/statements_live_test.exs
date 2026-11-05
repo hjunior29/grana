@@ -5,10 +5,11 @@ defmodule GranaWeb.StatementsLiveTest do
 
   setup :register_and_log_in_user
 
-  test "renders statements tab on upload page", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/upload")
-    html = view |> element("button[phx-value-tab=historico]") |> render_click()
-    assert html =~ "Nenhum extrato encontrado"
+  test "without data there is no history tab nor its empty list", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/upload?tab=historico")
+
+    refute has_element?(view, "button[phx-value-tab=historico]")
+    refute has_element?(view, "#statements-empty")
   end
 
   test "shows page description", %{conn: conn} do

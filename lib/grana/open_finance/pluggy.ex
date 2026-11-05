@@ -129,6 +129,13 @@ defmodule Grana.OpenFinance.Pluggy do
     end
   end
 
+  @doc "Limpa as chaves de API cacheadas em :persistent_term."
+  def clear_cache do
+    for {{__MODULE__, :api_key, _, _} = key, _} <- :persistent_term.get() do
+      :persistent_term.erase(key)
+    end
+  end
+
   # Uma chave em cache por par de credenciais: trocar o secret na tela já força nova autenticação.
   defp api_key_term(%{client_id: client_id, client_secret: client_secret}) do
     {__MODULE__, :api_key, client_id, :crypto.hash(:sha256, client_secret)}

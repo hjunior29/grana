@@ -4,6 +4,8 @@ defmodule GranaWeb.GoalsLive do
   alias Grana.Banking
   alias Grana.Banking.FinancialGoal
 
+  on_mount {GranaWeb.DataHook, :reload_on_data}
+
   @impl true
   def mount(_params, _session, socket) do
     user_id = socket.assigns.current_scope.user.id
@@ -36,24 +38,29 @@ defmodule GranaWeb.GoalsLive do
 
     socket
     |> assign(:goals_progress, progress)
+    |> assign(:history, Banking.goals_history(user_id, year, month))
     |> assign(:suggestions, suggestions)
     |> assign(:year, year)
     |> assign(:month, month)
   end
 
+  @impl true
+  def handle_params(%{"action" => "new"}, _uri, socket) do
+    socket = new_goal_form(socket)
+
+    socket =
+      if connected?(socket), do: push_patch(socket, to: ~p"/goals", replace: true), else: socket
+
+    {:noreply, socket}
+  end
+
+  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+
   # ── Events ──
 
   @impl true
   def handle_event("show_form", _params, socket) do
-    changeset = FinancialGoal.changeset(%FinancialGoal{}, %{})
-
-    {:noreply,
-     assign(socket,
-       show_form: true,
-       editing_goal: nil,
-       form_type: "expense_limit",
-       form: to_form(changeset, as: "goal")
-     )}
+    {:noreply, new_goal_form(socket)}
   end
 
   def handle_event("hide_form", _params, socket) do
@@ -97,7 +104,7 @@ defmodule GranaWeb.GoalsLive do
           |> assign(:show_form, false)
           |> assign(:editing_goal, nil)
           |> load_goals(year, month)
-          |> put_flash(:info, "Meta salva!")
+          |> put_flash(:info, "Meta salva.")
 
         {:noreply, socket}
 
@@ -127,7 +134,7 @@ defmodule GranaWeb.GoalsLive do
         {:noreply,
          socket
          |> load_goals(year, month)
-         |> put_flash(:info, "Meta criada!")}
+         |> put_flash(:info, "Meta criada.")}
 
       {:error, _changeset} ->
         {:noreply,
@@ -158,7 +165,7 @@ defmodule GranaWeb.GoalsLive do
      socket
      |> assign(:delete_target, nil)
      |> load_goals(year, month)
-     |> put_flash(:info, "Meta removida")}
+     |> put_flash(:info, "Meta removida.")}
   end
 
   # ── Render ──
@@ -166,236 +173,349 @@ defmodule GranaWeb.GoalsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      ai_notice={@ai_notice}
+    >
       <div class="max-w-6xl mx-auto">
-        <div class="flex items-center justify-between mb-4 sm:mb-8">
-          <div>
-            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Metas</h1>
-            <p class="text-xs sm:text-sm opacity-60 mt-1">Acompanhe seus objetivos financeiros</p>
+        <.page_header title="Metas" subtitle="Acompanhe seus objetivos financeiros">
+          <:actions>
+            <.button
+              :if={@has_data}
+              id="new-goal"
+              type="button"
+              variant="primary"
+              size="sm"
+              icon="hero-plus"
+              phx-click="show_form"
+            >
+              Nova meta
+            </.button>
+          </:actions>
+        </.page_header>
+
+        <.no_data
+          :if={!@has_data}
+          id="goals-no-data"
+          icon="hero-flag"
+          text="As metas acompanham os seus gastos mês a mês, com sugestões tiradas do seu histórico."
+        />
+
+        <div :if={@has_data}>
+          <div :if={@goals_progress != []} class="flex items-center justify-center mb-6">
+            <.tag kind="neutro">Referência: {month_name(@month)} {@year}</.tag>
           </div>
-          <button phx-click="show_form" class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="size-4" /> Nova Meta
-          </button>
-        </div>
 
-        <div :if={@goals_progress != []} class="flex items-center justify-center mb-6">
-          <span class="badge badge-xs badge-ghost">
-            Referência: {month_name(@month)} {@year}
-          </span>
-        </div>
-
-        <%!-- Suggestions --%>
-        <div :if={@suggestions != [] and @goals_progress == []} class="mb-6 space-y-3">
-          <h2 class="text-sm font-semibold opacity-60">Sugestões baseadas no seu histórico</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div :for={s <- @suggestions} class="card bg-base-200 p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <.icon name={FinancialGoal.type_icon(s.type)} class="size-5 text-primary" />
-                <span class="font-medium text-sm">{FinancialGoal.type_label(s.type)}</span>
-              </div>
-              <p class="text-xs opacity-60 mb-3">
-                Média dos últimos 3 meses: {format_currency(s.avg)}
-              </p>
-              <% v90 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.9)), 0) %>
-              <% v80 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.8)), 0) %>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  phx-click="accept_suggestion"
-                  phx-value-type={s.type}
-                  phx-value-amount={Decimal.to_string(s.avg, :normal)}
-                  class="btn btn-primary btn-xs"
-                >
-                  {format_currency(s.avg)}
-                </button>
-                <button
-                  type="button"
-                  phx-click="accept_suggestion"
-                  phx-value-type={s.type}
-                  phx-value-amount={Decimal.to_string(v90, :normal)}
-                  class="btn btn-ghost btn-xs"
-                >
-                  {format_currency(v90)}
-                </button>
-                <button
-                  type="button"
-                  phx-click="accept_suggestion"
-                  phx-value-type={s.type}
-                  phx-value-amount={Decimal.to_string(v80, :normal)}
-                  class="btn btn-ghost btn-xs"
-                >
-                  {format_currency(v80)}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <%!-- Active Goals --%>
-        <div :if={@goals_progress != []} class="space-y-4">
-          <div :for={gp <- @goals_progress} class="card bg-base-200 p-4 sm:p-6">
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                <.icon
-                  name={FinancialGoal.type_icon(gp.goal.type)}
-                  class={"size-5 #{status_color(gp.status)}"}
-                />
-                <div>
-                  <span class="font-semibold text-sm sm:text-base">
-                    {FinancialGoal.type_label(gp.goal.type)}
-                  </span>
-                  <.category_icon
-                    :if={gp.goal.category}
-                    category={gp.goal.category}
-                    class="size-5 ml-2"
-                  />
+          <%!-- Suggestions --%>
+          <% suggestions =
+            Enum.reject(
+              @suggestions,
+              &(&1.type in Enum.map(@goals_progress, fn gp -> gp.goal.type end))
+            ) %>
+          <div :if={suggestions != []} class="mb-6 space-y-3">
+            <h2 class="ui-section-title">Sugestões baseadas no seu histórico</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div :for={s <- suggestions} class="card bg-base-200 p-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <.icon name={FinancialGoal.type_icon(s.type)} class="size-5 text-primary" />
+                  <span class="ui-body font-medium">{FinancialGoal.type_label(s.type)}</span>
+                </div>
+                <p class="ui-help mb-3">
+                  Média dos últimos 3 meses: <span class="ui-private">{format_currency(s.avg)}</span>
+                </p>
+                <% v90 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.9)), 0) %>
+                <% v80 = Decimal.round(Decimal.mult(s.avg, Decimal.from_float(0.8)), 0) %>
+                <div class="flex flex-wrap gap-2">
+                  <.button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    phx-click="accept_suggestion"
+                    phx-value-type={s.type}
+                    phx-value-amount={Decimal.to_string(s.avg, :normal)}
+                  >
+                    <span class="ui-private">{format_currency(s.avg)}</span>
+                  </.button>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="accept_suggestion"
+                    phx-value-type={s.type}
+                    phx-value-amount={Decimal.to_string(v90, :normal)}
+                  >
+                    <span class="ui-private">{format_currency(v90)}</span>
+                  </.button>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="accept_suggestion"
+                    phx-value-type={s.type}
+                    phx-value-amount={Decimal.to_string(v80, :normal)}
+                  >
+                    <span class="ui-private">{format_currency(v80)}</span>
+                  </.button>
                 </div>
               </div>
-              <div class="flex items-center gap-1">
-                <button
-                  phx-click="edit_goal"
-                  phx-value-id={gp.goal.id}
-                  class="btn btn-ghost btn-xs"
-                >
-                  <.icon name="hero-pencil" class="size-3.5" />
-                </button>
-                <button
-                  phx-click="confirm_delete"
-                  phx-value-id={gp.goal.id}
-                  class="btn btn-ghost btn-xs text-error"
-                >
-                  <.icon name="hero-trash" class="size-3.5" />
-                </button>
+            </div>
+          </div>
+
+          <%!-- Active Goals --%>
+          <div :if={@goals_progress != []} class="space-y-4">
+            <div
+              :for={gp <- @goals_progress}
+              id={"goal-#{gp.goal.id}"}
+              class="card bg-base-200 p-4 sm:p-6"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <.icon
+                    name={FinancialGoal.type_icon(gp.goal.type)}
+                    class={"size-5 #{status_color(gp.status)}"}
+                  />
+                  <div>
+                    <span class="ui-body font-semibold">
+                      {FinancialGoal.type_label(gp.goal.type)}
+                    </span>
+                    <.category_icon
+                      :if={gp.goal.category}
+                      category={gp.goal.category}
+                      class="size-5 ml-2"
+                    />
+                  </div>
+                </div>
+                <div class="flex items-center gap-1">
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon="hero-pencil"
+                    class="btn-square"
+                    aria-label="Editar meta"
+                    phx-click="edit_goal"
+                    phx-value-id={gp.goal.id}
+                  >
+                    <span class="sr-only">Editar meta</span>
+                  </.button>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon="hero-trash"
+                    class="btn-square text-error"
+                    aria-label="Remover meta"
+                    phx-click="confirm_delete"
+                    phx-value-id={gp.goal.id}
+                  >
+                    <span class="sr-only">Remover meta</span>
+                  </.button>
+                </div>
               </div>
-            </div>
 
-            <div class="flex items-end justify-between mb-2">
-              <span class={"text-lg sm:text-xl font-bold #{status_color(gp.status)}"}>
-                {format_currency(gp.current)}
-              </span>
-              <span class="text-sm opacity-60">
-                / {format_currency(gp.target)}
-              </span>
-            </div>
+              <div class="flex items-end justify-between mb-2">
+                <span class={"ui-private text-lg sm:text-xl font-bold #{status_color(gp.status)}"}>
+                  {format_currency(gp.current)}
+                </span>
+                <span class="ui-body ui-text-secondary">
+                  / <span class="ui-private">{format_currency(gp.target)}</span>
+                </span>
+              </div>
 
-            <div class="w-full bg-base-300 rounded-full h-3 mb-1">
-              <div
-                class={"h-3 rounded-full transition-all #{status_bg(gp.status)}"}
-                style={"width: #{min(gp.pct, 100)}%"}
+              <div class="ui-goal-track w-full bg-base-300 rounded-full h-3 mb-1">
+                <div
+                  class={"h-3 rounded-full transition-all #{status_bg(gp.status)}"}
+                  style={"width: #{min(gp.pct, 100)}%"}
+                />
+                <span
+                  :if={gp.pace}
+                  id={"goal-#{gp.goal.id}-today"}
+                  class="ui-goal-needle"
+                  style={"left: #{gp.pace.day_pct}%"}
+                  title={"Hoje: #{format_pct(gp.pace.day_pct)} do mês"}
+                />
+              </div>
+
+              <div class="ui-help flex justify-between">
+                <span>{status_label(gp.status)}</span>
+                <span class={"font-medium #{status_color(gp.status)}"}>{format_pct(gp.pct)}</span>
+              </div>
+
+              <p :if={gp.pace && gp.pace.daily} id={"goal-#{gp.goal.id}-quota"} class="ui-help mt-1">
+                <.private_text text={daily_quota(gp.pace)} />
+              </p>
+
+              <.goal_history
+                id={"goal-#{gp.goal.id}-history"}
+                months={Map.get(@history, gp.goal.id, [])}
+                hide_values={@current_scope.user.hide_values}
               />
             </div>
-
-            <div class="flex justify-between text-xs opacity-60">
-              <span>{status_label(gp.status)}</span>
-              <span class={"font-medium #{status_color(gp.status)}"}>{gp.pct}%</span>
-            </div>
           </div>
+
+          <%!-- Empty State --%>
+          <.empty_state
+            :if={@goals_progress == [] and @suggestions == []}
+            id="goals-empty"
+            icon="hero-flag"
+            title="Nenhuma meta definida"
+            text="Importe pelo menos 2 meses de extratos para receber sugestões automáticas."
+          >
+            <:action>
+              <.button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon="hero-plus"
+                phx-click="show_form"
+              >
+                Criar meta
+              </.button>
+            </:action>
+          </.empty_state>
         </div>
 
-        <%!-- Empty State --%>
-        <div :if={@goals_progress == [] and @suggestions == []} class="text-center py-16">
-          <.icon name="hero-flag" class="size-16 mx-auto mb-4 opacity-20" />
-          <h2 class="text-lg font-semibold mb-2">Nenhuma meta definida</h2>
-          <p class="opacity-60 mb-6 text-sm">
-            Importe pelo menos 2 meses de extratos para receber sugestões automáticas
-          </p>
-          <button phx-click="show_form" class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="size-4" /> Criar Meta
-          </button>
-        </div>
-
-        <%!-- New/Edit Modal --%>
-        <dialog
+        <.form_modal
           :if={@show_form}
-          class="modal modal-open"
-          phx-window-keydown="hide_form"
-          phx-key="Escape"
+          id="goal_modal"
+          title={if @editing_goal, do: "Editar meta", else: "Nova meta"}
+          form={@form}
+          form_id="goal-form"
+          on_submit="save_goal"
+          on_cancel={JS.push("hide_form")}
         >
-          <div class="modal-box">
-            <h3 class="text-lg font-bold mb-4">
-              {if @editing_goal, do: "Editar Meta", else: "Nova Meta"}
-            </h3>
-            <.form for={@form} phx-submit="save_goal" class="space-y-4" novalidate>
-              <div :if={!@editing_goal}>
-                <label class="label text-sm font-medium">Tipo</label>
-                <select
-                  name="goal[type]"
-                  class="select select-bordered w-full"
-                  phx-change="select_type"
-                  value={@form_type}
-                >
-                  <option :for={t <- FinancialGoal.types()} value={t} selected={@form_type == t}>
-                    {FinancialGoal.type_label(t)}
-                  </option>
-                </select>
-              </div>
-              <input :if={@editing_goal} type="hidden" name="goal[type]" value={@editing_goal.type} />
+          <div class="flex flex-col gap-4">
+            <.input
+              :if={!@editing_goal}
+              id="goal_type"
+              type="select"
+              name="goal[type]"
+              label="Tipo"
+              value={@form_type}
+              options={Enum.map(FinancialGoal.types(), &{FinancialGoal.type_label(&1), &1})}
+              phx-change="select_type"
+            />
+            <input :if={@editing_goal} type="hidden" name="goal[type]" value={@editing_goal.type} />
 
-              <div :if={@form_type == "category_limit"}>
-                <label class="label text-sm font-medium">Categoria</label>
-                <select name="goal[category_id]" class="select select-bordered w-full">
-                  <option :for={c <- Enum.filter(@categories, &(&1.kind == "expense"))} value={c.id}>
-                    {c.name}
-                  </option>
-                </select>
-              </div>
+            <.input
+              :if={@form_type == "category_limit"}
+              id="goal_category_id"
+              type="select"
+              name="goal[category_id]"
+              label="Categoria"
+              value={nil}
+              options={for c <- Enum.filter(@categories, &(&1.kind == "expense")), do: {c.name, c.id}}
+            />
 
-              <div>
-                <label class="label text-sm font-medium">Valor alvo (R$)</label>
-                <div
-                  id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"}
-                  phx-hook="CurrencyInput"
-                  phx-update="ignore"
-                >
-                  <input
-                    type="hidden"
-                    name="goal[target_value]"
-                    value={if @editing_goal, do: @editing_goal.target_value, else: ""}
-                  />
-                  <input
-                    type="text"
-                    inputmode="numeric"
-                    data-currency-display
-                    class={"input input-bordered w-full #{if @form.errors[:target_value], do: "input-error"}"}
-                    placeholder="Ex: 4.000,00"
-                  />
-                </div>
-                <p :if={@form.errors[:target_value]} class="text-error text-xs mt-1">
-                  {translate_error(@form.errors[:target_value])}
-                </p>
+            <div>
+              <label for="goal-target-display" class="ui-label">Valor alvo (R$)</label>
+              <div
+                id={"currency-input-#{if @editing_goal, do: @editing_goal.id, else: "new"}"}
+                phx-hook="CurrencyInput"
+                phx-update="ignore"
+              >
+                <input
+                  type="hidden"
+                  name="goal[target_value]"
+                  value={if @editing_goal, do: @editing_goal.target_value, else: ""}
+                />
+                <input
+                  id="goal-target-display"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  data-currency-display
+                  class={[
+                    "ui-private-input input w-full",
+                    @form.errors[:target_value] && "input-error"
+                  ]}
+                  placeholder="Ex: 4000 ou 4.000,50"
+                />
               </div>
-
-              <div class="modal-action">
-                <button type="button" phx-click="hide_form" class="btn btn-ghost">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Salvar</button>
-              </div>
-            </.form>
-          </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="hide_form">close</button>
-          </form>
-        </dialog>
-
-        <%!-- Delete Confirmation --%>
-        <dialog :if={@delete_target} class="modal modal-open">
-          <div class="modal-box">
-            <h3 class="text-lg font-bold">Remover meta?</h3>
-            <p class="py-4 opacity-70">Esta ação não pode ser desfeita.</p>
-            <div class="modal-action">
-              <button phx-click="cancel_delete" class="btn btn-ghost">Cancelar</button>
-              <button phx-click="delete_goal" class="btn btn-error">Remover</button>
+              <p :if={@form.errors[:target_value]} class="ui-body mt-1 text-error">
+                {translate_error(@form.errors[:target_value])}
+              </p>
             </div>
           </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="cancel_delete">close</button>
-          </form>
-        </dialog>
+        </.form_modal>
+
+        <.confirm_modal
+          :if={@delete_target}
+          id="delete-goal-modal"
+          open
+          title="Remover meta?"
+          confirm="Remover"
+          loading="Removendo…"
+          on_confirm={JS.push("delete_goal")}
+          on_cancel={JS.push("cancel_delete")}
+        >
+          Remover {delete_goal_label(@goals_progress, @delete_target)}? Esta ação não pode ser desfeita.
+        </.confirm_modal>
       </div>
     </Layouts.app>
     """
   end
 
+  attr :id, :string, required: true
+  attr :months, :list, required: true
+  attr :hide_values, :boolean, required: true
+
+  defp goal_history(assigns) do
+    ~H"""
+    <div
+      :if={@months != []}
+      id={@id}
+      class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-base-content/10 pt-3"
+    >
+      <div class="flex items-center gap-1" role="list" aria-label="Últimos meses">
+        <span
+          :for={m <- @months}
+          role="listitem"
+          class={["ui-goal-month", "ui-goal-month-#{m.status}"]}
+          title={history_title(m, @hide_values)}
+          data-status={m.status}
+        >
+          {String.first(month_name(m.month))}
+        </span>
+      </div>
+      <span class="ui-caption">{history_summary(@months)}</span>
+    </div>
+    """
+  end
+
+  defp history_title(%{status: :no_data} = m, _hide_values),
+    do: "#{month_name(m.month)}/#{m.year}: sem dados"
+
+  defp history_title(m, true), do: "#{month_name(m.month)}/#{m.year}: #{history_status(m.status)}"
+
+  defp history_title(m, false),
+    do:
+      "#{month_name(m.month)}/#{m.year}: #{format_currency(m.value)} (#{history_status(m.status)})"
+
+  defp history_status(:met), do: "cumprida"
+  defp history_status(:missed), do: "não cumprida"
+
+  defp history_summary(months) do
+    with_data = Enum.reject(months, &(&1.status == :no_data))
+    met = Enum.count(with_data, &(&1.status == :met))
+
+    case length(with_data) do
+      0 -> "Sem dados nos últimos #{length(months)} meses"
+      1 -> "Cumprida em #{met} de 1 mês"
+      n -> "Cumprida em #{met} de #{n} meses"
+    end
+  end
+
   # ── Helpers ──
+
+  defp delete_goal_label(goals_progress, id) do
+    case Enum.find(goals_progress, &(&1.goal.id == id)) do
+      nil -> "esta meta"
+      gp -> "“" <> FinancialGoal.type_label(gp.goal.type) <> "”"
+    end
+  end
 
   defp has_unique_error?(%Ecto.Changeset{} = changeset) do
     Enum.any?(changeset.errors, fn {_field, {_msg, opts}} ->
@@ -437,24 +557,35 @@ defmodule GranaWeb.GoalsLive do
   defp month_name(11), do: "Novembro"
   defp month_name(12), do: "Dezembro"
 
-  defp status_color(:on_track), do: "text-success"
-  defp status_color(:achieved), do: "text-success"
+  defp status_color(:on_track), do: "ui-money-receita"
+  defp status_color(:achieved), do: "ui-money-receita"
   defp status_color(:warning), do: "text-warning"
-  defp status_color(:exceeded), do: "text-error"
-  defp status_color(:behind), do: "text-error"
+  defp status_color(:exceeded), do: "ui-money-despesa"
+  defp status_color(:behind), do: "ui-money-despesa"
   defp status_color(_), do: ""
 
-  defp status_bg(:on_track), do: "bg-success"
-  defp status_bg(:achieved), do: "bg-success"
+  defp status_bg(:on_track), do: "bg-(--ui-receita)"
+  defp status_bg(:achieved), do: "bg-(--ui-receita)"
   defp status_bg(:warning), do: "bg-warning"
-  defp status_bg(:exceeded), do: "bg-error"
-  defp status_bg(:behind), do: "bg-error"
+  defp status_bg(:exceeded), do: "bg-(--ui-despesa)"
+  defp status_bg(:behind), do: "bg-(--ui-despesa)"
   defp status_bg(_), do: "bg-primary"
 
   defp status_label(:on_track), do: "No caminho certo"
-  defp status_label(:achieved), do: "Meta atingida!"
+  defp status_label(:achieved), do: "Meta atingida"
   defp status_label(:warning), do: "Atenção"
   defp status_label(:exceeded), do: "Limite ultrapassado"
   defp status_label(:behind), do: "Abaixo da meta"
   defp status_label(_), do: ""
+
+  defp new_goal_form(socket) do
+    changeset = FinancialGoal.changeset(%FinancialGoal{}, %{})
+
+    assign(socket,
+      show_form: true,
+      editing_goal: nil,
+      form_type: "expense_limit",
+      form: to_form(changeset, as: "goal")
+    )
+  end
 end

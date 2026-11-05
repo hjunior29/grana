@@ -13,8 +13,10 @@ defmodule Grana.Banking.Parsers.NubankFatura do
   defp parse_line(line) do
     case parse_csv_line(line) do
       [date_str, title, amount_str] ->
+        # Zero rows ("Encerramento de dívida") are bookkeeping, not movements.
         with {:ok, date} <- parse_date(String.trim(date_str)),
-             {csv_amount, _rest} <- Decimal.parse(String.trim(amount_str)) do
+             {csv_amount, _rest} <- Decimal.parse(String.trim(amount_str)),
+             false <- Decimal.equal?(csv_amount, 0) do
           amount = Decimal.negate(csv_amount)
           type = if Decimal.compare(amount, 0) == :lt, do: "debit", else: "credit"
 

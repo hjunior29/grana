@@ -7,10 +7,13 @@ defmodule GranaWeb.CalendarLiveTest do
 
   setup :register_and_log_in_user
 
-  test "mostra estado vazio quando não há dados", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/upload?tab=calendario")
-    assert html =~ "Calendário de Importações"
-    assert html =~ "Ainda não há dados importados"
+  test "sem nada importado, não há calendário: a tela fica só na importação", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/upload?tab=calendario")
+
+    refute has_element?(view, "#calendar-heatmap")
+    refute has_element?(view, "#calendar-empty")
+    refute has_element?(view, "button[phx-value-tab=calendario]")
+    assert render(view) =~ "Importe e gerencie seus extratos e faturas"
   end
 
   test "renderiza o heatmap com dados de extrato e fatura", %{
@@ -67,7 +70,7 @@ defmodule GranaWeb.CalendarLiveTest do
     ])
 
     {:ok, view, html} = live(conn, ~p"/upload?tab=calendario")
-    assert html =~ "Calendário de Importações"
+    assert html =~ "Calendário de importações"
     assert html =~ "2026"
     assert html =~ ~s(aria-label="Mar/2026 - 2 uploads - Extrato, Fatura")
     assert html =~ ~s(data-calendar-uploads="2 uploads")

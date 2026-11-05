@@ -15,7 +15,7 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
     user = user_fixture()
 
     {:ok, user} =
-      Accounts.update_user_identity(user, %{name: "Ana Costa Ramos", cpf: "123.555.444-45"})
+      Accounts.update_user_identity(user, %{name: "Ana Costa Ramos", cpf: "123.555.444-99"})
 
     Banking.ensure_default_categories(user.id)
     cat = Banking.get_uncategorized_category(user.id)
@@ -84,5 +84,50 @@ defmodule Grana.Banking.InternalTransferDetectionTest do
     # Re-rodar a detecção mantém externo (a regra continua vencendo).
     assert :ok = Banking.detect_internal_transfers(ctx.user.id)
     refute internal?(mine.id, ctx.user.id)
+  end
+
+  test "marcação manual sem contraparte (:single) sobrevive a novas detecções", ctx do
+    # TED sem nome ou CPF da contraparte extraível
+    txn = insert_txn(ctx, "TED ENVIADA 1234", "debit")
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    refute internal?(txn.id, ctx.user.id)
+
+    # Marca manualmente como interna -> :single
+    assert {:ok, :single} = Banking.set_transaction_internal(ctx.user.id, txn.id, true)
+    assert internal?(txn.id, ctx.user.id)
+
+    # Nova importação / sync re-executa detect_internal_transfers -> marcação é mantida!
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    assert internal?(txn.id, ctx.user.id)
+
+    # Se desmarcar manualmente como externa -> :single
+    assert {:ok, :single} = Banking.set_transaction_internal(ctx.user.id, txn.id, false)
+    refute internal?(txn.id, ctx.user.id)
+
+    # Nova detecção não volta a marcar
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    refute internal?(txn.id, ctx.user.id)
+  end
+
+  test "pagamento de fatura só é marcado interno se o usuário tiver fatura importada", ctx do
+    # Apenas o extrato existe
+    cc_pay = insert_txn(ctx, "PAGAMENTO DE FATURA", "debit")
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    refute internal?(cc_pay.id, ctx.user.id)
+
+    # Cria uma fatura correspondente
+    {:ok, _fatura} =
+      Banking.create_statement(%{
+        bank: "nubank",
+        filename: "fatura.csv",
+        statement_type: "fatura",
+        period_start: ~D[2026-01-10],
+        period_end: ~D[2026-02-10],
+        user_id: ctx.user.id
+      })
+
+    # Agora a detecção marca como interna
+    assert :ok = Banking.detect_internal_transfers(ctx.user.id)
+    assert internal?(cc_pay.id, ctx.user.id)
   end
 end

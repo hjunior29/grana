@@ -87,7 +87,7 @@ defmodule Grana.AccountsFixtures do
 
   def set_password(user) do
     {:ok, {user, _expired_tokens}} =
-      Accounts.update_user_password(user, %{password: valid_user_password()})
+      Accounts.reset_user_password(user, %{password: valid_user_password()})
 
     user
   end

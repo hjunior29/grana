@@ -1,10 +1,17 @@
 defmodule GranaWeb.DashboardLive do
   use GranaWeb, :live_view
 
+  alias Grana.Analyses
   alias Grana.Banking
   alias Grana.Banking.FinancialGoal
+  alias Grana.Banking.PrivateNames
   alias Grana.OpenFinance
+  alias GranaWeb.AnalysisComponents
   alias GranaWeb.OpenFinanceComponents
+  alias GranaWeb.SpendingCalendar
+
+  on_mount GranaWeb.ModelChoicesHook
+  on_mount {GranaWeb.DataHook, :reload_on_data}
 
   # ── Mount ──
 
@@ -24,14 +31,19 @@ defmodule GranaWeb.DashboardLive do
 
     {year, month, view_mode} =
       case months do
-        [{y, m} | _] -> {y, m, "month"}
-        [] -> {Date.utc_today().year, Date.utc_today().month, "month"}
+        [{y, m} | _] ->
+          {y, m, "month"}
+
+        [] ->
+          today = Grana.LocalTime.today()
+          {today.year, today.month, "month"}
       end
 
     socket =
       socket
       |> assign(:page_title, "Dashboard")
       |> assign(:tab, "banking")
+      |> assign(:private_names, PrivateNames.pattern(user_id))
       # Banking state
       |> assign(:available_years, available_years)
       |> assign(:available_months, months)
@@ -43,12 +55,16 @@ defmodule GranaWeb.DashboardLive do
       |> assign(:selected_type, "all")
       |> assign(:selected_txn_type, "all")
       |> assign(:excluded_categories, MapSet.new())
+      |> assign(:spending_view, "bars")
+      |> assign(:merchants_expanded, false)
+      |> assign_simulation(false, nil, 10)
       |> load_banking_data()
       # Recurring-expenses state (lazy loaded on first tab switch)
       |> assign(:rec_loaded, false)
       |> assign(:rec_window, "6")
       |> assign(:rec_bank, "all")
       |> assign(:rec_type, "all")
+      |> assign(:rec_rules_open, false)
       |> assign_today()
 
     # O Open Finance é relido em segundo plano se a última leitura tiver mais de
@@ -73,11 +89,30 @@ defmodule GranaWeb.DashboardLive do
           |> assign(:tab, "recurring")
 
         _ ->
-          assign(socket, :tab, "banking")
+          socket |> assign(:tab, "banking") |> select_period(params)
       end
 
     {:noreply, socket}
   end
+
+  # `?year=2026&month=3` (or `month=all`) opens a period, as the analysis notice links do.
+  defp select_period(socket, %{"year" => year} = params) do
+    year = GranaWeb.Params.to_int(year, socket.assigns.selected_year)
+
+    case params["month"] do
+      "all" ->
+        socket |> assign(selected_year: year, view_mode: "year") |> load_banking_data()
+
+      month ->
+        month = GranaWeb.Params.to_int(month, socket.assigns.selected_month)
+
+        socket
+        |> assign(selected_year: year, selected_month: month, view_mode: "month")
+        |> load_banking_data()
+    end
+  end
+
+  defp select_period(socket, _params), do: socket
 
   # ── Events: Tab Switch ──
 
@@ -100,6 +135,25 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, socket |> assign(:rec_type, type) |> load_recurring_data()}
   end
 
+  def handle_event("open_rec_rules", _params, socket) do
+    {:noreply, assign(socket, :rec_rules_open, true)}
+  end
+
+  def handle_event("close_rec_rules", _params, socket) do
+    {:noreply, assign(socket, :rec_rules_open, false)}
+  end
+
+  def handle_event("delete_rec_rule", %{"pattern" => pattern}, socket) do
+    Banking.delete_recurring_rule(socket.assigns.current_scope.user.id, pattern)
+
+    socket = load_recurring_data(socket)
+
+    {:noreply,
+     socket
+     |> assign(:rec_rules_open, socket.assigns.rec_rules != [])
+     |> put_flash(:info, "Regra removida. A despesa volta à detecção automática.")}
+  end
+
   # ── Events: Period Selection ──
 
   def handle_event("select_view_total", _params, socket) do
@@ -112,7 +166,7 @@ defmodule GranaWeb.DashboardLive do
   end
 
   def handle_event("select_year", %{"year" => year_str}, socket) do
-    year = GranaWeb.Params.to_int(year_str, Date.utc_today().year)
+    year = GranaWeb.Params.to_int(year_str, Grana.LocalTime.today().year)
 
     socket =
       socket
@@ -144,9 +198,15 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, socket}
   end
 
-  def handle_event("chart-navigate", %{"url" => url}, socket) do
-    {:noreply, push_navigate(socket, to: url)}
+  def handle_event("chart-navigate", %{"url" => "/" <> _ = url}, socket) do
+    if String.starts_with?(url, "//") do
+      {:noreply, socket}
+    else
+      {:noreply, push_navigate(socket, to: url)}
+    end
   end
+
+  def handle_event("chart-navigate", _params, socket), do: {:noreply, socket}
 
   # ── Events: Banking Only ──
 
@@ -168,6 +228,17 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, socket}
   end
 
+  def handle_event("clear_filters", _params, socket) do
+    socket =
+      socket
+      |> assign(:selected_bank, "all")
+      |> assign(:selected_type, "all")
+      |> assign(:selected_txn_type, "all")
+      |> load_banking_data()
+
+    {:noreply, socket}
+  end
+
   def handle_event("select_txn_type", %{"txn_type" => txn_type}, socket) do
     socket =
       socket
@@ -175,6 +246,19 @@ defmodule GranaWeb.DashboardLive do
       |> load_banking_data()
 
     {:noreply, socket}
+  end
+
+  # ── Events: Period analysis ──
+
+  def handle_event("analyze", params, socket) do
+    {year, month} = analysis_period(socket.assigns)
+    choice = if params["model"] in [nil, ""], do: nil, else: params["model"]
+
+    case Analyses.request(socket.assigns.current_scope.user.id, year, month, choice) do
+      {:ok, :current} -> {:noreply, assign(socket, :analysis_status, :current)}
+      {:ok, :started} -> {:noreply, assign(socket, :analysis_status, :loading)}
+      {:error, :busy} -> {:noreply, socket}
+    end
   end
 
   def handle_event("toggle-category", %{"id" => "nil"}, socket) do
@@ -191,11 +275,52 @@ defmodule GranaWeb.DashboardLive do
     {:noreply, assign(socket, :excluded_categories, MapSet.new())}
   end
 
+  def handle_event("set_spending_view", %{"view" => view}, socket)
+      when view in ~w(bars calendar pace) do
+    {:noreply, assign(socket, :spending_view, view)}
+  end
+
+  def handle_event("toggle_merchants", _params, socket) do
+    {:noreply, assign(socket, :merchants_expanded, !socket.assigns.merchants_expanded)}
+  end
+
+  # ── Events: installment simulator ──
+
+  def handle_event("open_simulation", _params, socket) do
+    {:noreply, assign_simulation(socket, true, nil, 10)}
+  end
+
+  def handle_event("close_simulation", _params, socket) do
+    {:noreply, assign_simulation(socket, false, nil, 10)}
+  end
+
+  def handle_event("simulate", %{"sim" => params}, socket) do
+    total =
+      case Decimal.parse(to_string(params["total"])) do
+        {value, ""} -> if Decimal.gt?(value, 0), do: value
+        _ -> nil
+      end
+
+    count = params["count"] |> GranaWeb.Params.to_int(10) |> max(1) |> min(48)
+    {:noreply, assign_simulation(socket, true, total, count)}
+  end
+
+  # ── PubSub: Period analysis ──
+
+  @impl true
+  def handle_info({:agent_run, {:analysis, year, month}, {status, _}}, socket) do
+    if {year, month} == analysis_period(socket.assigns) do
+      {:noreply, load_analysis(socket)}
+    else
+      notice = %{kind: :analysis, status: status, year: year, month: month}
+      {:noreply, assign(socket, :ai_notice, notice)}
+    end
+  end
+
   # ── PubSub: Open Finance ──
 
   # Uma releitura do Open Finance pode trazer o retrato novo e transações dos
   # períodos sem upload (inclusive um mês novo nos seletores).
-  @impl true
   def handle_info({:open_finance_synced, _connection_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
 
@@ -219,8 +344,22 @@ defmodule GranaWeb.DashboardLive do
       accounts: accounts,
       totals: OpenFinance.totals(accounts),
       calendar: OpenFinance.coverage_calendar(scope),
-      collected_at: OpenFinance.last_collected_at(scope)
+      collected_at: OpenFinance.last_collected_at(scope),
+      pending_fixed:
+        if(accounts != [], do: Banking.pending_fixed_expenses(scope.user.id), else: [])
     })
+  end
+
+  defp assign_simulation(socket, open?, total, count) do
+    assign(socket,
+      sim_open: open?,
+      sim_total: total,
+      sim_count: count,
+      sim_form:
+        to_form(%{"total" => total && Decimal.to_string(total), "count" => to_string(count)},
+          as: :sim
+        )
+    )
   end
 
   # ── Data Loading: Banking ──
@@ -243,6 +382,7 @@ defmodule GranaWeb.DashboardLive do
     socket
     |> assign(:rec_analysis, analysis)
     |> assign(:rec_chart, rec_chart_data(analysis))
+    |> assign(:rec_rules, Banking.list_recurring_rules(socket.assigns.current_scope.user.id))
     |> assign(:rec_loaded, true)
   end
 
@@ -258,6 +398,13 @@ defmodule GranaWeb.DashboardLive do
       }
     end)
     |> Jason.encode!()
+  end
+
+  defp banking_filtered?(assigns) do
+    Enum.any?(
+      [assigns.selected_bank, assigns.selected_type, assigns.selected_txn_type],
+      &(&1 != "all")
+    )
   end
 
   defp load_banking_data(socket) do
@@ -286,6 +433,28 @@ defmodule GranaWeb.DashboardLive do
       case view_mode do
         "month" -> Banking.daily_spending(user_id, year, month, opts)
         _ -> []
+      end
+
+    {prev_year, prev_month} = previous_month(year, month)
+
+    previous_daily =
+      case view_mode do
+        "month" -> Banking.daily_spending(user_id, prev_year, prev_month, opts)
+        _ -> []
+      end
+
+    trend =
+      case view_mode do
+        "month" -> Banking.period_trend(user_id, year, month, opts)
+        "year" -> Banking.period_trend(user_id, year, nil, opts)
+        _ -> nil
+      end
+
+    merchants =
+      case view_mode do
+        "month" -> Banking.merchant_spending(user_id, {:month, year, month}, opts)
+        "year" -> Banking.merchant_spending(user_id, {:year, year}, opts)
+        _ -> Banking.merchant_spending(user_id, :total, opts)
       end
 
     all_monthly_ie =
@@ -351,7 +520,10 @@ defmodule GranaWeb.DashboardLive do
 
     socket
     |> assign(:summary, summary)
+    |> assign(:trend, trend)
+    |> assign(:merchants, merchants)
     |> assign(:daily_spending, daily)
+    |> assign(:previous_daily, previous_daily)
     |> assign(:monthly_ie, monthly_ie)
     |> assign(:yearly_spending, yearly_spending)
     |> assign(:uncategorized_count, uncat_count)
@@ -359,6 +531,8 @@ defmodule GranaWeb.DashboardLive do
     |> assign(:top_category, top_category)
     |> assign(:installment_summary, installment_summary)
     |> assign(:installment_projections, installment_projections)
+    |> assign(:relief, relief(installment_projections))
+    |> assign(:deltas, deltas(trend, summary))
     |> assign(
       :goals_progress,
       case view_mode do
@@ -366,7 +540,38 @@ defmodule GranaWeb.DashboardLive do
         _ -> []
       end
     )
+    |> load_analysis()
   end
+
+  # The analysis of the selected month or year (`Grana.Analyses`): the saved one and the
+  # state of a run in progress, so the panel comes back as it was when the user left.
+  defp load_analysis(%{assigns: %{view_mode: "total"}} = socket),
+    do: assign(socket, analysis: nil, analysis_status: nil)
+
+  defp load_analysis(socket) do
+    user_id = socket.assigns.current_scope.user.id
+    {year, month} = analysis_period(socket.assigns)
+
+    status =
+      case Analyses.in_progress(user_id, year, month) do
+        %{outcome: nil} -> :loading
+        %{outcome: {:error, reason}} -> {:error, analysis_error(reason)}
+        _done_or_none -> nil
+      end
+
+    assign(socket, analysis: Analyses.latest(user_id, year, month), analysis_status: status)
+  end
+
+  defp analysis_period(%{view_mode: "month", selected_year: year, selected_month: month}),
+    do: {year, month}
+
+  defp analysis_period(%{selected_year: year}), do: {year, 0}
+
+  defp analysis_error(:no_api_key),
+    do: "Cadastre um provedor de IA nas Configurações para analisar o período."
+
+  defp analysis_error(reason) when is_binary(reason), do: reason
+  defp analysis_error(_reason), do: "Não foi possível analisar o período. Tente de novo."
 
   defp bank_opts("all"), do: []
   defp bank_opts(bank), do: [bank: bank]
@@ -500,43 +705,56 @@ defmodule GranaWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      import_queue={@import_queue}
+      ai_notice={@ai_notice}
+    >
       <div class="max-w-6xl mx-auto">
-        <div class="mb-4 sm:mb-8 text-center sm:text-left">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p class="text-xs sm:text-sm opacity-60 mt-1">Visão geral das suas finanças</p>
-        </div>
+        <.page_header title="Painel" subtitle="Visão geral das suas finanças" />
 
-        <div role="tablist" class="tabs tabs-border mb-6">
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="banking"
-            class={["tab", @tab == "banking" && "tab-active"]}
-          >
-            <.icon name="hero-banknotes" class="size-4 mr-1" /> Resumo
-          </button>
-          <button
-            role="tab"
-            phx-click="switch_tab"
-            phx-value-tab="recurring"
-            class={["tab", @tab == "recurring" && "tab-active"]}
-          >
-            <.icon name="hero-arrow-path" class="size-4 mr-1" /> Despesas Fixas
-          </button>
-        </div>
+        <.tabs :if={@has_data}>
+          <:tab
+            label="Resumo"
+            icon="hero-banknotes"
+            active={@tab != "recurring"}
+            event="switch_tab"
+            value="banking"
+          />
+          <:tab
+            label="Despesas fixas"
+            icon="hero-arrow-path"
+            active={@tab == "recurring"}
+            event="switch_tab"
+            value="recurring"
+          />
+        </.tabs>
+
+        <OpenFinanceComponents.today
+          :if={(!@has_data or @tab != "recurring") and @today.accounts != []}
+          accounts={@today.accounts}
+          totals={@today.totals}
+          calendar={@today.calendar}
+          collected_at={@today.collected_at}
+        />
+
+        <.liquidity_card
+          :if={@has_data and @tab != "recurring" and @today.accounts != []}
+          totals={@today.totals}
+          pending={@today.pending_fixed}
+        />
 
         <%= cond do %>
+          <% !@has_data -> %>
+            <.no_data
+              id="dashboard-no-data"
+              icon="hero-chart-bar"
+              text="O painel mostra para onde vai o seu dinheiro: receitas e despesas, categorias, fluxo de caixa e despesas fixas."
+            />
           <% @tab == "recurring" -> %>
             {render_recurring_tab(assigns)}
           <% true -> %>
-            <OpenFinanceComponents.today
-              :if={@today.accounts != []}
-              accounts={@today.accounts}
-              totals={@today.totals}
-              calendar={@today.calendar}
-              collected_at={@today.collected_at}
-            />
             {render_banking_tab(assigns)}
         <% end %>
       </div>
@@ -548,152 +766,154 @@ defmodule GranaWeb.DashboardLive do
 
   defp render_recurring_tab(assigns) do
     ~H"""
-    <div class="mb-4 sm:mb-6 space-y-2">
-      <%!-- Row 1: Período --%>
-      <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-        <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Período</span>
-        <button
+    <.filter_bar id="recurring-filters">
+      <.chip_group label="Janela">
+        <.chip
           :for={{label, value} <- [{"6 meses", "6"}, {"12 meses", "12"}]}
+          active={@rec_window == value}
           phx-click="rec_set_window"
           phx-value-window={value}
-          class={["btn btn-xs sm:btn-sm", (@rec_window == value && "btn-primary") || "btn-ghost"]}
         >
           {label}
-        </button>
-      </div>
+        </.chip>
+      </.chip_group>
+      <.bank_filter banks={@banks} selected={@rec_bank} event="rec_select_bank" />
+      <.source_filter selected={@rec_type} event="rec_select_type" />
+      <.button
+        :if={@rec_rules != []}
+        id="rec-rules-open"
+        type="button"
+        variant="ghost"
+        size="sm"
+        icon="hero-adjustments-horizontal"
+        class="ml-auto"
+        phx-click="open_rec_rules"
+      >
+        Regras salvas ({length(@rec_rules)})
+      </.button>
+    </.filter_bar>
 
-      <%!-- Row 2: Banco + Fonte --%>
-      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div :if={@banks != []} class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
-          <button
-            phx-click="rec_select_bank"
-            phx-value-bank="all"
-            class={["btn btn-xs", (@rec_bank == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todos
-          </button>
-          <button
-            :for={b <- @banks}
-            phx-click="rec_select_bank"
-            phx-value-bank={b}
-            class={["btn btn-xs gap-1", (@rec_bank == b && "btn-primary") || "btn-ghost"]}
-          >
-            <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
-            <span class="hidden sm:inline">{String.capitalize(b)}</span>
-          </button>
-        </div>
-        <div class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
-          <button
-            phx-click="rec_select_type"
-            phx-value-type="all"
-            class={["btn btn-xs", (@rec_type == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todas
-          </button>
-          <button
-            phx-click="rec_select_type"
-            phx-value-type="extrato"
-            class={["btn btn-xs gap-1", (@rec_type == "extrato" && "btn-primary") || "btn-ghost"]}
-          >
-            <.icon name="hero-banknotes" class="size-3" />
-            <span class="hidden sm:inline">Extrato</span>
-          </button>
-          <button
-            phx-click="rec_select_type"
-            phx-value-type="fatura"
-            class={["btn btn-xs gap-1", (@rec_type == "fatura" && "btn-primary") || "btn-ghost"]}
-          >
-            <.icon name="hero-credit-card" class="size-3" />
-            <span class="hidden sm:inline">Fatura</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <%= if @rec_analysis.total_months == 0 do %>
-      <div class="text-center py-16 opacity-60">
-        <.icon name="hero-arrow-path" class="size-10 mx-auto mb-3 opacity-40" />
-        <p>Nenhuma despesa encontrada nesse período.</p>
-        <p class="text-sm mt-1">
-          Importe extratos/faturas em <.link navigate={~p"/upload"} class="link">Uploads</.link>.
-        </p>
-      </div>
-    <% else %>
-      <div class="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-8">
-        <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-          <div class="stat-title text-xs">Fixas / mês</div>
-          <div class="stat-value text-primary text-sm sm:text-lg">
-            {format_currency(@rec_analysis.avg_fixed)}
-          </div>
-          <div class="stat-desc text-xs">{length(@rec_analysis.fixed)} recorrente(s)</div>
-        </div>
-        <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-          <div class="stat-title text-xs">Variáveis / mês</div>
-          <div class="stat-value text-warning text-sm sm:text-lg">
-            {format_currency(@rec_analysis.avg_variable)}
-          </div>
-          <div class="stat-desc text-xs">{@rec_analysis.total_months} meses analisados</div>
-        </div>
-      </div>
-
-      <div class="card bg-base-200 mb-4 sm:mb-8">
-        <div class="card-body p-4 sm:p-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-2">Fixas vs variáveis por mês</h3>
-          <div
-            id="recurring-chart"
-            phx-hook="IncomeExpensesChart"
-            data-monthly={@rec_chart}
-            data-income-label="Fixas"
-            data-expenses-label="Variáveis"
-            data-income-fill="fill-primary"
-            data-expenses-fill="fill-warning"
-            data-income-color="bg-primary/70"
-            data-expenses-color="bg-warning/70"
-          >
-          </div>
-        </div>
-      </div>
-
-      <div class="card bg-base-200">
-        <div class="card-body p-4 sm:p-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3">
-            Despesas fixas
-            <span class="text-sm font-normal opacity-50">({length(@rec_analysis.fixed)})</span>
-          </h3>
-          <div :if={@rec_analysis.fixed == []} class="text-sm opacity-60 py-4">
-            Nenhuma despesa fixa na janela selecionada. Abra Transações, filtre seus lançamentos e
-            marque as despesas que devem entrar como fixas.
-          </div>
-          <div :if={@rec_analysis.fixed != []} class="space-y-1">
-            <.link
-              :for={item <- @rec_analysis.fixed}
-              navigate={rec_transactions_url(assigns, %{search: item.name, type: "debit"})}
-              class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 transition-all cursor-pointer hover:bg-base-300"
+    <.list_modal
+      :if={@rec_rules_open}
+      id="rec-rules-modal"
+      title="Regras salvas"
+      description="Despesas que você marcou como fixas ou como variáveis. Remover uma regra devolve a despesa à detecção automática."
+      on_cancel={JS.push("close_rec_rules")}
+    >
+      <ul class="divide-y divide-base-content/10">
+        <.item_row
+          :for={rule <- @rec_rules}
+          id={"rec-rule-#{rule.id}"}
+          title={rule.pattern}
+          title_class="ui-private-name"
+        >
+          <:tags>
+            <.tag kind="neutro">{if rule.mode == "fixed", do: "fixa", else: "variável"}</.tag>
+          </:tags>
+          <:actions>
+            <.button
+              type="button"
+              variant="ghost"
+              size="sm"
+              icon="hero-trash"
+              class="btn-square text-error"
+              aria-label={"Remover regra de #{rule.pattern}"}
+              phx-click="delete_rec_rule"
+              phx-value-pattern={rule.pattern}
             >
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate">{item.name}</div>
-                <div class="text-xs opacity-50 flex items-center gap-2 mt-0.5">
-                  <span class="badge badge-xs badge-ghost">
-                    {item.months_present}/{item.total_months} meses
-                  </span>
-                  <span :if={item.typical_day}>dia {item.typical_day}</span>
-                </div>
-              </div>
-              <div class="shrink-0 hidden sm:block">
-                {render_rec_category(assigns, item.category)}
-              </div>
-              <div class="text-right shrink-0">
-                <div class="text-sm font-medium">{format_currency(item.avg_amount)}</div>
-                <div class="text-xs opacity-40">/mês</div>
-              </div>
-              <.icon name="hero-chevron-right" class="size-4 opacity-30 shrink-0" />
-            </.link>
-          </div>
-        </div>
+              <span class="sr-only">Remover</span>
+            </.button>
+          </:actions>
+        </.item_row>
+      </ul>
+    </.list_modal>
+
+    <.empty_state
+      :if={@rec_analysis.total_months == 0}
+      id="recurring-empty"
+      icon="hero-arrow-path"
+      title="Nenhuma despesa encontrada nesse período"
+      text="Tente uma janela maior ou outro banco e fonte."
+    >
+      <:action>
+        <.button navigate={~p"/upload"} variant="primary" icon="hero-cloud-arrow-up">
+          Importar extratos
+        </.button>
+      </:action>
+    </.empty_state>
+
+    <div :if={@rec_analysis.total_months != 0}>
+      <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4">
+        <.stat_tile
+          id="rec-fixed-avg"
+          label="Média de fixas por mês"
+          value={format_currency(@rec_analysis.avg_fixed)}
+          tone={:fixa}
+          caption={"#{length(@rec_analysis.fixed)} recorrente(s)"}
+        />
+        <.stat_tile
+          id="rec-variable-avg"
+          label="Média de variáveis por mês"
+          value={format_currency(@rec_analysis.avg_variable)}
+          tone={:variavel}
+          caption={"#{@rec_analysis.total_months} meses analisados"}
+        />
       </div>
-    <% end %>
+
+      <.card title="Fixas vs variáveis por mês" spaced={false} class="mb-6">
+        <div
+          id="recurring-chart"
+          phx-hook="IncomeExpensesChart"
+          data-monthly={@rec_chart}
+          data-income-label="Fixas"
+          data-expenses-label="Variáveis"
+          data-income-fill="fill-(--ui-fixa)"
+          data-expenses-fill="fill-(--ui-variavel)"
+          data-income-color="bg-(--ui-fixa)"
+          data-expenses-color="bg-(--ui-variavel)"
+        >
+        </div>
+      </.card>
+
+      <.card
+        id="recurring-list"
+        title="Despesas fixas"
+        spaced={false}
+      >
+        <:aside>
+          <.tag kind="neutro">{length(@rec_analysis.fixed)}</.tag>
+        </:aside>
+        <p :if={@rec_analysis.fixed == []} class="ui-body ui-text-secondary">
+          Nenhuma despesa fixa na janela selecionada. Abra Transações, filtre seus lançamentos e
+          marque as despesas que devem entrar como fixas.
+        </p>
+        <div :if={@rec_analysis.fixed != []} class="-mx-2 flex flex-col">
+          <.link
+            :for={item <- @rec_analysis.fixed}
+            navigate={rec_transactions_url(assigns, %{search: item.name, type: "debit"})}
+            class="ui-rounded-box flex cursor-pointer items-center gap-3 px-2 py-2 transition-colors hover:bg-base-300"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="ui-body truncate font-medium">
+                <span class="ui-private-name">{item.name}</span>
+              </div>
+              <div class="ui-help mt-0.5 flex items-center gap-2">
+                <.tag kind="neutro">{item.months_present}/{item.total_months} meses</.tag>
+                <span :if={item.typical_day}>dia {item.typical_day}</span>
+              </div>
+            </div>
+            <div class="hidden shrink-0 sm:block">
+              {render_rec_category(assigns, item.category)}
+            </div>
+            <div class="shrink-0 text-right">
+              <.money value={item.avg_amount} class="ui-body font-medium" />
+              <div class="ui-caption">valor típico</div>
+            </div>
+            <.icon name="hero-chevron-right" class="ui-text-tertiary size-4 shrink-0" />
+          </.link>
+        </div>
+      </.card>
+    </div>
     """
   end
 
@@ -702,633 +922,558 @@ defmodule GranaWeb.DashboardLive do
 
     ~H"""
     <.category_icon :if={@cat} category={@cat} />
-    <span :if={!@cat} class="text-xs opacity-40">—</span>
+    <span :if={!@cat} class="ui-text-tertiary">—</span>
     """
   end
 
   # ── Banking Tab Render ──
 
+  attr :title, :string, required: true
+  attr :text, :string, required: true
+
+  defp empty_chart_card(assigns) do
+    ~H"""
+    <.card title={@title} spaced={false}>
+      <p class="ui-help">{@text}</p>
+    </.card>
+    """
+  end
+
   defp render_banking_tab(assigns) do
     ~H"""
-    <div :if={@available_years != []} class="mb-4 sm:mb-6 space-y-2">
-      <%!-- Row 1: Year + Month --%>
-      <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-        <div class="flex gap-1">
-          <button
-            phx-click="select_view_total"
-            class={["btn btn-xs sm:btn-sm", (@view_mode == "total" && "btn-primary") || "btn-ghost"]}
-          >
-            Todos
-          </button>
-          <button
-            :for={y <- @available_years}
-            phx-click="select_year"
-            phx-value-year={y}
-            class={[
-              "btn btn-xs sm:btn-sm",
-              (@view_mode != "total" && y == @selected_year && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            {y}
-          </button>
-        </div>
-        <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
-        <div class="flex flex-wrap gap-1">
-          <button
-            phx-click="select_month"
-            phx-value-month="all"
-            class={["btn btn-xs", (@view_mode in ["year", "total"] && "btn-primary") || "btn-ghost"]}
-          >
-            Todos
-          </button>
-          <button
-            :for={m <- months_for_year(@available_months, @selected_year)}
-            phx-click="select_month"
-            phx-value-month={m}
-            class={[
-              "btn btn-xs",
-              ((@view_mode == "month" and m == @selected_month) && "btn-primary") ||
-                "btn-ghost"
-            ]}
-          >
-            {Banking.month_name_short(m)}
-          </button>
-        </div>
-      </div>
+    <.filter_bar id="banking-filters">
+      <.period_filter
+        years={@available_years}
+        selected_year={if @view_mode == "total", do: nil, else: @selected_year}
+        months={months_for_year(@available_months, @selected_year)}
+        selected_month={if @view_mode == "month", do: @selected_month}
+        all_years
+        all_years_active={@view_mode == "total"}
+        all_months_active={@view_mode in ["year", "total"]}
+      />
+      <.bank_filter banks={@banks} selected={@selected_bank} />
+      <.source_filter selected={@selected_type} event="select_type" />
+      <.movement_filter selected={@selected_txn_type} />
+    </.filter_bar>
 
-      <%!-- Row 2: Bank + Statement Type + Transaction Type --%>
-      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div :if={@banks != []} class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Banco</span>
-          <button
-            phx-click="select_bank"
-            phx-value-bank="all"
-            class={["btn btn-xs", (@selected_bank == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todos
-          </button>
-          <button
-            :for={b <- @banks}
-            phx-click="select_bank"
-            phx-value-bank={b}
-            class={["btn btn-xs gap-1", (@selected_bank == b && "btn-primary") || "btn-ghost"]}
-          >
-            <img src={bank_logo(b)} alt="" class="w-4 h-4 rounded-full" />
-            <span class="hidden sm:inline">{String.capitalize(b)}</span>
-          </button>
-        </div>
-        <div class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Fonte</span>
-          <button
-            phx-click="select_type"
-            phx-value-type="all"
-            class={["btn btn-xs", (@selected_type == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todas
-          </button>
-          <button
-            phx-click="select_type"
-            phx-value-type="extrato"
-            class={[
-              "btn btn-xs gap-1",
-              (@selected_type == "extrato" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            <.icon name="hero-banknotes" class="size-3" />
-            <span class="hidden sm:inline">Extrato</span>
-          </button>
-          <button
-            phx-click="select_type"
-            phx-value-type="fatura"
-            class={[
-              "btn btn-xs gap-1",
-              (@selected_type == "fatura" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            <.icon name="hero-credit-card" class="size-3" />
-            <span class="hidden sm:inline">Fatura</span>
-          </button>
-        </div>
-        <div class="flex items-center gap-1">
-          <span class="text-xs opacity-40 mr-0.5 sm:mr-1">Tipo</span>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="all"
-            class={["btn btn-xs", (@selected_txn_type == "all" && "btn-primary") || "btn-ghost"]}
-          >
-            Todas
-          </button>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="debit"
-            class={[
-              "btn btn-xs gap-1",
-              (@selected_txn_type == "debit" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            Despesas
-          </button>
-          <button
-            phx-click="select_txn_type"
-            phx-value-txn_type="credit"
-            class={[
-              "btn btn-xs gap-1",
-              (@selected_txn_type == "credit" && "btn-primary") || "btn-ghost"
-            ]}
-          >
-            Receitas
-          </button>
-        </div>
-      </div>
-    </div>
+    <.empty_state
+      :if={@summary.transaction_count == 0 && banking_filtered?(assigns)}
+      id="dashboard-empty"
+      icon="hero-chart-bar"
+      title="Nada com esses filtros"
+      text="Tente outro período ou limpe os filtros de banco, fonte e tipo."
+    >
+      <:action>
+        <.button type="button" variant="secondary" size="sm" phx-click="clear_filters">
+          Limpar filtros
+        </.button>
+      </:action>
+    </.empty_state>
 
-    <div :if={@summary.transaction_count == 0} class="text-center py-10 sm:py-16">
-      <.icon name="hero-chart-bar" class="size-12 sm:size-16 mx-auto mb-4 opacity-20" />
-      <h2 class="text-lg sm:text-xl font-semibold mb-2">Nenhuma transação encontrada</h2>
-      <p class="opacity-60 mb-6 text-sm">Faça upload de um extrato bancário para começar</p>
-      <.link navigate={~p"/upload"} class="btn btn-primary btn-sm sm:btn-md">
-        <.icon name="hero-cloud-arrow-up" class="size-5" /> Upload
-      </.link>
-    </div>
+    <.empty_state
+      :if={@summary.transaction_count == 0 && !banking_filtered?(assigns)}
+      id="dashboard-empty"
+      icon="hero-chart-bar"
+      title="Nada nesse período"
+      text="Escolha outro mês ou ano nos filtros acima."
+    />
 
     <div :if={@summary.transaction_count > 0}>
+      <AnalysisComponents.analysis_panel
+        :if={@view_mode != "total"}
+        analysis={@analysis}
+        status={@analysis_status}
+        open={@current_scope.user.analysis_open}
+        year={@selected_year}
+        month={if @view_mode == "month", do: @selected_month, else: 0}
+        filtered={banking_filtered?(assigns)}
+        model_choices={@model_choices}
+        model_default={@model_defaults["analysis"]}
+        private_names={@private_names}
+      />
+
       <%!-- Stat Cards --%>
-      <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
-        <%= if @summary.income_count == 0 do %>
-          <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
-            <div class="stat-title text-xs">Receitas</div>
-            <div class="stat-value text-sm sm:text-lg">—</div>
-            <div class="stat-desc text-xs">Sem receitas no período</div>
-          </div>
-        <% else %>
-          <.link
-            navigate={transactions_url(assigns, %{type: "credit"})}
-            class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-          >
-            <div class="stat-title text-xs">Receitas</div>
-            <div class="stat-value text-success text-sm sm:text-lg">
-              {format_currency(@summary.total_income)}
-            </div>
-            <div class="stat-desc text-xs">
-              {@summary.income_count} transações
-            </div>
-          </.link>
-        <% end %>
-
-        <.link
-          navigate={transactions_url(assigns, %{type: "debit"})}
-          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
+      <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+        <.stat_tile
+          id="stat-income"
+          label="Receitas"
+          value={if @summary.income_count == 0, do: "—", else: format_currency(@summary.total_income)}
+          tone={:receita}
+          muted={@summary.income_count == 0}
+          caption={
+            if @summary.income_count == 0,
+              do: "Sem receitas no período",
+              else: average_caption(@trend, :income) || "#{@summary.income_count} transações"
+          }
+          navigate={if @summary.income_count > 0, do: transactions_url(assigns, %{type: "credit"})}
         >
-          <div class="stat-title text-xs">Despesas</div>
-          <div class="stat-value text-error text-sm sm:text-lg">
-            {format_currency(@summary.total_expenses)}
-          </div>
-          <div class="stat-desc text-xs">
-            {@summary.expense_count} transações{if @summary.refund_count > 0,
-              do: " (#{@summary.refund_count} est.)",
-              else: ""}
-          </div>
-        </.link>
-
-        <%= if @summary.investment_count == 0 do %>
-          <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
-            <div class="stat-title text-xs">Investimentos</div>
-            <div class="stat-value text-sm sm:text-lg">—</div>
-            <div class="stat-desc text-xs">Sem invest. no período</div>
-          </div>
-        <% else %>
-          <.link
-            navigate={transactions_url(assigns, %{type: "investment"})}
-            class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-          >
-            <div class="stat-title text-xs">Investimentos</div>
-            <div class="stat-value text-info text-sm sm:text-lg">
-              {format_currency(@summary.total_investments)}
-            </div>
-            <div class="stat-desc text-xs">
-              {@summary.investment_count} transações
-            </div>
-          </.link>
-        <% end %>
-
-        <%= if @summary.income_count == 0 do %>
-          <div class="stat bg-base-200 rounded-xl p-3 sm:p-4 opacity-40">
-            <div class="stat-title text-xs">Saldo Livre</div>
-            <div class="stat-value text-sm sm:text-lg">—</div>
-            <div class="stat-desc text-xs">Sem receitas para saldo</div>
-          </div>
-        <% else %>
-          <.link
-            navigate={transactions_url(assigns)}
-            class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-          >
-            <div class="stat-title text-xs">Saldo Livre</div>
-            <div class={[
-              "stat-value text-sm sm:text-lg",
-              (Decimal.compare(@summary.balance, 0) == :lt && "text-error") || "text-success"
-            ]}>
-              {format_currency(@summary.balance)}
-            </div>
-            <div class="stat-desc text-xs">
-              {if @uncategorized_count > 0,
-                do: "#{@uncategorized_count} sem cat.",
-                else: "Categorizado"}
-            </div>
-          </.link>
-        <% end %>
-
-        <.link
+          <:trend :if={@summary.income_count > 0 and @deltas[:income]}>
+            <.delta_tag id="stat-income-trend" delta={@deltas.income} />
+          </:trend>
+        </.stat_tile>
+        <.stat_tile
+          id="stat-expenses"
+          label="Despesas"
+          value={format_currency(@summary.total_expenses)}
+          tone={:despesa}
+          caption={
+            average_caption(@trend, :expenses) ||
+              "#{@summary.expense_count} transações" <>
+                if(@summary.refund_count > 0, do: " (#{@summary.refund_count} est.)", else: "")
+          }
           navigate={transactions_url(assigns, %{type: "debit"})}
-          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
         >
-          <div class="stat-title text-xs">
-            {case @view_mode do
-              "total" -> "Média Anual"
-              "year" -> "Média Mensal"
-              _ -> "Média Diária"
-            end}
-          </div>
-          <div class="stat-value text-sm sm:text-lg">
-            {format_currency(@expense_avg)}
-          </div>
-          <div class="stat-desc text-xs">em despesas</div>
-        </.link>
-
-        <.link
+          <:trend :if={@deltas[:expenses]}>
+            <.delta_tag id="stat-expenses-trend" delta={@deltas.expenses} />
+          </:trend>
+        </.stat_tile>
+        <.stat_tile
+          id="stat-investments"
+          label="Investimentos"
+          value={
+            if @summary.investment_count == 0,
+              do: "—",
+              else: format_currency(@summary.total_investments)
+          }
+          tone={:investimento}
+          muted={@summary.investment_count == 0}
+          caption={
+            if @summary.investment_count == 0,
+              do: "Nenhum no período",
+              else:
+                average_caption(@trend, :investments) ||
+                  "#{@summary.investment_count} transações"
+          }
+          navigate={
+            if @summary.investment_count > 0, do: transactions_url(assigns, %{type: "investment"})
+          }
+        >
+          <:trend :if={@summary.investment_count > 0 and @deltas[:investments]}>
+            <.delta_tag id="stat-investments-trend" delta={@deltas.investments} />
+          </:trend>
+        </.stat_tile>
+        <.stat_tile
+          id="stat-balance"
+          label="Saldo livre"
+          value={if @summary.income_count == 0, do: "—", else: format_currency(@summary.balance)}
+          tone={if Decimal.compare(@summary.balance, 0) == :lt, do: :despesa, else: :receita}
+          muted={@summary.income_count == 0}
+          caption={
+            cond do
+              @summary.income_count == 0 -> "Sem receitas para saldo"
+              @uncategorized_count > 0 -> "#{@uncategorized_count} sem categoria"
+              true -> "Categorizado"
+            end
+          }
+          navigate={if @summary.income_count > 0, do: transactions_url(assigns)}
+        />
+        <.stat_tile
+          id="stat-average"
+          label={
+            case @view_mode do
+              "total" -> "Média anual"
+              "year" -> "Média mensal"
+              _ -> "Média diária"
+            end
+          }
+          value={format_currency(@expense_avg)}
+          caption="em despesas"
+          navigate={transactions_url(assigns, %{type: "debit"})}
+        />
+        <.stat_tile
+          id="stat-count"
+          label="Transações"
+          value={@summary.transaction_count}
+          caption={@top_category}
           navigate={transactions_url(assigns)}
-          class="stat bg-base-200 rounded-xl p-3 sm:p-4 hover:scale-[1.03] hover:shadow-lg transition-all cursor-pointer"
-        >
-          <div class="stat-title text-xs">Transações</div>
-          <div class="stat-value text-sm sm:text-lg">
-            {@summary.transaction_count}
-          </div>
-          <div class="stat-desc text-xs truncate" title={@top_category}>{@top_category}</div>
-        </.link>
+        />
       </div>
 
-      <div
-        :if={@uncategorized_count > 0}
-        class="alert alert-warning mb-6"
-      >
-        <.icon name="hero-exclamation-triangle" class="size-5" />
-        <span>Você tem {@uncategorized_count} transações sem categoria.</span>
-        <.link navigate={~p"/transactions?filter=uncategorized"} class="btn btn-sm btn-ghost">
-          Categorizar
-        </.link>
-      </div>
+      <.notice :if={@uncategorized_count > 0} id="uncategorized-notice" tone={:warning} class="mb-6">
+        Você tem {@uncategorized_count} transações sem categoria.
+        <:action>
+          <.button navigate={~p"/transactions?filter=uncategorized"} variant="secondary" size="sm">
+            Categorizar
+          </.button>
+        </:action>
+      </.notice>
 
       <%!-- Goals Progress --%>
-      <div
+      <.card
         :if={@goals_progress != [] and @view_mode == "month"}
-        class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
+        id="dashboard-goals"
+        title="Metas do mês"
+        spaced={false}
+        class="mb-6"
       >
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold text-sm sm:text-base">Metas do Mês</h3>
-          <.link navigate={~p"/goals"} class="text-xs text-primary hover:underline">
+        <:aside>
+          <.link navigate={~p"/goals"} class="ui-help link link-primary no-underline">
             Ver todas
           </.link>
-        </div>
-        <div class="space-y-3">
-          <div :for={gp <- @goals_progress} class="flex items-center gap-3">
-            <span class="text-xs w-20 sm:w-24 truncate opacity-70" title={goal_short_label(gp.goal)}>
+        </:aside>
+        <div class="flex flex-col gap-3">
+          <div
+            :for={gp <- @goals_progress}
+            id={"dashboard-goal-#{gp.goal.id}"}
+            class="flex flex-wrap items-center gap-x-3 gap-y-1"
+          >
+            <span class="ui-help w-28 shrink-0 truncate" title={goal_short_label(gp.goal)}>
               {goal_short_label(gp.goal)}
             </span>
-            <div class="flex-1">
-              <div class="w-full bg-base-300 rounded-full h-2.5">
+            <div class="min-w-16 flex-1">
+              <div class="ui-goal-track h-2.5 w-full rounded-full bg-base-300">
                 <div
                   class={"h-2.5 rounded-full transition-all #{goal_bar_color(gp.status)}"}
                   style={"width: #{min(gp.pct, 100)}%"}
                 />
+                <span
+                  :if={gp.pace}
+                  class="ui-goal-needle"
+                  style={"left: #{gp.pace.day_pct}%"}
+                  title={"Hoje: #{format_pct(gp.pace.day_pct)} do mês"}
+                />
               </div>
             </div>
-            <span class="text-xs font-medium whitespace-nowrap">
-              {format_currency(gp.current)} / {format_currency(gp.target)}
+            <span class="ui-help whitespace-nowrap">
+              <span class="ui-private">{format_currency(gp.current)}</span>
+              / <span class="ui-private">{format_currency(gp.target)}</span>
             </span>
-            <span class={"text-xs font-bold w-10 text-right #{goal_text_color(gp.status)}"}>
-              {gp.pct}%
+            <span class={"ui-help w-14 shrink-0 text-right font-bold #{goal_text_color(gp.status)}"}>
+              {format_pct(gp.pct)}
             </span>
+            <p :if={gp.pace && gp.pace.daily} class="ui-caption w-full sm:pl-31">
+              <.private_text text={daily_quota(gp.pace)} />
+            </p>
           </div>
         </div>
-      </div>
+      </.card>
 
       <%!-- Charts: Category + Daily/Monthly --%>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+      <div class="mb-6 grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <%= if @selected_txn_type == "credit" do %>
-          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Despesas por Categoria</h3>
-              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
-            </div>
-          </div>
+          <.empty_chart_card
+            title="Despesas por categoria"
+            text="Sem dados para o filtro selecionado"
+          />
         <% else %>
-          <div class="card bg-base-200 p-4 sm:p-6">
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Despesas por Categoria</h3>
+          <.card title="Despesas por categoria" spaced={false}>
             <div
               id="category-chart"
               phx-hook="CategoryChart"
               data-categories={category_chart_data(assigns)}
             >
-              <div class="space-y-3">
+              <div class="flex flex-col gap-3">
                 <div
                   :for={item <- @summary.by_category}
                   phx-click="toggle-category"
                   phx-value-id={if item.category, do: to_string(item.category.id), else: "nil"}
                   class={[
-                    "flex items-center gap-3 rounded-lg px-2 py-1 -mx-2 transition-all cursor-pointer select-none",
+                    "ui-rounded-box -mx-2 flex cursor-pointer select-none items-center gap-3 px-2 py-1 transition-colors",
                     if(category_excluded?(item.category, @excluded_categories),
-                      do: "opacity-30",
+                      do: "ui-text-tertiary",
                       else: "hover:bg-base-300"
                     )
                   ]}
                 >
                   <div
-                    class="w-3 h-3 rounded-full shrink-0"
+                    class="size-3 shrink-0 rounded-full"
                     style={"background-color: #{category_color(item.category)}"}
                   />
                   <span
                     class={[
-                      "flex-1 text-sm truncate",
+                      "ui-body flex-1 truncate",
                       category_excluded?(item.category, @excluded_categories) && "line-through"
                     ]}
-                    title={if item.category, do: item.category.name, else: "Sem Categoria"}
+                    title={if item.category, do: item.category.name, else: "Sem categoria"}
                   >
-                    {if item.category, do: item.category.name, else: "Sem Categoria"}
+                    {if item.category, do: item.category.name, else: "Sem categoria"}
                   </span>
-                  <span class="text-sm font-medium">{format_currency(item.total)}</span>
-                  <span class="text-xs opacity-50">
+                  <.money value={item.total} class="ui-body font-medium" />
+                  <span class="ui-help">
                     {percentage(item.total, @summary.total_expenses)}%
                   </span>
                 </div>
-                <button
-                  :if={MapSet.size(@excluded_categories) > 0}
-                  phx-click="reset-categories"
-                  class="text-xs text-primary hover:underline mt-1 cursor-pointer"
-                >
-                  Mostrar todas
-                </button>
+                <div :if={MapSet.size(@excluded_categories) > 0}>
+                  <.button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="reset-categories"
+                  >
+                    Mostrar todas
+                  </.button>
+                </div>
               </div>
             </div>
-          </div>
+          </.card>
         <% end %>
 
         <%!-- Daily Chart (month view) --%>
         <%= if @selected_txn_type == "credit" do %>
-          <div
+          <.empty_chart_card
             :if={@view_mode == "month"}
-            class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center"
-          >
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Gastos Diários</h3>
-              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
-            </div>
-          </div>
+            title="Gastos diários"
+            text="Sem dados para o filtro selecionado"
+          />
         <% else %>
-          <div
+          <.card
             :if={@view_mode == "month" and @daily_spending != []}
-            class="card bg-base-200 p-4 sm:p-6"
+            title="Gastos diários"
+            spaced={false}
           >
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Diários</h3>
+            <:aside>
+              <SpendingCalendar.view_toggle id="daily-view" view={@spending_view} pace />
+            </:aside>
+            <SpendingCalendar.heat_grid
+              :if={@spending_view == "calendar"}
+              id="spending-calendar"
+              columns={~w(Dom Seg Ter Qua Qui Sex Sáb)}
+              rows={month_heat_rows(assigns)}
+            />
+            <.pace_view :if={@spending_view == "pace"} pace={pace_data(assigns)} />
             <div
+              :if={@spending_view == "bars"}
               id="daily-chart"
               phx-hook="DailyChart"
               data-daily={daily_chart_data(assigns)}
             >
-              <div class="space-y-1">
+              <div class="flex flex-col gap-1">
                 <div
                   :for={day <- @daily_spending}
-                  class="flex items-center gap-2 cursor-pointer"
+                  class="flex cursor-pointer items-center gap-2"
                   data-day-date={Calendar.strftime(day.date, "%d/%m")}
                   data-day-value={day.total}
                 >
-                  <span class="text-xs w-10 opacity-60">
-                    {Calendar.strftime(day.date, "%d/%m")}
-                  </span>
-                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                  <span class="ui-help w-10">{Calendar.strftime(day.date, "%d/%m")}</span>
+                  <div class="h-4 flex-1 overflow-hidden rounded-full bg-base-300">
                     <div
-                      class="bg-primary h-full rounded-full transition-all"
+                      class="h-full rounded-full bg-(--ui-despesa)/70 transition-all"
                       style={"width: #{bar_width(day.total, @daily_spending)}%"}
                     />
                   </div>
-                  <span class="text-xs font-medium w-20 text-right">
-                    {format_currency(day.total)}
-                  </span>
+                  <.money value={day.total} class="ui-help w-20 text-right font-medium" />
                 </div>
               </div>
             </div>
-          </div>
+          </.card>
         <% end %>
 
         <%!-- Yearly Spending Chart (total view) --%>
         <%= if @selected_txn_type == "credit" do %>
-          <div
+          <.empty_chart_card
             :if={@view_mode == "total"}
-            class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center"
-          >
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Gastos por Ano</h3>
-              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
-            </div>
-          </div>
+            title="Gastos por ano"
+            text="Sem dados para o filtro selecionado"
+          />
         <% else %>
-          <div
+          <.card
             :if={@view_mode == "total" and @yearly_spending != []}
-            class="card bg-base-200 p-4 sm:p-6"
+            title="Gastos por ano"
+            spaced={false}
           >
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos por Ano</h3>
+            <:aside>
+              <SpendingCalendar.view_toggle id="yearly-view" view={period_view(@spending_view)} />
+            </:aside>
+            <SpendingCalendar.heat_grid
+              :if={@spending_view == "calendar"}
+              id="spending-calendar"
+              columns={Enum.map(1..12, &Banking.month_name_short/1)}
+              rows={total_heat_rows(assigns)}
+              row_labels
+            />
             <div
+              :if={period_view(@spending_view) == "bars"}
               id="yearly-spending-chart"
               phx-hook="DailyChart"
               data-daily={yearly_spending_chart_data(assigns)}
             >
-              <div class="space-y-1">
+              <div class="flex flex-col gap-1">
                 <div :for={item <- @yearly_spending} class="flex items-center gap-2">
-                  <span class="text-xs w-10 opacity-60">
-                    {item.year}
-                  </span>
-                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                  <span class="ui-help w-10">{item.year}</span>
+                  <div class="h-4 flex-1 overflow-hidden rounded-full bg-base-300">
                     <div
-                      class="bg-primary h-full rounded-full transition-all"
+                      class="h-full rounded-full bg-(--ui-despesa)/70 transition-all"
                       style={"width: #{yearly_bar_width(item.expenses, @yearly_spending)}%"}
                     />
                   </div>
-                  <span class="text-xs font-medium w-20 text-right">
-                    {format_currency(item.expenses)}
-                  </span>
+                  <.money value={item.expenses} class="ui-help w-20 text-right font-medium" />
                 </div>
               </div>
             </div>
-          </div>
+          </.card>
         <% end %>
 
         <%!-- Monthly Spending Chart (year view) --%>
         <%= if @selected_txn_type == "credit" do %>
-          <div
+          <.empty_chart_card
             :if={@view_mode == "year"}
-            class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center"
-          >
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Gastos Mensais</h3>
-              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
-            </div>
-          </div>
+            title="Gastos mensais"
+            text="Sem dados para o filtro selecionado"
+          />
         <% else %>
-          <div :if={@view_mode == "year"} class="card bg-base-200 p-4 sm:p-6">
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Gastos Mensais</h3>
+          <.card :if={@view_mode == "year"} title="Gastos mensais" spaced={false}>
+            <:aside>
+              <SpendingCalendar.view_toggle id="monthly-view" view={period_view(@spending_view)} />
+            </:aside>
+            <SpendingCalendar.heat_grid
+              :if={@spending_view == "calendar"}
+              id="spending-calendar"
+              columns={Enum.map(1..12, &Banking.month_name_short/1)}
+              rows={year_heat_rows(assigns)}
+            />
             <div
+              :if={period_view(@spending_view) == "bars"}
               id="monthly-spending-chart"
               phx-hook="DailyChart"
               data-daily={monthly_spending_chart_data(assigns)}
             >
-              <div class="space-y-1">
+              <div class="flex flex-col gap-1">
                 <div :for={item <- @monthly_ie} class="flex items-center gap-2">
-                  <span class="text-xs w-10 opacity-60">
-                    {Banking.month_name_short(item.month)}
-                  </span>
-                  <div class="flex-1 bg-base-300 rounded-full h-4 overflow-hidden">
+                  <span class="ui-help w-10">{Banking.month_name_short(item.month)}</span>
+                  <div class="h-4 flex-1 overflow-hidden rounded-full bg-base-300">
                     <div
-                      class="bg-primary h-full rounded-full transition-all"
+                      class="h-full rounded-full bg-(--ui-despesa)/70 transition-all"
                       style={"width: #{monthly_bar_width(item.expenses, @monthly_ie)}%"}
                     />
                   </div>
-                  <span class="text-xs font-medium w-20 text-right">
-                    {format_currency(item.expenses)}
-                  </span>
+                  <.money value={item.expenses} class="ui-help w-20 text-right font-medium" />
                 </div>
               </div>
             </div>
-          </div>
+          </.card>
         <% end %>
       </div>
 
-      <%!-- Top Expenses / Top Income --%>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+      <%!-- Maiores receitas / maiores despesas --%>
+      <div class="mb-6 grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <%= if @selected_txn_type == "debit" or @summary.income_count == 0 do %>
-          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Top Receitas</h3>
-              <p class="text-xs opacity-70">
-                {if @selected_txn_type == "debit",
-                  do: "Sem dados para o filtro selecionado",
-                  else: "Sem receitas no período"}
-              </p>
-            </div>
-          </div>
+          <.empty_chart_card
+            title="Maiores receitas"
+            text={
+              if @selected_txn_type == "debit",
+                do: "Sem dados para o filtro selecionado",
+                else: "Sem receitas no período"
+            }
+          />
         <% else %>
-          <div class="card bg-base-200 p-4 sm:p-6">
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Receitas</h3>
-            <div class="space-y-1">
+          <.card title="Maiores receitas" spaced={false}>
+            <div class="-mx-2 flex flex-col">
               <.link
                 :for={txn <- Enum.take(@summary.top_income, 10)}
                 navigate={txn_url(assigns, txn)}
-                class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                class="ui-rounded-box flex items-center gap-3 px-2 py-1 transition-colors hover:bg-base-300"
               >
-                <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
-                <.category_icon :if={txn.category} category={txn.category} />
-                <span class="text-sm font-medium text-success whitespace-nowrap">
-                  {format_currency(Decimal.abs(txn.amount))}
+                <span class="ui-help w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
+                <span
+                  class="ui-body flex-1 truncate"
+                  title={!@current_scope.user.hide_names && txn.description}
+                >
+                  <span class="ui-private-name">{txn.description}</span>
                 </span>
+                <.category_icon :if={txn.category} category={txn.category} />
+                <.money
+                  value={Decimal.abs(txn.amount)}
+                  tone={:receita}
+                  class="ui-body font-medium"
+                />
               </.link>
             </div>
-          </div>
+          </.card>
         <% end %>
 
         <%= if @selected_txn_type == "credit" or @summary.expense_count == 0 do %>
-          <div class="card bg-base-200 p-4 sm:p-6 opacity-40 flex items-center justify-center">
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Top Despesas</h3>
-              <p class="text-xs opacity-70">
-                {if @selected_txn_type == "credit",
-                  do: "Sem dados para o filtro selecionado",
-                  else: "Sem despesas no período"}
-              </p>
-            </div>
-          </div>
+          <.empty_chart_card
+            title="Maiores despesas"
+            text={
+              if @selected_txn_type == "credit",
+                do: "Sem dados para o filtro selecionado",
+                else: "Sem despesas no período"
+            }
+          />
         <% else %>
-          <div class="card bg-base-200 p-4 sm:p-6">
-            <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Top Despesas</h3>
-            <div class="space-y-1">
+          <.card title="Maiores despesas" spaced={false}>
+            <div class="-mx-2 flex flex-col">
               <.link
                 :for={txn <- Enum.take(@summary.top_expenses, 10)}
                 navigate={txn_url(assigns, txn)}
-                class="flex items-center gap-3 hover:bg-base-300 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                class="ui-rounded-box flex items-center gap-3 px-2 py-1 transition-colors hover:bg-base-300"
               >
-                <span class="text-xs opacity-50 w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
-                <span class="flex-1 text-sm truncate" title={txn.description}>{txn.description}</span>
-                <.category_icon :if={txn.category} category={txn.category} />
-                <span class="text-sm font-medium text-error whitespace-nowrap">
-                  {format_currency(Decimal.abs(txn.amount))}
+                <span class="ui-help w-12">{Calendar.strftime(txn.date, "%d/%m")}</span>
+                <span
+                  class="ui-body flex-1 truncate"
+                  title={!@current_scope.user.hide_names && txn.description}
+                >
+                  <span class="ui-private-name">{txn.description}</span>
                 </span>
+                <.category_icon :if={txn.category} category={txn.category} />
+                <.money
+                  value={Decimal.abs(txn.amount)}
+                  tone={:despesa}
+                  class="ui-body font-medium"
+                />
               </.link>
             </div>
-          </div>
+          </.card>
         <% end %>
       </div>
 
-      <%!-- Income vs Expenses Chart --%>
-      <%= if @selected_txn_type != "all" do %>
-        <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
-          <div class="flex items-center justify-center py-8">
-            <div class="text-center">
-              <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
-              <p class="text-xs opacity-70">Sem dados para o filtro selecionado</p>
-            </div>
+      <.merchants_card
+        :if={@selected_txn_type != "credit" and @merchants != []}
+        merchants={@merchants}
+        expanded={@merchants_expanded}
+        total_expenses={@summary.total_expenses}
+        period_label={period_label(assigns)}
+        url={fn merchant -> transactions_url(assigns, %{search: merchant.name, type: "debit"}) end}
+      />
+
+      <%!-- Receitas vs despesas --%>
+      <%= cond do %>
+        <% @selected_txn_type != "all" -> %>
+          <div class="mb-6">
+            <.empty_chart_card
+              title="Receitas vs despesas"
+              text="Sem dados para o filtro selecionado"
+            />
           </div>
-        </div>
-      <% else %>
-        <%= if @summary.income_count == 0 do %>
-          <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6 opacity-40">
-            <div class="flex items-center justify-center py-8">
-              <div class="text-center">
-                <h3 class="font-semibold text-sm sm:text-base mb-2">Receitas vs Despesas</h3>
-                <p class="text-xs opacity-70">Sem receitas no período</p>
-              </div>
-            </div>
+        <% @summary.income_count == 0 -> %>
+          <div class="mb-6">
+            <.empty_chart_card title="Receitas vs despesas" text="Sem receitas no período" />
           </div>
-        <% else %>
-          <div
-            :if={@monthly_ie != []}
-            class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 class="font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
-              <div class="flex items-center gap-3 text-sm">
-                <span class={[
-                  "font-semibold",
-                  if(Decimal.compare(@summary.balance, 0) == :lt,
-                    do: "text-error",
-                    else: "text-success"
-                  )
-                ]}>
-                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "+", else: ""}{format_currency(
-                    @summary.balance
-                  )}
-                </span>
-                <span
+        <% @monthly_ie != [] -> %>
+          <.card title="Receitas vs despesas" spaced={false} class="mb-6">
+            <:aside>
+              <div class="flex items-center gap-3">
+                <.money value={@summary.balance} tone={:auto} sign class="ui-body font-semibold" />
+                <.tag
                   :if={Decimal.compare(@summary.total_income, 0) == :gt}
-                  class={[
-                    "badge badge-sm",
-                    if(Decimal.compare(@summary.balance, 0) == :lt,
-                      do: "badge-error",
-                      else: "badge-success"
-                    )
-                  ]}
+                  kind={if Decimal.compare(@summary.balance, 0) == :lt, do: "erro", else: "ativo"}
                 >
-                  {if Decimal.compare(@summary.balance, 0) != :lt, do: "", else: ""}{income_expense_pct(
-                    @summary
-                  )}
-                </span>
+                  {income_expense_pct(@summary)}
+                </.tag>
               </div>
-            </div>
+            </:aside>
             <div
               id="income-expenses-chart"
               phx-hook="IncomeExpensesChart"
               data-monthly={ie_chart_data(assigns)}
             >
             </div>
-          </div>
-        <% end %>
+          </.card>
+        <% true -> %>
       <% end %>
+
+      <%!-- Cash flow --%>
+      <.card
+        :if={
+          @selected_txn_type == "all" and (@summary.income_count > 0 or @summary.expense_count > 0)
+        }
+        id="cash-flow-card"
+        title="Fluxo de caixa"
+        spaced={false}
+        class="mb-6"
+      >
+        <div id="cash-flow-chart" phx-hook="CashFlowChart" data-flow={cash_flow_data(assigns)}></div>
+      </.card>
 
       <%!-- Installments --%>
       <div
@@ -1336,99 +1481,613 @@ defmodule GranaWeb.DashboardLive do
           @installment_summary.active_count > 0 and @selected_type != "extrato" and
             @selected_txn_type != "credit"
         }
-        class="mb-4 sm:mb-8"
+        class="mb-8"
       >
-        <div class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Parcelas Ativas</h3>
+        <div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+          <.stat_tile
+            id="stat-installments-active"
+            label="Parcelas ativas"
+            value={@installment_summary.active_count}
+            caption="parceladas"
+          />
+          <.stat_tile
+            id="stat-installments-month"
+            label="Parcelas do mês"
+            value={format_currency(@installment_summary.this_month_total)}
+            tone={:despesa}
+            caption="por mês"
+          />
+          <.stat_tile
+            id="stat-installments-remaining"
+            label="Total restante"
+            value={format_currency(@installment_summary.total_remaining)}
+            tone={:despesa}
+            caption="futuras"
+          />
+        </div>
+
+        <.card id="installments-card" title="Parcelas ativas" spaced={false} class="mb-6">
           <div class="overflow-x-auto">
             <table class="table">
               <thead>
                 <tr>
                   <th>Descrição</th>
                   <th>Categoria</th>
-                  <th>Valor/mês</th>
+                  <th>Valor por mês</th>
                   <th>Progresso</th>
                   <th class="text-right">Restante</th>
                 </tr>
               </thead>
               <tbody>
                 <tr :for={txn <- @installment_summary.installments} class="hover">
-                  <td class="text-sm max-w-xs truncate" title={txn.description}>
-                    <.link navigate={txn_url(assigns, txn)} class="hover:underline">
+                  <td
+                    class="ui-body max-w-xs truncate"
+                    title={!@current_scope.user.hide_names && txn.description}
+                  >
+                    <.link navigate={txn_url(assigns, txn)} class="ui-private-name hover:underline">
                       {txn.description}
                     </.link>
                   </td>
                   <td>
                     <.category_icon :if={txn.category} category={txn.category} />
                   </td>
-                  <td class="text-sm font-medium">
-                    {format_currency(Decimal.abs(txn.amount))}
+                  <td>
+                    <.money value={Decimal.abs(txn.amount)} class="ui-body font-medium" />
                   </td>
                   <td>
                     <div class="flex items-center gap-2">
                       <progress
-                        class="progress progress-warning w-20"
+                        class="progress progress-primary w-20"
                         value={txn.installment_current}
                         max={txn.installment_total}
                       />
-                      <span class="text-xs opacity-60">
+                      <span class="ui-help">
                         {txn.installment_current}/{txn.installment_total}
                       </span>
                     </div>
                   </td>
-                  <td class="text-right text-sm font-medium text-warning">
-                    {format_currency(
-                      Decimal.mult(
-                        Decimal.abs(txn.amount),
-                        txn.installment_total - txn.installment_current
-                      )
-                    )}
+                  <td class="text-right">
+                    <.money
+                      value={
+                        Decimal.mult(
+                          Decimal.abs(txn.amount),
+                          txn.installment_total - txn.installment_current
+                        )
+                      }
+                      tone={:despesa}
+                      class="ui-body font-medium"
+                    />
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
+        </.card>
 
-        <div :if={@installment_projections != []} class="card bg-base-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h3 class="font-semibold text-sm sm:text-base mb-3 sm:mb-4">Projeção de Parcelas</h3>
+        <.card
+          :if={@installment_projections != []}
+          id="projection-card"
+          title="Projeção de parcelas"
+          spaced={false}
+        >
+          <:title_extra>
+            <.tag :if={@relief} id="installments-relief" kind="ativo">
+              <span>
+                <.private_text text={
+                  "Alívio em #{short_month(@relief.date)}: −#{format_currency(@relief.amount)}/mês"
+                } />
+              </span>
+            </.tag>
+          </:title_extra>
+          <:aside>
+            <.button
+              :if={!@sim_open}
+              id="simulation-open"
+              type="button"
+              variant="ghost"
+              size="sm"
+              icon="hero-plus"
+              phx-click="open_simulation"
+            >
+              Simular compra
+            </.button>
+          </:aside>
+          <.simulation_bar
+            :if={@sim_open}
+            form={@sim_form}
+            total={@sim_total}
+            count={@sim_count}
+            start={simulation_start(@installment_projections)}
+          />
           <div
             id="projection-chart"
             phx-hook="ProjectionChart"
-            data-projections={projection_chart_data(@installment_projections)}
+            data-projections={
+              projection_chart_data(
+                @installment_projections,
+                if(@sim_open, do: @sim_total),
+                @sim_count
+              )
+            }
           >
           </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2 sm:gap-4">
-          <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-            <div class="stat-title text-xs">Parcelas Ativas</div>
-            <div class="stat-value text-warning text-sm sm:text-lg">
-              {@installment_summary.active_count}
-            </div>
-            <div class="stat-desc text-xs">parceladas</div>
-          </div>
-
-          <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-            <div class="stat-title text-xs">Mensal Parcelas</div>
-            <div class="stat-value text-warning text-sm sm:text-lg">
-              {format_currency(@installment_summary.this_month_total)}
-            </div>
-            <div class="stat-desc text-xs">por mês</div>
-          </div>
-
-          <div class="stat bg-base-200 rounded-xl p-3 sm:p-4">
-            <div class="stat-title text-xs">Total Restante</div>
-            <div class="stat-value text-warning text-sm sm:text-lg">
-              {format_currency(@installment_summary.total_remaining)}
-            </div>
-            <div class="stat-desc text-xs">futuras</div>
-          </div>
-        </div>
+        </.card>
       </div>
     </div>
     """
   end
+
+  # ── Resumo: comparison, liquidity, pace, merchants and simulator ──
+
+  attr :id, :string, required: true
+  attr :delta, :map, required: true
+
+  defp delta_tag(assigns) do
+    ~H"""
+    <.tag
+      id={@id}
+      kind={
+        cond do
+          @delta.direction == :flat -> "neutro"
+          @delta.good -> "ativo"
+          true -> "erro"
+        end
+      }
+      class="shrink-0"
+      title={"Comparado com #{@delta.label}"}
+    >
+      <.icon :if={@delta.direction == :up} name="hero-arrow-up-micro" class="size-3" />
+      <.icon :if={@delta.direction == :down} name="hero-arrow-down-micro" class="size-3" />
+      {format_pct(@delta.pct)}
+    </.tag>
+    """
+  end
+
+  attr :totals, :map, required: true
+  attr :pending, :list, required: true
+
+  # Free balance until the end of the month: what is in the accounts minus the open card
+  # bills and the fixed expenses that did not fall yet this month.
+  defp liquidity_card(assigns) do
+    pending_total =
+      Enum.reduce(assigns.pending, Decimal.new(0), &Decimal.add(&2, &1.avg_amount))
+
+    committed = Decimal.add(assigns.totals.card_used, pending_total)
+    free = Decimal.sub(assigns.totals.bank, committed)
+    scale = Decimal.max(assigns.totals.bank, committed)
+
+    assigns =
+      assign(assigns,
+        pending_total: pending_total,
+        free: free,
+        bar: [
+          {"bills", share(assigns.totals.card_used, scale)},
+          {"pending", share(pending_total, scale)},
+          {"free", share(Decimal.max(free, 0), scale)}
+        ],
+        month: Banking.month_name(Grana.LocalTime.today().month)
+      )
+
+    ~H"""
+    <.card id="liquidity-card" title="Saldo livre projetado" spaced={false} class="mb-6">
+      <:logo><.icon name="hero-scale" class="size-5 shrink-0" /></:logo>
+      <:aside><span class="ui-help">até o fim de {String.downcase(@month)}</span></:aside>
+
+      <div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <div>
+          <p class="ui-caption">
+            {if Decimal.negative?(@free),
+              do: "Falta para cobrir faturas e fixas",
+              else: "Livre depois de faturas e fixas"}
+          </p>
+          <.money
+            id="liquidity-free"
+            value={Decimal.abs(@free)}
+            tone={if Decimal.negative?(@free), do: :despesa, else: :receita}
+            class="text-2xl font-semibold"
+          />
+        </div>
+        <dl class="grid grid-cols-3 gap-x-6 gap-y-1 text-right">
+          <dt class="ui-caption">Em conta</dt>
+          <dt class="ui-caption">Faturas abertas</dt>
+          <dt class="ui-caption">Fixas pendentes</dt>
+          <dd><.money id="liquidity-bank" value={@totals.bank} class="ui-body font-medium" /></dd>
+          <dd>
+            −<.money
+              id="liquidity-bills"
+              value={@totals.card_used}
+              tone={:despesa}
+              class="ui-body font-medium"
+            />
+          </dd>
+          <dd>
+            −<.money
+              id="liquidity-pending"
+              value={@pending_total}
+              tone={:despesa}
+              class="ui-body font-medium"
+            />
+          </dd>
+        </dl>
+      </div>
+
+      <div>
+        <div class="ui-liquidity-bar" role="img" aria-label="Composição do saldo em conta">
+          <span
+            :for={{kind, width} <- @bar}
+            :if={width > 0}
+            class={"ui-liquidity-#{kind}"}
+            style={"width: #{width}%"}
+          />
+        </div>
+        <div class="ui-caption mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          <span class="flex items-center gap-1">
+            <span class="ui-liquidity-swatch ui-liquidity-bills"></span> faturas abertas
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="ui-liquidity-swatch ui-liquidity-pending"></span> fixas pendentes
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="ui-liquidity-swatch ui-liquidity-free"></span> livre
+          </span>
+        </div>
+      </div>
+
+      <p :if={@pending == []} class="ui-help">Nenhuma despesa fixa pendente neste mês.</p>
+      <details :if={@pending != []} id="liquidity-pending-list" class="group">
+        <summary class="ui-help flex cursor-pointer select-none list-none items-center gap-1.5 transition-colors hover:text-base-content">
+          <.icon name="hero-chevron-right" class="size-3.5 transition-transform group-open:rotate-90" />
+          {count_label(length(@pending), "fixa ainda não caiu", "fixas ainda não caíram")} este mês
+        </summary>
+        <ul class="mt-2 ml-5 divide-y divide-base-content/10">
+          <li
+            :for={item <- @pending}
+            class="flex items-center gap-3 py-2"
+          >
+            <span class="ui-body min-w-0 flex-1 truncate">
+              <span class="ui-private-name">{item.name}</span>
+            </span>
+            <span :if={item.typical_day} class="ui-caption shrink-0">dia {item.typical_day}</span>
+            <.money value={item.avg_amount} tone={:despesa} class="ui-body shrink-0 font-medium" />
+          </li>
+        </ul>
+      </details>
+    </.card>
+    """
+  end
+
+  defp share(value, scale) do
+    if Decimal.gt?(scale, 0),
+      do:
+        value |> Decimal.div(scale) |> Decimal.mult(100) |> Decimal.round(2) |> Decimal.to_float(),
+      else: 0.0
+  end
+
+  attr :pace, :map, required: true
+
+  defp pace_view(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p id="pace-summary" class="ui-body">
+          Até o dia {@pace.until}: <.money value={@pace.current_total} class="font-semibold" />
+          acumulados
+          <span :if={@pace.previous_total}>
+            vs. <.money value={@pace.previous_total} /> em {String.downcase(@pace.previous_label)}
+          </span>
+        </p>
+        <.delta_tag :if={@pace.delta} id="pace-delta" delta={@pace.delta} />
+      </div>
+      <SpendingCalendar.pace_chart
+        id="pace-chart"
+        current={@pace.current}
+        previous={@pace.previous}
+        days={@pace.days}
+        until={@pace.until}
+        today={@pace.today}
+        urls={@pace.urls}
+        month_label={@pace.month_label}
+      />
+      <div class="ui-caption flex flex-wrap gap-x-4 gap-y-1">
+        <span class="flex items-center gap-1.5">
+          <span class="ui-pace-swatch"></span> {@pace.month_label}
+        </span>
+        <span :if={@pace.previous != []} class="flex items-center gap-1.5">
+          <span class="ui-pace-swatch ui-pace-swatch-reference"></span> {@pace.previous_label}
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  attr :merchants, :list, required: true
+  attr :expanded, :boolean, required: true
+  attr :total_expenses, :any, required: true
+  attr :period_label, :string, required: true
+  attr :url, :any, required: true, doc: "merchant -> transactions link"
+
+  @merchants_shown 8
+  @merchants_max 50
+
+  defp merchants_card(assigns) do
+    assigns =
+      assign(assigns,
+        shown:
+          Enum.take(
+            assigns.merchants,
+            if(assigns.expanded, do: @merchants_max, else: @merchants_shown)
+          ),
+        collapsed: @merchants_shown,
+        top: assigns.merchants |> hd() |> Map.fetch!(:total)
+      )
+
+    ~H"""
+    <.card id="merchants-card" title="Onde mais gasto" spaced={false} class="mb-6">
+      <:aside>
+        <span class="ui-help">
+          {count_label(length(@merchants), "estabelecimento", "estabelecimentos")} em {@period_label}
+        </span>
+      </:aside>
+      <ol id="merchants-list" class="-mx-2 flex flex-col">
+        <li :for={{merchant, rank} <- Enum.with_index(@shown, 1)} id={"merchant-#{rank}"}>
+          <.link
+            navigate={@url.(merchant)}
+            class="ui-rounded-box flex items-center gap-3 px-2 py-2 transition-colors hover:bg-base-300"
+          >
+            <span class="ui-caption w-5 shrink-0 text-right tabular-nums">{rank}</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="ui-body truncate font-medium">
+                  <span class="ui-private-name">{merchant.name}</span>
+                </span>
+                <.category_icon :if={merchant.category} category={merchant.category} />
+              </div>
+              <div class="ui-caption mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                <span>{count_label(merchant.count, "compra", "compras")}</span>
+                <span aria-hidden="true">·</span>
+                <span>ticket médio <.money value={merchant.average} /></span>
+              </div>
+              <div class="ui-merchant-share mt-1.5">
+                <span style={"width: #{share(merchant.total, @top)}%"} />
+              </div>
+            </div>
+            <div class="shrink-0 text-right">
+              <.money value={merchant.total} tone={:despesa} class="ui-body font-medium" />
+              <div class="ui-caption">{percentage(merchant.total, @total_expenses)}%</div>
+            </div>
+          </.link>
+        </li>
+      </ol>
+      <div :if={length(@merchants) > @collapsed}>
+        <.button
+          id="merchants-toggle"
+          type="button"
+          variant="ghost"
+          size="sm"
+          icon={if @expanded, do: "hero-chevron-up", else: "hero-chevron-down"}
+          phx-click="toggle_merchants"
+        >
+          {if @expanded, do: "Mostrar menos", else: "Ver todos (#{length(@merchants)})"}
+        </.button>
+      </div>
+    </.card>
+    """
+  end
+
+  attr :form, :any, required: true
+  attr :total, :any, required: true
+  attr :count, :integer, required: true
+  attr :start, :any, required: true
+
+  defp simulation_bar(assigns) do
+    ~H"""
+    <.form
+      for={@form}
+      id="simulation-form"
+      phx-change="simulate"
+      phx-submit="simulate"
+      class="ui-simulation ui-rounded-box flex flex-wrap items-end gap-3"
+    >
+      <div class="fieldset mb-2 w-40">
+        <label for="simulation-total-display"><span class="ui-label">Valor total</span></label>
+        <div id="simulation-total" phx-hook="CurrencyInput" phx-update="ignore">
+          <input type="hidden" name={@form[:total].name} value={@form[:total].value} />
+          <input
+            id="simulation-total-display"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            data-currency-display
+            class="ui-private-input input input-sm w-full"
+            placeholder="Ex: 2.400"
+          />
+        </div>
+      </div>
+      <div class="w-24">
+        <.input
+          field={@form[:count]}
+          type="number"
+          label="Parcelas"
+          size="sm"
+          min="1"
+          max="48"
+        />
+      </div>
+      <p id="simulation-result" class="ui-help mb-2 min-w-0 flex-1">
+        <%= if @total do %>
+          {@count}x de
+          <.money value={Decimal.div(@total, @count) |> Decimal.round(2)} class="font-semibold" />
+          a partir de {short_month(@start)}, somado às barras abaixo
+        <% else %>
+          Digite o valor da compra para ver as parcelas somadas às barras abaixo.
+        <% end %>
+      </p>
+      <.button
+        id="simulation-close"
+        type="button"
+        variant="ghost"
+        size="sm"
+        icon="hero-x-mark"
+        class="mb-1"
+        phx-click="close_simulation"
+      >
+        Fechar
+      </.button>
+    </.form>
+    """
+  end
+
+  defp previous_month(year, 1), do: {year - 1, 12}
+  defp previous_month(year, month), do: {year, month - 1}
+
+  defp deltas(nil, _summary), do: %{}
+
+  defp deltas(%{previous: previous}, summary) do
+    %{
+      income: delta(summary.total_income, previous.income, :up, previous.label),
+      expenses: delta(summary.total_expenses, previous.expenses, :down, previous.label),
+      investments: delta(summary.total_investments, previous.investments, :up, previous.label)
+    }
+  end
+
+  # Percent change against the previous period; nil when it had nothing (no infinite %).
+  # `better` is the direction that is good news: down for expenses, up otherwise.
+  defp delta(current, previous, better, label) do
+    if Decimal.gt?(previous, 0) do
+      pct =
+        current
+        |> Decimal.sub(previous)
+        |> Decimal.div(previous)
+        |> Decimal.mult(100)
+        |> Decimal.round(1)
+        |> Decimal.to_float()
+
+      direction =
+        cond do
+          pct > 0 -> :up
+          pct < 0 -> :down
+          true -> :flat
+        end
+
+      %{pct: abs(pct), direction: direction, good: direction == better, label: label}
+    end
+  end
+
+  defp average_caption(%{average: %{months: months} = average}, field),
+    do: "média #{months}m: #{format_currency(Map.fetch!(average, field))}"
+
+  defp average_caption(_trend, _field), do: nil
+
+  # The pace view only exists for a month; the year and all-years charts show bars instead.
+  defp period_view("pace"), do: "bars"
+  defp period_view(view), do: view
+
+  defp period_label(%{view_mode: "month", selected_year: year, selected_month: month}),
+    do: "#{String.downcase(Banking.month_name(month))} de #{year}"
+
+  defp period_label(%{view_mode: "year", selected_year: year}), do: to_string(year)
+  defp period_label(_assigns), do: "todo o período"
+
+  defp pace_data(%{selected_year: year, selected_month: month} = assigns) do
+    first = Date.new!(year, month, 1)
+    days = Date.days_in_month(first)
+    today = Grana.LocalTime.today()
+    {prev_year, prev_month} = previous_month(year, month)
+
+    until =
+      cond do
+        {today.year, today.month} == {year, month} -> today.day
+        Date.after?(first, today) -> 0
+        true -> days
+      end
+
+    current = cumulative(assigns.daily_spending, first)
+    previous = cumulative(assigns.previous_daily, Date.new!(prev_year, prev_month, 1))
+    current_total = value_at(current, until)
+    previous_total = if previous != [], do: value_at(previous, min(until, length(previous)))
+
+    %{
+      current: current,
+      previous: previous,
+      days: days,
+      until: until,
+      today: {today.year, today.month} == {year, month},
+      current_total: Decimal.from_float(current_total),
+      previous_total: previous_total && Decimal.from_float(previous_total),
+      delta:
+        previous_total &&
+          delta(
+            Decimal.from_float(current_total),
+            Decimal.from_float(previous_total),
+            :down,
+            Banking.month_name(prev_month)
+          ),
+      month_label: Banking.month_name(month),
+      previous_label: Banking.month_name(prev_month),
+      urls:
+        Map.new(1..max(until, 1)//1, fn day ->
+          date_to = Date.new!(year, month, day)
+          {day, transactions_url(assigns, %{date_from: first, date_to: date_to, type: "debit"})}
+        end)
+    }
+  end
+
+  # Spending accumulated day by day; with the bill filter, purchases dated before the
+  # month count on day 1.
+  defp cumulative([], _first), do: []
+
+  defp cumulative(daily, first) do
+    by_day =
+      Enum.reduce(daily, %{}, fn %{date: date, total: total}, acc ->
+        day = if Date.before?(date, first), do: 1, else: date.day
+        Map.update(acc, day, to_float(total), &(&1 + to_float(total)))
+      end)
+
+    {series, _total} =
+      Enum.map_reduce(1..Date.days_in_month(first), 0.0, fn day, acc ->
+        total = acc + Map.get(by_day, day, 0.0)
+        {{day, Float.round(total, 2)}, total}
+      end)
+
+    series
+  end
+
+  defp value_at(_series, 0), do: 0.0
+
+  defp value_at(series, day) do
+    case Enum.find(series, fn {d, _} -> d == day end) do
+      {_day, value} -> value
+      nil -> 0.0
+    end
+  end
+
+  # The month the installments shrink the most (the month after it is not paid anymore),
+  # over the projection; nil when nothing ends in the window.
+  defp relief(projections) do
+    ends =
+      case List.last(projections) do
+        %{date: date} when length(projections) < 12 ->
+          [%{date: Date.shift(date, month: 1), total: Decimal.new(0)}]
+
+        _ ->
+          []
+      end
+
+    (projections ++ ends)
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.map(fn [before, next] ->
+      %{date: next.date, amount: Decimal.sub(before.total, next.total)}
+    end)
+    |> Enum.filter(&Decimal.gt?(&1.amount, 0))
+    |> Enum.max_by(& &1.amount, Decimal, fn -> nil end)
+  end
+
+  defp short_month(%Date{} = date),
+    do:
+      "#{Banking.month_name_short(date.month)}/#{rem(date.year, 100) |> Integer.to_string() |> String.pad_leading(2, "0")}"
+
+  # A purchase made now is first charged on the next bill: the month after the first bar.
+  defp simulation_start([%{date: date} | _]), do: Date.shift(date, month: 1)
 
   # ── Shared Helpers ──
 
@@ -1443,26 +2102,7 @@ defmodule GranaWeb.DashboardLive do
     |> Enum.sort()
   end
 
-  defp format_currency(amount) do
-    "R$ #{format_br_number(amount)}"
-  end
-
-  defp format_br_number(amount) do
-    str = amount |> Decimal.round(2) |> Decimal.abs() |> Decimal.to_string(:normal)
-    [int_part, dec_part] = String.split(str, ".")
-    dec_part = String.pad_trailing(dec_part, 2, "0")
-
-    int_formatted =
-      int_part
-      |> String.reverse()
-      |> String.to_charlist()
-      |> Enum.chunk_every(3)
-      |> Enum.join(".")
-      |> String.reverse()
-
-    sign = if Decimal.compare(amount, 0) == :lt, do: "-", else: ""
-    "#{sign}#{int_formatted},#{dec_part}"
-  end
+  defp format_currency(amount), do: Grana.Money.format(amount)
 
   defp percentage(part, total) do
     case Decimal.compare(total, 0) do
@@ -1475,10 +2115,6 @@ defmodule GranaWeb.DashboardLive do
   end
 
   # ── Banking Formatting Helpers ──
-
-  defp bank_logo("nubank"), do: ~p"/images/nubank-logo.png"
-  defp bank_logo("bradesco"), do: ~p"/images/bradesco-logo.png"
-  defp bank_logo(_), do: ~p"/images/logo-32.png"
 
   defp income_expense_pct(summary) do
     income = summary.total_income
@@ -1595,6 +2231,158 @@ defmodule GranaWeb.DashboardLive do
     |> Jason.encode!()
   end
 
+  # Sankey data: income (and a deficit, when expenses go past it) flows into the period's
+  # cash and out to the expense categories, investments and what is left.
+  @flow_categories 8
+
+  defp cash_flow_data(assigns) do
+    summary = assigns.summary
+    balance = to_float(summary.balance)
+
+    sources =
+      flow_nodes(summary.income_by_category, assigns, "credit", "var(--ui-receita)") ++
+        if(balance < 0,
+          do: [%{name: "Déficit", value: -balance, color: "var(--ui-despesa)", kind: "deficit"}],
+          else: []
+        )
+
+    targets =
+      flow_nodes(summary.by_category, assigns, "debit", "var(--ui-despesa)") ++
+        if(Decimal.compare(summary.total_investments, 0) == :gt,
+          do: [
+            %{
+              name: "Investimentos",
+              value: to_float(summary.total_investments),
+              color: "var(--color-info)",
+              kind: "investment",
+              url: transactions_url(assigns, %{type: "investment"})
+            }
+          ],
+          else: []
+        ) ++
+        if(balance > 0,
+          do: [%{name: "Sobra", value: balance, color: "var(--ui-receita)", kind: "surplus"}],
+          else: []
+        )
+
+    Jason.encode!(%{sources: sources, targets: targets})
+  end
+
+  defp flow_nodes(by_category, assigns, type, fallback_color) do
+    {top, rest} = Enum.split(by_category, @flow_categories)
+
+    nodes =
+      Enum.map(top, fn item ->
+        url_extra =
+          if item.category, do: %{category_id: item.category.id}, else: %{filter: "uncategorized"}
+
+        %{
+          name: if(item.category, do: item.category.name, else: "Sem categoria"),
+          value: to_float(item.total),
+          color:
+            if(item.category && item.category.color,
+              do: item.category.color,
+              else: fallback_color
+            ),
+          kind: "category",
+          url: transactions_url(assigns, Map.put(url_extra, :type, type))
+        }
+      end)
+
+    case rest do
+      [] ->
+        nodes
+
+      rest ->
+        total = Enum.reduce(rest, Decimal.new(0), &Decimal.add(&2, &1.total))
+
+        nodes ++
+          [%{name: "Outras categorias", value: to_float(total), color: "#9CA3AF", kind: "other"}]
+    end
+  end
+
+  # ── Calendar view of the spending charts ──
+
+  # Weeks of the month, Sunday first; each day shaded by its spending against the
+  # month's biggest day. Days still to come stay dim.
+  defp month_heat_rows(%{selected_year: year, selected_month: month} = assigns) do
+    first = Date.new!(year, month, 1)
+    today = Grana.LocalTime.today()
+    totals = Map.new(assigns.daily_spending, &{&1.date, to_float(&1.total)})
+    max = totals |> Map.values() |> Enum.max(fn -> 0.0 end)
+
+    days =
+      Enum.map(Date.range(first, Date.end_of_month(first)), fn date ->
+        label = Calendar.strftime(date, "%d/%m/%Y")
+        url = transactions_url(assigns, %{date_from: date, date_to: date, type: "debit"})
+        heat_cell(Map.get(totals, date), max, Date.after?(date, today), label, date.day, url)
+      end)
+
+    blanks = List.duplicate(blank_cell(), Date.day_of_week(first, :sunday) - 1)
+
+    (blanks ++ days)
+    |> Enum.chunk_every(7, 7, Stream.cycle([blank_cell()]))
+    |> Enum.map(&%{label: nil, cells: &1})
+  end
+
+  defp year_heat_rows(%{selected_year: year} = assigns) do
+    totals = Map.new(assigns.monthly_ie, &{&1.month, to_float(&1.expenses)})
+    [%{label: to_string(year), cells: month_cells(assigns, year, totals, max_of(totals))}]
+  end
+
+  defp total_heat_rows(assigns) do
+    by_year = Enum.group_by(assigns.monthly_ie, & &1.year)
+    max = assigns.monthly_ie |> Enum.map(&to_float(&1.expenses)) |> Enum.max(fn -> 0.0 end)
+
+    by_year
+    |> Enum.sort_by(fn {year, _} -> year end, :desc)
+    |> Enum.map(fn {year, items} ->
+      totals = Map.new(items, &{&1.month, to_float(&1.expenses)})
+      %{label: to_string(year), cells: month_cells(assigns, year, totals, max)}
+    end)
+  end
+
+  defp month_cells(assigns, year, totals, max) do
+    today = Grana.LocalTime.today()
+
+    Enum.map(1..12, fn month ->
+      from = Date.new!(year, month, 1)
+      label = "#{Banking.month_name_short(month)}/#{year}"
+
+      url =
+        transactions_url(assigns, %{
+          date_from: from,
+          date_to: Date.end_of_month(from),
+          type: "debit"
+        })
+
+      heat_cell(Map.get(totals, month), max, Date.after?(from, today), label, nil, url)
+    end)
+  end
+
+  defp max_of(totals), do: totals |> Map.values() |> Enum.max(fn -> 0.0 end)
+
+  defp heat_cell(_value, _max, true, label, caption, _url),
+    do: %{kind: :future, label: label, caption: caption, value: nil, intensity: nil, url: nil}
+
+  defp heat_cell(value, max, _future?, label, caption, url)
+       when is_number(value) and value > 0 and max > 0 do
+    %{
+      kind: :spend,
+      label: label,
+      caption: caption,
+      value: value,
+      intensity: Float.round(value / max, 3),
+      url: url
+    }
+  end
+
+  defp heat_cell(_value, _max, _future?, label, caption, _url),
+    do: %{kind: :empty, label: label, caption: caption, value: nil, intensity: nil, url: nil}
+
+  defp blank_cell,
+    do: %{kind: :blank, label: nil, caption: nil, value: nil, intensity: nil, url: nil}
+
   defp daily_chart_data(assigns) do
     assigns.daily_spending
     |> Enum.map(fn day ->
@@ -1677,34 +2465,57 @@ defmodule GranaWeb.DashboardLive do
     |> Jason.encode!()
   end
 
-  defp projection_chart_data(projections) do
-    projections
+  # With a simulated purchase, its installment (`total / count`) is stacked on the months
+  # it would be charged, adding months past the projection when it goes beyond it.
+  defp projection_chart_data(projections, sim_total, sim_count) do
+    start = simulation_start(projections)
+    sim_end = Date.shift(start, month: sim_count - 1)
+    %{date: last} = List.last(projections)
+
+    extra =
+      if sim_total do
+        for offset <- 1..(month_index(sim_end) - month_index(last))//1 do
+          date = Date.shift(last, month: offset)
+          %{label: "#{Banking.month_name_short(date.month)}/#{date.year}", date: date, total: 0}
+        end
+      else
+        []
+      end
+
+    installment = sim_total && sim_total |> Decimal.div(sim_count) |> Decimal.round(2)
+
+    (projections ++ extra)
     |> Enum.map(fn item ->
-      %{
-        label: item.label,
-        value: to_float(item.total)
-      }
+      sim =
+        if installment != nil and not Date.before?(item.date, start) and
+             not Date.after?(item.date, sim_end),
+           do: to_float(installment),
+           else: 0.0
+
+      %{label: item.label, value: to_float(item.total), sim: sim}
     end)
     |> Jason.encode!()
   end
+
+  defp month_index(date), do: date.year * 12 + date.month
 
   # ── Goal Helpers ──
 
   defp goal_short_label(%{type: "category_limit", category: %{name: name}}), do: name
   defp goal_short_label(%{type: type}), do: FinancialGoal.type_label(type)
 
-  defp goal_bar_color(:on_track), do: "bg-success"
-  defp goal_bar_color(:achieved), do: "bg-success"
+  defp goal_bar_color(:on_track), do: "bg-(--ui-receita)"
+  defp goal_bar_color(:achieved), do: "bg-(--ui-receita)"
   defp goal_bar_color(:warning), do: "bg-warning"
-  defp goal_bar_color(:exceeded), do: "bg-error"
-  defp goal_bar_color(:behind), do: "bg-error"
+  defp goal_bar_color(:exceeded), do: "bg-(--ui-despesa)"
+  defp goal_bar_color(:behind), do: "bg-(--ui-despesa)"
   defp goal_bar_color(_), do: "bg-primary"
 
-  defp goal_text_color(:on_track), do: "text-success"
-  defp goal_text_color(:achieved), do: "text-success"
+  defp goal_text_color(:on_track), do: "ui-money-receita"
+  defp goal_text_color(:achieved), do: "ui-money-receita"
   defp goal_text_color(:warning), do: "text-warning"
-  defp goal_text_color(:exceeded), do: "text-error"
-  defp goal_text_color(:behind), do: "text-error"
+  defp goal_text_color(:exceeded), do: "ui-money-despesa"
+  defp goal_text_color(:behind), do: "ui-money-despesa"
   defp goal_text_color(_), do: ""
 
   defp to_float(%Decimal{} = d), do: Decimal.to_float(d)

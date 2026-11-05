@@ -7,13 +7,13 @@ defmodule GranaWeb.DashboardLiveTest do
 
   test "renders dashboard page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/dashboard")
-    assert html =~ "Dashboard"
-    assert html =~ "Nenhuma transação encontrada"
+    assert html =~ "Painel"
+    assert html =~ "Nenhuma transação ainda"
   end
 
   test "shows upload button when no transactions", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/dashboard")
-    assert html =~ "Upload"
+    assert html =~ "Importar"
   end
 
   test "shows period selector description", %{conn: conn} do
@@ -29,10 +29,25 @@ defmodule GranaWeb.DashboardLiveTest do
   describe "aba Despesas Fixas" do
     alias Grana.Banking
 
-    test "renderiza a sub-aba de despesas fixas", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/dashboard?tab=recurring")
-      assert html =~ "Despesas Fixas"
-      assert html =~ "Nenhuma despesa encontrada"
+    test "sem nada importado, fica igual ao Resumo: sem filtros e com o botão de importar",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=recurring")
+
+      assert has_element?(
+               view,
+               ~s|#dashboard-no-data a.btn-primary[href="/upload"]|,
+               "Importar extratos"
+             )
+
+      refute has_element?(view, "#recurring-filters")
+    end
+
+    test "com dados fora da janela, mantém os filtros", %{conn: conn, user: user} do
+      Grana.BankingFixtures.transaction_fixture(user, %{date: Date.add(Date.utc_today(), -800)})
+      {:ok, view, _html} = live(conn, ~p"/dashboard?tab=recurring")
+
+      assert has_element?(view, "#recurring-empty", "Nenhuma despesa encontrada nesse período")
+      assert has_element?(view, "#recurring-filters")
     end
 
     test "mostra apenas a lista efetiva de despesas fixas", %{

@@ -5,9 +5,9 @@ defmodule Grana.Banking.Parsers.NubankTest do
 
   @sample_csv """
   Data,Valor,Identificador,Descrição
-  01/01/2026,-15.00,69568510-71d9-4de7-8840-1455aebae4a7,Pagamento de fatura
-  02/01/2026,13200.00,695799b4-dab0-4ae4-bb34-79f360a4c419,Transferência recebida pelo Pix - FLAMBRA LTDA
-  02/01/2026,-8.78,6957d111-ba04-4f7d-882a-45351dc50403,Compra no débito - RAYSA ATACADO E VAREJO
+  01/01/2026,-15.00,00000000-0000-4000-8000-0000000000a1,Pagamento de fatura
+  02/01/2026,9800.00,00000000-0000-4000-8000-0000000000a2,Transferência recebida pelo Pix - EMPRESA EXEMPLO LTDA
+  02/01/2026,-8.78,00000000-0000-4000-8000-0000000000a3,Compra no débito - MERCADO EXEMPLO
   """
 
   test "parses valid CSV content" do
@@ -28,13 +28,13 @@ defmodule Grana.Banking.Parsers.NubankTest do
 
   test "parses credit amount as positive" do
     [_, second | _] = Nubank.parse(@sample_csv)
-    assert Decimal.compare(second.amount, Decimal.new("13200.00")) == :eq
+    assert Decimal.compare(second.amount, Decimal.new("9800.00")) == :eq
     assert second.type == "credit"
   end
 
   test "extracts identifier" do
     [first | _] = Nubank.parse(@sample_csv)
-    assert first.identifier == "69568510-71d9-4de7-8840-1455aebae4a7"
+    assert first.identifier == "00000000-0000-4000-8000-0000000000a1"
   end
 
   test "extracts description" do

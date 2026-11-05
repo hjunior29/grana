@@ -80,16 +80,24 @@ config :grana, GranaWeb.Gettext, default_locale: "pt_BR"
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :phoenix,
+       :filter_parameters,
+       ~w(password secret api_key token code old_cloak_key smtp_password client_secret)
+
 # Configure ErrorTracker
 config :error_tracker,
   repo: Grana.Repo,
-  otp_app: :grana
+  otp_app: :grana,
+  filter: Grana.ErrorTracker.Filter,
+  plugins: [{ErrorTracker.Plugins.Pruner, max_age: :timer.hours(24 * 7)}]
 
 # Configure Oban
 config :grana, Oban,
   engine: Oban.Engines.Lite,
   repo: Grana.Repo,
-  queues: [uploads: 2, ai_analysis: 1, notifications: 1, open_finance: 1],
+  # uploads: um arquivo por vez. A deduplicação compara cada arquivo com o que já foi
+  # importado, então extratos com períodos sobrepostos precisam entrar um depois do outro.
+  queues: [uploads: 1, notifications: 1, open_finance: 1],
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     Oban.Plugins.Lifeline,
