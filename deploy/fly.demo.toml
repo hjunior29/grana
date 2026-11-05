@@ -13,6 +13,9 @@
 # visitas, e a próxima visita já encontra a demo como nova.
 
 primary_region = "gru"
+# A demo cabe em 256 MB: o app fica em ~190 MB, e o swap (no disco, sem custo) guarda o que
+# o Erlang reservou e não usa. Sem ele, o boot passaria do limite.
+swap_size_mb = 512
 
 [build]
   image = "ghcr.io/hjunior29/grana:latest"
@@ -39,6 +42,6 @@ primary_region = "gru"
     grace_period = "30s"
 
 [[vm]]
-  memory = "512mb"
+  memory = "256mb"
   cpu_kind = "shared"
   cpus = 1
