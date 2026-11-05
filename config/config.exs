@@ -24,6 +24,9 @@ config :grana, :scopes,
 # DATA_DIR (config/runtime.exs); em dev é a raiz do projeto.
 config :grana, :data_dir, Path.expand("..", __DIR__)
 
+# Demonstração pública (Grana.Demo): ligada por GRANA_DEMO=true (config/runtime.exs).
+config :grana, :demo, false
+
 config :grana,
   ecto_repos: [Grana.Repo],
   generators: [timestamp_type: :utc_datetime]

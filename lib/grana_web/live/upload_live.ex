@@ -31,7 +31,7 @@ defmodule GranaWeb.UploadLive do
       |> assign(:cal_score, nil)
       |> assign(:show_api_key_alert, false)
       |> assign(:model_choice, "")
-      |> allow_statements(~w(.csv .pdf))
+      |> assign_upload_mode(Grana.Demo.enabled?())
       # Esta tela mostra a fila inteira e trata `:imports_changed` por conta própria,
       # para também atualizar o histórico e o calendário a cada arquivo processado.
       |> detach_hook(:imports, :handle_info)
@@ -99,6 +99,11 @@ defmodule GranaWeb.UploadLive do
   end
 
   @impl true
+  # Na demonstração nada é enviado: a conta é de todos, e um extrato real ficaria à vista.
+  def handle_event(event, _params, %{assigns: %{demo: true}} = socket)
+      when event in ~w(validate select-bank select-type select_upload_category upload cancel-upload),
+      do: {:noreply, put_flash(socket, :error, Grana.Demo.reason(:upload))}
+
   def handle_event("validate", params, socket) do
     {:noreply, assign(socket, :model_choice, params["model"] || socket.assigns.model_choice)}
   end
@@ -384,8 +389,15 @@ defmodule GranaWeb.UploadLive do
             queue={@import_queue}
           />
 
+          <GranaWeb.DemoComponents.demo_notice
+            :if={@demo}
+            feature={:upload}
+            id="upload-demo-notice"
+            class="mb-8"
+          />
+
           <%!-- Upload Category Selection --%>
-          <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div :if={!@demo} class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
             <.option_card
               title="Fatura / Extrato"
               description="Conta corrente e cartão de crédito"
@@ -1113,6 +1125,14 @@ defmodule GranaWeb.UploadLive do
 
   @month_abbr {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"}
   defp month_label(month), do: elem(@month_abbr, month - 1)
+
+  defp assign_upload_mode(socket, true), do: assign(socket, :demo, true)
+
+  defp assign_upload_mode(socket, false) do
+    socket
+    |> assign(:demo, false)
+    |> allow_statements(~w(.csv .pdf))
+  end
 
   defp allow_statements(socket, accept) do
     allow_upload(socket, :statements,

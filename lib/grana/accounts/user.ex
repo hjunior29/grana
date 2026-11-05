@@ -49,6 +49,9 @@ defmodule Grana.Accounts.User do
     field :onboarded_at, :utc_datetime
     field :base_url, :string
 
+    # Conta da demonstração pública (GRANA_DEMO): só existe nesse modo, e o boot a recria.
+    field :demo, :boolean, default: false
+
     timestamps(type: :utc_datetime)
   end
 

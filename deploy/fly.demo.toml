@@ -1,0 +1,47 @@
+# Grana — demonstração pública no Fly.io: a landing e uma conta compartilhada com dados
+# fictícios (GRANA_DEMO=true, a partir da versão 1.1.0).
+#
+#   fly apps create grana-demo
+#   fly deploy -c deploy/fly.demo.toml -a grana-demo --ha=false
+#   fly certs add demo.seudominio.com -a grana-demo          # opcional: domínio próprio
+#
+# Não use este arquivo para a sua instância: o modo demonstração apaga tudo a cada boot e
+# se recusa a subir numa instância que já tem dono.
+#
+# Sem volume: o disco da máquina é efêmero, então cada boot começa limpo e recria a conta
+# com os dados de base. Com o auto stop, a máquina para depois de alguns minutos sem
+# visitas, e a próxima visita já encontra a demo como nova.
+
+primary_region = "gru"
+# A demo cabe em 256 MB: o app fica em ~190 MB, e o swap (no disco, sem custo) guarda o que
+# o Erlang reservou e não usa. Sem ele, o boot passaria do limite.
+swap_size_mb = 512
+
+[build]
+  image = "ghcr.io/hjunior29/grana:latest"
+
+[env]
+  GRANA_DEMO = "true"
+  # O proxy do Fly termina o HTTPS (ver deploy/fly.toml).
+  TRUST_PROXY_HEADERS = "true"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # "stop", e não "suspend": a máquina suspensa voltaria com a memória e o disco de antes,
+  # e a demo não voltaria ao original.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

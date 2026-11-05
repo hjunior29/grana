@@ -27,14 +27,18 @@ defmodule Grana.Application do
           {Task.Supervisor, name: Grana.Agents.TaskSupervisor},
           {DynamicSupervisor, name: Grana.Agents.RunSupervisor, strategy: :one_for_one},
           Grana.Setup,
-          GranaWeb.Endpoint
-        ] ++ announce_setup()
+          Grana.Demo.Sessions
+        ] ++
+        demo_boot() ++
+        [GranaWeb.Endpoint] ++ announce_setup()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Grana.Supervisor]
     Supervisor.start_link(children, opts)
   end
+
+  defp demo_boot, do: if(Grana.Demo.enabled?(), do: [Grana.Demo.Boot], else: [])
 
   defp announce_setup do
     if Application.get_env(:grana, :announce_setup_code, true) do

@@ -38,7 +38,7 @@ Nenhuma variável de ambiente é obrigatória.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjunior29/grana/main/deploy/install.sh -o install.sh
 bash install.sh                      # última versão, tarball pronto do GitHub Releases
-bash install.sh --version v1.0.0     # uma versão específica
+bash install.sh --version v1.1.0     # uma versão específica
 ```
 
 O script baixa o tarball da sua arquitetura (x86_64 ou arm64), confere o `sha256`, cria o
@@ -161,6 +161,7 @@ quando não há nada no ambiente).
 | `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_URL` | Open Finance |
 | `TRUST_PROXY_HEADERS` | `true` atrás de proxy reverso ou no Fly.io: confia no `X-Forwarded-*` para o HTTPS (cookies seguros e o LiveView) e para o IP real no rate limit. Sem proxy na frente, deixe desligado |
 | `POOL_SIZE`, `CACHE_ENABLED`, `CACHE_TTL_SECONDS`, `SKIP_MIGRATIONS` | Ajustes finos |
+| `GRANA_DEMO` | `true` só para uma [demonstração pública](#demonstração-pública): **apaga tudo a cada boot** |
 
 > **Guarde a `CLOAK_KEY`** em local seguro e **separada** do arquivo de backup (por exemplo, no seu gerenciador de senhas). Ela
 > decifra as credenciais salvas (chaves de IA, Pluggy, SMTP, CPF); sem ela, ao restaurar em outra
@@ -337,6 +338,48 @@ Para validar uma release como em produção:
 ```bash
 MIX_ENV=prod mix assets.deploy && MIX_ENV=prod mix release
 DATA_DIR=$(mktemp -d) PORT=4010 PHX_SERVER=true _build/prod/rel/grana/bin/grana start
+```
+
+Para publicar uma versão, basta a tag: o `release.yml` usa `vX.Y.Z` como versão do app
+(`GRANA_VERSION`, lida pelo `mix.exs`) e publica os tarballs, a imagem e o GitHub Release.
+Não há versão para editar no código; fora de uma release, ela é `0.0.0-dev`.
+
+```bash
+git tag -a v1.2.0 -m "Grana 1.2.0" && git push origin v1.2.0
+```
+
+## Demonstração pública
+
+Para divulgar o Grana, a mesma imagem sobe como demonstração com `GRANA_DEMO=true`. Nesse
+modo:
+
+- a landing ganha o botão **Ver a demo**, que leva ao login de sempre com o acesso da conta
+  compartilhada à vista e já preenchido (`demo@grana.local` / `demonstracao`);
+- a conta tem um ano de dados 100% fictícios (Bradesco e Nubank, com parcelas, faturas,
+  investimentos e estornos), com datas relativas ao dia. A análise do Painel e uma conversa
+  no Chat vêm escritas de antemão;
+- cada boot **apaga a instância** e recria a conta com os dados de base: o que os visitantes
+  mudam dura até o próximo reinício. Uma instância que já tem dono se recusa a subir assim;
+- IA, SMTP, Open Finance, troca de email e senha, envio de arquivos, backup, restauração,
+  "apagar tudo" e os painéis técnicos ficam desligados. As Configurações mostram os campos
+  dessas seções só para ver, com um recado em cada uma, e a tela de importar explica que na
+  demo não há importação;
+- tema e privacidade valem por visitante, e uma faixa no topo do app explica tudo isso.
+
+No Fly.io, sem volume (cada boot começa limpo e o auto stop faz a demo voltar ao original
+depois de um tempo sem visitas):
+
+```bash
+fly apps create grana-demo
+fly deploy -c deploy/fly.demo.toml -a grana-demo --ha=false
+```
+
+Em outro servidor, basta um container com `GRANA_DEMO=true` e sem volume. Para ver a demo
+na sua máquina, use uma pasta de dados vazia:
+
+```bash
+MIX_ENV=prod mix assets.deploy && MIX_ENV=prod mix release
+DATA_DIR=$(mktemp -d) GRANA_DEMO=true PORT=4010 PHX_SERVER=true _build/prod/rel/grana/bin/grana start
 ```
 
 ## Licença

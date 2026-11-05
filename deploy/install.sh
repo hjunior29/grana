@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Instala (ou atualiza) o Grana como serviço systemd.
 #
-#   ./deploy/install.sh --version v1.0.0     # baixa o tarball pronto do GitHub Releases
+#   ./deploy/install.sh --version v1.1.0     # baixa o tarball pronto do GitHub Releases
 #   ./deploy/install.sh                      # idem, usando a última versão
 #   ./deploy/install.sh --from-source        # compila neste servidor (Erlang/OTP 28 + Elixir 1.18)
 #   ./deploy/install.sh --update [...]       # atualiza uma instalação existente e reinicia
@@ -32,7 +32,7 @@ usage() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --from-source) MODE="source" ;;
-    --version) VERSION="${2:-}"; [ -n "$VERSION" ] || die "--version precisa de um valor (ex.: v1.0.0)"; shift ;;
+    --version) VERSION="${2:-}"; [ -n "$VERSION" ] || die "--version precisa de um valor (ex.: v1.1.0)"; shift ;;
     --update) ;; # mesmo caminho da instalação: refaz o download/build e reinicia
     -h|--help) usage 0 ;;
     *) warn "Opção desconhecida: $1"; usage 1 ;;

@@ -1,23 +1,33 @@
 defmodule GranaWeb.LandingLive do
   use GranaWeb, :live_view
 
+  alias Grana.Demo
   alias GranaWeb.OpenFinanceComponents
   alias GranaWeb.SpendingCalendar
 
   @impl true
+  # Na demonstração a landing é a vitrine: abre também para quem já entrou na demo.
   def mount(_params, _session, %{assigns: %{current_scope: %{user: %{}}}} = socket) do
-    {:ok, push_navigate(socket, to: ~p"/dashboard")}
+    if Demo.enabled?(),
+      do: {:ok, assign_landing(socket)},
+      else: {:ok, push_navigate(socket, to: ~p"/dashboard")}
   end
 
-  def mount(_params, _session, socket) do
-    {:ok,
-     assign(socket,
-       page_title: "Controle suas finanças",
-       spending_view: "calendar",
-       hide_values: false,
-       hide_names: false,
-       install_method: "script"
-     )}
+  def mount(_params, _session, socket), do: {:ok, assign_landing(socket)}
+
+  # Quem já entrou na demo volta direto ao app; os demais passam pelo login.
+  defp demo_path(nil), do: ~p"/users/log-in"
+  defp demo_path(_scope), do: ~p"/dashboard"
+
+  defp assign_landing(socket) do
+    assign(socket,
+      page_title: "Controle suas finanças",
+      spending_view: "calendar",
+      hide_values: false,
+      hide_names: false,
+      install_method: "script",
+      demo: Demo.enabled?()
+    )
   end
 
   @impl true
@@ -59,11 +69,23 @@ defmodule GranaWeb.LandingLive do
         <div class="flex-none">
           <div class="flex items-center gap-3">
             <Layouts.theme_toggle :if={!@current_scope} />
-            <.link :if={!@current_scope} navigate={~p"/users/log-in"} class="btn btn-primary btn-sm">
+            <.link
+              :if={@demo && !@current_scope}
+              id="nav-demo"
+              navigate={~p"/users/log-in"}
+              class="btn btn-primary btn-sm"
+            >
+              Ver a demo
+            </.link>
+            <.link
+              :if={!@demo && !@current_scope}
+              navigate={~p"/users/log-in"}
+              class="btn btn-primary btn-sm"
+            >
               Entrar
             </.link>
             <.link :if={@current_scope} navigate={~p"/dashboard"} class="btn btn-primary btn-sm">
-              Dashboard
+              {if @demo, do: "Voltar à demo", else: "Dashboard"}
             </.link>
           </div>
         </div>
@@ -385,13 +407,30 @@ defmodule GranaWeb.LandingLive do
             chave de IA.
           </p>
           <div class="lp-actions lp-rise" style="--d: 0.3">
-            <.link id="hero-login" navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
+            <.link
+              :if={@demo}
+              id="hero-demo"
+              navigate={demo_path(@current_scope)}
+              class="btn btn-primary btn-lg"
+            >
+              Ver a demo
+            </.link>
+            <.link
+              :if={!@demo}
+              id="hero-login"
+              navigate={~p"/users/log-in"}
+              class="btn btn-primary btn-lg"
+            >
               Entrar
             </.link>
             <a id="hero-install" href="#instalacao" class="btn btn-ghost btn-lg">
               Instalar no seu servidor
             </a>
           </div>
+          <p :if={@demo} id="hero-demo-note" class="lp-demo-note lp-rise" style="--d: 0.35">
+            A demo é uma conta compartilhada, com dados fictícios: o que você mudar, os outros
+            visitantes também veem, e tudo volta ao original quando o servidor reinicia.
+          </p>
           <ul class="lp-facts lp-rise" style="--d: 0.4">
             <li :for={{icon, text} <- facts()}>
               <.icon name={icon} class="size-4 text-primary" /> {text}
@@ -1507,10 +1546,25 @@ defmodule GranaWeb.LandingLive do
           <GranaWeb.BrandComponents.logo class="block size-20 mx-auto mb-6 lp-rise" />
           <h2 class="lp-h2 lp-rise" style="--d: 0.1">Pronto para organizar as suas finanças?</h2>
           <p class="lp-lead lp-rise" style="--d: 0.2">
-            Entre na sua instância ou instale o Grana no seu próprio servidor.
+            {if @demo,
+              do: "Veja a demonstração ou instale o Grana no seu próprio servidor.",
+              else: "Entre na sua instância ou instale o Grana no seu próprio servidor."}
           </p>
           <div class="lp-actions lp-rise" style="--d: 0.3">
-            <.link id="cta-login" navigate={~p"/users/log-in"} class="btn btn-primary btn-lg">
+            <.link
+              :if={@demo}
+              id="cta-demo"
+              navigate={demo_path(@current_scope)}
+              class="btn btn-primary btn-lg"
+            >
+              Ver a demo
+            </.link>
+            <.link
+              :if={!@demo}
+              id="cta-login"
+              navigate={~p"/users/log-in"}
+              class="btn btn-primary btn-lg"
+            >
               Entrar
             </.link>
             <a href="#instalacao" class="btn btn-ghost btn-lg">Instalar no seu servidor</a>

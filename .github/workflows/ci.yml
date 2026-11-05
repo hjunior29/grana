@@ -210,9 +210,42 @@ jobs:
             -H "Origin: https://grana.example.com" "http://localhost:4002/live/longpoll?vsn=2.0.0" \
             | grep -q '"status":410' || { cat "$RUNNER_TEMP/grana-https.log"; exit 1; }
 
+      # A demonstração pública: numa pasta vazia, o boot cria a conta fictícia, a landing
+      # oferece a demo e o login, com o acesso à vista, entra nela.
+      - name: Modo demonstração sobe com a conta fictícia
+        run: |
+          PID=$(DATA_DIR="$RUNNER_TEMP/grana-smoke" _build/prod/rel/grana/bin/grana pid)
+          DATA_DIR="$RUNNER_TEMP/grana-smoke" _build/prod/rel/grana/bin/grana stop
+          for i in $(seq 1 30); do
+            kill -0 "$PID" 2> /dev/null || break
+            sleep 1
+          done
+          mkdir -p "$RUNNER_TEMP/grana-demo"
+          DATA_DIR="$RUNNER_TEMP/grana-demo" PHX_SERVER=true GRANA_DEMO=true \
+            _build/prod/rel/grana/bin/grana start > "$RUNNER_TEMP/grana-demo.log" 2>&1 &
+          for i in $(seq 1 20); do
+            curl -sf --max-time 3 http://localhost:4002/health > /dev/null && break
+            sleep 2
+          done
+          curl -s --max-time 5 http://localhost:4002/ | grep -q 'id="hero-demo"' \
+            || { cat "$RUNNER_TEMP/grana-demo.log"; exit 1; }
+          JAR="$RUNNER_TEMP/grana-demo.cookies"
+          LOGIN=$(curl -s --max-time 5 -c "$JAR" http://localhost:4002/users/log-in)
+          echo "$LOGIN" | grep -q 'id="demo-credentials"' \
+            || { cat "$RUNNER_TEMP/grana-demo.log"; exit 1; }
+          CSRF=$(echo "$LOGIN" | grep -o 'name="csrf-token" content="[^"]*"' | cut -d'"' -f4)
+          curl -si --max-time 10 -b "$JAR" http://localhost:4002/users/log-in \
+            --data-urlencode "_csrf_token=$CSRF" \
+            --data-urlencode "user[email]=demo@grana.local" \
+            --data-urlencode "user[password]=demonstracao" | tr -d '\r' \
+            | grep -iE '^location: .*/dashboard$' || { cat "$RUNNER_TEMP/grana-demo.log"; exit 1; }
+
       - name: Parar app
         if: always()
-        run: DATA_DIR="$RUNNER_TEMP/grana-smoke" _build/prod/rel/grana/bin/grana stop || true
+        run: |
+          for dir in grana-demo grana-smoke; do
+            DATA_DIR="$RUNNER_TEMP/$dir" _build/prod/rel/grana/bin/grana stop || true
+          done
 
   # ── 🐳 Docker smoke ─────────────────────────────────────────────────────────
   # Constrói a imagem (só amd64) e a sobe com as mesmas restrições do docker-compose.yml:
