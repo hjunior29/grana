@@ -66,12 +66,19 @@ defmodule Grana.AI do
     attrs = default_name(attrs)
     changeset = ProviderConfig.changeset(%ProviderConfig{user_id: user.id}, attrs)
 
-    with {:ok, candidate} <- Ecto.Changeset.apply_action(changeset, :insert),
+    with :ok <- Grana.Demo.allow(:ai),
+         {:ok, candidate} <- Ecto.Changeset.apply_action(changeset, :insert),
          {:ok, models} <- Models.list(config_for(candidate)),
          {:ok, provider} <- Repo.insert(changeset) do
       user = maybe_set_default(user, provider, models)
       {:ok, provider, models, user}
     else
+      {:error, :demo} ->
+        {:error,
+         changeset
+         |> Ecto.Changeset.add_error(:api_key, Grana.Demo.reason(:ai))
+         |> Map.put(:action, :insert)}
+
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error, changeset}
 
@@ -215,7 +222,15 @@ defmodule Grana.AI do
   def resolve(user_id, specialist, choice) when is_integer(user_id),
     do: resolve(Repo.get!(User, user_id), specialist, choice)
 
+  # Na demonstração pública nenhuma chamada de IA acontece: `{:error, :demo}`.
   def resolve(%User{} = user, specialist, choice) do
+    case Grana.Demo.allow(:ai) do
+      :ok -> resolve_config(user, specialist, choice)
+      {:error, :demo} -> {:error, :demo}
+    end
+  end
+
+  defp resolve_config(user, specialist, choice) do
     providers = list_providers(user)
 
     with :error <- from_choice(providers, choice),

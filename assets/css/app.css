@@ -3246,6 +3246,84 @@ html {
 }
 
 .ui-notice-success { --ui-tone: var(--color-success); }
+
+/* Demonstração: seção das Configurações só para ver. O fieldset desabilita os campos e
+   botões; os botões que são links (baixar backup, painéis) precisam do mesmo efeito. */
+fieldset:disabled a.btn {
+  pointer-events: none;
+  opacity: 0.5;
+}
+fieldset:disabled .btn:disabled { filter: grayscale(1); }
+fieldset:disabled [phx-drop-target] {
+  pointer-events: none;
+  opacity: 0.6;
+}
+/* Sem isto o campo desabilitado some no fundo do cartão (o daisyUI tira a borda). */
+fieldset:disabled :is(.input, .select, .textarea) {
+  border-color: color-mix(in oklch, var(--color-base-content) 14%, transparent);
+  background-color: color-mix(in oklch, var(--color-base-content) 4%, transparent);
+  cursor: not-allowed;
+}
+
+/* Login da demonstração: email e senha em duas linhas alinhadas */
+.ui-demo-credentials {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.125rem 0.75rem;
+  margin-top: 0.25rem;
+}
+.ui-demo-credentials dt { color: color-mix(in oklch, var(--color-base-content) 75%, transparent); }
+.ui-demo-credentials dd {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+/* Demonstração pública: faixa fina abaixo do cabeçalho; o "Como funciona" abre num modal */
+.ui-demo-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 0.25rem 0.5rem; padding: 0.4rem 1rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--color-primary) 18%, transparent);
+  background: color-mix(in oklch, var(--color-primary) 7%, var(--color-base-100));
+  color: color-mix(in oklch, var(--color-base-content) 75%, transparent);
+  font-size: 0.8125rem; line-height: 1.25rem;
+}
+.ui-demo-banner-more {
+  display: inline-flex; align-items: center; gap: 0.125rem;
+  padding: 0 0.25rem 0 0.5rem; border-radius: 999px; cursor: pointer;
+  color: var(--color-primary); font-weight: 500;
+  transition: background-color 150ms ease;
+}
+.ui-demo-banner-more:hover,
+.ui-demo-banner-more:focus-visible {
+  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  outline: none;
+}
+.ui-demo-banner-more > .size-4 { transition: transform 150ms ease; }
+.ui-demo-banner-more:hover > .size-4 { transform: translateX(2px); }
+.ui-demo-info { position: relative; max-width: 30rem; }
+.ui-demo-info-close {
+  position: absolute; top: 0.75rem; right: 0.75rem;
+  display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 999px;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent); cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.ui-demo-info-close:hover {
+  background: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  color: var(--color-base-content);
+}
+.ui-demo-info-badge {
+  display: grid; place-items: center; width: 2.5rem; height: 2.5rem; margin-bottom: 0.75rem;
+  border-radius: 0.75rem; color: var(--color-primary);
+  background: color-mix(in oklch, var(--color-primary) 14%, transparent);
+}
+.ui-demo-info-list { display: grid; gap: 1rem; margin-top: 1.25rem; }
+.ui-demo-info-list > li { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: start; }
+.ui-demo-info-icon {
+  display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 999px;
+  color: color-mix(in oklch, var(--color-base-content) 75%, transparent);
+  background: color-mix(in oklch, var(--color-base-content) 7%, transparent);
+}
 .ui-notice-warning {
   --ui-tone: var(--color-warning);
   border-color: transparent;
@@ -4280,6 +4358,10 @@ html {
 }
 .lp-facts li { display: inline-flex; align-items: center; gap: 0.4rem; }
 .lp-hero { padding-top: 8rem; padding-bottom: 7rem; }
+.lp-demo-note {
+  max-width: 34rem; margin: 1rem auto 0; font-size: 0.8125rem; line-height: 1.5;
+  color: color-mix(in oklch, var(--color-base-content) 62%, transparent);
+}
 
 /* progresso: --p vem do ancestral; --d atrasa a entrada (0..1); --a/--b abrem uma janela */
 .lp-rise {

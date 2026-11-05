@@ -47,6 +47,11 @@ defmodule GranaWeb.Router do
     plug GranaWeb.SetupGate, :pending
   end
 
+  # Desligado na demonstração pública (Grana.Demo): responde 404.
+  pipeline :demo_off do
+    plug GranaWeb.DemoGate, :off
+  end
+
   pipeline :csp do
     plug :put_secure_browser_headers, %{"content-security-policy" => @content_security_policy}
   end
@@ -60,7 +65,7 @@ defmodule GranaWeb.Router do
   # Webhooks da Pluggy (Open Finance). Fora do pipeline :browser: sem sessão/CSRF;
   # a autenticação é o header secreto conferido no controller.
   scope "/webhooks", GranaWeb do
-    pipe_through :api
+    pipe_through [:api, :demo_off]
 
     post "/pluggy", PluggyWebhookController, :create
   end
@@ -87,7 +92,7 @@ defmodule GranaWeb.Router do
   import Oban.Web.Router
 
   scope "/admin" do
-    pipe_through [:browser, :setup_complete, :require_authenticated_user]
+    pipe_through [:browser, :setup_complete, :demo_off, :require_authenticated_user]
 
     error_tracker_dashboard("/errors",
       on_mount: [
@@ -144,8 +149,13 @@ defmodule GranaWeb.Router do
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end
 
-    post "/users/update-password", UserSessionController, :update_password
     get "/transactions/export", TransactionsExportController, :export
+  end
+
+  scope "/", GranaWeb do
+    pipe_through [:browser, :setup_complete, :csp, :demo_off, :require_authenticated_user]
+
+    post "/users/update-password", UserSessionController, :update_password
     get "/users/settings/backup", BackupController, :download
   end
 
@@ -153,7 +163,11 @@ defmodule GranaWeb.Router do
     pipe_through [:browser, :setup_complete, :csp]
 
     live_session :current_user,
-      on_mount: [{GranaWeb.SetupGate, :setup_complete}, {GranaWeb.UserAuth, :mount_current_scope}] do
+      on_mount: [
+        {GranaWeb.SetupGate, :setup_complete},
+        {GranaWeb.DemoGate, :email_off},
+        {GranaWeb.UserAuth, :mount_current_scope}
+      ] do
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/code", UserLive.TwoFactor, :new
       live "/users/reset-password", UserLive.ForgotPassword, :new
@@ -161,7 +175,12 @@ defmodule GranaWeb.Router do
     end
 
     post "/users/log-in", UserSessionController, :create
-    post "/users/log-in/code", UserSessionController, :verify_code
     delete "/users/log-out", UserSessionController, :delete
+  end
+
+  scope "/", GranaWeb do
+    pipe_through [:browser, :setup_complete, :csp, :demo_off]
+
+    post "/users/log-in/code", UserSessionController, :verify_code
   end
 end

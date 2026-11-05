@@ -71,7 +71,7 @@ defmodule GranaWeb.UserAuth do
       ErrorTracker.set_context(%{user_id: user.id})
 
       conn
-      |> assign(:current_scope, Scope.for_user(user))
+      |> assign(:current_scope, Scope.for_user(Grana.Demo.with_session_preferences(user, token)))
       |> maybe_reissue_user_session_token(user, token_inserted_at)
     else
       nil -> assign(conn, :current_scope, Scope.for_user(nil))
@@ -254,7 +254,13 @@ defmodule GranaWeb.UserAuth do
     Phoenix.Component.assign_new(socket, :current_scope, fn ->
       {user, _} =
         if user_token = session["user_token"] do
-          Accounts.get_user_by_session_token(user_token)
+          case Accounts.get_user_by_session_token(user_token) do
+            {user, inserted_at} ->
+              {Grana.Demo.with_session_preferences(user, user_token), inserted_at}
+
+            nil ->
+              nil
+          end
         end || {nil, nil}
 
       Scope.for_user(user)

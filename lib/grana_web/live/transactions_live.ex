@@ -57,6 +57,8 @@ defmodule GranaWeb.TransactionsLive do
   defp ai_error(:no_api_key),
     do: "Cadastre um provedor de IA nas Configurações para pedir buscas à IA."
 
+  defp ai_error(:demo), do: Grana.Demo.reason(:ai)
+
   defp ai_error(reason) when is_binary(reason), do: reason
   defp ai_error(_reason), do: "Não foi possível montar a busca. Tente de novo."
 

@@ -53,7 +53,10 @@ defmodule Grana.OpenFinance do
   no Grana. `nil` quando a integração não está configurada.
   """
   def credentials(%Scope{user: user}), do: credentials(user)
-  def credentials(%User{} = user), do: Pluggy.env_credentials() || saved_credentials(user)
+
+  def credentials(%User{} = user) do
+    if Grana.Demo.enabled?(), do: nil, else: Pluggy.env_credentials() || saved_credentials(user)
+  end
 
   defp saved_credentials(%User{pluggy_client_id: client_id, pluggy_client_secret: secret})
        when is_binary(client_id) and is_binary(secret),
@@ -61,9 +64,23 @@ defmodule Grana.OpenFinance do
 
   defp saved_credentials(%User{}), do: nil
 
+  defp demo_off(changeset) do
+    case Grana.Demo.allow(:open_finance) do
+      :ok ->
+        :ok
+
+      {:error, :demo} ->
+        {:error,
+         changeset
+         |> Ecto.Changeset.add_error(:pluggy_client_id, Grana.Demo.reason(:open_finance))
+         |> Map.put(:action, :update)}
+    end
+  end
+
   @doc "De onde vêm as credenciais em uso: `:env`, `:database` ou `nil`."
   def credentials_source(%Scope{user: user}) do
     cond do
+      Grana.Demo.enabled?() -> nil
       Pluggy.env_credentials() -> :env
       saved_credentials(user) -> :database
       true -> nil
@@ -91,7 +108,8 @@ defmodule Grana.OpenFinance do
   def save_credentials(%Scope{user: user}, attrs) do
     changeset = User.pluggy_credentials_changeset(user, attrs)
 
-    with {:ok, valid_user} <- Ecto.Changeset.apply_action(changeset, :update),
+    with :ok <- demo_off(changeset),
+         {:ok, valid_user} <- Ecto.Changeset.apply_action(changeset, :update),
          :ok <- Pluggy.verify_credentials(credentials(valid_user)) do
       Repo.update(changeset)
     else

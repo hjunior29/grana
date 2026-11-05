@@ -129,8 +129,9 @@ defmodule GranaWeb.BackupHooks do
     end
   end
 
+  # A conta da demonstração acabou de entrar (modo sudo), mas restaurar fica desligado nela.
   defp authorized?(%{assigns: %{restore_context: :settings, current_scope: scope}}),
-    do: Accounts.sudo_mode?(scope.user)
+    do: not scope.user.demo and Accounts.sudo_mode?(scope.user)
 
   defp authorized?(%{assigns: %{restore_context: :setup} = assigns}),
     do: Setup.verify_code(assigns[:code])

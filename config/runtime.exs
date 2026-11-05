@@ -51,6 +51,12 @@ public_url =
 config :grana, :public_url, public_url
 config :grana, :trust_proxy_headers, System.get_env("TRUST_PROXY_HEADERS") == "true"
 
+# Demonstração pública: apaga a instância e recria uma conta fictícia a cada boot
+# (Grana.Demo). Em test só os próprios testes ligam.
+if config_env() != :test do
+  config :grana, :demo, System.get_env("GRANA_DEMO") == "true"
+end
+
 # Cache (Grana.Cache / Cachex). Em dev e prod o cache roda 100% em memória (ETS).
 # TTL padrão de 300s, customizável por CACHE_TTL_SECONDS. Pode ser desabilitado por CACHE_ENABLED=false.
 if config_env() != :test do

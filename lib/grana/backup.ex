@@ -98,7 +98,8 @@ defmodule Grana.Backup do
   """
   def restore(%{path: path}, user_id, opts \\ []) do
     result =
-      with {:ok, cleared} <- prepare_user(path, user_id, opts),
+      with :ok <- Grana.Demo.allow(:backup),
+           {:ok, cleared} <- prepare_user(path, user_id, opts),
            :ok <- apply_to_live(path) do
         {:ok, %{cleared: cleared}}
       end
@@ -353,9 +354,21 @@ defmodule Grana.Backup do
 
   @doc """
   Apaga todos os dados da instância (usuário, tudo que é dele, jobs e erros) e volta
-  ao setup, com um novo código no log.
+  ao setup, com um novo código no log. Na demonstração pública, `{:error, :demo}`.
   """
   def reset_all do
+    with :ok <- Grana.Demo.allow(:backup) do
+      result = wipe()
+      Setup.generate_code()
+      result
+    end
+  end
+
+  @doc """
+  Apaga todos os dados da instância sem voltar ao setup: a demonstração pública
+  (`Grana.Demo.reset!/1`) recria a conta logo em seguida.
+  """
+  def wipe do
     result =
       replace_live_data(fn ->
         Repo.transaction(fn ->
@@ -370,8 +383,6 @@ defmodule Grana.Backup do
 
     stop_dynamic_supervisors()
     Grana.OpenFinance.Pluggy.clear_cache()
-
-    Setup.generate_code()
     result
   end
 

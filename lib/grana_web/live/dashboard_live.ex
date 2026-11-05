@@ -570,6 +570,8 @@ defmodule GranaWeb.DashboardLive do
   defp analysis_error(:no_api_key),
     do: "Cadastre um provedor de IA nas Configurações para analisar o período."
 
+  defp analysis_error(:demo), do: Grana.Demo.reason(:ai)
+
   defp analysis_error(reason) when is_binary(reason), do: reason
   defp analysis_error(_reason), do: "Não foi possível analisar o período. Tente de novo."
 

@@ -5,7 +5,20 @@ defmodule GranaWeb.UserLive.Login do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} hide_nav>
-      <.auth_card id="login-card" title="Entrar" subtitle={subtitle(@current_scope)}>
+      <.auth_card id="login-card" title="Entrar" subtitle={subtitle(@current_scope, @demo)}>
+        <.notice
+          :if={@demo && !@current_scope}
+          id="demo-credentials"
+          title="Acesso da demonstração"
+          class="mb-6"
+        >
+          <dl class="ui-demo-credentials">
+            <dt>Email</dt>
+            <dd>{@demo.email}</dd>
+            <dt>Senha</dt>
+            <dd>{@demo.password}</dd>
+          </dl>
+        </.notice>
         <.form
           for={@form}
           id="login_form_password"
@@ -29,6 +42,7 @@ defmodule GranaWeb.UserLive.Login do
             type="password"
             label="Senha"
             autocomplete="current-password"
+            value={if @demo && !@current_scope, do: @demo.password}
           />
           <label class="mb-4 flex cursor-pointer items-center gap-2">
             <input
@@ -44,7 +58,7 @@ defmodule GranaWeb.UserLive.Login do
         </.form>
         <:footer>
           <.link
-            :if={!@current_scope}
+            :if={!@current_scope && !@demo}
             id="forgot-password-link"
             navigate={~p"/users/reset-password"}
             class="link link-hover"
@@ -57,18 +71,25 @@ defmodule GranaWeb.UserLive.Login do
     """
   end
 
-  defp subtitle(nil), do: "Entre na sua instância do Grana."
-  defp subtitle(_scope), do: "Confirme sua senha para realizar ações sensíveis na sua conta."
+  defp subtitle(nil, nil), do: "Entre na sua instância do Grana."
+  defp subtitle(nil, _demo), do: "Entre na conta da demonstração com o acesso abaixo."
+
+  defp subtitle(_scope, _demo),
+    do: "Confirme sua senha para realizar ações sensíveis na sua conta."
 
   @impl true
   def mount(_params, _session, socket) do
+    # Na demonstração pública o acesso é um só e vem preenchido.
+    demo = if Grana.Demo.enabled?(), do: Grana.Demo.credentials()
+
     email =
       Phoenix.Flash.get(socket.assigns.flash, :email) ||
-        get_in(socket.assigns, [:current_scope, Access.key(:user), Access.key(:email)])
+        get_in(socket.assigns, [:current_scope, Access.key(:user), Access.key(:email)]) ||
+        (demo && demo.email)
 
     form = to_form(%{"email" => email}, as: "user")
 
-    {:ok, assign(socket, form: form, trigger_submit: false)}
+    {:ok, assign(socket, form: form, trigger_submit: false, demo: demo)}
   end
 
   @impl true

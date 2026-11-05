@@ -170,6 +170,8 @@ defmodule GranaWeb.Layouts do
         </div>
       </header>
 
+      <GranaWeb.DemoComponents.demo_banner :if={@current_scope && @current_scope.user.demo} />
+
       <main class="grana-app-main flex-1 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
         {render_slot(@inner_block)}
       </main>

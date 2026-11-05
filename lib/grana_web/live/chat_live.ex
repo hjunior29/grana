@@ -51,6 +51,7 @@ defmodule GranaWeb.ChatLive do
      |> assign(:model_choice, "")
      |> assign(:delete_target, nil)
      |> assign(:show_api_key_alert, false)
+     |> assign(:demo, Grana.Demo.enabled?())
      |> assign(:suggestions, @suggestions)
      |> stream(:messages, [])
      |> load_conversations()}
@@ -149,6 +150,10 @@ defmodule GranaWeb.ChatLive do
     cond do
       text == "" or busy?(socket) ->
         {:noreply, socket}
+
+      # Na demonstração a pergunta nem é gravada: a conversa é de todos os visitantes.
+      socket.assigns.demo ->
+        {:noreply, put_flash(socket, :info, Grana.Demo.reason(:ai))}
 
       AI.resolve(user, "chat", choice) == {:error, :no_api_key} ->
         {:noreply, assign(socket, :show_api_key_alert, true)}
@@ -296,6 +301,7 @@ defmodule GranaWeb.ChatLive do
   end
 
   defp error_message(:no_api_key), do: "Cadastre um provedor de IA nas Configurações."
+  defp error_message(:demo), do: Grana.Demo.reason(:ai)
   defp error_message(reason) when is_binary(reason), do: reason
   defp error_message(_reason), do: "Não foi possível responder agora. Tente de novo."
 
@@ -442,7 +448,14 @@ defmodule GranaWeb.ChatLive do
               </div>
             </div>
 
+            <GranaWeb.DemoComponents.demo_notice
+              :if={@demo}
+              feature={:ai}
+              id="chat-demo-notice"
+              class="m-3"
+            />
             <form
+              :if={!@demo}
               id="chat-composer"
               class="ui-chat-composer"
               phx-submit="send"

@@ -182,7 +182,8 @@ defmodule Grana.Accounts do
   `SMTP_PASSWORD`...) vence o campo salvo pela tela, e o que nenhum dos dois define usa o
   padrão. `nil` sem servidor (`host`); nesse caso o 2FA fica desligado.
   """
-  def smtp_config, do: smtp_config_for(get_owner())
+  # Na demonstração pública não há email: nem 2FA, nem avisos (Grana.Demo).
+  def smtp_config, do: if(Grana.Demo.enabled?(), do: nil, else: smtp_config_for(get_owner()))
 
   @doc "Como `smtp_config/0`, com os campos salvos de `user` (inclusive ainda não gravados)."
   def smtp_config_for(user) do
@@ -268,15 +269,30 @@ defmodule Grana.Accounts do
     end
   end
 
+  defp smtp_allowed(changeset) do
+    case Grana.Demo.allow(:smtp) do
+      :ok ->
+        :ok
+
+      {:error, :demo} ->
+        {:error,
+         changeset
+         |> Ecto.Changeset.add_error(:smtp_host, Grana.Demo.reason(:smtp))
+         |> Map.put(:action, :update)}
+    end
+  end
+
   @doc "Só envia o email de teste com os dados informados, sem gravar nada."
   def send_smtp_test(%User{} = user, attrs) do
     with {:ok, _changeset} <- smtp_test(user, attrs), do: :ok
   end
 
+  # Na demonstração nada é enviado: o servidor não conecta a um SMTP informado na tela.
   defp smtp_test(user, attrs) do
     changeset = User.smtp_settings_changeset(user, attrs, smtp_env_columns())
 
-    with {:ok, candidate} <- Ecto.Changeset.apply_action(changeset, :update),
+    with :ok <- smtp_allowed(changeset),
+         {:ok, candidate} <- Ecto.Changeset.apply_action(changeset, :update),
          {:ok, _email} <- UserNotifier.deliver_smtp_test(candidate, smtp_config_for(candidate)) do
       {:ok, changeset}
     else
@@ -438,8 +454,18 @@ defmodule Grana.Accounts do
   end
 
   @doc "Troca o email direto, sem confirmação por link (quando não há SMTP)."
+  def update_user_email_directly(%User{demo: true} = user, attrs),
+    do: {:error, demo_account_error(User.email_changeset(user, attrs), :email)}
+
   def update_user_email_directly(%User{} = user, attrs) do
     user |> User.email_changeset(attrs) |> Repo.update()
+  end
+
+  # A conta da demonstração é de todos os visitantes: email, senha e titular não mudam.
+  defp demo_account_error(changeset, field) do
+    changeset
+    |> Ecto.Changeset.add_error(field, Grana.Demo.reason(:account))
+    |> Map.put(:action, :update)
   end
 
   ## Settings
@@ -523,6 +549,9 @@ defmodule Grana.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
+  def update_user_password(%User{demo: true} = user, _current_password, attrs),
+    do: {:error, demo_account_error(User.password_changeset(user, attrs), :password)}
+
   def update_user_password(user, current_password, attrs) do
     user
     |> User.password_changeset(attrs)
@@ -560,6 +589,9 @@ defmodule Grana.Accounts do
       {:ok, %{to: ..., body: ...}}
 
   """
+  def deliver_user_update_email_instructions(%User{demo: true}, _current_email, _url_fun),
+    do: {:error, :demo}
+
   def deliver_user_update_email_instructions(%User{} = user, current_email, update_email_url_fun)
       when is_function(update_email_url_fun, 1) do
     {encoded_token, user_token} = UserToken.build_email_token(user, "change:#{current_email}")
@@ -595,6 +627,9 @@ defmodule Grana.Accounts do
   def change_user_identity(user, attrs \\ %{}) do
     User.identity_changeset(user, attrs)
   end
+
+  def update_user_identity(%User{demo: true} = user, attrs),
+    do: {:error, demo_account_error(User.identity_changeset(user, attrs), :name)}
 
   def update_user_identity(user, attrs) do
     user
