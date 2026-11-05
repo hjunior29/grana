@@ -38,7 +38,7 @@ Nenhuma variável de ambiente é obrigatória.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjunior29/grana/main/deploy/install.sh -o install.sh
 bash install.sh                      # última versão, tarball pronto do GitHub Releases
-bash install.sh --version v1.0.0     # uma versão específica
+bash install.sh --version v1.1.0     # uma versão específica
 ```
 
 O script baixa o tarball da sua arquitetura (x86_64 ou arm64), confere o `sha256`, cria o
