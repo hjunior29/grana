@@ -5,6 +5,17 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="https://grana.vertices.me"><img alt="Conheça o Grana em grana.vertices.me" src="https://img.shields.io/badge/conhe%C3%A7a_o_grana-grana.vertices.me-605dff?style=for-the-badge"></a>
+  <a href="https://grana.vertices.me/users/log-in"><img alt="Ver a demonstração" src="https://img.shields.io/badge/ver_a_demo-dados_fict%C3%ADcios-1f2937?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  Veja antes de instalar: a <a href="https://grana.vertices.me">página do Grana</a> e uma
+  <a href="https://grana.vertices.me/users/log-in">demonstração</a> com um ano de movimento
+  fictício, sem cadastro.
+</p>
+
 # Grana
 
 Finanças pessoais **self-hosted**, para uma pessoa só. Importe extratos e faturas
@@ -242,14 +253,41 @@ apontando para `http://localhost:4000`), com `PUBLIC_URL` no domínio do túnel.
 
 ## Atualização
 
-```bash
-bash install.sh --update                        # systemd, pelo tarball: baixa a última versão e reinicia
-git pull && ./deploy/install.sh --from-source   # systemd, compilado no servidor
-docker compose pull && docker compose up -d     # Docker
-fly deploy -a meu-grana --ha=false              # Fly.io: baixa a imagem latest de novo
-```
+Atualizar troca só o aplicativo. O banco, os segredos (`SECRET_KEY_BASE` e `CLOAK_KEY`) e as
+configurações ficam no `DATA_DIR` (o volume `/data` no Docker e no Fly.io) e continuam lá, e as
+migrations rodam sozinhas no boot seguinte. Nada se atualiza por conta própria: você escolhe
+quando, e o que mudou em cada versão está nos
+[Releases](https://github.com/hjunior29/grana/releases).
 
-As migrations rodam sozinhas no boot. **Baixe um backup antes** (Configurações → Backup).
+1. **Baixe um backup** em Configurações → Backup. As migrations só andam para a frente; o
+   backup é o caminho de volta.
+2. Atualize pelo mesmo caminho da instalação:
+
+   ```bash
+   bash install.sh --update                        # systemd, pelo tarball: baixa a última versão e reinicia
+   git pull && ./deploy/install.sh --from-source   # systemd, compilado no servidor
+   docker compose pull && docker compose up -d     # Docker
+   fly deploy -a meu-grana --ha=false              # Fly.io: baixa a imagem latest de novo
+   ```
+
+3. O Grana reinicia, aplica as migrations e volta em alguns segundos.
+
+### Fixar uma versão
+
+Docker e Fly.io usam a imagem `latest`, que aponta sempre para a release mais nova. Cada
+release também publica as tags `X.Y.Z` e `X.Y`; a `X.Y` recebe as correções `X.Y.*` sem saltar
+para a próxima versão:
+
+- **Docker:** troque o `image:` do `docker-compose.yml` para `ghcr.io/hjunior29/grana:1.1` (ou
+  `:1.1.0`) e atualize como de costume;
+- **Fly.io:** `fly deploy -a meu-grana --ha=false --image ghcr.io/hjunior29/grana:1.1.0`, ou
+  troque o `image` do `[build]` no `fly.toml`;
+- **systemd, pelo tarball:** `bash install.sh --update --version v1.1.0`.
+
+### Voltar para a versão anterior
+
+Instale a versão anterior pelo mesmo caminho (com a tag dela, como acima) e restaure o backup
+feito antes de atualizar: o banco já migrado pela versão nova pode não servir à anterior.
 
 ## Backup e restauração
 
