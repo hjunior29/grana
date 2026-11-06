@@ -5,6 +5,17 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="https://grana.vertices.me"><img alt="Conheça o Grana em grana.vertices.me" src="https://img.shields.io/badge/conhe%C3%A7a_o_grana-grana.vertices.me-605dff?style=for-the-badge"></a>
+  <a href="https://grana.vertices.me/users/log-in"><img alt="Ver a demonstração" src="https://img.shields.io/badge/ver_a_demo-dados_fict%C3%ADcios-1f2937?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  Veja antes de instalar: a <a href="https://grana.vertices.me">página do Grana</a> e uma
+  <a href="https://grana.vertices.me/users/log-in">demonstração</a> com um ano de movimento
+  fictício, sem cadastro.
+</p>
+
 # Grana
 
 Finanças pessoais **self-hosted**, para uma pessoa só. Importe extratos e faturas
